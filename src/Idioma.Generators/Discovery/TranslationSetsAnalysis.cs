@@ -264,7 +264,7 @@ internal sealed record TranslationSetsAnalysis(
 
             var translations = translators
                 .Prepend(set)
-                .Select(static other => new TranslationLink(other.Language!, other.Namespace, other.Name, other.FullyQualifiedName, other.StringProperties))
+                .Select(static other => new TranslationLink(other.Language!, other.Namespace, other.Name, other.FullyQualifiedName, other.StringProperties, other.InheritedTexts))
                 .ToImmutableArray();
 
             contracts.Add(new TranslationContract(
@@ -530,15 +530,16 @@ internal sealed record TranslationContract(
 
 /// <summary>
 /// A set translating a generated contract, for the crefs on its texts: its language, its namespace and name, by which
-/// the contract's file names a set of its own namespace, its full name for a set of another, and the properties a cref
-/// can name on it.
+/// the contract's file names a set of its own namespace, its full name for a set of another, the properties a cref
+/// can name on it, and the texts it inherits, which a cref names on the class declaring them.
 /// </summary>
 internal readonly record struct TranslationLink(
     string Language,
     string Namespace,
     string Name,
     string FullyQualifiedName,
-    EquatableArray<string> StringProperties);
+    EquatableArray<string> StringProperties,
+    EquatableArray<InheritedText> InheritedTexts);
 
 /// <summary>
 /// That an assembly holds a set of a public contract for a language.

@@ -254,7 +254,7 @@ public sealed class LocalizableTextTests
     }
 
     [Test]
-    public void GetText_ShouldPreferOwnTranslationOverRegisteredSet()
+    public void ToString_ShouldPreferOwnTranslationOverRegisteredSet()
     {
         // Arrange: the same text with and without an inline translation, and a registry serving Dutch.
         var culture = CultureInfo.GetCultureInfo("nl-NL");
@@ -262,12 +262,12 @@ public sealed class LocalizableTextTests
         var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
 
         // Act & Assert
-        declared.GetText(culture, registry).ShouldBe("Hallo");
-        declared.WithTranslation("nl", "Goedendag").GetText(culture, registry).ShouldBe("Goedendag");
+        declared.ToString(culture, registry).ShouldBe("Hallo");
+        declared.WithTranslation("nl", "Goedendag").ToString(culture, registry).ShouldBe("Goedendag");
     }
 
     [Test]
-    public void GetText_ShouldFallBackToDefaultTextWhenNothingTranslates()
+    public void ToString_ShouldFallBackToDefaultTextWhenNothingTranslates()
     {
         // Arrange
         var culture = CultureInfo.GetCultureInfo("de-DE");
@@ -275,12 +275,12 @@ public sealed class LocalizableTextTests
         var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
 
         // Act & Assert
-        declared.GetText(culture, registry).ShouldBe("Hello");
-        new LocalizableText("Name").GetText(culture, registry).ShouldBe("Name");
+        declared.ToString(culture, registry).ShouldBe("Hello");
+        new LocalizableText("Name").ToString(culture, registry).ShouldBe("Name");
     }
 
     [Test]
-    public void GetText_OfTextWithoutTranslationsOrContract_ShouldBeDefaultTextInEveryCulture()
+    public void ToString_OfTextWithoutTranslationsOrContract_ShouldBeDefaultTextInEveryCulture()
     {
         // Arrange: a registry with sets and app languages, none of which can phrase a text of no contract.
         var registry = TranslationsRegistry.Create([new TextTranslationsEN(), new TextTranslationsNL()], "nl", "en");
@@ -290,9 +290,9 @@ public sealed class LocalizableTextTests
         // Act & Assert: the default text itself, for a culture with a set, one without, and the invariant culture.
         foreach (var culture in new[] { CultureInfo.GetCultureInfo("nl-BE"), CultureInfo.GetCultureInfo("fr-FR"), CultureInfo.InvariantCulture })
         {
-            plain.GetText(culture, registry).ShouldBeSameAs(plain.DefaultText);
-            keyed.GetText(culture, registry).ShouldBeSameAs(keyed.DefaultText);
-            plain.GetText(culture, registry: null).ShouldBeSameAs(plain.DefaultText);
+            plain.ToString(culture, registry).ShouldBeSameAs(plain.DefaultText);
+            keyed.ToString(culture, registry).ShouldBeSameAs(keyed.DefaultText);
+            plain.ToString(culture, registry: null).ShouldBeSameAs(plain.DefaultText);
         }
 
         plain.ToString().ShouldBeSameAs(plain.DefaultText);
@@ -300,7 +300,7 @@ public sealed class LocalizableTextTests
     }
 
     [Test]
-    public void GetText_ForCultureNoLanguageServes_ShouldFallBackToAppDefaultLanguage()
+    public void ToString_ForCultureNoLanguageServes_ShouldFallBackToAppDefaultLanguage()
     {
         // Arrange: an inline text of a library whose default language is English, in an app whose default is Dutch.
         var text = LocalizableText.FromGeneratedCode("Orders", ("en", "Orders"), ("nl", "Bestellingen"));
@@ -308,16 +308,16 @@ public sealed class LocalizableTextTests
 
         // Act & Assert: the app's default language, walked up to its language as the build checks it (nl-BE through
         // nl); a culture a language serves keeps that language; without the app's language the text's own default.
-        text.GetText(french, registry: null, appLanguages: ["nl"]).ShouldBe("Bestellingen");
-        text.GetText(french, registry: null, appLanguages: ["nl-BE"]).ShouldBe("Bestellingen");
-        text.GetText(CultureInfo.InvariantCulture, registry: null, appLanguages: ["nl"]).ShouldBe("Bestellingen");
-        text.GetText(CultureInfo.GetCultureInfo("en-GB"), registry: null, appLanguages: ["nl", "en"]).ShouldBe("Orders");
-        text.GetText(french, registry: null, appLanguages: ["de"]).ShouldBe("Orders");
-        text.GetText(french, registry: null, appLanguages: []).ShouldBe("Orders");
+        text.ToString(french, registry: null, appLanguages: ["nl"]).ShouldBe("Bestellingen");
+        text.ToString(french, registry: null, appLanguages: ["nl-BE"]).ShouldBe("Bestellingen");
+        text.ToString(CultureInfo.InvariantCulture, registry: null, appLanguages: ["nl"]).ShouldBe("Bestellingen");
+        text.ToString(CultureInfo.GetCultureInfo("en-GB"), registry: null, appLanguages: ["nl", "en"]).ShouldBe("Orders");
+        text.ToString(french, registry: null, appLanguages: ["de"]).ShouldBe("Orders");
+        text.ToString(french, registry: null, appLanguages: []).ShouldBe("Orders");
     }
 
     [Test]
-    public void GetText_ForCultureAppDoesNotDeclare_ShouldShowAppDefaultLanguageThoughTextHasIt()
+    public void ToString_ForCultureAppDoesNotDeclare_ShouldShowAppDefaultLanguageThoughTextHasIt()
     {
         // Arrange: an inline text of a library with more languages than the app, which declares ("en", "fr").
         var text = LocalizableText.FromGeneratedCode("Orders", ("en", "Orders"), ("nl", "Bestellingen"), ("de", "Bestellungen"));
@@ -326,30 +326,30 @@ public sealed class LocalizableTextTests
         // Act & Assert: a culture the app does not declare shows the app's default language, so the library's Dutch and
         // German stay unused next to the app's English; a culture the app declares keeps the walk (en-GB through en,
         // fr-FR to the default as the text lacks French); and an app without languages shows every language the text has.
-        text.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
-        text.GetText(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
-        text.GetText(CultureInfo.GetCultureInfo("en-GB"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
-        text.GetText(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
-        text.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: []).ShouldBe("Bestellingen");
-        text.GetText(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: []).ShouldBe("Bestellungen");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
+        text.ToString(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
+        text.ToString(CultureInfo.GetCultureInfo("en-GB"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
+        text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: [.. appLanguages]).ShouldBe("Orders");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: []).ShouldBe("Bestellingen");
+        text.ToString(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: []).ShouldBe("Bestellungen");
     }
 
     [Test]
-    public void GetText_ForRegionOfAppLanguage_ShouldShowThatLanguage()
+    public void ToString_ForRegionOfAppLanguage_ShouldShowThatLanguage()
     {
         // Arrange: an app declaring Belgian Dutch next to English, and a text with Dutch and Belgian Dutch.
         var text = LocalizableText.FromGeneratedCode("Orders", ("en", "Orders"), ("nl", "Bestellingen"), ("nl-BE", "Bestellingen (BE)"));
 
         // Act & Assert: a culture under a declared language shows it; the neutral language above it is not declared,
         // and nor is another region of it.
-        text.GetText(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en", "nl-BE"]).ShouldBe("Bestellingen (BE)");
-        text.GetText(CultureInfo.GetCultureInfo("nl"), registry: null, appLanguages: ["en", "nl-BE"]).ShouldBe("Orders");
-        text.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "nl-BE"]).ShouldBe("Orders");
-        text.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "NL"]).ShouldBe("Bestellingen");
+        text.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en", "nl-BE"]).ShouldBe("Bestellingen (BE)");
+        text.ToString(CultureInfo.GetCultureInfo("nl"), registry: null, appLanguages: ["en", "nl-BE"]).ShouldBe("Orders");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "nl-BE"]).ShouldBe("Orders");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "NL"]).ShouldBe("Bestellingen");
     }
 
     [Test]
-    public void GetText_WithoutAppDefaultLanguageArgument_ShouldUseLanguageAppRegistered()
+    public void ToString_WithoutAppDefaultLanguageArgument_ShouldUseLanguageAppRegistered()
     {
         // Arrange: this test project is an application declaring ("en", "nl"), so its generated registrar registered
         // English when it started.
@@ -357,31 +357,31 @@ public sealed class LocalizableTextTests
         var french = CultureInfo.GetCultureInfo("fr-FR");
 
         // Act & Assert: a Dutch-first text still falls back to the app's English.
-        text.GetText(french, registry: null).ShouldBe("Orders");
-        text.GetText(french).ShouldBe("Orders");
+        text.ToString(french, registry: null).ShouldBe("Orders");
+        text.ToString(french).ShouldBe("Orders");
     }
 
     [Test]
-    public void GetText_WithoutRegistry_ShouldConsiderOnlyOwnTranslations()
+    public void ToString_WithoutRegistry_ShouldConsiderOnlyOwnTranslations()
     {
         // Arrange
         var culture = CultureInfo.GetCultureInfo("nl-NL");
         var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
 
         // Act & Assert
-        declared.GetText(culture, registry: null).ShouldBe("Hello");
-        declared.WithTranslation("nl", "Goedendag").GetText(culture, registry: null).ShouldBe("Goedendag");
+        declared.ToString(culture, registry: null).ShouldBe("Hello");
+        declared.WithTranslation("nl", "Goedendag").ToString(culture, registry: null).ShouldBe("Goedendag");
     }
 
     [Test]
-    public void GetText_ShouldThrowForNullCulture()
+    public void ToString_ShouldThrowForNullCulture()
     {
         // Arrange
         var text = new LocalizableText("Name");
 
         // Act & Assert
-        Should.Throw<ArgumentNullException>(() => text.GetText(null!));
-        Should.Throw<ArgumentNullException>(() => text.GetText(null!, registry: null));
+        Should.Throw<ArgumentNullException>(() => text.ToString(null!));
+        Should.Throw<ArgumentNullException>(() => text.ToString(null!, registry: null));
     }
 
     [Test]
@@ -509,7 +509,7 @@ public sealed class LocalizableTextTests
     }
 
     [Test]
-    public void GetText_ForRegionWithInvariantParent_ShouldShowItsLanguage()
+    public void ToString_ForRegionWithInvariantParent_ShouldShowItsLanguage()
     {
         // Arrange: nl-BE as invariant globalization creates it, whose parent is the invariant culture, in an app that
         // declares nl. It showed English before the lookups also walked by name.
@@ -520,8 +520,8 @@ public sealed class LocalizableTextTests
 
         // Act & Assert
         inline.GetTranslation(belgian).ShouldBe("Bestellingen");
-        inline.GetText(belgian, registry, appLanguages: ["en", "nl"]).ShouldBe("Bestellingen");
-        declared.GetText(belgian, registry, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
+        inline.ToString(belgian, registry, appLanguages: ["en", "nl"]).ShouldBe("Bestellingen");
+        declared.ToString(belgian, registry, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
     }
 
     [Test]

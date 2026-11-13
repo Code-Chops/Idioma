@@ -70,15 +70,18 @@ public sealed record ResourceText : LocalizableText
     /// in resource files itself. Until something resolves the key, it shows <paramref name="defaultText"/>.
     /// </summary>
     /// <remarks>
-    /// In an assembly that declares <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, a default you
-    /// write as wording is a build error (<c>LOC011</c>), as the build cannot see which languages a resource file
-    /// holds. Pass a value instead, such as a customer's name, or declare the text in a set per language (see
+    /// In an assembly that declares two or more languages with
+    /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, a default you write as wording is a build
+    /// error (<c>LOC011</c>), as the build cannot see which languages a resource file holds. Pass a value instead, such as a customer's name, or declare the text in a set per language (see
     /// <see cref="ITranslations"/>).
     /// </remarks>
     /// <param name="key">The name of the text in a resource file, such as <c>Customer.Name</c>.</param>
     /// <param name="defaultText">The wording shown when nothing resolves the key.</param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="key"/> is empty or white-space; pass the name the text has in the resource file.
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="key"/> or <paramref name="defaultText"/> is <see langword="null"/>.
     /// </exception>
     public ResourceText(string key, string defaultText)
         : base(defaultText)
@@ -109,11 +112,12 @@ public sealed record ResourceText : LocalizableText
     {
         ArgumentNullException.ThrowIfNull(selector);
 
-        return new ResourceText(key, defaultText)
+        var text = new ResourceText(key, defaultText)
         {
             Contract = typeof(TTranslations),
             Selector = translations => selector((TTranslations)translations),
         };
+        return text;
     }
 
     /// <summary>
@@ -124,13 +128,15 @@ public sealed record ResourceText : LocalizableText
     /// <returns>
     /// The set's wording, or <see langword="null"/> when the set does not implement this text's <see cref="Contract"/>.
     /// </returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="translations"/> is <see langword="null"/>.</exception>
     public string? GetTranslation(ITranslations translations)
     {
         ArgumentNullException.ThrowIfNull(translations);
 
-        return this.Contract is not null && this.Contract.IsInstanceOfType(translations)
+        var text = this.Contract is not null && this.Contract.IsInstanceOfType(translations)
             ? this.Selector!(translations)
             : null;
+        return text;
     }
 
     /// <summary>
@@ -145,7 +151,8 @@ public sealed record ResourceText : LocalizableText
     /// </exception>
     internal new ResourceText WithTranslation(string language, string text)
     {
-        return (ResourceText)base.WithTranslation(language, text);
+        var result = (ResourceText)base.WithTranslation(language, text);
+        return result;
     }
 
     /// <summary>
@@ -155,11 +162,12 @@ public sealed record ResourceText : LocalizableText
     public bool Equals(ResourceText? other)
     {
         // The selector is not compared: the key names the member it selects.
-        return other is not null
+        var isEqual = other is not null
                && base.Equals(other)
                && String.Equals(this.Key, other.Key, StringComparison.Ordinal)
                && this.Contract == other.Contract
                && String.Equals(this.DefaultLanguage, other.DefaultLanguage, StringComparison.Ordinal);
+        return isEqual;
     }
 
     /// <inheritdoc />
@@ -174,9 +182,10 @@ public sealed record ResourceText : LocalizableText
     /// </summary>
     private protected override string? FindTranslation(TranslationsRegistry registry, CultureFallback names)
     {
-        return this.Contract is not null
+        var text = this.Contract is not null
             ? registry.FindWording(this.Contract, names, this.Selector!)
             : null;
+        return text;
     }
 
     /// <summary>
@@ -186,11 +195,12 @@ public sealed record ResourceText : LocalizableText
     /// </summary>
     private protected override string? FindDefaultTranslation(TranslationsRegistry registry)
     {
-        // Walked by language code, not through a CultureInfo: under invariant globalization (a NativeAOT console, a
-        // trimmed WebAssembly app) constructing any culture but the invariant one throws by default, and this fallback
-        // runs for exactly that culture.
-        return this.Contract is not null && this.DefaultLanguage is not null
-            ? registry.FindWording(this.Contract, new CultureFallback(this.DefaultLanguage), this.Selector!)
+        // From the language code, through its culture only where this machine has one: under invariant globalization (a
+        // NativeAOT console, a trimmed WebAssembly app) constructing any culture but the invariant one throws by
+        // default, and this fallback runs for exactly that culture.
+        var text = this.Contract is not null && this.DefaultLanguage is not null
+            ? registry.FindWording(this.Contract, CultureFallback.OfLanguage(this.DefaultLanguage), this.Selector!)
             : null;
+        return text;
     }
 }

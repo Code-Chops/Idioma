@@ -175,7 +175,7 @@ public sealed class TranslationsRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Read a text's wording from it with <see cref="LocalizableText.GetText(CultureInfo, TranslationsRegistry)"/>. To
+    /// Read a text's wording from it with <see cref="LocalizableText.ToString(CultureInfo, TranslationsRegistry)"/>. To
     /// add sets to your whole app, use <see cref="Register(ReadOnlySpan{ITranslations})"/> instead.
     /// </para>
     /// <para>
@@ -188,6 +188,7 @@ public sealed class TranslationsRegistry
     /// <param name="sets">
     /// The sets, in the order they apply: for one contract and language, a later set wins for every text it changes.
     /// </param>
+    /// <exception cref="ArgumentNullException">When <paramref name="sets"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
@@ -212,6 +213,9 @@ public sealed class TranslationsRegistry
     /// </param>
     /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>en-GB</c>.</param>
     /// <param name="otherLanguages">The other languages, each a culture name.</param>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="sets"/> or a language is <see langword="null"/>.
+    /// </exception>
     /// <exception cref="ArgumentException">
     /// When a language is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture name such as
     /// <c>en</c> or <c>en-GB</c>.
@@ -321,6 +325,7 @@ public sealed class TranslationsRegistry
     /// <param name="translations">
     /// The sets, in the order they apply: for one contract and language, a later set wins for every text it changes.
     /// </param>
+    /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
@@ -343,6 +348,7 @@ public sealed class TranslationsRegistry
     /// <param name="translations">
     /// The sets, in the order they apply: for one contract and language, a later set wins for every text it changes.
     /// </param>
+    /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
@@ -427,7 +433,7 @@ public sealed class TranslationsRegistry
     /// The set's wording is not always what a user sees, as a text can take its wording from another set: a rewording
     /// registered for <c>en</c> also shows for <c>en-GB</c>, for the texts the <c>en-GB</c> set does not change, while
     /// this returns the <c>en-GB</c> set. For the wording a user of the culture sees, call
-    /// <see cref="LocalizableText.GetText(CultureInfo)"/> on the text instead.
+    /// <see cref="LocalizableText.ToString(CultureInfo)"/> on the text instead.
     /// </para>
     /// </remarks>
     /// <typeparam name="TTranslations">The contract the set implements, such as <c>IShopTranslations</c>.</typeparam>
@@ -435,6 +441,7 @@ public sealed class TranslationsRegistry
     /// <returns>
     /// The set, or <see langword="null"/> when no set of the contract serves the culture.
     /// </returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
     public TTranslations? Find<TTranslations>(CultureInfo culture)
         where TTranslations : class, ITranslations
     {
@@ -456,6 +463,9 @@ public sealed class TranslationsRegistry
     /// <returns>
     /// The set, or <see langword="null"/> when no set of the contract serves the culture.
     /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="contract"/> or <paramref name="culture"/> is <see langword="null"/>.
+    /// </exception>
     public ITranslations? Find(Type contract, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(contract);

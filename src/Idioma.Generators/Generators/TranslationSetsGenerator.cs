@@ -64,7 +64,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor MissingLanguageRule = Error(
         MissingLanguageDiagnosticId,
         "Translations contract misses a language",
-        "'{0}' has no translation into '{1}', which [assembly: SupportedLanguages] requires. Add {2}.",
+        "'{0}' has no translation into '{1}', which [assembly: SupportedLanguages] requires. Add {2}. A nested, generic, or file-local class does not count as a set.",
         "Every language of [assembly: SupportedLanguages] has a set of its own in every contract, as every inline text takes its wording. That goes for a region of a listed language too, such as en-GB next to en: its set derives from the set of its language, and holds only the texts that differ.");
 
     private static readonly DiagnosticDescriptor UnlistedLanguageRule = Error(
@@ -319,7 +319,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
 
             sb.AppendLine();
             AppendMemberDocs(sb, contract, className, member);
-            sb.AppendLine($"    public static {PackageNamespace}.ResourceText {memberName} {{ get; }} = CreateResourceText<{name}>({TranslationSetsAnalysis.ResourceKeyPrefixName} + nameof({memberName}), static translations => translations.{memberName}, DefaultSet<{className}>.Instance);");
+            sb.AppendLine($"    public static {(HidesObjectMember(member.Name) ? "new " : "")}{PackageNamespace}.ResourceText {memberName} {{ get; }} = CreateResourceText<{name}>({TranslationSetsAnalysis.ResourceKeyPrefixName} + nameof({memberName}), static translations => translations.{memberName}, DefaultSet<{className}>.Instance);");
         }
 
         // The end of the texts, and the set every text takes its default wording from. File-local, so that inside this
@@ -347,6 +347,32 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     private static string GetNameIn(string @namespace, TranslationLink set)
     {
         return String.Equals(set.Namespace, @namespace, StringComparison.Ordinal) ? EscapeIdentifier(set.Name) : set.FullyQualifiedName;
+    }
+
+    /// <summary>
+    /// Where the wording a set gives a text is found, as the file of a contract names it: the set's own property when it
+    /// declares the text, the property of the nearest class declaring it when the set inherits the text
+    /// (<c>ShopTranslationsEN.Checkout</c> for a British set that leaves <c>Checkout</c> as it is), and else the set.
+    /// </summary>
+    // A cref does not find a member through a class that only inherits it (CS1574), and a text implemented explicitly
+    // has no name to link to at all.
+    private static string GetCref(string @namespace, TranslationLink set, string member)
+    {
+        if (set.StringProperties.AsImmutableArray().Contains(member, StringComparer.Ordinal))
+            return $"{GetNameIn(@namespace, set)}.{EscapeIdentifier(member)}";
+
+        foreach (var inherited in set.InheritedTexts)
+        {
+            if (!String.Equals(inherited.Name, member, StringComparison.Ordinal))
+                continue;
+
+            // The class by its name alone when it lies in the contract's namespace, as a set is named.
+            var declaringClass = String.Equals(inherited.Namespace, @namespace, StringComparison.Ordinal) ? inherited.TypeName : inherited.FullyQualifiedTypeName;
+
+            return $"{declaringClass}.{EscapeIdentifier(member)}";
+        }
+
+        return GetNameIn(@namespace, set);
     }
 
     /// <summary>
@@ -384,12 +410,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             """);
         foreach (var translation in contract.Translations)
         {
-            var set = GetNameIn(contract.Namespace, translation);
-
-            // A set implementing the member explicitly has no such name to link to, so that link goes to the set.
-            var cref = translation.StringProperties.AsImmutableArray().Contains(member.Name, StringComparer.Ordinal)
-                ? $"{set}.{EscapeIdentifier(member.Name)}"
-                : set;
+            var cref = GetCref(contract.Namespace, translation, member.Name);
 
             sb.AppendLine($"    /// <item><description><see cref=\"{cref}\">{translation.Language}</see></description></item>");
         }
@@ -397,6 +418,16 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
                 /// </list>
                 /// </remarks>
             """);
+    }
+
+    /// <summary>
+    /// Whether a text carries the name of a member every class has, such as <c>Equals</c>, which the generated class
+    /// then hides. Its property says so with <see langword="new"/>: without it the build warns (<c>CS0108</c>) about
+    /// code its author cannot change.
+    /// </summary>
+    private static bool HidesObjectMember(string name)
+    {
+        return name is "Equals" or "GetHashCode" or "GetType" or "MemberwiseClone" or "ReferenceEquals" or "ToString";
     }
 
     private static string EscapeXml(string text)

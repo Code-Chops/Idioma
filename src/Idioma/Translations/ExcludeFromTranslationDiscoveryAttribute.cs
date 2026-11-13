@@ -14,7 +14,8 @@ namespace CodeChops.Idioma;
 /// The build still counts an excluded set as the set of its language, for the apps that use your library as well, so
 /// that language is not reported as missing. Until you register the set, users of that language see the default
 /// language. The set's language must still be one your assembly lists (<c>LOC005</c>). Never exclude the set of your
-/// default language: the build then writes neither its contract nor the class of its texts.
+/// default language: the build then writes neither its contract nor the class of its texts, and reports nothing, as it
+/// takes the set for one you register and read yourself.
 /// </para>
 /// <para>
 /// The attribute is not inherited: a set deriving from an excluded set registers itself like any other.

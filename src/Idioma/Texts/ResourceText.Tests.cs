@@ -155,18 +155,18 @@ public sealed class ResourceTextTests
     }
 
     [Test]
-    public void GetText_FromRegistryWithoutLanguages_ShouldShowEveryLanguageWithASet()
+    public void ToString_FromRegistryWithoutLanguages_ShouldShowEveryLanguageWithASet()
     {
         // Arrange: no languages given, so nothing of what the app of this process declares applies.
         var registry = TranslationsRegistry.Create([new ResourceTranslationsNL()]);
 
         // Act & Assert: the Dutch set shows, and a culture without a set gets the text's own default wording.
-        Greeting.GetText(CultureInfo.GetCultureInfo("nl-BE"), registry).ShouldBe("Hallo");
-        Greeting.GetText(CultureInfo.GetCultureInfo("fr-FR"), registry).ShouldBe("Hello");
+        Greeting.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry).ShouldBe("Hallo");
+        Greeting.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry).ShouldBe("Hello");
     }
 
     [Test]
-    public void GetText_FromRegistryWithLanguages_ShouldShowOnlyThoseAndFallBackToItsDefault()
+    public void ToString_FromRegistryWithLanguages_ShouldShowOnlyThoseAndFallBackToItsDefault()
     {
         // Arrange: a registry that has Dutch, with and without Dutch among its languages.
         ITranslations[] sets = [new ResourceTranslationsEN(), new ResourceTranslationsNL()];
@@ -174,9 +174,9 @@ public sealed class ResourceTextTests
         var withoutDutch = TranslationsRegistry.Create(sets, "en", "fr");
 
         // Act & Assert: a culture no language serves gets the registry's default language, even where it has a set.
-        Greeting.GetText(CultureInfo.GetCultureInfo("fr-FR"), dutchFirst).ShouldBe("Hallo");
-        Greeting.GetText(CultureInfo.GetCultureInfo("en-GB"), dutchFirst).ShouldBe("Hello");
-        Greeting.GetText(CultureInfo.GetCultureInfo("nl-NL"), withoutDutch).ShouldBe("Hello");
+        Greeting.ToString(CultureInfo.GetCultureInfo("fr-FR"), dutchFirst).ShouldBe("Hallo");
+        Greeting.ToString(CultureInfo.GetCultureInfo("en-GB"), dutchFirst).ShouldBe("Hello");
+        Greeting.ToString(CultureInfo.GetCultureInfo("nl-NL"), withoutDutch).ShouldBe("Hello");
     }
 
     [Test]
@@ -215,7 +215,7 @@ public sealed class ResourceTextTests
         text.Key.ShouldBe("MyApp.Greeting");
         text.Contract.ShouldBeNull();
         text.Translations.ShouldBeEmpty();
-        text.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry).ShouldBe("Hello");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry).ShouldBe("Hello");
     }
 
     [Test]
@@ -281,7 +281,7 @@ public sealed class ResourceTextTests
     }
 
     [Test]
-    public void GetText_ShouldFallBackToDefaultLanguageSetWithoutCultureWalk()
+    public void ToString_ShouldFallBackToDefaultLanguageSetWithoutCultureWalk()
     {
         // Arrange: an English set rewording a text. The invariant culture (the UI culture of an app under invariant
         // globalization, where no other culture can be constructed) has no chain to walk.
@@ -291,14 +291,14 @@ public sealed class ResourceTextTests
         // Act & Assert: in an app without a default language of its own, the default-language set serves the invariant
         // culture and an uncovered one, a covered culture keeps its own set, and a text declared without a default
         // language keeps its default.
-        Greeting.GetText(CultureInfo.InvariantCulture, registry, appLanguages: []).ShouldBe("Hi");
-        Greeting.GetText(CultureInfo.GetCultureInfo("fr-FR"), registry, appLanguages: []).ShouldBe("Hi");
-        Greeting.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry, appLanguages: []).ShouldBe("Hallo");
-        withoutDefaultLanguage.GetText(CultureInfo.InvariantCulture, registry, appLanguages: []).ShouldBe("Hello");
+        Greeting.ToString(CultureInfo.InvariantCulture, registry, appLanguages: []).ShouldBe("Hi");
+        Greeting.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry, appLanguages: []).ShouldBe("Hi");
+        Greeting.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry, appLanguages: []).ShouldBe("Hallo");
+        withoutDefaultLanguage.ToString(CultureInfo.InvariantCulture, registry, appLanguages: []).ShouldBe("Hello");
     }
 
     [Test]
-    public void GetText_ShouldFallBackToSetOfAppDefaultLanguageBeforeItsOwn()
+    public void ToString_ShouldFallBackToSetOfAppDefaultLanguageBeforeItsOwn()
     {
         // Arrange: a contract whose default language is English, with an English set rewording a text, in an app whose
         // default language is Dutch.
@@ -309,28 +309,28 @@ public sealed class ResourceTextTests
         // Act & Assert: an uncovered culture gets the app's language, also through a regional app language (nl-BE
         // through nl) and for a text without a default language; a covered culture keeps its own set; and an app
         // language without a set leaves the text's own default language.
-        Greeting.GetText(french, registry, appLanguages: ["nl"]).ShouldBe("Hallo");
-        Greeting.GetText(CultureInfo.InvariantCulture, registry, appLanguages: ["nl"]).ShouldBe("Hallo");
-        Greeting.GetText(french, registry, appLanguages: ["nl-BE"]).ShouldBe("Hallo");
-        withoutDefaultLanguage.GetText(french, registry, appLanguages: ["nl"]).ShouldBe("Hallo");
-        Greeting.GetText(CultureInfo.GetCultureInfo("en-GB"), registry, appLanguages: ["nl", "en"]).ShouldBe("Hi");
-        Greeting.GetText(french, registry, appLanguages: ["de"]).ShouldBe("Hi");
+        Greeting.ToString(french, registry, appLanguages: ["nl"]).ShouldBe("Hallo");
+        Greeting.ToString(CultureInfo.InvariantCulture, registry, appLanguages: ["nl"]).ShouldBe("Hallo");
+        Greeting.ToString(french, registry, appLanguages: ["nl-BE"]).ShouldBe("Hallo");
+        withoutDefaultLanguage.ToString(french, registry, appLanguages: ["nl"]).ShouldBe("Hallo");
+        Greeting.ToString(CultureInfo.GetCultureInfo("en-GB"), registry, appLanguages: ["nl", "en"]).ShouldBe("Hi");
+        Greeting.ToString(french, registry, appLanguages: ["de"]).ShouldBe("Hi");
     }
 
     [Test]
-    public void GetText_ForCultureAppDoesNotDeclare_ShouldShowSetOfAppDefaultLanguageThoughSetExists()
+    public void ToString_ForCultureAppDoesNotDeclare_ShouldShowSetOfAppDefaultLanguageThoughSetExists()
     {
         // Arrange: a library's contract with English and Dutch sets, in an app declaring ("en", "fr").
         var registry = TranslationsRegistry.Create([new ResourceRewordedTranslationsEN(), new ResourceTranslationsNL()]);
 
         // Act & Assert: a Dutch user sees the English set, as the app's own texts are English for them too; an app
         // without languages shows the Dutch set.
-        Greeting.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry, appLanguages: ["en", "fr"]).ShouldBe("Hi");
-        Greeting.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry, appLanguages: []).ShouldBe("Hallo");
+        Greeting.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry, appLanguages: ["en", "fr"]).ShouldBe("Hi");
+        Greeting.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry, appLanguages: []).ShouldBe("Hallo");
     }
 
     [Test]
-    public void GetText_ForRegion_ShouldTakeRewordingOfItsLanguageWhereRegionalSetKeepsItsWording()
+    public void ToString_ForRegion_ShouldTakeRewordingOfItsLanguageWhereRegionalSetKeepsItsWording()
     {
         // Arrange: a library's English and British sets, and an app's rewording of the English set registered after
         // them, as an override is in the sets of the whole app; then the same with the rewording before the British set.
@@ -342,17 +342,17 @@ public sealed class ResourceTextTests
         // Act & Assert: a British user gets the rewording of the text the British set inherits, whichever registered
         // first, and the British wording of the text it words itself; so does an uncovered culture in an app whose
         // default language is British English. Other English cultures get the English sets.
-        Greeting.GetText(british, registry, appLanguages: ["en", "nl"]).ShouldBe("Hi");
-        Greeting.GetText(british, rewordingFirst, appLanguages: ["en", "nl"]).ShouldBe("Hi");
-        Farewell.GetText(british, registry, appLanguages: ["en", "nl"]).ShouldBe("Cheerio");
-        Greeting.GetText(french, registry, appLanguages: ["en-GB", "nl"]).ShouldBe("Hi");
-        Farewell.GetText(french, registry, appLanguages: ["en-GB", "nl"]).ShouldBe("Cheerio");
-        Greeting.GetText(CultureInfo.GetCultureInfo("en-US"), registry, appLanguages: ["en", "nl"]).ShouldBe("Hi");
-        Farewell.GetText(CultureInfo.GetCultureInfo("en-US"), registry, appLanguages: ["en", "nl"]).ShouldBe("Goodbye");
+        Greeting.ToString(british, registry, appLanguages: ["en", "nl"]).ShouldBe("Hi");
+        Greeting.ToString(british, rewordingFirst, appLanguages: ["en", "nl"]).ShouldBe("Hi");
+        Farewell.ToString(british, registry, appLanguages: ["en", "nl"]).ShouldBe("Cheerio");
+        Greeting.ToString(french, registry, appLanguages: ["en-GB", "nl"]).ShouldBe("Hi");
+        Farewell.ToString(french, registry, appLanguages: ["en-GB", "nl"]).ShouldBe("Cheerio");
+        Greeting.ToString(CultureInfo.GetCultureInfo("en-US"), registry, appLanguages: ["en", "nl"]).ShouldBe("Hi");
+        Farewell.ToString(CultureInfo.GetCultureInfo("en-US"), registry, appLanguages: ["en", "nl"]).ShouldBe("Goodbye");
     }
 
     [Test]
-    public void GetText_ShouldShowEveryRewordingOfOneSetForTextsItChanges()
+    public void ToString_ShouldShowEveryRewordingOfOneSetForTextsItChanges()
     {
         // Arrange: two rewordings of the English set, each changing another text, as a shared library's and an app's;
         // the same next to the British set; and a set implementing the contract in full, registered after a rewording.
@@ -371,29 +371,29 @@ public sealed class ResourceTextTests
         // Act & Assert: each text shows the last rewording that changes it, also as the default-language fallback of an
         // app without languages, and through the British set for a text it inherits; the British set's own wording
         // stays; a set deriving from no other set words every text itself, even one matching the default wording.
-        Greeting.GetText(english, registry, appLanguages: ["en"]).ShouldBe("Hi");
-        Farewell.GetText(english, registry, appLanguages: ["en"]).ShouldBe("Bye");
-        Greeting.GetText(french, registry, appLanguages: []).ShouldBe("Hi");
-        Farewell.GetText(french, registry, appLanguages: []).ShouldBe("Bye");
-        Greeting.GetText(british, withBritish, appLanguages: ["en"]).ShouldBe("Hi");
-        Farewell.GetText(british, withBritish, appLanguages: ["en"]).ShouldBe("Cheerio");
-        Greeting.GetText(english, standaloneLast, appLanguages: ["en"]).ShouldBe("Hello");
-        Farewell.GetText(english, standaloneLast, appLanguages: ["en"]).ShouldBe("So long");
+        Greeting.ToString(english, registry, appLanguages: ["en"]).ShouldBe("Hi");
+        Farewell.ToString(english, registry, appLanguages: ["en"]).ShouldBe("Bye");
+        Greeting.ToString(french, registry, appLanguages: []).ShouldBe("Hi");
+        Farewell.ToString(french, registry, appLanguages: []).ShouldBe("Bye");
+        Greeting.ToString(british, withBritish, appLanguages: ["en"]).ShouldBe("Hi");
+        Farewell.ToString(british, withBritish, appLanguages: ["en"]).ShouldBe("Cheerio");
+        Greeting.ToString(english, standaloneLast, appLanguages: ["en"]).ShouldBe("Hello");
+        Farewell.ToString(english, standaloneLast, appLanguages: ["en"]).ShouldBe("So long");
     }
 
     [Test]
-    public void GetText_ForRegion_ShouldKeepRegionalSetDerivingFromNoSetOfItsLanguage()
+    public void ToString_ForRegion_ShouldKeepRegionalSetDerivingFromNoSetOfItsLanguage()
     {
         // Arrange
         var registry = TranslationsRegistry.Create([new ResourceTranslationsEN(), new ResourceStandaloneBritishTranslations(), new ResourceRewordedTranslationsEN()]);
 
         // Act & Assert: the British set inherits nothing from English, so the English rewording does not apply to it,
         // even where its wording matches the English.
-        Greeting.GetText(CultureInfo.GetCultureInfo("en-GB"), registry, appLanguages: ["en"]).ShouldBe("Hello");
+        Greeting.ToString(CultureInfo.GetCultureInfo("en-GB"), registry, appLanguages: ["en"]).ShouldBe("Hello");
     }
 
     [Test]
-    public void GetText_ForRegion_ShouldPassRewordingThroughEveryLevel()
+    public void ToString_ForRegion_ShouldPassRewordingThroughEveryLevel()
     {
         // Arrange: walked by name, through the app's default language, so the levels do not depend on the parent
         // cultures of this machine.
@@ -407,8 +407,8 @@ public sealed class ResourceTextTests
 
         // Act & Assert: the Taiwanese set keeps the traditional wording, which keeps the Chinese one, so the rewording
         // of Chinese reaches Taiwan; the traditional set's own wording stays.
-        Greeting.GetText(french, registry, appLanguages: ["zh-Hant-TW"]).ShouldBe("Nin hao");
-        Farewell.GetText(french, registry, appLanguages: ["zh-Hant-TW"]).ShouldBe("Zaijian (Hant)");
+        Greeting.ToString(french, registry, appLanguages: ["zh-Hant-TW"]).ShouldBe("Nin hao");
+        Farewell.ToString(french, registry, appLanguages: ["zh-Hant-TW"]).ShouldBe("Zaijian (Hant)");
     }
 
     [Test]

@@ -19,7 +19,10 @@ namespace CodeChops.Idioma.Generators;
 /// module constructor: it keeps the assembly when trimming, and works under NativeAOT. Each call is guarded, because a
 /// referenced assembly need not be there when the app starts (a Blazor WebAssembly assembly loaded lazily, one deployed
 /// later): such an assembly registers its sets itself when its code first runs, and the app starts as it would without
-/// the call. So does an assembly referenced under an extern alias only, whose registrar this code cannot name.
+/// the call. So does an assembly referenced under an extern alias only, whose registrar this code cannot name. The
+/// guard looks the assembly up by name, and makes the call only when it is there. Catching the call when it fails is
+/// not enough: the WebAssembly runtime remembers that this assembly could not reach the other one, and refuses every
+/// later use of it from here, also once it has loaded.
 /// <para>
 /// The registrar of an application that declares languages also registers them
 /// (<c>GeneratedCode.RegisterLanguages</c>), before calling any other registrar: a culture none of them serves,
@@ -36,7 +39,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
     public const string UnmappedLanguageCodeDiagnosticId = "LOC015";
 
     /// <summary>
-    /// The MSBuild property with which the Android SDK marks the project of an app (<c>true</c>), as the compiler's
+    /// The MSBuild property with which the Android SDK marks the project of an app (<see langword="true"/>), as the compiler's
     /// options hand it to a generator.
     /// </summary>
     internal const string AndroidApplicationProperty = "build_property.AndroidApplication";
@@ -217,7 +220,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
     private static RegistrarAssembly ReadAssembly(Compilation compilation)
     {
         var ownName = GetRegistrarName(compilation.AssemblyName);
-        var names = new List<string>();
+        var registrars = new List<ReferencedRegistrar>();
 
         foreach (var reference in compilation.SourceModule.ReferencedAssemblySymbols)
         {
@@ -227,22 +230,22 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
             var name = GetRegistrarName(reference.Identity.Name);
 
             if (reference.GetTypeByMetadataName($"{RegistrarNamespace}.{name}") is { DeclaredAccessibility: Accessibility.Public })
-                names.Add(name);
+                registrars.Add(new ReferencedRegistrar(reference.Identity.Name, name));
         }
 
         // A name two assemblies share (My-App and My_App), or this assembly's own, would bind ambiguously or to itself;
         // such an assembly registers its sets when it loads, as without this.
-        var referenced = names
-            .GroupBy(static name => name, StringComparer.Ordinal)
+        var referenced = registrars
+            .GroupBy(static registrar => registrar.RegistrarName, StringComparer.Ordinal)
             .Where(group => group.Count() is 1 && !String.Equals(group.Key, ownName, StringComparison.Ordinal))
-            .Select(static group => group.Key)
-            .OrderBy(static name => name, StringComparer.Ordinal)
+            .Select(static group => group.Single())
+            .OrderBy(static registrar => registrar.RegistrarName, StringComparer.Ordinal)
             .ToImmutableArray();
 
         return new RegistrarAssembly(
             ownName,
             compilation.Options.OutputKind is OutputKind.ConsoleApplication or OutputKind.WindowsApplication or OutputKind.WindowsRuntimeApplication,
-            new EquatableArray<string>(referenced));
+            new EquatableArray<ReferencedRegistrar>(referenced));
     }
 
     /// <summary>
@@ -308,9 +311,10 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         }
 
         // Each call inside a lambda of its own: the runtime loads the referenced assembly when it compiles the method that
-        // calls into it, so only a call in another method fails inside the try of RegisterReferenced.
+        // calls into it, so a call in another method is one RegisterReferenced can leave out for an assembly that is not
+        // there, and one that fails inside its try when the assembly cannot load after all.
         foreach (var referenced in registrar.ReferencedRegistrars)
-            sb.AppendLine($"            RegisterReferenced(static () => {RegistrarNamespace}.{referenced}.Register());");
+            sb.AppendLine($"            RegisterReferenced({SymbolDisplay.FormatLiteral(referenced.AssemblyName, quote: true)}, static () => {RegistrarNamespace}.{referenced.RegistrarName}.Register());");
 
         // Last, after the sets of the assemblies it references: a set of this assembly rewording one of theirs wins.
         if (hasOwnSets)
@@ -326,10 +330,14 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
                         /// Calls the registrar of a referenced assembly, unless that assembly is not there yet: one the app loads later
                         /// registers its sets itself when its code first runs.
                         /// </summary>
-                        private static void RegisterReferenced(System.Action register)
+                        private static void RegisterReferenced(string assemblyName, System.Action register)
                         {
                             try
                             {
+                                // Looked up by name before the call. A call into an assembly that is not there fails, and
+                                // the WebAssembly runtime then refuses every later use of that assembly from this one, also
+                                // once it has loaded. A lookup that fails leaves nothing behind.
+                                System.Reflection.Assembly.Load(new System.Reflection.AssemblyName { Name = assemblyName });
                                 register();
                             }
                             catch (System.IO.FileNotFoundException)
@@ -405,7 +413,15 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
 internal readonly record struct RegistrarAssembly(
     string RegistrarName,
     bool IsApplication,
-    EquatableArray<string> ReferencedRegistrars);
+    EquatableArray<ReferencedRegistrar> ReferencedRegistrars);
+
+/// <summary>
+/// The public registrar of a referenced assembly: the name of the assembly, by which the generated code looks it up
+/// before it calls the registrar, and the name of the registrar.
+/// </summary>
+internal readonly record struct ReferencedRegistrar(
+    string AssemblyName,
+    string RegistrarName);
 
 /// <summary>
 /// A set whose class declares a <c>LanguageCode</c> that implements nothing: what <c>LOC015</c> reports.
@@ -423,7 +439,7 @@ internal readonly record struct UnmappedLanguageCode(
 internal readonly record struct Registrar(
     string Name,
     EquatableArray<RegisteredTranslations> Sets,
-    EquatableArray<string> ReferencedRegistrars,
+    EquatableArray<ReferencedRegistrar> ReferencedRegistrars,
     EquatableArray<string> Languages,
     EquatableArray<RecordedLanguageCode> LanguageCodes);
 

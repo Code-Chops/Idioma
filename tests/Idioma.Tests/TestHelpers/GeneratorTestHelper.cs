@@ -166,6 +166,18 @@ internal static class GeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs the generators as a build does and returns every warning of the resulting compilation, so that a test can
+    /// pin that what they write leaves a build that treats warnings as errors nothing to stop at.
+    /// </summary>
+    internal static ImmutableArray<Diagnostic> GetWarningsWithGenerators(string source, params MetadataReference[] references)
+    {
+        return
+        [
+            .. RunAllGenerators(source, references).Diagnostics.Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Warning),
+        ];
+    }
+
+    /// <summary>
     /// Runs the generators as a build does and returns what they report, each diagnostic as the build takes it: one that
     /// a <c>#pragma warning disable</c> or a <c>[SuppressMessage]</c> in the source silences comes back suppressed.
     /// </summary>
@@ -246,7 +258,25 @@ internal static class GeneratorTestHelper
         return MetadataReference.CreateFromImage(EmitWithGenerators(assemblyName, source, OutputKind.ConsoleApplication, references));
     }
 
+    /// <summary>
+    /// Compiles <paramref name="source"/>, with the generators run over it, into a library another compilation
+    /// references as an IDE hands a generator a project of the same solution: as the compilation itself, syntax trees
+    /// and all, where a build hands over the assembly.
+    /// </summary>
+    internal static MetadataReference CompileProjectWithGenerators(string assemblyName, string source, params MetadataReference[] references)
+    {
+        var compilation = CreateCompilationWithGenerators(assemblyName, source, OutputKind.DynamicallyLinkedLibrary, references);
+        compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error).ShouldBeEmpty();
+
+        return compilation.ToMetadataReference();
+    }
+
     private static byte[] EmitWithGenerators(string assemblyName, string source, OutputKind outputKind, MetadataReference[] references)
+    {
+        return EmitImage(CreateCompilationWithGenerators(assemblyName, source, outputKind, references));
+    }
+
+    private static Compilation CreateCompilationWithGenerators(string assemblyName, string source, OutputKind outputKind, MetadataReference[] references)
     {
         var compilation = CSharpCompilation.Create(
             assemblyName,
@@ -256,7 +286,7 @@ internal static class GeneratorTestHelper
 
         CreateFullDriver(ParseOptions).RunGeneratorsAndUpdateCompilation(compilation, out var updated, out _);
 
-        return EmitImage(updated);
+        return updated;
     }
 
     /// <summary>

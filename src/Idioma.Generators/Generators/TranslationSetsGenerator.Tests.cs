@@ -303,10 +303,11 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void SetInheritingText_ShouldBeLinkedAtItsMember()
+    public void SetInheritingText_ShouldBeLinkedAtClassDeclaringIt()
     {
-        // Arrange & Act: the text is declared by a base class the set inherits it from.
-        var text = ContractText(Run($$"""
+        // Arrange: the text is declared by a base class the set inherits it from. A cref does not find it through the
+        // set, which only inherits it (CS1574).
+        var source = $$"""
             {{Header}}
 
             public sealed partial class ShopTranslationsEN : ITranslations
@@ -320,10 +321,126 @@ public sealed class TranslationSetsGeneratorTests
             }
 
             public sealed class ShopTranslationsNL : ShopWordingBase, IShopTranslations;
-            """));
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
 
         // Assert
-        text.ShouldContain("<see cref=\"ShopTranslationsNL.Checkout\">nl</see>");
+        text.ShouldContain("<see cref=\"ShopWordingBase.Checkout\">nl</see>");
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void RegionalSetLeavingTextAsItsLanguageWordsIt_ShouldBeLinkedAtSetOfItsLanguage()
+    {
+        // Arrange: a British set with wording of its own for one text, as the README writes it.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "en-GB")]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsEN : ITranslations
+            {
+                public virtual string Cart => "Cart";
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Cart => "Winkelwagen";
+                public virtual string Checkout => "Afrekenen";
+            }
+
+            public class ShopTranslationsEnGB : ShopTranslationsEN
+            {
+                public override string Cart => "Basket";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert: its own wording at the set, and the rest where British users get it from.
+        text.ShouldContain("<see cref=\"ShopTranslationsEnGB.Cart\">en-GB</see>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Checkout\">en-GB</see>");
+        text.ShouldNotContain("ShopTranslationsEnGB.Checkout");
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("namespace TestApp { public abstract class WordingBase<TMarker> { public string Checkout => \"Afrekenen\"; } }", "WordingBase<int>", "WordingBase{TMarker}.Checkout")]
+    [Arguments("namespace TestApp { public static class Wordings { public abstract class Dutch { public string Checkout => \"Afrekenen\"; } } }", "Wordings.Dutch", "Wordings.Dutch.Checkout")]
+    [Arguments("namespace Shared.Wording { public abstract class DutchBase { public string Checkout => \"Afrekenen\"; } }", "Shared.Wording.DutchBase", "Shared.Wording.DutchBase.Checkout")]
+    [Arguments("namespace Shared { public abstract class Pair<TFirst, TSecond> { public string Checkout => \"Afrekenen\"; } }", "Shared.Pair<int, string>", "Shared.Pair{TFirst, TSecond}.Checkout")]
+    public void SetInheritingTextFromGenericOrNestedClassOrOtherNamespace_ShouldBeLinkedWithResolvedCref(string declaration, string baseType, string expectedCref)
+    {
+        // Arrange: a cref names a generic class with its type parameters in braces, a nested one through its container,
+        // and a class of another namespace by its full name.
+        var source = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            {{declaration}}
+
+            namespace TestApp
+            {
+                public sealed partial class ShopTranslationsEN : ITranslations
+                {
+                    public string Checkout => "Checkout";
+                }
+
+                public sealed class ShopTranslationsNL : {{baseType}}, IShopTranslations;
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        text.ShouldContain($"<see cref=\"{expectedCref}\">nl</see>");
+        errors.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetImplementingExplicitlyTextItAlsoInherits_ShouldBeLinkedAsSet()
+    {
+        // Arrange: the explicit implementation is the wording, not the property of the same name the set inherits.
+        var source = $$"""
+            {{Header}}
+
+            public sealed partial class ShopTranslationsEN : ITranslations
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public abstract class ShopWordingBase
+            {
+                public string Checkout => "Kassa";
+            }
+
+            public sealed class ShopTranslationsNL : ShopWordingBase, IShopTranslations
+            {
+                string IShopTranslations.Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        text.ShouldContain("<see cref=\"ShopTranslationsNL\">nl</see>");
+        text.ShouldNotContain("ShopWordingBase.Checkout");
+        unresolved.ShouldBeEmpty();
     }
 
     [Test]
@@ -816,6 +933,106 @@ public sealed class TranslationSetsGeneratorTests
         error.Id.ShouldBe("LOC014");
         error.GetMessage().ShouldContain($"'OptionTranslationsEN' has a text named '{name}'");
         error.GetMessage().ShouldContain($"'OptionTranslations.{name}' is not generated");
+    }
+
+    [Test]
+    public void TextNamedLikeMemberOfObject_ShouldCompileWithoutWarnings()
+    {
+        // Arrange: a text named like a member every class has, as a filter's "Equals" is. The generated class hides
+        // that member as the set does, which without the new modifier is a warning (CS0108) in generated code. Finalize
+        // hides nothing, and neither does any other text, where the modifier would be a warning itself (CS0109).
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class FilterTranslationsEN : ITranslations
+            {
+                public new string Equals => "Equals";
+                public new string GetHashCode => "Hash code";
+                public new string GetType => "Type";
+                public new string MemberwiseClone => "Copy";
+                public new string ReferenceEquals => "Is the same as";
+                public new string ToString => "As text";
+                public string Finalize => "Finalize";
+                public string Contains => "Contains";
+            }
+
+            public sealed class FilterTranslationsNL : IFilterTranslations
+            {
+                public new string Equals => "Is gelijk aan";
+                public new string GetHashCode => "Hashcode";
+                public new string GetType => "Type";
+                public new string MemberwiseClone => "Kopie";
+                public new string ReferenceEquals => "Is hetzelfde als";
+                public new string ToString => "Als tekst";
+                public string Finalize => "Afronden";
+                public string Contains => "Bevat";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        text.ShouldContain("public static new CodeChops.Idioma.ResourceText Equals { get; }");
+        text.ShouldContain("public static CodeChops.Idioma.ResourceText Contains { get; }");
+        warnings.ShouldBeEmpty();
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetDerivingFromSetOfProjectReferencedAsCompilation_ShouldNotStopTheGenerator()
+    {
+        // Arrange: an IDE hands a generator a project of the same solution as its compilation, where a build hands over
+        // the assembly. The LanguageCode the library's set implements then has syntax, in a tree of that other
+        // compilation, which this one has no semantic model for.
+        var library = GeneratorTestHelper.CompileProjectWithGenerators("RegionalLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace RegionalLibrary;
+
+            public partial class GridTranslationsEN : ITranslations
+            {
+                public virtual string Colour => "Color";
+            }
+
+            public class GridTranslationsNL : IGridTranslations
+            {
+                public virtual string Colour => "Kleur";
+            }
+
+            public class GridTranslationsEnGB : GridTranslationsEN, ITranslations
+            {
+                string ITranslations.LanguageCode => "en-GB";
+
+                public override string Colour => "Colour";
+            }
+            """);
+
+        // Act
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class MyGridTranslationsEnGB : RegionalLibrary.GridTranslationsEnGB
+            {
+                public override string Colour => "Hue";
+            }
+            """, library);
+
+        // Assert: as in a build, where the language of such a set cannot be read, so nothing is held against it.
+        result.Results.ShouldHaveSingleItem().Exception.ShouldBeNull();
+        DiagnosticIds(result).ShouldBeEmpty();
     }
 
     [Test]
@@ -1409,7 +1626,7 @@ public sealed class TranslationSetsGeneratorTests
         // Assert: the set to add derives from the English one, so that it holds only the texts that differ.
         var diagnostic = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldBe("'ShopTranslations' has no translation into 'en-GB', which [assembly: SupportedLanguages] requires. Add 'class ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override.");
+        diagnostic.GetMessage().ShouldBe("'ShopTranslations' has no translation into 'en-GB', which [assembly: SupportedLanguages] requires. Add 'class ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override. A nested, generic, or file-local class does not count as a set.");
     }
 
     [Test]
@@ -1446,9 +1663,9 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("\"nl\", \"en\", \"en-GB\"", "public sealed class ShopTranslationsEN", "Add 'class ShopTranslationsEnGB : IShopTranslations'.")]
-    [Arguments("\"nl\", \"en\", \"en-GB\"", "public record ShopTranslationsEN", "Add 'record ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override.")]
-    [Arguments("\"nl\", \"en-GB\"", "public class ShopTranslationsEN", "Add 'class ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override.")]
+    [Arguments("\"nl\", \"en\", \"en-GB\"", "public sealed class ShopTranslationsEN", "Add 'class ShopTranslationsEnGB : IShopTranslations'. A nested, generic, or file-local class does not count as a set.")]
+    [Arguments("\"nl\", \"en\", \"en-GB\"", "public record ShopTranslationsEN", "Add 'record ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override. A nested, generic, or file-local class does not count as a set.")]
+    [Arguments("\"nl\", \"en-GB\"", "public class ShopTranslationsEN", "Add 'class ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override. A nested, generic, or file-local class does not count as a set.")]
     public void ListedRegionWithoutSet_ShouldBeToldWhichSetToAdd(string languages, string english, string advice)
     {
         // Arrange & Act: here the English set is not the default one. A sealed set has nothing deriving from it, a record
@@ -1503,7 +1720,7 @@ public sealed class TranslationSetsGeneratorTests
 
         // Assert
         var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
-        message.ShouldEndWith("Add 'class ShopTranslationsZhHansCN : ShopTranslationsZhHans', which keeps the wording of 'zh-Hans' for every text it does not override.");
+        message.ShouldEndWith("Add 'class ShopTranslationsZhHansCN : ShopTranslationsZhHans', which keeps the wording of 'zh-Hans' for every text it does not override. A nested, generic, or file-local class does not count as a set.");
     }
 
     [Test]
@@ -1536,7 +1753,7 @@ public sealed class TranslationSetsGeneratorTests
         // Assert
         var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("'TestApp.IGridTranslations' has no translation into 'en-GB'");
-        message.ShouldEndWith("Add 'class GridTranslationsEnGB : GridTranslationsEN', which keeps the wording of 'en' for every text it does not override.");
+        message.ShouldEndWith("Add 'class GridTranslationsEnGB : GridTranslationsEN', which keeps the wording of 'en' for every text it does not override. A nested, generic, or file-local class does not count as a set.");
     }
 
     [Test]
@@ -1653,7 +1870,7 @@ public sealed class TranslationSetsGeneratorTests
         recorded.ShouldContain("TranslationSetAttribute(\"TestApp.IMessages\", \"es-AR\")");
         var contract = ContractText(result);
         contract.ShouldContain("MessagesAR.Save\">ar</see>");
-        contract.ShouldContain("MessagesEsAR.Save\">es-AR</see>");
+        contract.ShouldContain("MessagesES.Save\">es-AR</see>");
     }
 
     [Test]
@@ -1900,7 +2117,7 @@ public sealed class TranslationSetsGeneratorTests
         // Assert: only the contract without a British set is reported, with the set that derives from its English one.
         var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("'GridTranslations' has no translation into 'en-GB'");
-        message.ShouldEndWith("Add 'class GridTranslationsEnGB : GridTranslationsEN', which keeps the wording of 'en' for every text it does not override.");
+        message.ShouldEndWith("Add 'class GridTranslationsEnGB : GridTranslationsEN', which keeps the wording of 'en' for every text it does not override. A nested, generic, or file-local class does not count as a set.");
     }
 
     [Test]

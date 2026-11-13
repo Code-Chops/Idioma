@@ -31,6 +31,23 @@ internal static class TranslationsDiscovery
         miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
     /// <summary>
+    /// A class as a cref names it from another namespace, with its type parameters: <c>Wording.DutchBase&lt;T&gt;</c>.
+    /// </summary>
+    private static SymbolDisplayFormat CrefFullNameFormat { get; } = new(
+        globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
+
+    /// <summary>
+    /// A class as a cref names it from its own namespace, with its type parameters: <c>DutchBase&lt;T&gt;</c>.
+    /// </summary>
+    private static SymbolDisplayFormat CrefNameFormat { get; } = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
+
+    /// <summary>
     /// What one pass over the classes of the current compilation finds: the candidate sets, the nested or file-local
     /// sets that reword another assembly's texts, and the partial classes listing <c>ITranslations</c> that no contract
     /// can come from because of their shape.
@@ -355,6 +372,7 @@ internal static class TranslationsDiscovery
             IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
             StringProperties: new EquatableArray<string>(GetStringProperties(type)),
+            InheritedTexts: new EquatableArray<InheritedText>(GetInheritedTexts(type)),
             Texts: new EquatableArray<TranslationsMember>(listsTranslations ? GetTextMembers(type, compilation, cancellationToken) : ImmutableArray<TranslationsMember>.Empty));
     }
 
@@ -787,19 +805,79 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The public string properties a cref can name on this set, inherited ones included. An explicit interface
-    /// implementation has no such name.
+    /// The public string properties a cref can name on this set: those the class declares itself. A cref does not find
+    /// a member through a class that only inherits it (<c>ShopTranslationsEnGB.Checkout</c>, declared by
+    /// <c>ShopTranslationsEN</c>, is <c>CS1574</c>), so those are named where they are declared
+    /// (<see cref="GetInheritedTexts"/>). An explicit interface implementation has no such name.
     /// </summary>
     private static ImmutableArray<string> GetStringProperties(INamedTypeSymbol type)
     {
         var names = ImmutableArray.CreateBuilder<string>();
 
-        for (var current = type; current is not null; current = current.BaseType)
-            foreach (var member in current.GetMembers())
-                if (IsPublicStringProperty(member, out var property) && !String.Equals(property.Name, LanguageCodeMemberName, StringComparison.Ordinal))
-                    names.Add(property.Name);
+        foreach (var member in type.GetMembers())
+            if (IsPublicStringProperty(member, out var property) && !String.Equals(property.Name, LanguageCodeMemberName, StringComparison.Ordinal))
+                names.Add(property.Name);
 
         return names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
+    }
+
+    /// <summary>
+    /// The public string properties this set inherits, each with the nearest class declaring it: where a cref names a
+    /// text the set does not declare itself, such as <c>ShopTranslationsEN.Checkout</c> for a British set that leaves
+    /// <c>Checkout</c> as it is. A text that the set, or a class between it and the one declaring the text, implements
+    /// explicitly is left out: that implementation is its wording, and has no name.
+    /// </summary>
+    private static ImmutableArray<InheritedText> GetInheritedTexts(INamedTypeSymbol type)
+    {
+        var texts = ImmutableArray.CreateBuilder<InheritedText>();
+
+        // The names a nearer class has settled: those it declares, and those it implements explicitly.
+        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var members = current.GetMembers();
+
+            foreach (var member in members)
+            {
+                if (!IsPublicStringProperty(member, out var property) || !settled.Add(property.Name) || SymbolEqualityComparer.Default.Equals(current, type))
+                    continue;
+
+                texts.Add(new InheritedText(
+                    Name: property.Name,
+                    Namespace: GetNamespaceName(current.ContainingNamespace),
+                    TypeName: GetCrefName(current, CrefNameFormat),
+                    FullyQualifiedTypeName: GetCrefName(current, CrefFullNameFormat)));
+            }
+
+            // After the properties a cref can name, so that a class holding both is linked at the one with a name.
+            foreach (var member in members)
+                if (member is IPropertySymbol { IsStatic: false } property && GetExplicitlyImplementedName(property) is { } name)
+                    settled.Add(name);
+        }
+
+        return texts.OrderBy(static text => text.Name, StringComparer.Ordinal).ToImmutableArray();
+    }
+
+    /// <summary>
+    /// A class as a cref names it, its type parameters in braces: <c>Wording.DutchBase{T}</c>.
+    /// </summary>
+    private static string GetCrefName(INamedTypeSymbol type, SymbolDisplayFormat format)
+    {
+        return type.OriginalDefinition.ToDisplayString(format).Replace('<', '{').Replace('>', '}');
+    }
+
+    /// <summary>
+    /// The name of the member a property implements explicitly (<c>Checkout</c> for
+    /// <c>string IShopTranslations.Checkout</c>), or <see langword="null"/> for any other property.
+    /// </summary>
+    // Read from the property's own name, which holds the interface as it is written: the symbol names no implemented
+    // member for a contract generated here, which binds to nothing yet.
+    private static string? GetExplicitlyImplementedName(IPropertySymbol property)
+    {
+        var separator = property.Name.LastIndexOf('.');
+
+        return separator < 0 ? null : property.Name.Substring(separator + 1);
     }
 
     /// <summary>
@@ -890,7 +968,10 @@ internal static class TranslationsDiscovery
             }
         }
 
-        if (expression is null)
+        // A property of another assembly has its syntax here only where an IDE references that project as a
+        // compilation, and then in a tree this compilation has no semantic model for. Left unread, as in a build,
+        // which references the project's assembly and sees no syntax at all.
+        if (expression is null || !compilation.ContainsSyntaxTree(expression.SyntaxTree))
             return null;
 
         var constant = compilation.GetSemanticModel(expression.SyntaxTree).GetConstantValue(expression, cancellationToken);
@@ -939,7 +1020,19 @@ internal readonly record struct DiscoveredTranslations(
     bool IsSealed,
     bool IsPublic,
     EquatableArray<string> StringProperties,
+    EquatableArray<InheritedText> InheritedTexts,
     EquatableArray<TranslationsMember> Texts);
+
+/// <summary>
+/// A text a set inherits, with the nearest class declaring it as a cref names that class: its namespace (<c>""</c> for
+/// the global namespace), its name there, and its full name, the last two with containing types and with type
+/// parameters in braces (<c>DutchBase{T}</c>).
+/// </summary>
+internal readonly record struct InheritedText(
+    string Name,
+    string Namespace,
+    string TypeName,
+    string FullyQualifiedTypeName);
 
 /// <summary>
 /// A base type a candidate lists that binds to nothing in the input compilation: its simple name, and the namespaces the

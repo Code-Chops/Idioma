@@ -69,10 +69,8 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
             var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
 
             foreach (var baseType in baseList.Types)
-            {
                 if (String.Equals(partModel.GetTypeInfo(baseType.Type, cancellationToken).Type?.ToDisplayString(), TranslationsInterfaceFullName, StringComparison.Ordinal))
                     listed.Add(baseType.Type);
-            }
         }
 
         foreach (var tree in listed.GroupBy(static name => name.SyntaxTree))

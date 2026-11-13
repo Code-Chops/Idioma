@@ -14,12 +14,14 @@ public sealed class FormatPlaceholdersAttribute : Attribute
     /// The indexes of the placeholders, in ascending order: <c>0</c> and <c>1</c> for <c>"{1} of {0}"</c>. Empty for
     /// wording without placeholders.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public IReadOnlyList<int> Placeholders { get; }
 
     /// <summary>
     /// Records the placeholders of a default wording.
     /// </summary>
     /// <param name="placeholders">The indexes of the placeholders, in ascending order.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public FormatPlaceholdersAttribute(params int[] placeholders)
     {
         ArgumentNullException.ThrowIfNull(placeholders);

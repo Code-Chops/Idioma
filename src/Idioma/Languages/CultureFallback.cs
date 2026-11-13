@@ -4,7 +4,7 @@ namespace CodeChops.Idioma;
 /// The names to try when looking up a culture, most specific first: the culture, then each parent culture
 /// (<c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>), then the last of those names with its subtags dropped one at a time.
 /// For a culture name instead of a culture, only the subtags are dropped: <c>zh-TW</c>, then <c>zh</c>. The invariant
-/// culture and an empty name give no names.
+/// culture gives no names, and an empty name is refused.
 /// </summary>
 // Through CultureInfo.Parent, because a parent need not be a prefix of the name (zh-TW falls back to zh-Hant), and by
 // name as well: under invariant globalization a culture either cannot be created at all (the default) or has the
@@ -33,15 +33,39 @@ internal readonly struct CultureFallback
 
     public CultureFallback(CultureInfo culture)
     {
+        ArgumentNullException.ThrowIfNull(culture);
+
         this.Culture = culture;
     }
 
     public CultureFallback(string name)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
         this.Name = name;
     }
 
-    public Enumerator GetEnumerator() => new(this.Culture, this.Name);
+    /// <summary>
+    /// The names to try for a language code as a user of that language gets them: through its culture where this
+    /// machine has one (<c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>), else by name alone.
+    /// </summary>
+    // So that a text falling back to a language shows what a user of that language sees. By name where the culture
+    // goes by another name than the code (an alias), which its walk would never try.
+    public static CultureFallback OfLanguage(string language)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+
+        var fallback = CultureName.FindCulture(language) is { } culture && String.Equals(culture.Name, language, StringComparison.OrdinalIgnoreCase)
+            ? new CultureFallback(culture)
+            : new CultureFallback(language);
+
+        return fallback;
+    }
+
+    public Enumerator GetEnumerator()
+    {
+        return new Enumerator(this.Culture, this.Name);
+    }
 
     internal struct Enumerator(CultureInfo? culture, string? name)
     {
@@ -76,19 +100,19 @@ internal readonly struct CultureFallback
             this.Current = GetNameAbove(this.Current, separator);
 
             return true;
+
+            static string GetNameAbove(string name, int separator)
+            {
+                if (NamesAbove.TryGetValue(name, out var above))
+                    return above;
+
+                above = name[..separator];
+
+                if (NamesAbove.Count < MaxNamesKept)
+                    NamesAbove.TryAdd(name, above);
+
+                return above;
+            }
         }
-    }
-
-    private static string GetNameAbove(string name, int separator)
-    {
-        if (NamesAbove.TryGetValue(name, out var above))
-            return above;
-
-        above = name[..separator];
-
-        if (NamesAbove.Count < MaxNamesKept)
-            NamesAbove.TryAdd(name, above);
-
-        return above;
     }
 }

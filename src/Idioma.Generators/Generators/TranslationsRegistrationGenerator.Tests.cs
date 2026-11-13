@@ -175,6 +175,54 @@ public sealed class TranslationsRegistrationGeneratorTests
     }
 
     [Test]
+    public void SetDerivedFromSetOfProjectReferencedAsCompilation_RegistersAsOverride()
+    {
+        // Arrange: an IDE hands a generator a project of the same solution as its compilation, where a build hands over
+        // the assembly. The LanguageCode the library's set implements then has syntax, in a tree of that other
+        // compilation, which this one has no semantic model for.
+        var library = GeneratorTestHelper.CompileProjectWithGenerators("RegionalLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace RegionalLibrary;
+
+            public partial class GridTranslationsEN : ITranslations
+            {
+                public virtual string Colour => "Color";
+            }
+
+            public class GridTranslationsNL : IGridTranslations
+            {
+                public virtual string Colour => "Kleur";
+            }
+
+            public class GridTranslationsEnGB : GridTranslationsEN, ITranslations
+            {
+                string ITranslations.LanguageCode => "en-GB";
+
+                public override string Colour => "Colour";
+            }
+            """);
+
+        // Act
+        var result = Run("""
+            namespace TestApp;
+
+            public sealed class MyGridTranslationsEnGB : RegionalLibrary.GridTranslationsEnGB
+            {
+                public override string Colour => "Hue";
+            }
+            """, library);
+
+        // Assert: the registrar is written as a build writes it.
+        var text = GeneratedText(result);
+        text.ShouldContain("TranslationsRegistry.Register(");
+        text.ShouldContain("new TestApp.MyGridTranslationsEnGB()");
+        text.ShouldNotContain("RegisterDefaults");
+    }
+
+    [Test]
     public void SetDerivedFromConcreteSetInSameAssembly_RegistersAsDefaultAfterItsBase()
     {
         // Arrange & Act: no override (a library's own regional set must not outrank an app's), yet it must still win
@@ -1023,7 +1071,7 @@ public sealed class TranslationsRegistrationGeneratorTests
         var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new TranslationsRegistrationGenerator(), "namespace TestApp;", library));
 
         // Assert
-        text.ShouldContain("RegisterReferenced(static () => CodeChops.Idioma.Generated.TranslationsRegistrar_My_App_Shop.Register());");
+        text.ShouldContain("RegisterReferenced(\"My-App.Shop\", static () => CodeChops.Idioma.Generated.TranslationsRegistrar_My_App_Shop.Register());");
     }
 
     [Test]
@@ -1101,7 +1149,7 @@ public sealed class TranslationsRegistrationGeneratorTests
         var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new TranslationsRegistrationGenerator(), "namespace TestApp;", client));
 
         // Assert
-        text.ShouldContain("RegisterReferenced(static () => CodeChops.Idioma.Generated.TranslationsRegistrar_LanguagesClient.Register());");
+        text.ShouldContain("RegisterReferenced(\"LanguagesClient\", static () => CodeChops.Idioma.Generated.TranslationsRegistrar_LanguagesClient.Register());");
     }
 
     [Test]
@@ -1159,7 +1207,7 @@ public sealed class TranslationsRegistrationGeneratorTests
             (TranslationsRegistrationGenerator.AndroidApplicationProperty, "true")));
 
         // Assert
-        text.ShouldContain("RegisterReferenced(static () => CodeChops.Idioma.Generated.TranslationsRegistrar_SetsLibrary.Register());");
+        text.ShouldContain("RegisterReferenced(\"SetsLibrary\", static () => CodeChops.Idioma.Generated.TranslationsRegistrar_SetsLibrary.Register());");
     }
 
     [Test]
@@ -1292,7 +1340,7 @@ public sealed class TranslationsRegistrationGeneratorTests
             """, SetsLibrary));
 
         // Assert
-        text.ShouldContain("RegisterReferenced(static () => CodeChops.Idioma.Generated.TranslationsRegistrar_SetsLibrary.Register());");
+        text.ShouldContain("RegisterReferenced(\"SetsLibrary\", static () => CodeChops.Idioma.Generated.TranslationsRegistrar_SetsLibrary.Register());");
     }
 
     [Test]
@@ -1380,7 +1428,7 @@ public sealed class TranslationsRegistrationGeneratorTests
         context.Assemblies.ShouldContain(assembly => String.Equals(assembly.GetName().Name, "UnusedAddOn", StringComparison.Ordinal));
         var texts = context.LoadFromAssemblyName(new AssemblyName("UnusedAddOnLibrary")).GetType("UnusedAddOnLibrary.AddOnShopTranslations")!;
         var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        checkout.GetText(CultureInfo.GetCultureInfo("de-DE"), TranslationsRegistry.Current, appLanguages: ["en", "nl", "de"]).ShouldBe("Zur Kasse");
+        checkout.ToString(CultureInfo.GetCultureInfo("de-DE"), TranslationsRegistry.Current, appLanguages: ["en", "nl", "de"]).ShouldBe("Zur Kasse");
     }
 
     [Test]
@@ -1435,7 +1483,81 @@ public sealed class TranslationsRegistrationGeneratorTests
         context.Assemblies.ShouldNotContain(assembly => String.Equals(assembly.GetName().Name, "AbsentLibrary", StringComparison.Ordinal));
         var texts = appAssembly.GetType("AbsentLibraryApp.AbsentAppTranslations")!;
         var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        checkout.GetText(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Afrekenen");
+        checkout.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Afrekenen");
+    }
+
+    [Test]
+    [NotInParallel(nameof(TranslationsRegistry))]
+    public void AssemblyThatArrivesAfterAppStarted_ShouldBeUsableAndRegisterItsSetsWhenItsCodeFirstRuns()
+    {
+        // Arrange: the app starts without a library it references, as a Blazor WebAssembly app starts without an
+        // assembly it loads lazily, and the library arrives afterwards. This runtime tries again when a call into an
+        // assembly failed before, so the test passed with the call alone as well; the WebAssembly runtime does not,
+        // which is what the test below is for.
+        var library = GeneratorTestHelper.EmitLibraryWithGenerators("LateLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace LateLibrary;
+
+            public partial class LateTranslationsEN : ITranslations
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public sealed class LateTranslationsNL : ILateTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+        var app = GeneratorTestHelper.EmitLibraryWithGenerators("LateLibraryApp", """
+            using System.Globalization;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace LateLibraryApp;
+
+            public static class Reader
+            {
+                public static string ReadDutchCheckout() => LateLibrary.LateTranslations.Checkout.ToString(CultureInfo.GetCultureInfo("nl-NL"));
+            }
+            """, MetadataReference.CreateFromImage(library));
+        var images = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["LateLibraryApp"] = app,
+        };
+        var context = new InMemoryLoadContext(images);
+        var appAssembly = context.LoadFromAssemblyName(new AssemblyName("LateLibraryApp"));
+        RuntimeHelpers.RunModuleConstructor(appAssembly.ManifestModule.ModuleHandle);
+        context.Assemblies.ShouldNotContain(assembly => String.Equals(assembly.GetName().Name, "LateLibrary", StringComparison.Ordinal));
+
+        // Act: the library arrives, and the app's code calls into it for the first time.
+        images["LateLibrary"] = library;
+        var checkout = (string)appAssembly.GetType("LateLibraryApp.Reader")!.GetMethod("ReadDutchCheckout")!.Invoke(obj: null, parameters: null)!;
+
+        // Assert: the library's own registrar ran with its code, so its Dutch set words the text.
+        checkout.ShouldBe("Afrekenen");
+    }
+
+    [Test]
+    public void ReferencedRegistrar_IsCalledOnlyAfterItsAssemblyIsFoundByName()
+    {
+        // Arrange & Act: the WebAssembly runtime remembers a call into an assembly that was not there, and refuses
+        // every later use of that assembly from the calling one, also once it has loaded lazily. Seen in a browser: a
+        // lookup by name that fails leaves nothing behind, and a call that fails does.
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new TranslationsRegistrationGenerator(), "namespace TestApp;", SetsLibrary));
+
+        // Assert: the lookup comes first, inside the same try, so a missing assembly skips the call.
+        var guard = text.Substring(text.IndexOf("private static void RegisterReferenced(string assemblyName, System.Action register)", StringComparison.Ordinal));
+        var lookup = guard.IndexOf("System.Reflection.Assembly.Load(new System.Reflection.AssemblyName { Name = assemblyName });", StringComparison.Ordinal);
+        var call = guard.IndexOf("register();", StringComparison.Ordinal);
+        var handler = guard.IndexOf("catch (System.IO.FileNotFoundException)", StringComparison.Ordinal);
+
+        lookup.ShouldBeGreaterThan(guard.IndexOf("try", StringComparison.Ordinal));
+        call.ShouldBeGreaterThan(lookup);
+        handler.ShouldBeGreaterThan(call);
     }
 
     [Test]
@@ -1478,7 +1600,7 @@ public sealed class TranslationsRegistrationGeneratorTests
         // Assert
         var texts = assembly.GetType("AbstractBaseLibrary.BaseShopTranslations")!;
         var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        checkout.GetText(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Afrekenen");
+        checkout.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Afrekenen");
     }
 
     [Test]
@@ -1528,8 +1650,8 @@ public sealed class TranslationsRegistrationGeneratorTests
         var texts = assembly.GetType("RegionalNameLibrary.ShopTranslations")!;
         var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
         var total = (LocalizableText)texts.GetProperty("Total")!.GetValue(null)!;
-        checkout.GetText(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Betalen");
-        total.GetText(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Totaal");
+        checkout.ToString(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Betalen");
+        total.ToString(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Totaal");
     }
 
     [Test]

@@ -54,7 +54,7 @@ public sealed class CultureFallbackTests
         // Arrange & Act & Assert: a language code, which under invariant globalization cannot become a culture.
         Names("zh-Hant-TW").ShouldBe(["zh-Hant-TW", "zh-Hant", "zh"]);
         Names("nl").ShouldBe(["nl"]);
-        Names("").ShouldBeEmpty();
+        Should.Throw<ArgumentException>(() => Names(""));
     }
 
     [Test]

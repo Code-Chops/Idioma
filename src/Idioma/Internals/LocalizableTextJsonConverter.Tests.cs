@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CodeChops.Idioma.Internals;
 
 namespace CodeChops.Idioma.Tests;
@@ -63,6 +64,32 @@ public sealed class LocalizableTextJsonConverterTests
     /// </summary>
     private sealed class JsonOtherTranslationsDE : ITranslations;
 
+    /// <summary>
+    /// A set for Traditional Chinese, the parent culture of <c>zh-TW</c>, which is no prefix of that name.
+    /// </summary>
+    private class JsonTraditionalChineseTranslations : IJsonTranslations, ITranslations
+    {
+        string ITranslations.LanguageCode => "zh-Hant";
+
+        public virtual string Greeting => "你好";
+    }
+
+    /// <summary>
+    /// A Taiwanese set that keeps the Traditional Chinese wording.
+    /// </summary>
+    private sealed class JsonTaiwaneseTranslations : JsonTraditionalChineseTranslations, ITranslations
+    {
+        string ITranslations.LanguageCode => "zh-TW";
+    }
+
+    /// <summary>
+    /// An app's rewording of the Traditional Chinese set.
+    /// </summary>
+    private sealed class JsonRewordedTraditionalChineseTranslations : JsonTraditionalChineseTranslations
+    {
+        public override string Greeting => "哈囉";
+    }
+
     private static ResourceText Greeting { get; } = ResourceText.Create<IJsonTranslations>("Json.Greeting", t => t.Greeting, new JsonTranslationsEN());
 
     private static LocalizableText Inline { get; } = LocalizableText.FromGeneratedCode("Checkout", ("en", "Checkout"), ("nl", "Afrekenen"));
@@ -104,8 +131,8 @@ public sealed class LocalizableTextJsonConverterTests
         // Assert
         text.ShouldBe(Inline);
         text.ShouldNotBeOfType<ResourceText>();
-        text.GetText(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Afrekenen");
-        text.GetText(CultureInfo.GetCultureInfo("en-US"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Checkout");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Afrekenen");
+        text.ToString(CultureInfo.GetCultureInfo("en-US"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Checkout");
     }
 
     [Test]
@@ -144,8 +171,8 @@ public sealed class LocalizableTextJsonConverterTests
         // Assert: the default language through the English set, English itself, and the region of Dutch; no German,
         // which a German user of this app never sees, and no Dutch, which no set words.
         text.Translations.Keys.Order(StringComparer.Ordinal).ShouldBe(["en", "en-GB", "nl-BE"]);
-        text.GetText(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: ["en-GB", "nl"]).ShouldBe("Hello");
-        text.GetText(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en-GB", "nl"]).ShouldBe("Dag");
+        text.ToString(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: ["en-GB", "nl"]).ShouldBe("Hello");
+        text.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en-GB", "nl"]).ShouldBe("Dag");
     }
 
     [Test]
@@ -166,6 +193,80 @@ public sealed class LocalizableTextJsonConverterTests
     }
 
     [Test]
+    public void Write_RegionWhoseParentCultureIsNoPrefixOfItsName_ShouldWriteWordingAUserOfTheRegionSees()
+    {
+        // Arrange: a Taiwanese set that leaves the text as Traditional Chinese words it, and a rewording of that.
+        var registry = TranslationsRegistry.Create(
+            [new JsonTranslationsEN(), new JsonTraditionalChineseTranslations(), new JsonTaiwaneseTranslations(), new JsonRewordedTraditionalChineseTranslations()],
+            "en", "zh-Hant");
+        var taiwanese = CultureInfo.GetCultureInfo("zh-TW");
+
+        // Act
+        var text = JsonSerializer.Deserialize<LocalizableText>(Write(Greeting, registry), Options)!;
+
+        // Assert: the rewording, which zh-TW reaches through its parent culture and not through its name.
+        Greeting.ToString(taiwanese, registry).ShouldBe("哈囉");
+        text.ToString(taiwanese, registry: null, appLanguages: registry.AppLanguages).ShouldBe("哈囉");
+    }
+
+    [Test]
+    public void Write_DefaultLanguageWhoseParentCultureIsNoPrefixOfItsName_ShouldShowWhatAUserOfItSees()
+    {
+        // Arrange: an app whose default language is Taiwanese, with a set for Traditional Chinese alone.
+        var registry = TranslationsRegistry.Create([new JsonTranslationsEN(), new JsonTraditionalChineseTranslations()], "zh-TW");
+        var taiwanese = CultureInfo.GetCultureInfo("zh-TW");
+        var french = CultureInfo.GetCultureInfo("fr-FR");
+
+        // Act
+        var text = JsonSerializer.Deserialize<LocalizableText>(Write(Greeting, registry), Options)!;
+
+        // Assert: a culture the app does not declare gets the default language as its own users see it, live and
+        // read back.
+        Greeting.ToString(taiwanese, registry).ShouldBe("你好");
+        Greeting.ToString(french, registry).ShouldBe("你好");
+        text.ToString(taiwanese, registry: null, appLanguages: registry.AppLanguages).ShouldBe("你好");
+        text.ToString(french, registry: null, appLanguages: registry.AppLanguages).ShouldBe("你好");
+    }
+
+    [Test]
+    public void Write_TextWithOneWording_ShouldWriteStringAndLeaveOutEmptyTranslations()
+    {
+        // Arrange
+        var registry = TranslationsRegistry.Create([]);
+        var declaredByKey = new ResourceText("Customer.Name", "Anna");
+
+        // Act
+        var ofString = Write(new LocalizableText("Anna"), registry);
+        var ofKey = Write(declaredByKey, registry);
+
+        // Assert: each reads back as it was.
+        ofString.ShouldBe("\"Anna\"");
+        ofKey.ShouldBe("""{"key":"Customer.Name","defaultText":"Anna"}""");
+        JsonSerializer.Deserialize<LocalizableText>(ofString, Options).ShouldBe(new LocalizableText("Anna"));
+        JsonSerializer.Deserialize<LocalizableText>(ofKey, Options).ShouldBe(declaredByKey);
+    }
+
+    [Test]
+    [Arguments("""{"defaultText":"Checkout","translations":{"nl":"Afrekenen"}""")]
+    [Arguments("""{"defaultText":"Checkout","translations":{"nl":""")]
+    [Arguments("""{"defaultText":"Checkout","other":[1,""")]
+    [Arguments("""{"defaultText":""")]
+    public void Read_JsonThatEndsBeforeTheText_ShouldThrow(string json)
+    {
+        // Arrange: part of a text with more JSON to come, which the serializer never hands a converter.
+        var converter = (JsonConverter<LocalizableText>)new LocalizableTextJsonConverter().CreateConverter(typeof(LocalizableText), Options);
+
+        // Act & Assert
+        Should.Throw<JsonException>(() =>
+        {
+            var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json), isFinalBlock: false, state: default);
+            reader.Read();
+
+            converter.Read(ref reader, typeof(LocalizableText), Options);
+        });
+    }
+
+    [Test]
     public void Deserialize_ResourceText_ShouldKeepKeyAndShowWordingOfSetsWithoutThem()
     {
         // Arrange
@@ -179,8 +280,8 @@ public sealed class LocalizableTextJsonConverterTests
         // Assert: no contract any more, so the wording comes from the text itself, with no sets at all.
         text.Key.ShouldBe("Json.Greeting");
         text.Contract.ShouldBeNull();
-        text.GetText(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
-        text.GetText(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hello");
+        text.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
+        text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hello");
         asBase.ShouldBe(text);
     }
 

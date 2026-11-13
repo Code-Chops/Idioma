@@ -18,13 +18,25 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>A region you list is a language of its own to the build. With en-GB next to en in [assembly: SupportedLanguages], every contract of the assembly needs a set for en-GB (LOC004), as every inline text already takes enGB:. The error names the set to add, such as 'class ShopTranslationsEnGB : ShopTranslationsEN', which can add nothing. To give one contract British wording and leave the rest alone, keep en-GB out of the attribute and implement LanguageCode in that set.
+    <PackageReleaseNotes>The wording for a culture you pass is text.ToString(culture), next to ToString() for the user's own, where it was text.GetText(culture). The overload that also takes a registry is renamed with it.
 
-Unchanged: a library's set covers the regions of its language. An app that lists en-GB owes a library with an English set no British one.
+A text without translations and without a key is written to JSON as its wording alone, such as "Anna", and a text without translations leaves "translations" out. JSON written by an earlier version still reads.
 
-The docs and the messages of the build now show a region as British English next to English.</PackageReleaseNotes>
+A text that falls back to a language shows what a user of that language sees: with zh-TW as the default language, it reaches a set for zh-Hant.
+
+LOC004 says that a nested, generic, or file-local class does not count as a set, where it asked for a set that seemed to exist.
+
+A generated text links a set that inherits its wording to the class that words it, such as ShopTranslationsEN.Checkout for a British set that leaves Checkout as it is. That link named the set, which a project writing a documentation file reported as CS1574.
+
+A text named like a member every class has, such as Equals, no longer gives CS0108 in the generated class.
+
+In an IDE, a set deriving from a set of another project that implements LanguageCode no longer stops the source generator.
+
+A library that a Blazor WebAssembly app loads lazily works once it has loaded, and registers its sets when its code first runs. The app called the library's registrar at startup, and the WebAssembly runtime kept refusing the library afterwards. The app now looks the library up by name first.
+
+The docs say that LOC011 starts with the second language an assembly declares, that the build rejects text.Equals("Naam") there, and which members throw on null.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Title>CodeChops.Idioma</Title>
     <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>

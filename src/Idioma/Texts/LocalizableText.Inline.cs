@@ -69,7 +69,8 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
             pairs[index < 0 ? count++ : index] = (language, translation);
         }
 
-        return new LocalizableText(defaultText) { TranslationPairs = count == pairs.Length ? pairs : pairs[..count] };
+        var text = new LocalizableText(defaultText) { TranslationPairs = count == pairs.Length ? pairs : pairs[..count] };
+        return text;
     }
 
     /// <summary>
@@ -77,8 +78,9 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// translations: <c>Title = customer.Name</c>. A <see langword="null"/> string gives <see langword="null"/>.
     /// </summary>
     /// <remarks>
-    /// In an assembly that declares <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, converting
-    /// wording you write in the source is a build error (<c>LOC011</c>): <c>"Orders"</c>, <c>$"Order {number}"</c>, and
+    /// In an assembly that declares two or more languages with
+    /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, converting wording you write in the source
+    /// is a build error (<c>LOC011</c>): <c>"Orders"</c>, <c>$"Order {number}"</c>, and
     /// <c>"Order " + number</c> all need <c>LocalizableText.Translated</c>. A string without letters, such as
     /// <c>"-"</c> or <c>"1234"</c>, still converts, and so does a value read at run time.
     /// </remarks>
@@ -122,9 +124,10 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// </summary>
     /// <remarks>
     /// A registered <see cref="ITranslations"/> set and the <see cref="DefaultText"/> are left out: to get what a user
-    /// sees, call <see cref="GetText(CultureInfo)"/>.
+    /// sees, call <see cref="ToString(CultureInfo)"/>.
     /// </remarks>
     /// <param name="culture">The culture to find a translation for.</param>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
     public string? GetTranslation(CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(culture);
@@ -175,8 +178,9 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// <remarks>
     /// A string becomes a text without translations here, so <c>text.Equals("Naam")</c> and
     /// <c>list.Contains("Naam")</c> are <see langword="false"/> for a translated text, even while it shows that
-    /// wording. To compare with the wording a user sees, write <c>text == "Naam"</c>. A <see cref="ResourceText"/> also
-    /// compares its key, contract, and default language.
+    /// wording. In an assembly that declares two or more languages the build rejects both, as wording written in one
+    /// language (<c>LOC011</c>). To compare with the wording a user sees, write <c>text == "Naam"</c>. A
+    /// <see cref="ResourceText"/> also compares its key, contract, and default language.
     /// </remarks>
     public virtual bool Equals(LocalizableText? other)
     {

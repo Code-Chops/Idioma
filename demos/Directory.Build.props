@@ -1,0 +1,8 @@
+<Project>
+
+  <!--
+    Stops the repository's Directory.Build.props from applying here: a demo is a file-based program that takes
+    the published package through its own #:package line, which central package management would refuse (NU1008).
+  -->
+
+</Project>

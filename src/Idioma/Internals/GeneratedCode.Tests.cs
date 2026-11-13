@@ -32,4 +32,25 @@ public sealed class GeneratedCodeTests
         text.DefaultText.ShouldBe("Orders");
         text.GetTranslation(new CultureInfo("nl-NL")).ShouldBe("Bestellingen");
     }
+
+    [Test]
+    [Arguments("", "en")]
+    [Arguments("s", "")]
+    public void CreateText_ShouldTakeEmptyWordingInAnyLanguage(string english, string dutch)
+    {
+        // Arrange & Act: a suffix one language has and another lacks. The default language is no exception.
+        var text = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
+
+        // Assert
+        text.DefaultText.ShouldBe(english);
+        text.GetTranslation(new CultureInfo("nl-NL")).ShouldBe(dutch);
+    }
+
+    [Test]
+    public void CreateText_ShouldRefuseNullWording()
+    {
+        // Arrange, Act & Assert
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.CreateText(null!, ("nl", "Bestellingen")));
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.CreateText("Orders", ("nl", null!)));
+    }
 }

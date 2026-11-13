@@ -16,9 +16,9 @@ namespace CodeChops.Idioma;
 /// <item>One class per language, for a library or a larger group of texts: see <see cref="ITranslations"/>.</item>
 /// </list>
 /// <para>
-/// Wording you write as a plain string where a text is expected is a build error (<c>LOC011</c>), so a text cannot end
-/// up in one language by accident. A value that is not wording of yours, such as a customer's name, still converts to
-/// a text.
+/// Once you list two or more languages, wording you write as a plain string where a text is expected is a build error
+/// (<c>LOC011</c>), so a text cannot end up in one language by accident. A value that is not wording of yours, such as
+/// a customer's name, still converts to a text.
 /// </para>
 /// <para>
 /// In an application, the first language is also the one every text falls back to, the texts of the libraries it uses
@@ -87,7 +87,7 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// </param>
     public SupportedLanguagesAttribute(string defaultLanguage, params string[] otherLanguages)
     {
-        ArgumentNullException.ThrowIfNull(defaultLanguage);
+        ArgumentException.ThrowIfNullOrWhiteSpace(defaultLanguage);
         ArgumentNullException.ThrowIfNull(otherLanguages);
 
         this.DefaultLanguage = defaultLanguage;

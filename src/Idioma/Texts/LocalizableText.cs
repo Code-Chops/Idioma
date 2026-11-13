@@ -16,6 +16,12 @@ namespace CodeChops.Idioma;
 /// <item>In one class per language, for a library or a larger group of texts: see <see cref="ITranslations"/>.</item>
 /// </list>
 /// <para>
+/// For wording that differs in a region, list the region next to its language:
+/// <c>[assembly: SupportedLanguages("en", "nl", "en-GB")]</c>. Every text then needs British wording too: an inline
+/// text takes <c>enGB: "Colour"</c>, and a class per language gets a class for <c>en-GB</c>. British users see that
+/// wording, and other English users keep the <c>en</c> wording.
+/// </para>
+/// <para>
 /// A text shows the first wording it finds:
 /// </para>
 /// <list type="number">
@@ -23,11 +29,12 @@ namespace CodeChops.Idioma;
 /// <c>en-US</c> and <c>en-GB</c> alike.</item>
 /// <item>The wording for your app's default language. A culture your app does not declare starts here, even for a
 /// library's text that has that culture's language, so no screen ends up in two languages.</item>
-/// <item>The wording for the text's own default language: that of the project that wrote it.</item>
+/// <item>The wording for the text's own default language: that of the project that wrote it. This is its
+/// <see cref="DefaultText"/>, unless a registered <see cref="ITranslations"/> set for that language rewords it.</item>
 /// </list>
 /// <para>
 /// To show the wording for another culture, such as the language of an email's recipient, call
-/// <see cref="GetText(CultureInfo)"/>.
+/// <see cref="ToString(CultureInfo)"/>.
 /// </para>
 /// <para>
 /// For a value inside the wording, write a placeholder in every language (<c>"Hello, {0}!"</c>) and fill it in with
@@ -79,7 +86,8 @@ public partial record LocalizableText
 
         var registry = TranslationsRegistry.Current;
 
-        return this.FindText(CultureInfo.CurrentUICulture, registry, registry.AppLanguages);
+        var text = this.FindText(CultureInfo.CurrentUICulture, registry, registry.AppLanguages);
+        return text;
     }
 
     /// <summary>
@@ -88,21 +96,29 @@ public partial record LocalizableText
     /// </summary>
     public string DefaultText { get; }
 
+    // A text made from a plain string, or declared by key alone: without translations of its own and without a
+    // contract no step of the order above can find it other wording, in any culture, so it need not walk them.
+    private bool HasOnlyDefaultText => this.TranslationPairs.Length is 0 && this is not ResourceText { Contract: not null };
+
     /// <summary>
     /// A text with one wording for every culture, for a value that has no translations, such as a customer's name. You
     /// rarely need this, as a <see cref="string"/> converts to a text by itself.
     /// </summary>
     /// <remarks>
-    /// In an assembly that declares <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, passing wording
-    /// you write in the source is a build error (<c>LOC011</c>): write <c>LocalizableText.Translated</c> instead.
+    /// In an assembly that declares two or more languages with
+    /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, passing wording you write in the source is a
+    /// build error (<c>LOC011</c>): write <c>LocalizableText.Translated</c> instead.
     /// </remarks>
-    /// <param name="defaultText">The wording every culture gets.</param>
+    /// <param name="defaultText">The wording every culture gets. It may be empty, as a value read at run time can be.</param>
+    /// <exception cref="ArgumentNullException">When <paramref name="defaultText"/> is <see langword="null"/>.</exception>
     /// <exception cref="NotSupportedException">
     /// When a type of your own derives from <see cref="LocalizableText"/>: hold a text in a member of your type
     /// instead.
     /// </exception>
     public LocalizableText(string defaultText)
     {
+        // Null alone: an empty or blank value read at run time, such as a customer's name, is a text too, and so is
+        // empty wording passed to LocalizableText.Translated.
         ArgumentNullException.ThrowIfNull(defaultText);
 
         this.ThrowIfDerived();
@@ -140,10 +156,6 @@ public partial record LocalizableText
             throw new NotSupportedException($"{this.GetType()} cannot derive from {nameof(LocalizableText)}: hold a {nameof(LocalizableText)} in a member instead.");
     }
 
-    // A text made from a plain string, or declared by key alone: without translations of its own and without a
-    // contract no step of the order above can find it other wording, in any culture, so it need not walk them.
-    private bool HasOnlyDefaultText => this.TranslationPairs.Length is 0 && this is not ResourceText { Contract: not null };
-
     /// <summary>
     /// The wording for the current UI culture, so a text goes wherever a <see cref="string"/> is expected:
     /// <c>string label = ShopTexts.Checkout;</c>. A <see langword="null"/> text gives <see langword="null"/>.
@@ -167,7 +179,8 @@ public partial record LocalizableText
     public static bool operator ==(LocalizableText? left, ReadOnlySpan<char> right) => left is not null && left.ToString().AsSpan().SequenceEqual(right);
 
     /// <summary>
-    /// Whether this text shows another wording than the given one for the current UI culture.
+    /// Whether this text shows another wording than the given one for the current UI culture. A
+    /// <see langword="null"/> text shows no wording, so this holds for it whatever the wording given.
     /// </summary>
     public static bool operator !=(LocalizableText? left, ReadOnlySpan<char> right) => !(left == right);
 
@@ -178,7 +191,8 @@ public partial record LocalizableText
     public static bool operator ==(ReadOnlySpan<char> left, LocalizableText? right) => right == left;
 
     /// <summary>
-    /// Whether this text shows another wording than the given one for the current UI culture.
+    /// Whether this text shows another wording than the given one for the current UI culture. A
+    /// <see langword="null"/> text shows no wording, so this holds for it whatever the wording given.
     /// </summary>
     public static bool operator !=(ReadOnlySpan<char> left, LocalizableText? right) => !(right == left);
     #endregion
@@ -201,7 +215,8 @@ public partial record LocalizableText
     /// </exception>
     public string Format(params ReadOnlySpan<object?> arguments)
     {
-        return String.Format(CultureInfo.CurrentCulture, this.ToString(), arguments);
+        var formatted = String.Format(CultureInfo.CurrentCulture, this.ToString(), arguments);
+        return formatted;
     }
 
     /// <summary>
@@ -209,7 +224,7 @@ public partial record LocalizableText
     /// email's recipient: <c>ShopTexts.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name)</c>.
     /// </summary>
     /// <remarks>
-    /// The culture gives both the wording, as <see cref="GetText(CultureInfo)"/> does, and the format of the values:
+    /// The culture gives both the wording, as <see cref="ToString(CultureInfo)"/> does, and the format of the values:
     /// a date or a number reads as the recipient writes it. Otherwise this works as
     /// <see cref="Format(ReadOnlySpan{object})"/> does.
     /// </remarks>
@@ -217,6 +232,7 @@ public partial record LocalizableText
     /// <param name="arguments">
     /// The values for the placeholders: the first fills <c>{0}</c>, the second <c>{1}</c>, and so on.
     /// </param>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
     /// <exception cref="FormatException">
     /// When the wording for the culture is not a valid format string, or has a placeholder without an argument. Pass a
     /// value for each placeholder, and write a literal brace as <c>{{</c> or <c>}}</c>.
@@ -225,20 +241,25 @@ public partial record LocalizableText
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        return String.Format(culture, this.GetText(culture), arguments);
+        var formatted = String.Format(culture, this.ToString(culture), arguments);
+        return formatted;
     }
 
     /// <summary>
     /// The wording for a given culture instead of the current UI culture, such as the language of an email's recipient:
-    /// <c>ShopTexts.Checkout.GetText(CultureInfo.GetCultureInfo("nl"))</c>.
+    /// <c>ShopTexts.Checkout.ToString(CultureInfo.GetCultureInfo("nl"))</c>.
     /// </summary>
     /// <remarks>
     /// A culture without a wording falls back as the current UI culture does: see <see cref="LocalizableText"/>.
     /// </remarks>
     /// <param name="culture">The culture to get the wording for.</param>
-    public string GetText(CultureInfo culture)
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    public string ToString(CultureInfo culture)
     {
-        return this.GetText(culture, TranslationsRegistry.Current);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var text = this.ToString(culture, TranslationsRegistry.Current);
+        return text;
     }
 
     /// <summary>
@@ -256,21 +277,26 @@ public partial record LocalizableText
     /// The sets to look in, or <see langword="null"/> to use only the text's own translations, with your app's
     /// languages.
     /// </param>
-    public string GetText(CultureInfo culture, TranslationsRegistry? registry)
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    public string ToString(CultureInfo culture, TranslationsRegistry? registry)
     {
+        ArgumentNullException.ThrowIfNull(culture);
+
         // Without a registry there are only the text's own translations, which are the app's: its languages decide.
-        return this.GetText(culture, registry, registry?.AppLanguages ?? TranslationsRegistry.SupportedLanguages);
+        var text = this.ToString(culture, registry, registry?.AppLanguages ?? TranslationsRegistry.SupportedLanguages);
+        return text;
     }
 
     /// <summary>
     /// The wording for a culture, for the given app languages (the default first) instead of those of the registry or
     /// the app.
     /// </summary>
-    internal string GetText(CultureInfo culture, TranslationsRegistry? registry, ImmutableArray<string> appLanguages)
+    internal string ToString(CultureInfo culture, TranslationsRegistry? registry, ImmutableArray<string> appLanguages)
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        return this.HasOnlyDefaultText ? this.DefaultText : this.FindText(culture, registry, appLanguages);
+        var text = this.HasOnlyDefaultText ? this.DefaultText : this.FindText(culture, registry, appLanguages);
+        return text;
     }
 
     private string FindText(CultureInfo culture, TranslationsRegistry? registry, ImmutableArray<string> appLanguages)
@@ -286,11 +312,13 @@ public partial record LocalizableText
         var appDefaultLanguage = appLanguages.IsDefaultOrEmpty ? null : appLanguages[0];
         var showsCulture = appDefaultLanguage is null || IsServed(culture, appLanguages);
 
-        return (showsCulture ? this.GetTranslation(culture) : null)
+        var text = (showsCulture ? this.GetTranslation(culture) : null)
                ?? (showsCulture && registry is not null ? this.FindTranslation(registry, new CultureFallback(culture)) : null)
                ?? (appDefaultLanguage is null ? null : this.GetTranslation(appDefaultLanguage, registry))
                ?? (registry is null ? null : this.FindDefaultTranslation(registry))
                ?? this.DefaultText;
+
+        return text;
     }
 
     /// <summary>
@@ -336,16 +364,21 @@ public partial record LocalizableText
     /// </summary>
     private string? GetTranslation(string language, TranslationsRegistry? registry)
     {
-        // Walked by code rather than through CultureInfo.Parent: under invariant globalization (a NativeAOT console, a
-        // trimmed WebAssembly app) only the invariant culture can be created by default. Dropping the last subtag
-        // (en-GB, then en) is also how the build checks that a set serves each of the app's languages.
-        foreach (var name in new CultureFallback(language))
+        // Through the culture of the language where there is one, so that a text falling back to a language shows what
+        // a user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh)
+        // walks past. By name where there is none: under invariant globalization (a NativeAOT console, a trimmed
+        // WebAssembly app) only the invariant culture can be created by default. Dropping the last subtag (en-GB, then
+        // en) is also how the build checks that a set serves each of the app's languages.
+        var names = CultureFallback.OfLanguage(language);
+
+        foreach (var name in names)
             if (this.FindOwnTranslation(name) is { } translation)
                 return translation;
 
-        return registry is null
+        var text = registry is null
             ? null
-            : this.FindTranslation(registry, new CultureFallback(language));
+            : this.FindTranslation(registry, names);
+        return text;
     }
 
     /// <summary>
@@ -363,8 +396,8 @@ public partial record LocalizableText
         var appLanguages = registry.AppLanguages;
         var builder = NoTranslations.ToBuilder();
 
-        foreach (var language in this.Translations.Keys)
-            Add(language);
+        foreach (var (language, wording) in this.Translations)
+            builder[language] = wording;
 
         // Each app language itself, as the default one is what a culture without wording gets, also where only a set
         // of a language above it words the text (en for an app declaring en-GB).
@@ -397,7 +430,8 @@ public partial record LocalizableText
                 ? otherEnd
                 : other.Length);
 
-            return language.Equals(otherLanguage, StringComparison.OrdinalIgnoreCase);
+            var result = language.Equals(otherLanguage, StringComparison.OrdinalIgnoreCase);
+            return result;
         }
     }
 

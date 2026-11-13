@@ -102,8 +102,8 @@ public sealed class FormatPlaceholdersAnalyzer : DiagnosticAnalyzer
         var declaration = (PropertyDeclarationSyntax)context.Node;
 
         if (!OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree)
-            || context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not { IsStatic: false, Type.SpecialType: SpecialType.System_String } property
-            || property.ContainingType is not { TypeKind: TypeKind.Class } set
+            || context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken)
+                is not { IsStatic: false, Type.SpecialType: SpecialType.System_String, ContainingType: { TypeKind: TypeKind.Class } set } property
             || !set.AllInterfaces.Contains(translations, SymbolEqualityComparer.Default)
             || GetConstantWording(declaration, context.SemanticModel, context.CancellationToken) is not { } wording)
         {

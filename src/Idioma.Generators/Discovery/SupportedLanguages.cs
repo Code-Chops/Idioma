@@ -225,11 +225,12 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// A first part of two to eight ASCII letters, and further parts of ASCII letters and digits: what fits a parameter
-    /// name, and what a culture name looks like. Not checked against the cultures of this machine, because a compiler
-    /// may run under invariant globalization.
+    /// A first part of two to eight ASCII letters, and further parts of one to eight ASCII letters or digits: what fits
+    /// a parameter name, and what a culture name looks like. Not checked against the cultures of this machine, because
+    /// a compiler may run under invariant globalization.
     /// </summary>
-    private static bool IsCultureName(string code)
+    // The rule CultureName.IsValid applies at run time, so that a code the build accepts is one the registry accepts.
+    public static bool IsCultureName(string code)
     {
         var parts = code.Split('-');
 

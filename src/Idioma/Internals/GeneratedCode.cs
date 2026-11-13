@@ -15,7 +15,10 @@ public static class GeneratedCode
     /// Creates a text with its translations, for the generated <c>LocalizableText.Translated</c>, which demands every
     /// language of <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>.
     /// </summary>
-    /// <param name="defaultText">The wording shown for every culture without a translation.</param>
+    /// <param name="defaultText">
+    /// The wording shown for every culture without a translation. It may be empty, as the wording of any other
+    /// language may.
+    /// </param>
     /// <param name="translations">
     /// The translations, each a language (a culture name, see <see cref="LocalizableText.Translations"/>) and its
     /// wording; a language listed twice keeps its last wording.
@@ -23,9 +26,16 @@ public static class GeneratedCode
     /// <exception cref="ArgumentException">
     /// When a language is empty or white-space; pass a culture name such as <c>en</c> or <c>en-GB</c>.
     /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="defaultText"/> or the wording of a language is <see langword="null"/>.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static LocalizableText CreateText(string defaultText, params ReadOnlySpan<(string Language, string Text)> translations)
     {
-        return LocalizableText.FromGeneratedCode(defaultText, translations);
+        // Null alone is refused, by the text itself: empty wording is wording, as it is in a set and in every other
+        // language of an inline text (a suffix one language has and another lacks).
+        var text = LocalizableText.FromGeneratedCode(defaultText, translations);
+        return text;
     }
 
     /// <summary>
@@ -48,10 +58,14 @@ public static class GeneratedCode
     /// <see cref="ITranslations.LanguageCode"/>. Name the set after its language (<c>ShopTranslationsEN</c>), or
     /// implement that property.
     /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static ResourceText CreateResourceText<TTranslations>(string key, Func<TTranslations, string> selector, TTranslations defaults)
         where TTranslations : class, ITranslations
     {
-        return ResourceText.Create(key, selector, defaults);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var text = ResourceText.Create(key, selector, defaults);
+        return text;
     }
 
     /// <summary>
@@ -65,8 +79,11 @@ public static class GeneratedCode
     /// When a language is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture name such as
     /// <c>en</c> or <c>en-GB</c>.
     /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static void RegisterLanguages(string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(defaultLanguage);
+
         TranslationsRegistry.RegisterLanguages(defaultLanguage, otherLanguages);
     }
 
@@ -81,9 +98,12 @@ public static class GeneratedCode
     /// When <paramref name="languageCode"/> is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture
     /// name such as <c>en-GB</c>.
     /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static void RegisterLanguageCode<TTranslations>(string languageCode)
         where TTranslations : class, ITranslations
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(languageCode);
+
         TranslationsRegistry.RegisterLanguageCode<TTranslations>(languageCode);
     }
 }

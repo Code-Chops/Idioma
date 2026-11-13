@@ -173,6 +173,47 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        public async Task TextsReadByManyUsersAtOnce_ShouldShowEachUserTheirOwnLanguage()
+        {
+            // Arrange: as on a server, where the work of each user carries its own UI culture, and goes on wherever a
+            // thread is free.
+            (string Culture, string Checkout, string Greeting, string Orders)[] users =
+            [
+                ("nl-NL", "Afrekenen", "Hallo, Max!", "Bestellingen"),
+                ("en-US", "Pay", "Hello, Max!", "Orders"),
+                ("nl-BE", "Afrekenen", "Hallo, Max!", "Bestellingen"),
+                ("en-GB", "Pay", "Hello, Max!", "Orders"),
+                ("fr-FR", "Pay", "Hello, Max!", "Orders"),
+            ];
+
+            // Act
+            var wrongReads = await Task.WhenAll(Enumerable.Range(start: 0, count: 64).Select(index => Task.Run(async () =>
+            {
+                var user = users[index % users.Length];
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(user.Culture);
+                var wrong = 0;
+
+                for (var i = 0; i < 2_000; i++)
+                {
+                    if (!String.Equals(GeneratedTranslations.Checkout.ToString(), user.Checkout, StringComparison.Ordinal)
+                        || !String.Equals(GeneratedTranslations.Greeting.Format("Max"), user.Greeting, StringComparison.Ordinal)
+                        || !String.Equals(InlineTexts.Orders.ToString(), user.Orders, StringComparison.Ordinal))
+                    {
+                        wrong++;
+                    }
+
+                    // Hands the thread to the work of another user.
+                    await Task.Yield();
+                }
+
+                return wrong;
+            })));
+
+            // Assert
+            wrongReads.Sum().ShouldBe(0);
+        }
+
+        [Test]
         public void GeneratedFactory_ShouldHoldEveryLanguage()
         {
             // Arrange & Act

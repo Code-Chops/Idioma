@@ -183,10 +183,10 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // Assert: a culture neither serves gets the default wording, in an app without a default language of its own,
         // and the app's default language otherwise (this test project declares en).
-        text.GetText(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("Colour");
-        text.GetText(CultureInfo.GetCultureInfo("en-US")).ShouldBe("Color");
-        text.GetText(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: []).ShouldBe("Colour");
-        text.GetText(CultureInfo.GetCultureInfo("fr-FR")).ShouldBe("Color");
+        text.ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("Colour");
+        text.ToString(CultureInfo.GetCultureInfo("en-US")).ShouldBe("Color");
+        text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: []).ShouldBe("Colour");
+        text.ToString(CultureInfo.GetCultureInfo("fr-FR")).ShouldBe("Color");
     }
 
     [Test]
