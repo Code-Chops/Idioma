@@ -1,0 +1,1 @@
+﻿{"key":"Json.Greeting","defaultText":"Hi","translations":{"en":"Hi","en-GB":"Hi","nl":"Hallo"}}

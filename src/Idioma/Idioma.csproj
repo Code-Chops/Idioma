@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Texts for any .NET app, Blazor or not. The package has no dependencies, and must keep none: tests/Idioma.Tests
+    fails when one creeps in (PackageIndependenceTests).
+  -->
+
+  <PropertyGroup Label="Main">
+    <!-- One framework: the package depends on nothing framework-specific, so a newer runtime uses this build as is.
+         The tests run on every supported runtime (see Idioma.Tests.csproj). -->
+    <TargetFramework>net10.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <!--
+    Packages are produced by `dotnet pack` only, never on build: with GeneratePackageOnBuild set, NuGet's Pack target
+    no longer depends on Build, so `dotnet pack` would pack whatever outputs happen to be on disk.
+  -->
+  <PropertyGroup Label="Package">
+    <IsPackable>true</IsPackable>
+    <Version>0.1.0</Version>
+    <PackageReleaseNotes>First release.</PackageReleaseNotes>
+    <PackageId>CodeChops.Idioma</PackageId>
+    <Title>CodeChops.Idioma</Title>
+    <Description>Translations for any .NET app, written in C#: a class per language, or one-line texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>
+    <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
+    <PackageProjectUrl>https://github.com/code-chops/Idioma</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/code-chops/Idioma</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <Authors>CodeChops (@Code-Chops), Max Bergman</Authors>
+    <Company>CodeChops</Company>
+    <Copyright>Copyright (c) CodeChops $([System.DateTime]::Now.ToString(yyyy))</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Symbols go into a separate .snupkg, with the sources that are not in git (generated code) embedded. -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Label="PackageAssets">
+    <!-- The license file is packed next to the license expression for its closing sentence on generated code. -->
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="false" />
+    <!-- The generator ships in the package's analyzers folder. A literal path, not a glob: a glob evaluates before
+         the generator builds and would silently pack nothing, where a missing file fails the pack. -->
+    <None Include="..\Idioma.Generators\bin\$(Configuration)\netstandard2.0\CodeChops.Idioma.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="$(AssemblyName).Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Builds the generator before this project, and runs it on this project's own code. -->
+    <ProjectReference Include="..\Idioma.Generators\Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

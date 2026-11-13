@@ -1,0 +1,19 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.nupkg
+*.snupkg
+*.binlog
+
+# IDE and user-specific files
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+*.DotSettings.user
+.DS_Store
+
+# Verify writes a received file next to a failing snapshot
+*.received.*

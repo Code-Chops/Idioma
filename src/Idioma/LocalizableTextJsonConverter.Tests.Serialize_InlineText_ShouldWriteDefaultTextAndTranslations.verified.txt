@@ -1,0 +1,1 @@
+﻿{"defaultText":"Checkout","translations":{"en":"Checkout","nl":"Afrekenen"}}

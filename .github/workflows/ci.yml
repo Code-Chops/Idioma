@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test-pack:
+    name: Build, test, and pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The package targets net10.0, and the tests run on every supported runtime.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build Idioma.slnx -c Release
+
+      # The suite runs on Microsoft.Testing.Platform (TUnit), so it is executed, not `dotnet test`ed.
+      - name: Tests (net10.0)
+        run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net10.0 --no-build
+
+      - name: Tests (net11.0)
+        run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net11.0 --no-build
+
+      - name: Pack
+        run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg

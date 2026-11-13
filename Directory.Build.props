@@ -1,0 +1,27 @@
+<Project>
+
+  <PropertyGroup>
+    <AssemblyName>CodeChops.$(MSBuildProjectName)</AssemblyName>
+    <RootNamespace>CodeChops.$(MSBuildProjectName)</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <NuGetAudit>true</NuGetAudit>
+    <!-- Packing is opt-in: only src/Idioma ships. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- A build on CI is deterministic, so the package's symbols map to the sources on GitHub (Source Link). -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Analyzer">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
