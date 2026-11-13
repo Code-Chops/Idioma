@@ -87,9 +87,9 @@ public sealed class FormatPlaceholdersAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(
                 PlaceholdersDifferRule,
                 argument.Syntax.GetLocation(),
-                $"The '{GetLanguage(parameter)}' wording",
+                $"The '{GetLanguage(parameter, context.Compilation)}' wording",
                 found,
-                $"the '{GetLanguage(referenceParameter)}' wording",
+                $"the '{GetLanguage(referenceParameter, context.Compilation)}' wording",
                 FormatPlaceholders.Describe(expected)));
         }
     }
@@ -141,11 +141,14 @@ public sealed class FormatPlaceholdersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The language a parameter of the factory stands for: <c>zh-Hans</c> for <c>zh_Hans</c>.
+    /// The language a parameter of the factory stands for, as the attribute lists it: <c>zh-Hans</c> for
+    /// <c>zhHans</c>.
     /// </summary>
-    private static string GetLanguage(IParameterSymbol parameter)
+    // Read from the attribute when a wording is reported, not before: the factory is the assembly's own, written for
+    // the languages it lists.
+    private static string GetLanguage(IParameterSymbol parameter, Compilation compilation)
     {
-        return parameter.Name.Replace('_', '-');
+        return SupportedLanguages.FindLanguageOfParameter(parameter.Name, SupportedLanguages.ReadCodes(compilation.Assembly));
     }
 
     /// <summary>

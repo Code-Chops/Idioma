@@ -89,10 +89,10 @@ public sealed class FormatPlaceholdersAnalyzerTests
     #endregion
 
     [Test]
-    [Arguments("""en: "Hello, {0}!", nl: "Hallo!", en_GB: "Hello, {0}!" """, "nl", "The 'nl' wording has no placeholders, while the 'en' wording has placeholder {0}.")]
-    [Arguments("""en: "Hello, {0}!", nl: "Hallo, {1}!", en_GB: "Hello, {0}!" """, "nl", "The 'nl' wording has placeholder {1}, while the 'en' wording has placeholder {0}.")]
-    [Arguments("""en: "Hello", nl: "Hallo", en_GB: "Hello, {0}" """, "en_GB", "The 'en-GB' wording has placeholder {0}, while the 'en' wording has no placeholders.")]
-    [Arguments("""nl: "Totaal: {0} {", en: "Total: {0}", en_GB: "Total: {0}" """, "nl", "The 'nl' wording has a brace that is no placeholder (write a literal brace as {{ or }}), while the 'en' wording has placeholder {0}.")]
+    [Arguments("""en: "Hello, {0}!", nl: "Hallo!", enGB: "Hello, {0}!" """, "nl", "The 'nl' wording has no placeholders, while the 'en' wording has placeholder {0}.")]
+    [Arguments("""en: "Hello, {0}!", nl: "Hallo, {1}!", enGB: "Hello, {0}!" """, "nl", "The 'nl' wording has placeholder {1}, while the 'en' wording has placeholder {0}.")]
+    [Arguments("""en: "Hello", nl: "Hallo", enGB: "Hello, {0}" """, "enGB", "The 'en-GB' wording has placeholder {0}, while the 'en' wording has no placeholders.")]
+    [Arguments("""nl: "Totaal: {0} {", en: "Total: {0}", enGB: "Total: {0}" """, "nl", "The 'nl' wording has a brace that is no placeholder (write a literal brace as {{ or }}), while the 'en' wording has placeholder {0}.")]
     public async Task InlineWordingWithOtherPlaceholders_ShouldReportLOC016(string arguments, string parameter, string message)
     {
         // Arrange & Act
@@ -108,11 +108,11 @@ public sealed class FormatPlaceholdersAnalyzerTests
     }
 
     [Test]
-    [Arguments("""en: "{0} of {1}", nl: "{1} van {0}", en_GB: "{0} of {1}" """)]
-    [Arguments("""en: "Use braces", nl: "Gebruik {", en_GB: "Use }" """)]
-    [Arguments("""en: "Total: {0:N2}", nl: "Totaal: {0,8}", en_GB: "{{Total}}: {0}" """)]
-    [Arguments("""en: System.DateTime.Now.ToString(), nl: "{1}", en_GB: "x" """)]
-    [Arguments("""en: "Hello, {0}!", nl: System.DateTime.Now.ToString(), en_GB: "Hello, {0}!" """)]
+    [Arguments("""en: "{0} of {1}", nl: "{1} van {0}", enGB: "{0} of {1}" """)]
+    [Arguments("""en: "Use braces", nl: "Gebruik {", enGB: "Use }" """)]
+    [Arguments("""en: "Total: {0:N2}", nl: "Totaal: {0,8}", enGB: "{{Total}}: {0}" """)]
+    [Arguments("""en: System.DateTime.Now.ToString(), nl: "{1}", enGB: "x" """)]
+    [Arguments("""en: "Hello, {0}!", nl: System.DateTime.Now.ToString(), enGB: "Hello, {0}!" """)]
     public async Task InlineWordingWithSamePlaceholdersOrNoConstant_ShouldReportNothing(string arguments)
     {
         // Arrange & Act
@@ -221,12 +221,12 @@ public sealed class FormatPlaceholdersAnalyzerTests
 
             public static class Page
             {
-                public static LocalizableText Text => LocalizableText.Translated(en: "{0} items", nl: "Items", en_GB: "{0} items");
+                public static LocalizableText Text => LocalizableText.Translated(en: "{0} items", nl: "Items", enGB: "{0} items");
             }
             """;
 
         // Act
-        var diagnostics = await GeneratorTestHelper.AnalyzeAsync(new FormatPlaceholdersAnalyzer(), Inline("""en: "x", nl: "x", en_GB: "x" """), [], ("Pages/Orders_razor.g.cs", razorOutput));
+        var diagnostics = await GeneratorTestHelper.AnalyzeAsync(new FormatPlaceholdersAnalyzer(), Inline("""en: "x", nl: "x", enGB: "x" """), [], ("Pages/Orders_razor.g.cs", razorOutput));
 
         // Assert
         diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC016");

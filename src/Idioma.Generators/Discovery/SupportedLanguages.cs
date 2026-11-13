@@ -45,13 +45,36 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The parameter a language has in the generated factory: <c>nl</c>, <c>zh_Hans</c>, and <c>@is</c>.
+    /// The parameter a language has in the generated factory: the suffix of its set (<see cref="ToTypeSuffix"/>) in
+    /// camel case, so <c>nl</c> where a set ends in <c>NL</c>, <c>nlBE</c> for <c>NlBE</c>, and <c>zhHans</c> for
+    /// <c>ZhHans</c>. A keyword is escaped: <c>@is</c>.
     /// </summary>
     public static string ToParameterName(string code)
     {
-        var name = code.Replace('-', '_');
+        // The language itself in lower case, and every part after it as the suffix of a set writes it.
+        var parts = code.Split('-');
+        var builder = new StringBuilder(code.Length).Append(parts[0].ToLowerInvariant());
+
+        for (var i = 1; i < parts.Length; i++)
+            AppendCapitalized(builder, parts[i]);
+
+        var name = builder.ToString();
 
         return SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
+    }
+
+    /// <summary>
+    /// The language a parameter of the generated factory stands for among the languages an assembly lists, such as
+    /// <c>nl-BE</c> for <c>nlBE</c>. The name of the parameter itself when none of them gives it.
+    /// </summary>
+    public static string FindLanguageOfParameter(string parameterName, IEnumerable<string> codes)
+    {
+        // A symbol's name comes without the @ that escapes a keyword.
+        foreach (var code in codes)
+            if (String.Equals(ToParameterName(code).TrimStart('@'), parameterName, StringComparison.Ordinal))
+                return code;
+
+        return parameterName;
     }
 
     /// <summary>
@@ -64,10 +87,15 @@ internal static class SupportedLanguages
 
         var suffix = new StringBuilder(code.Length);
         foreach (var part in code.Split('-'))
-            if (part.Length > 0)
-                suffix.Append(Char.ToUpperInvariant(part[0])).Append(part, startIndex: 1, part.Length - 1);
+            AppendCapitalized(suffix, part);
 
         return suffix.ToString();
+    }
+
+    private static void AppendCapitalized(StringBuilder builder, string part)
+    {
+        if (part.Length > 0)
+            builder.Append(Char.ToUpperInvariant(part[0])).Append(part, startIndex: 1, part.Length - 1);
     }
 
     /// <summary>
@@ -135,6 +163,8 @@ internal static class SupportedLanguages
                 problems.Add($"'{code}' is no culture name");
             else if (codes.Contains(code, StringComparer.OrdinalIgnoreCase))
                 problems.Add($"'{code}' is listed twice");
+            else if (codes.FirstOrDefault(listed => DifferInHyphensAlone(listed, code)) is { } other)
+                problems.Add($"'{code}' and '{other}' differ only in their hyphens");
             else
                 codes.Add(code);
         }
@@ -183,6 +213,15 @@ internal static class SupportedLanguages
 
             return constant.Kind is not TypedConstantKind.Error && (language is not null || constant.IsNull);
         }
+    }
+
+    /// <summary>
+    /// Whether two languages are the same once their hyphens are left out, as <c>sr-Latn-RS</c> and <c>sr-LatnRS</c>
+    /// are. A parameter and the suffix of a set are written without hyphens, so neither could tell the two apart.
+    /// </summary>
+    private static bool DifferInHyphensAlone(string code, string other)
+    {
+        return String.Equals(code.Replace("-", ""), other.Replace("-", ""), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

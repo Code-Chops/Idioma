@@ -18,24 +18,13 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>Rebuild every assembly that uses Idioma with this version. What generated code calls has moved to the namespace CodeChops.Idioma.Internals, so an assembly built with 0.1.0 does not run on 0.2.0.
+    <PackageReleaseNotes>LocalizableText.Translated names a language as the name of its set ends, in camelCase: enGB next to ShopTranslationsEnGB, and zhHans next to ShopTranslationsZhHans. It was en_GB and zh_Hans, so rename such arguments. A language without a hyphen keeps its name: nl, fil.
 
-New:
-- Your IDE offers a fix for LOC002 and LOC007.
-- Translated is on LocalizableText alone: ResourceText.Translated no longer compiles.
-- #pragma warning disable and [SuppressMessage] also silence what the generator reports.
-
-Fixed:
-- An Android app registers its languages.
-- Generated code compiles for a text named like its namespace, and in a namespace that starts with Idioma, Generated, or Internals.
-- A text read from JSON that comes in as a stream skips a member it does not know.
-- A set named after a two-letter code is not taken for a longer code its name happens to end in.
-- A default-language set without a parameterless constructor gets LOC002, not a compiler error in generated code.
-- LOC016 also checks wording written as the initializer of a property.
-
-No longer public: WithTranslation, LocalizableText.FromGeneratedCode, ResourceText.Create, and RegisterLanguages and RegisterLanguageCode of TranslationsRegistry.</PackageReleaseNotes>
+Also:
+- A language written in upper case in [assembly: SupportedLanguages] gets its parameter in lower case: nl for "NL".
+- Two listed languages that differ only in their hyphens, such as sr-Latn-RS and sr-LatnRS, are an error (LOC010): neither a parameter nor the name of a set could tell them apart.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Title>CodeChops.Idioma</Title>
     <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>

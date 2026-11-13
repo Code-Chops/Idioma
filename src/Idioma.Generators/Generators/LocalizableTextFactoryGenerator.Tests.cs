@@ -97,9 +97,68 @@ public sealed class LocalizableTextFactoryGeneratorTests
         var text = Factory(Run(Source("\"en\", \"zh-Hans\", \"is\"")))!;
 
         // Assert
-        text.ShouldContain("Translated(string en, string zh_Hans, string @is)");
-        text.ShouldContain("GeneratedCode.CreateText(en, (\"en\", en), (\"zh-Hans\", zh_Hans), (\"is\", @is));");
+        text.ShouldContain("Translated(string en, string zhHans, string @is)");
+        text.ShouldContain("GeneratedCode.CreateText(en, (\"en\", en), (\"zh-Hans\", zhHans), (\"is\", @is));");
         text.ShouldContain("<param name=\"is\">");
+    }
+
+    [Test]
+    [Arguments("nl", "nl", "NL")]
+    [Arguments("NL", "nl", "NL")]
+    [Arguments("fil", "fil", "Fil")]
+    [Arguments("nl-BE", "nlBE", "NlBE")]
+    [Arguments("NL-be", "nlBe", "NLBe")]
+    [Arguments("zh-Hans", "zhHans", "ZhHans")]
+    [Arguments("sr-Latn-RS", "srLatnRS", "SrLatnRS")]
+    [Arguments("es-419", "es419", "Es419")]
+    public void Language_ShouldBecomeParameterNamedAsItsSetEnds(string code, string parameter, string suffix)
+    {
+        // Arrange & Act
+        var text = Factory(Run(Source($"\"en\", \"{code}\"")))!;
+
+        // Assert: a language reads alike in both places. The parameter is what the name of a set of the language ends
+        // in, in camel case: nlBE next to ShopTranslationsNlBE.
+        text.ShouldContain($"Translated(string en, string {parameter})");
+        text.ShouldContain($"(\"{code}\", {parameter})");
+        text.ShouldContain($"<param name=\"{parameter}\">The wording in <c>{code}</c>.</param>");
+        SupportedLanguages.ToTypeSuffix(code).ShouldBe(suffix);
+        parameter.ShouldBe(suffix, StringCompareShould.IgnoreCase);
+    }
+
+    [Test]
+    public void RegionalLanguage_ShouldCompileInSetAndInlineText()
+    {
+        // Arrange & Act: nl-BE as the end of a set's name, and as an argument.
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "nl-BE")]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsEN : ITranslations
+            {
+                public virtual string Cart => "Cart";
+            }
+
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Cart => "Winkelwagen";
+            }
+
+            public class ShopTranslationsNlBE : ShopTranslationsNL
+            {
+                public override string Cart => "Winkelkar";
+            }
+
+            public static class Texts
+            {
+                public static LocalizableText Greeting { get; } = LocalizableText.Translated(en: "Hello, {0}!", nl: "Hallo, {0}!", nlBE: "Dag, {0}!");
+            }
+            """);
+
+        // Assert
+        errors.ShouldBeEmpty();
     }
 
     [Test]
@@ -115,7 +174,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static LocalizableText Colour { get; } = LocalizableText.Translated(en_GB: "Colour", en: "Color");
+                public static LocalizableText Colour { get; } = LocalizableText.Translated(enGB: "Colour", en: "Color");
             }
             """));
 
@@ -238,6 +297,8 @@ public sealed class LocalizableTextFactoryGeneratorTests
     [Arguments("\"en\", \"nl_BE\"", "'nl_BE' is no culture name")]
     [Arguments("\"en\", \"nl-\"", "'nl-' is no culture name")]
     [Arguments("\"en\", \"nl\", \"NL\"", "'NL' is listed twice")]
+    [Arguments("\"en\", \"sr-Latn-RS\", \"sr-LatnRS\"", "'sr-LatnRS' and 'sr-Latn-RS' differ only in their hyphens")]
+    [Arguments("\"en\", \"zh-Hans\", \"zhhans\"", "'zhhans' and 'zh-Hans' differ only in their hyphens")]
     [Arguments("\"en\", \"nl\", null", "null is no culture name")]
     [Arguments("\"en\", null", "null is no culture name")]
     public void InvalidLanguage_ShouldReportLOC010AndKeepValidOnes(string languages, string expected)

@@ -92,12 +92,14 @@ public class ShopTranslationsEnGB : ShopTranslationsEN
 
 British users see "Basket", and the rest of your English. A class with nothing British about it needs no British class.
 
-Once you list `en-GB`, every inline text takes a British wording too: `LocalizableText.Translated(en: "Color", nl: "Kleur", en_GB: "Colour")`. To leave inline texts as they are, see [Language codes](#language-codes).
+Once you list `en-GB`, every inline text takes a British wording too: `LocalizableText.Translated(en: "Color", nl: "Kleur", enGB: "Colour")`. To leave inline texts as they are, see [Language codes](#language-codes).
 
 ### Format a text
 
 ```razor
-<p>@ShopTranslations.Greeting.Format(customer.Name)</p>
+<p>
+  @ShopTranslations.Greeting.Format(customer.Name)
+</p>
 ```
 
 `Format` fills in a text's placeholders. Give every language the same placeholders: the build checks it.
@@ -167,7 +169,7 @@ Three things do allocate:
 
 ### What the source generator writes
 
-`LocalizableText.Translated` gets one required parameter per declared language, named after it.
+`LocalizableText.Translated` gets one required parameter per declared language, named after it: `enGB` for `en-GB`.
 
 From the set of the default language, `ShopTranslationsEN`, it writes the contract `IShopTranslations` and the class `ShopTranslations`. Each generated text links to its wording in every language, so you can jump from `ShopTranslations.Checkout` to `ShopTranslationsNL.Checkout`. The generated class is partial, so a helper can sit next to the texts, and it holds the constant `ResourceKeyPrefix` (`"Shop."`) next to them, so no text can take that name.
 
@@ -195,11 +197,13 @@ A set's language is the end of its name. A two-letter code is the last two lette
 
 A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name as well, written in PascalCase (`ShopTranslationsEnGB`, `ShopTranslationsZhHans`, `ShopTranslationsFil`), but only when `[assembly: SupportedLanguages]` lists it. A set deriving from such a set serves the same language.
 
+An inline text names a language as a set's name ends, in camelCase: `nl:` next to `ShopTranslationsNL`, and `enGB:`, `zhHans:`, and `fil:` next to the sets above.
+
 A name alone cannot tell `ShopTranslationsEnGB` (British English) from `AdminUiNL` (Dutch). So when the code is not listed, only the last two letters count: `ShopTranslationsEnGB` serves `gb`, which is not a language (build error `LOC005`).
 
 For English in the United States and Britain, you need no `en-US` set: `ShopTranslationsEN` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. There are two ways to add one:
 
-- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`. The name is enough, but every inline text then takes a British wording too (`en_GB:`).
+- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`. The name is enough, but every inline text then takes a British wording too (`enGB:`).
 
   ```csharp
   public class ShopTranslationsEnGB : ShopTranslationsEN
