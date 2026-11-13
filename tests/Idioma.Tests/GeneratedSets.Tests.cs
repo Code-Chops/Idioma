@@ -1,3 +1,5 @@
+using CodeChops.Idioma.Internals;
+
 #region Fixture
 // Top-level, because that is what the source generators discover. Nothing in the tests below registers these sets.
 [assembly: CodeChops.Idioma.SupportedLanguages("en", "nl")]

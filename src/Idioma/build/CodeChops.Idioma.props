@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    Shows the source generator whether the project is an Android app. The Android SDK builds an app as a library (it
+    turns OutputType Exe into Library, as an app has no Main), so the compiler's output kind takes it for a library, and
+    the app's languages would not register when it starts. The SDK's own AndroidApplication property tells the two
+    apart: true for an app, false for a library.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AndroidApplication" />
+  </ItemGroup>
+
+</Project>

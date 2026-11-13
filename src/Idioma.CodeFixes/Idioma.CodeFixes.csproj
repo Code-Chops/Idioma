@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The code fixes of CodeChops.Idioma, packed into its analyzers folder next to the generator (see Idioma.csproj). An
+    assembly of their own: a code fix needs the workspaces API, which an IDE carries and a compiler does not, so the
+    generator's assembly must not reference it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <DevelopmentDependency>true</DevelopmentDependency>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pinned as the generator pins its compiler (see Idioma.Generators.csproj): an IDE skips a code fix built against
+         a newer Roslyn than its own. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" VersionOverride="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- For the diagnostic ids and properties the fixes read; the generator's assembly sits next to this one. -->
+    <ProjectReference Include="..\Idioma.Generators\Idioma.Generators.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

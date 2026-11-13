@@ -1,8 +1,11 @@
 name: Publish
 
-# Publishes CodeChops.Idioma to nuget.org: push a tag named after the version (v0.1.0), or run it by hand. It signs in
-# through trusted publishing, so the repository holds no API key: nuget.org needs a trusted publishing policy for this
-# repository and this workflow file (publish.yml).
+# Publishes CodeChops.Idioma to nuget.org: push a tag named after the version (v0.1.0), or run it by hand on such a
+# tag. It signs in through trusted publishing, so the repository holds no API key: nuget.org needs a trusted publishing
+# policy for this repository and this workflow file (publish.yml).
+#
+# This job can get an API key for nuget.org, so each action it uses is pinned to a commit, with its version in the
+# comment behind it: a tag such as v4 is one its owner can move to other code.
 on:
   push:
     tags: ['v*']
@@ -20,16 +23,25 @@ jobs:
       contents: read
       id-token: write # lets GitHub issue the token that nuget.org exchanges for a short-lived API key
     steps:
-      - uses: actions/checkout@v4
+      # A run by hand starts from the branch or tag picked for it, and a branch names no version to hold the package
+      # to, so only a version tag publishes.
+      - name: Check that the run is on a version tag
+        if: github.ref_type != 'tag'
+        run: |
+          echo "::error::Run this workflow on a version tag such as v0.1.0, not on '${GITHUB_REF_NAME}'."
+          exit 1
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: |
             10.0.x
             11.0.x
 
+      # A warning fails the build and the pack, as in CI: nothing is published that CI would turn down.
       - name: Build
-        run: dotnet build Idioma.slnx -c Release
+        run: dotnet build Idioma.slnx -c Release -warnaserror
 
       - name: Tests (net10.0)
         run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net10.0 --no-build
@@ -38,15 +50,14 @@ jobs:
         run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net11.0 --no-build
 
       - name: Pack
-        run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts
+        run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts -warnaserror
 
       # A tag that names another version than the project file would publish something else than it says.
       - name: Check the tag against the version
-        if: github.ref_type == 'tag'
         run: test -f "artifacts/CodeChops.Idioma.${GITHUB_REF_NAME#v}.nupkg"
 
       - name: Sign in to nuget.org
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: login
         with:
           user: CodeChops

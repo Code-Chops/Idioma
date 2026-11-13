@@ -11,6 +11,7 @@
     <File Path="README.md" />
   </Folder>
   <Project Path="src/Idioma/Idioma.csproj" />
+  <Project Path="src/Idioma.CodeFixes/Idioma.CodeFixes.csproj" />
   <Project Path="src/Idioma.Generators/Idioma.Generators.csproj" />
   <Project Path="tests/Idioma.Tests/Idioma.Tests.csproj" />
 </Solution>

@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using CodeChops.Idioma.Generators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,9 +14,9 @@ namespace CodeChops.Idioma.Tests.TestHelpers;
 /// </summary>
 internal static class GeneratorTestHelper
 {
-    private static CSharpParseOptions ParseOptions { get; } = new(LanguageVersion.Latest);
+    internal static CSharpParseOptions ParseOptions { get; } = new(LanguageVersion.Latest);
 
-    private static ImmutableArray<MetadataReference> References { get; } = CreateReferences();
+    internal static ImmutableArray<MetadataReference> References { get; } = CreateReferences();
 
     /// <summary>
     /// Runs one generator over <paramref name="source"/>.
@@ -59,6 +61,21 @@ internal static class GeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs one generator over <paramref name="source"/> with properties of the project, each under the key a generator
+    /// reads it by (<c>build_property.AndroidApplication</c>): what the build passes for the MSBuild properties a
+    /// package makes visible to the compiler.
+    /// </summary>
+    internal static GeneratorDriverRunResult RunWithBuildProperties(IIncrementalGenerator generator, string source, MetadataReference[] references, params (string Key, string Value)[] properties)
+    {
+        var driver = CSharpGeneratorDriver.Create(
+            generators: [generator.AsSourceGenerator()],
+            parseOptions: ParseOptions,
+            optionsProvider: new BuildProperties(properties));
+
+        return driver.RunGenerators(CreateCompilation(references, source)).GetRunResult();
+    }
+
+    /// <summary>
     /// Runs one generator, then runs the same driver over a fresh parse of <paramref name="source"/> next to an
     /// unchanged file: the IDE edit that surfaces stale cached symbols.
     /// </summary>
@@ -100,6 +117,43 @@ internal static class GeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs one generator, edits the file of <paramref name="source"/> itself without moving or changing what it
+    /// declares (a comment at its end), and runs the same driver again. Returns that second run, and the syntax tree
+    /// the file has after the edit.
+    /// </summary>
+    internal static (GeneratorRunResult Run, SyntaxTree Edited) RunAcrossEditInSameFile(IIncrementalGenerator generator, string source)
+    {
+        var compilation = CreateCompilation([], source);
+        var edited = CSharpSyntaxTree.ParseText(source + "\n// An edit that moves nothing.", ParseOptions);
+        var driver = (GeneratorDriver)CSharpGeneratorDriver.Create(
+            generators: [generator.AsSourceGenerator()],
+            parseOptions: ParseOptions,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), edited));
+
+        return (driver.GetRunResult().Results.Single(), edited);
+    }
+
+    /// <summary>
+    /// Why each output step of a run that wrote source ran: every reason being <c>Cached</c> means that the run wrote
+    /// no source again, whatever it reported.
+    /// </summary>
+    internal static ImmutableArray<IncrementalStepRunReason> GetSourceOutputReasons(GeneratorRunResult run)
+    {
+        // An output step gives a pair: the sources it wrote, and the diagnostics it reported.
+        return
+        [
+            .. run.TrackedOutputSteps
+                .SelectMany(static step => step.Value)
+                .SelectMany(static step => step.Outputs)
+                .Where(static output => output.Value is ITuple { Length: 2 } written && written[0] is IEnumerable sources && sources.Cast<object>().Any())
+                .Select(static output => output.Reason),
+        ];
+    }
+
+    /// <summary>
     /// Runs the generators as a build does and returns every error of the resulting compilation, so that a test can pin
     /// that what they write compiles.
     /// </summary>
@@ -109,6 +163,17 @@ internal static class GeneratorTestHelper
         [
             .. RunAllGenerators(source, references).Diagnostics.Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error),
         ];
+    }
+
+    /// <summary>
+    /// Runs the generators as a build does and returns what they report, each diagnostic as the build takes it: one that
+    /// a <c>#pragma warning disable</c> or a <c>[SuppressMessage]</c> in the source silences comes back suppressed.
+    /// </summary>
+    internal static ImmutableArray<Diagnostic> GetGeneratorDiagnostics(string source, params MetadataReference[] references)
+    {
+        CreateFullDriver(ParseOptions).RunGeneratorsAndUpdateCompilation(CreateCompilation(references, source), out _, out var diagnostics);
+
+        return diagnostics;
     }
 
     /// <summary>
@@ -268,6 +333,36 @@ internal static class GeneratorTestHelper
         public override string Path { get; } = path;
 
         public override SourceText GetText(CancellationToken cancellationToken = default) => this.Text;
+    }
+
+    /// <summary>
+    /// The properties of a project as the compiler's options hand them to a generator: the same for every file.
+    /// </summary>
+    private sealed class BuildProperties((string Key, string Value)[] properties) : AnalyzerConfigOptionsProvider
+    {
+        public override AnalyzerConfigOptions GlobalOptions { get; } = new Options(properties);
+
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => this.GlobalOptions;
+
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => this.GlobalOptions;
+
+        private sealed class Options((string Key, string Value)[] properties) : AnalyzerConfigOptions
+        {
+            public override bool TryGetValue(string key, out string value)
+            {
+                foreach (var property in properties)
+                {
+                    if (String.Equals(property.Key, key, StringComparison.Ordinal))
+                    {
+                        value = property.Value;
+                        return true;
+                    }
+                }
+
+                value = "";
+                return false;
+            }
+        }
     }
 
     /// <summary>

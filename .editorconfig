@@ -344,3 +344,9 @@ MA0048.excluded_file_name_parts_regex = \.(razor\.)?
 [{**/*.Tests.cs,tests/**}]
 dotnet_diagnostic.MA0032.severity = none # Use an overload with a CancellationToken argument
 
+# The folders inside a source project group its files by subject and are no part of a namespace: every type stays in
+# the project's root namespace, which is public API and which the generators locate types by (see the
+# *.csproj.DotSettings NamespaceFoldersToSkip entries).
+[src/{Idioma,Idioma.Generators}/**]
+dotnet_style_namespace_match_folder = false
+dotnet_diagnostic.IDE0130.severity = none

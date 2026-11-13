@@ -18,11 +18,27 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.1.0</Version>
-    <PackageReleaseNotes>First release.</PackageReleaseNotes>
+    <Version>0.2.0</Version>
+    <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
+    <PackageReleaseNotes>Rebuild every assembly that uses Idioma with this version. What generated code calls has moved to the namespace CodeChops.Idioma.Internals, so an assembly built with 0.1.0 does not run on 0.2.0.
+
+New:
+- Your IDE offers a fix for LOC002 and LOC007.
+- Translated is on LocalizableText alone: ResourceText.Translated no longer compiles.
+- #pragma warning disable and [SuppressMessage] also silence what the generator reports.
+
+Fixed:
+- An Android app registers its languages.
+- Generated code compiles for a text named like its namespace, and in a namespace that starts with Idioma, Generated, or Internals.
+- A text read from JSON that comes in as a stream skips a member it does not know.
+- A set named after a two-letter code is not taken for a longer code its name happens to end in.
+- A default-language set without a parameterless constructor gets LOC002, not a compiler error in generated code.
+- LOC016 also checks wording written as the initializer of a property.
+
+No longer public: WithTranslation, LocalizableText.FromGeneratedCode, ResourceText.Create, and RegisterLanguages and RegisterLanguageCode of TranslationsRegistry.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Title>CodeChops.Idioma</Title>
-    <Description>Translations for any .NET app, written in C#: a class per language, or one-line texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>
+    <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
     <PackageProjectUrl>https://github.com/code-chops/Idioma</PackageProjectUrl>
     <RepositoryUrl>https://github.com/code-chops/Idioma</RepositoryUrl>
@@ -54,6 +70,13 @@
     <!-- The generator ships in the package's analyzers folder. A literal path, not a glob: a glob evaluates before
          the generator builds and would silently pack nothing, where a missing file fails the pack. -->
     <None Include="..\Idioma.Generators\bin\$(Configuration)\netstandard2.0\CodeChops.Idioma.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Its code fixes, in an assembly of their own: they need the workspaces API, which a compiler does not carry. -->
+    <None Include="..\Idioma.CodeFixes\bin\$(Configuration)\netstandard2.0\CodeChops.Idioma.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Shows the generator whether the project is an Android app (see the file). In both folders: NuGet reads build
+         for a project that references the package itself, and buildTransitive for one that gets it through another.
+         Removed and included again by its path: the item the SDK includes by itself would land in build/build. -->
+    <None Remove="build\CodeChops.Idioma.props" />
+    <None Include="build\CodeChops.Idioma.props" Pack="true" PackagePath="build;buildTransitive" />
   </ItemGroup>
 
   <ItemGroup>
@@ -63,6 +86,8 @@
   <ItemGroup>
     <!-- Builds the generator before this project, and runs it on this project's own code. -->
     <ProjectReference Include="..\Idioma.Generators\Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- Only built before this project, for the pack: a build runs no code fix. -->
+    <ProjectReference Include="..\Idioma.CodeFixes\Idioma.CodeFixes.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

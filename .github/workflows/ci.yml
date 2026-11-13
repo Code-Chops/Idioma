@@ -23,8 +23,9 @@ jobs:
             10.0.x
             11.0.x
 
+      # A warning fails the build here, so that none comes in unnoticed.
       - name: Build
-        run: dotnet build Idioma.slnx -c Release
+        run: dotnet build Idioma.slnx -c Release -warnaserror
 
       # The suite runs on Microsoft.Testing.Platform (TUnit), so it is executed, not `dotnet test`ed.
       - name: Tests (net10.0)
@@ -33,8 +34,9 @@ jobs:
       - name: Tests (net11.0)
         run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net11.0 --no-build
 
+      # Here too: NuGet warns when a file of the package is not where it reads it, such as the one in its build folder.
       - name: Pack
-        run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts
+        run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts -warnaserror
 
       - uses: actions/upload-artifact@v4
         with:
