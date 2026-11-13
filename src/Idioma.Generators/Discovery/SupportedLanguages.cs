@@ -36,7 +36,7 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// Whether a set for <paramref name="provided"/> serves <paramref name="requested"/>: the same language, or a culture
-    /// that resolves through it at run time (<c>nl</c> serves <c>nl-BE</c>).
+    /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>).
     /// </summary>
     public static bool Serves(string provided, string requested)
     {
@@ -46,7 +46,7 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// The parameter a language has in the generated factory: the suffix of its set (<see cref="ToTypeSuffix"/>) in
-    /// camel case, so <c>nl</c> where a set ends in <c>NL</c>, <c>nlBE</c> for <c>NlBE</c>, and <c>zhHans</c> for
+    /// camel case, so <c>nl</c> where a set ends in <c>NL</c>, <c>enGB</c> for <c>EnGB</c>, and <c>zhHans</c> for
     /// <c>ZhHans</c>. A keyword is escaped: <c>@is</c>.
     /// </summary>
     public static string ToParameterName(string code)
@@ -65,7 +65,7 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// The language a parameter of the generated factory stands for among the languages an assembly lists, such as
-    /// <c>nl-BE</c> for <c>nlBE</c>. The name of the parameter itself when none of them gives it.
+    /// <c>en-GB</c> for <c>enGB</c>. The name of the parameter itself when none of them gives it.
     /// </summary>
     public static string FindLanguageOfParameter(string parameterName, IEnumerable<string> codes)
     {
@@ -100,7 +100,7 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// The set to add for a language, as a diagnostic names it: <c>'class ShopTranslationsNL : IShopTranslations'</c>.
-    /// The name alone gives the language, also for a code that is not two letters (<c>ShopTranslationsNlBE</c>), as
+    /// The name alone gives the language, also for a code that is not two letters (<c>ShopTranslationsEnGB</c>), as
     /// every language a diagnostic suggests a set for is one the assembly declares (<see cref="FindNamedLanguage"/>).
     /// </summary>
     public static string SuggestSet(string setName, string contract)
@@ -111,7 +111,7 @@ internal static class SupportedLanguages
     /// <summary>
     /// Whether a type's name ends in the suffix of a language (<see cref="ToTypeSuffix"/>), with something before it. A
     /// two-letter language takes its suffix in upper case (<c>ShopTranslationsNL</c>). A longer one takes it in any
-    /// letter case that starts with a capital (<c>ShopTranslationsNlBE</c>, <c>ShopTranslationsNLBE</c>).
+    /// letter case that starts with a capital (<c>ShopTranslationsEnGB</c>, <c>ShopTranslationsENGB</c>).
     /// </summary>
     // The capital marks where the suffix starts. Without it MessagesAR, an Arabic set, would end in the suffix of es-AR
     // (the "es" of Messages, then AR), and ReceiptBR, a Breton one, in that of pt-BR.
@@ -129,11 +129,11 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// The language a type's name gives it among declared languages that are not two letters: the longest code whose
-    /// suffix the name ends in (<see cref="EndsInTypeSuffix"/>), such as <c>nl-BE</c> for <c>ShopTranslationsNlBE</c>
+    /// suffix the name ends in (<see cref="EndsInTypeSuffix"/>), such as <c>en-GB</c> for <c>ShopTranslationsEnGB</c>
     /// or <c>fil</c> for <c>ShopTranslationsFil</c>; <see langword="null"/> when none does. A two-letter code needs no
     /// such match: the last two letters of a name give it at run time.
     /// </summary>
-    // Only declared codes: a name alone cannot tell ShopTranslationsNlBE (nl-BE) from AdminUiNL (nl).
+    // Only declared codes: a name alone cannot tell ShopTranslationsEnGB (en-GB) from AdminUiNL (nl).
     public static string? FindNamedLanguage(string typeName, IEnumerable<string> codes)
     {
         string? found = null;

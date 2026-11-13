@@ -19,8 +19,8 @@ namespace CodeChops.Idioma;
 /// A text shows the first wording it finds:
 /// </para>
 /// <list type="number">
-/// <item>The wording for the user's UI culture, or else for its parent culture: an <c>nl</c> wording serves
-/// <c>nl-NL</c> and <c>nl-BE</c> alike.</item>
+/// <item>The wording for the user's UI culture, or else for its parent culture: an <c>en</c> wording serves
+/// <c>en-US</c> and <c>en-GB</c> alike.</item>
 /// <item>The wording for your app's default language. A culture your app does not declare starts here, even for a
 /// library's text that has that culture's language, so no screen ends up in two languages.</item>
 /// <item>The wording for the text's own default language: that of the project that wrote it.</item>
@@ -300,8 +300,8 @@ public partial record LocalizableText
     private static bool IsServed(CultureInfo culture, ImmutableArray<string> appLanguages)
     {
         // The names the lookups walk, so that this gate and the lookups agree on which language serves a culture, also
-        // under invariant globalization, where nl-BE (if it can be created: PredefinedCulturesOnly off) has no parent
-        // culture and nl still serves it.
+        // under invariant globalization, where en-GB (if it can be created: PredefinedCulturesOnly off) has no parent
+        // culture and en still serves it.
         foreach (var name in new CultureFallback(culture))
             foreach (var language in appLanguages)
                 if (name.StartsWith(language, StringComparison.OrdinalIgnoreCase) && (name.Length == language.Length || name[language.Length] is '-'))
@@ -387,7 +387,7 @@ public partial record LocalizableText
                 builder[language] = wording;
         }
 
-        // Whether two culture names start with the same language: nl-BE and nl, or zh-TW and zh-Hant.
+        // Whether two culture names start with the same language: en-GB and en, or zh-TW and zh-Hant.
         static bool HasSameLanguage(string name, string other)
         {
             var language = name.AsSpan(start: 0, name.IndexOf('-', StringComparison.Ordinal) is var end and >= 0

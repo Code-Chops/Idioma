@@ -18,13 +18,13 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>LocalizableText.Translated names a language as the name of its set ends, in camelCase: enGB next to ShopTranslationsEnGB, and zhHans next to ShopTranslationsZhHans. It was en_GB and zh_Hans, so rename such arguments. A language without a hyphen keeps its name: nl, fil.
+    <PackageReleaseNotes>A region you list is a language of its own to the build. With en-GB next to en in [assembly: SupportedLanguages], every contract of the assembly needs a set for en-GB (LOC004), as every inline text already takes enGB:. The error names the set to add, such as 'class ShopTranslationsEnGB : ShopTranslationsEN', which can add nothing. To give one contract British wording and leave the rest alone, keep en-GB out of the attribute and implement LanguageCode in that set.
 
-Also:
-- A language written in upper case in [assembly: SupportedLanguages] gets its parameter in lower case: nl for "NL".
-- Two listed languages that differ only in their hyphens, such as sr-Latn-RS and sr-LatnRS, are an error (LOC010): neither a parameter nor the name of a set could tell them apart.</PackageReleaseNotes>
+Unchanged: a library's set covers the regions of its language. An app that lists en-GB owes a library with an English set no British one.
+
+The docs and the messages of the build now show a region as British English next to English.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Title>CodeChops.Idioma</Title>
     <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>

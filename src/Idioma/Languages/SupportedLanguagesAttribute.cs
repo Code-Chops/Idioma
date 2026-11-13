@@ -28,7 +28,12 @@ namespace CodeChops.Idioma;
 /// <para>
 /// To add a language, add it to the list: the build then reports every text without it, those of the libraries you
 /// use included, so you can work through them. Each language is a culture name in any letter case, neutral
-/// (<c>nl</c>) or specific (<c>nl-BE</c>).
+/// (<c>en</c>) or specific (<c>en-GB</c>).
+/// </para>
+/// <para>
+/// A specific language is a language of its own to the build, also next to its neutral one: with <c>en</c> and
+/// <c>en-GB</c> listed, every inline text takes <c>enGB:</c>, and every class of texts gets a British class beside its
+/// English one, which can derive from it and add nothing. Leave <c>en-GB</c> out, and its users see your English.
 /// </para>
 /// <para>
 /// An assembly without this attribute has no texts of its own to translate: its strings convert to texts as they are,

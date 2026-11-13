@@ -352,6 +352,7 @@ internal static class TranslationsDiscovery
             UnmappedLanguageCodeBaseType: unmappedLanguageCode?.ContainingType.BaseType?.Name,
             IsPartial: declaration.Modifiers.Any(SyntaxKind.PartialKeyword),
             IsRecord: type.IsRecord,
+            IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
             StringProperties: new EquatableArray<string>(GetStringProperties(type)),
             Texts: new EquatableArray<TranslationsMember>(listsTranslations ? GetTextMembers(type, compilation, cancellationToken) : ImmutableArray<TranslationsMember>.Empty));
@@ -550,7 +551,7 @@ internal static class TranslationsDiscovery
 
     /// <summary>
     /// The code a set's own name gives it among the languages its assembly declares that are not two letters
-    /// (<c>ShopTranslationsNlBE</c> for <c>nl-BE</c>), or <see langword="null"/>: what the generated registrar of that
+    /// (<c>ShopTranslationsEnGB</c> for <c>en-GB</c>), or <see langword="null"/>: what the generated registrar of that
     /// assembly records for it.
     /// </summary>
     private static string? FindOwnRecordedLanguageCode(INamedTypeSymbol type)
@@ -585,7 +586,7 @@ internal static class TranslationsDiscovery
 
         // At run time this would throw while the assembly loads, where the cause is hard to see.
         if (!EndsInTwoAsciiLetters(type.Name) && !DeclaresLanguageCode(type) && FindRecordedLanguageCode(type, ancestors) is null)
-            return "its name does not end in a language code (two letters, or a longer code the assembly declares, as in ShopTranslationsNlBE), and it does not implement LanguageCode";
+            return "its name does not end in a language code (two letters, or a longer code the assembly declares, as in ShopTranslationsEnGB), and it does not implement LanguageCode";
 
         return null;
     }
@@ -935,6 +936,7 @@ internal readonly record struct DiscoveredTranslations(
     string? UnmappedLanguageCodeBaseType,
     bool IsPartial,
     bool IsRecord,
+    bool IsSealed,
     bool IsPublic,
     EquatableArray<string> StringProperties,
     EquatableArray<TranslationsMember> Texts);

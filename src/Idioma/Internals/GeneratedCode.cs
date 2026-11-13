@@ -21,7 +21,7 @@ public static class GeneratedCode
     /// wording; a language listed twice keeps its last wording.
     /// </param>
     /// <exception cref="ArgumentException">
-    /// When a language is empty or white-space; pass a culture name such as <c>nl</c> or <c>nl-BE</c>.
+    /// When a language is empty or white-space; pass a culture name such as <c>en</c> or <c>en-GB</c>.
     /// </exception>
     public static LocalizableText CreateText(string defaultText, params ReadOnlySpan<(string Language, string Text)> translations)
     {
@@ -59,11 +59,11 @@ public static class GeneratedCode
     /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> starts. Only the first call counts,
     /// so an application the app loads later, such as the app a test project tests, cannot change them.
     /// </summary>
-    /// <param name="defaultLanguage">The default language: a culture name such as <c>nl</c> or <c>nl-BE</c>.</param>
+    /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>en-GB</c>.</param>
     /// <param name="otherLanguages">The other languages, each a culture name.</param>
     /// <exception cref="ArgumentException">
-    /// When a language is not a culture name, such as an empty string or <c>nl_BE</c>; pass a culture name such as
-    /// <c>nl</c> or <c>nl-BE</c>.
+    /// When a language is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture name such as
+    /// <c>en</c> or <c>en-GB</c>.
     /// </exception>
     public static void RegisterLanguages(string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
     {
@@ -71,15 +71,15 @@ public static class GeneratedCode
     }
 
     /// <summary>
-    /// Records the language a set's name gives it when the last two letters cannot hold it, such as <c>nl-BE</c> for
-    /// <c>ShopTranslationsNlBE</c>, for a set named after a language its assembly declares, before the set registers.
+    /// Records the language a set's name gives it when the last two letters cannot hold it, such as <c>en-GB</c> for
+    /// <c>ShopTranslationsEnGB</c>, for a set named after a language its assembly declares, before the set registers.
     /// Only the first call for a set counts.
     /// </summary>
     /// <typeparam name="TTranslations">The set.</typeparam>
-    /// <param name="languageCode">The language: a culture name such as <c>nl-BE</c>.</param>
+    /// <param name="languageCode">The language: a culture name such as <c>en-GB</c>.</param>
     /// <exception cref="ArgumentException">
-    /// When <paramref name="languageCode"/> is not a culture name, such as an empty string or <c>nl_BE</c>; pass a culture
-    /// name such as <c>nl-BE</c>.
+    /// When <paramref name="languageCode"/> is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture
+    /// name such as <c>en-GB</c>.
     /// </exception>
     public static void RegisterLanguageCode<TTranslations>(string languageCode)
         where TTranslations : class, ITranslations

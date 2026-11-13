@@ -65,7 +65,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         MissingLanguageDiagnosticId,
         "Translations contract misses a language",
         "'{0}' has no translation into '{1}', which [assembly: SupportedLanguages] requires. Add {2}.",
-        "Every language of [assembly: SupportedLanguages] must show every text. Without a set its users would see the default language.");
+        "Every language of [assembly: SupportedLanguages] has a set of its own in every contract, as every inline text takes its wording. That goes for a region of a listed language too, such as en-GB next to en: its set derives from the set of its language, and holds only the texts that differ.");
 
     private static readonly DiagnosticDescriptor UnlistedLanguageRule = Error(
         UnlistedLanguageDiagnosticId,

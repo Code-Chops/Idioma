@@ -141,7 +141,7 @@ public sealed record ResourceText : LocalizableText
     /// </param>
     /// <param name="text">The wording to show for the language.</param>
     /// <exception cref="ArgumentException">
-    /// When <paramref name="language"/> is empty or white-space; pass a culture name such as <c>nl</c> or <c>nl-BE</c>.
+    /// When <paramref name="language"/> is empty or white-space; pass a culture name such as <c>en</c> or <c>en-GB</c>.
     /// </exception>
     internal new ResourceText WithTranslation(string language, string text)
     {

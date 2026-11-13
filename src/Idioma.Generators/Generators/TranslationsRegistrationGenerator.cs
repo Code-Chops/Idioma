@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.Generators;
 /// app's override must win over the library it rewords even when the library loads later. Within a tier a set comes
 /// after the sets it derives from, so it wins over them. Before that it records the language code of each set named
 /// after a declared code that is not two letters (<c>GeneratedCode.RegisterLanguageCode</c>): at run time a
-/// set's name gives only its last two letters, and <c>ShopTranslationsNlBE</c> would serve <c>be</c>.
+/// set's name gives only its last two letters, and <c>ShopTranslationsEnGB</c> would serve <c>gb</c>.
 /// </summary>
 /// <remarks>
 /// An assembly that nothing uses never loads, so its module initializer never runs, while its sets already count for
@@ -57,7 +57,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A translations set registers itself through generated code that creates an instance. That takes a top-level class with a parameterless constructor, and a language code: the end of the type's name (two letters, or a longer code [assembly: SupportedLanguages] lists, as in ShopTranslationsNlBE), or an implementation of ITranslations.LanguageCode. A set that cannot register itself would otherwise leave its texts in their default language without a word of warning. A nested or file-local set is reported only when it rewords another assembly's texts.");
+        description: "A translations set registers itself through generated code that creates an instance. That takes a top-level class with a parameterless constructor, and a language code: the end of the type's name (two letters, or a longer code [assembly: SupportedLanguages] lists, as in ShopTranslationsEnGB), or an implementation of ITranslations.LanguageCode. A set that cannot register itself would otherwise leave its texts in their default language without a word of warning. A nested or file-local set is reported only when it rewords another assembly's texts.");
 
     private static readonly DiagnosticDescriptor UnmappedLanguageCodeRule = new(
         id: UnmappedLanguageCodeDiagnosticId,
@@ -428,7 +428,7 @@ internal readonly record struct Registrar(
     EquatableArray<RecordedLanguageCode> LanguageCodes);
 
 /// <summary>
-/// A set whose name gives it a code the last two letters cannot hold (<c>ShopTranslationsNlBE</c>: <c>nl-BE</c>), which
+/// A set whose name gives it a code the last two letters cannot hold (<c>ShopTranslationsEnGB</c>: <c>en-GB</c>), which
 /// the registrar records before the set registers. The metadata name orders the records.
 /// </summary>
 internal readonly record struct RecordedLanguageCode(

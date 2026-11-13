@@ -1384,23 +1384,159 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void RegionalLanguage_ShouldBeServedBySetOfItsLanguage()
+    public void ListedRegion_ShouldNeedSetOfItsOwn()
     {
-        // Arrange & Act: at run time nl-BE resolves through nl.
+        // Arrange & Act: at run time en-GB resolves through en. Listing it says it has wording of its own, as every
+        // inline text takes one, so the English set does not stand in for it.
         var result = Run("""
             using CodeChops.Idioma;
 
-            [assembly: SupportedLanguages("en", "nl-BE")]
+            [assembly: SupportedLanguages("en", "nl", "en-GB")]
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations;
+            public partial class ShopTranslationsEN : ITranslations
+            {
+                public virtual string Cart => "Cart";
+            }
 
-            public sealed class ShopTranslationsNL : IShopTranslations;
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Cart => "Winkelwagen";
+            }
+            """);
+
+        // Assert: the set to add derives from the English one, so that it holds only the texts that differ.
+        var diagnostic = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId);
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().ShouldBe("'ShopTranslations' has no translation into 'en-GB', which [assembly: SupportedLanguages] requires. Add 'class ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override.");
+    }
+
+    [Test]
+    [Arguments("public class ShopTranslationsEnGB : ShopTranslationsEN;")]
+    [Arguments("public class ShopTranslationsEnGB : ShopTranslationsEN { public override string Cart => \"Basket\"; }")]
+    [Arguments("public class ShopTranslationsEnGB : IShopTranslations { public string Cart => \"Basket\"; }")]
+    [Arguments("public class ShopTranslationsBritish : ShopTranslationsEN, ITranslations { string ITranslations.LanguageCode => \"en-GB\"; }")]
+    public void ListedRegionWithSetOfItsOwn_ShouldReportNothing(string british)
+    {
+        // Arrange & Act: a set that derives from the English one and adds nothing will do, as will one that implements
+        // the contract itself, or one that gives its language in LanguageCode.
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "en-GB")]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsEN : ITranslations
+            {
+                public virtual string Cart => "Cart";
+            }
+
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Cart => "Winkelwagen";
+            }
+
+            {{british}}
             """);
 
         // Assert
         DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("\"nl\", \"en\", \"en-GB\"", "public sealed class ShopTranslationsEN", "Add 'class ShopTranslationsEnGB : IShopTranslations'.")]
+    [Arguments("\"nl\", \"en\", \"en-GB\"", "public record ShopTranslationsEN", "Add 'record ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override.")]
+    [Arguments("\"nl\", \"en-GB\"", "public class ShopTranslationsEN", "Add 'class ShopTranslationsEnGB : ShopTranslationsEN', which keeps the wording of 'en' for every text it does not override.")]
+    public void ListedRegionWithoutSet_ShouldBeToldWhichSetToAdd(string languages, string english, string advice)
+    {
+        // Arrange & Act: here the English set is not the default one. A sealed set has nothing deriving from it, a record
+        // only a record, and a set of a language that is not listed itself still gives the region its wording.
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages({{languages}})]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsNL : ITranslations
+            {
+                public virtual string Cart => "Winkelwagen";
+            }
+
+            {{english}} : IShopTranslations
+            {
+                public virtual string Cart => "Cart";
+            }
+            """);
+
+        // Assert
+        var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        message.ShouldContain("has no translation into 'en-GB'");
+        message.ShouldEndWith(advice);
+    }
+
+    [Test]
+    public void ListedRegionOfRegion_ShouldBeToldToDeriveFromNearestSet()
+    {
+        // Arrange & Act: zh-Hans-CN has both the set of zh and the set of zh-Hans above it.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "zh", "zh-Hans", "zh-Hans-CN")]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsEN : ITranslations
+            {
+                public virtual string Cart => "Cart";
+            }
+
+            public class ShopTranslationsZH : IShopTranslations
+            {
+                public virtual string Cart => "购物车";
+            }
+
+            public class ShopTranslationsZhHans : ShopTranslationsZH;
+            """);
+
+        // Assert
+        var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        message.ShouldEndWith("Add 'class ShopTranslationsZhHansCN : ShopTranslationsZhHans', which keeps the wording of 'zh-Hans' for every text it does not override.");
+    }
+
+    [Test]
+    public void HandWrittenContractMissingListedRegion_ShouldReportLOC004()
+    {
+        // Arrange & Act: a contract written by hand is held to its languages as a generated one is.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "en-GB")]
+
+            namespace TestApp;
+
+            public interface IGridTranslations : ITranslations
+            {
+                string First { get; }
+            }
+
+            public class GridTranslationsEN : IGridTranslations
+            {
+                public virtual string First => "First";
+            }
+
+            public class GridTranslationsNL : IGridTranslations
+            {
+                public virtual string First => "Eerste";
+            }
+            """);
+
+        // Assert
+        var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        message.ShouldContain("'TestApp.IGridTranslations' has no translation into 'en-GB'");
+        message.ShouldEndWith("Add 'class GridTranslationsEnGB : GridTranslationsEN', which keeps the wording of 'en' for every text it does not override.");
     }
 
     [Test]
@@ -1483,7 +1619,7 @@ public sealed class TranslationSetsGeneratorTests
     public void SetNamedAfterTwoLetterCode_ShouldNotBeTakenForLongerCodeItsNameHappensToEndIn()
     {
         // Arrange & Act: "MessagesAR" ends in the letters of EsAR, the suffix of es-AR, but not at a capital: its "es"
-        // belongs to "Messages", and the set is Arabic. The Spanish set serves es-AR.
+        // belongs to "Messages", and the set is Arabic. The Argentinian set is the one named MessagesEsAR.
         var result = Run("""
             using CodeChops.Idioma;
 
@@ -1501,17 +1637,23 @@ public sealed class TranslationSetsGeneratorTests
                 public string Save => "Hifz";
             }
 
-            public sealed class MessagesES : IMessages
+            public class MessagesES : IMessages
             {
-                public string Save => "Guardar";
+                public virtual string Save => "Guardar";
             }
+
+            public sealed class MessagesEsAR : MessagesES;
             """);
 
-        // Assert: no LOC004 asking for the Arabic set that is there, and that set recorded as Arabic.
+        // Assert: no LOC004 asking for the Arabic set that is there, and each set recorded and linked under its own
+        // language.
         DiagnosticIds(result).ShouldBeEmpty();
         var recorded = RecordedSets(result);
         recorded.ShouldContain("TranslationSetAttribute(\"TestApp.IMessages\", \"ar\")");
-        recorded.ShouldNotContain("TranslationSetAttribute(\"TestApp.IMessages\", \"es-AR\")");
+        recorded.ShouldContain("TranslationSetAttribute(\"TestApp.IMessages\", \"es-AR\")");
+        var contract = ContractText(result);
+        contract.ShouldContain("MessagesAR.Save\">ar</see>");
+        contract.ShouldContain("MessagesEsAR.Save\">es-AR</see>");
     }
 
     [Test]
@@ -1718,10 +1860,10 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void ListedRegionOfDefaultLanguage_ShouldBeServedByDefaultSetOfEveryContract()
+    public void ListedRegionOfDefaultLanguage_ShouldNeedSetInEveryContract()
     {
-        // Arrange & Act: en serves en-GB as nl serves nl-BE, so only the contract with British wording needs a British
-        // set. Every other contract used to report en-GB as missing (LOC004).
+        // Arrange & Act: en-GB is listed, so every contract has a British set, also the one with nothing British about
+        // it. The set of the default language does not stand in for it.
         var result = Run("""
             using CodeChops.Idioma;
 
@@ -1755,8 +1897,10 @@ public sealed class TranslationSetsGeneratorTests
             }
             """);
 
-        // Assert
-        DiagnosticIds(result).ShouldBeEmpty();
+        // Assert: only the contract without a British set is reported, with the set that derives from its English one.
+        var message = SingleDiagnostic(result, TranslationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        message.ShouldContain("'GridTranslations' has no translation into 'en-GB'");
+        message.ShouldEndWith("Add 'class GridTranslationsEnGB : GridTranslationsEN', which keeps the wording of 'en' for every text it does not override.");
     }
 
     [Test]

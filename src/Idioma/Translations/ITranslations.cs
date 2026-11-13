@@ -63,12 +63,14 @@ namespace CodeChops.Idioma;
 ///
 /// public partial class ShopTranslationsEN : ITranslations
 /// {
+///     public virtual string Cart => "Cart";
 ///     public virtual string Checkout => "Checkout";
 ///     public virtual string Greeting => "Hello, {0}!";
 /// }
 ///
 /// public class ShopTranslationsNL : IShopTranslations
 /// {
+///     public virtual string Cart => "Winkelwagen";
 ///     public virtual string Checkout => "Afrekenen";
 ///     public virtual string Greeting => "Hallo, {0}!";
 /// }
@@ -87,8 +89,13 @@ public interface ITranslations
     /// <remarks>
     /// <para>
     /// The code is a culture name in any letter case, and the set serves that culture and every culture under it:
-    /// <c>nl</c> serves <c>nl-NL</c> and <c>nl-BE</c>. A set for <c>nl-BE</c> serves only Belgian Dutch, and wins
-    /// over the <c>nl</c> set there.
+    /// <c>en</c> serves <c>en-US</c> and <c>en-GB</c>. A set for <c>en-GB</c> serves only British English, and wins
+    /// over the <c>en</c> set there.
+    /// </para>
+    /// <para>
+    /// An assembly that lists <c>en-GB</c> in <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see>
+    /// needs such a set in every contract (<c>LOC004</c>), as each of its inline texts takes a British wording. A set
+    /// with nothing British of its own derives from the English one and adds nothing.
     /// </para>
     /// <para>
     /// A name gives the code in one of two ways:
@@ -97,29 +104,29 @@ public interface ITranslations
     /// <item>Its last two letters: <c>ShopTranslationsNL</c> serves <c>nl</c>.</item>
     /// <item>A longer code that the assembly's
     /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> lists, written in PascalCase:
-    /// <c>ShopTranslationsNlBE</c> serves <c>nl-BE</c>, and <c>ShopTranslationsZhHans</c> serves <c>zh-Hans</c>. So
+    /// <c>ShopTranslationsEnGB</c> serves <c>en-GB</c>, and <c>ShopTranslationsZhHans</c> serves <c>zh-Hans</c>. So
     /// does a set deriving from such a set.</item>
     /// </list>
     /// <para>
-    /// A longer code counts only when listed, as a name alone cannot tell <c>ShopTranslationsNlBE</c> (Belgian Dutch)
-    /// from <c>AdminUiNL</c> (Dutch). When it is not listed, the last two letters count: <c>ShopTranslationsNlBE</c>
-    /// serves <c>be</c>, and the build reports <c>LOC005</c>.
+    /// A longer code counts only when listed, as a name alone cannot tell <c>ShopTranslationsEnGB</c> (British English)
+    /// from <c>AdminUiNL</c> (Dutch). When it is not listed, the last two letters count: <c>ShopTranslationsEnGB</c>
+    /// serves <c>gb</c>, which is no language, and the build reports <c>LOC005</c>.
     /// </para>
     /// <para>
     /// Implement this property for such a code in an assembly that does not list it, or for a set whose name does
-    /// not end in its language: <c>string ITranslations.LanguageCode => "nl-BE";</c>. A set deriving from another set
+    /// not end in its language: <c>string ITranslations.LanguageCode => "en-GB";</c>. A set deriving from another set
     /// lists <see cref="ITranslations"/> again for that, as in the example below. Without it, the property implements
     /// nothing, and the build reports <c>LOC015</c>.
     /// </para>
     /// </remarks>
     /// <example>
     /// <code>
-    /// // In an assembly declaring ("en", "nl"): nl-BE is left out, so inline texts need no Belgian wording.
-    /// public class ShopTranslationsNlBE : ShopTranslationsNL, ITranslations
+    /// // In an assembly declaring ("en", "nl"): en-GB is left out, so inline texts need no British wording.
+    /// public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslations
     /// {
-    ///     string ITranslations.LanguageCode => "nl-BE";
+    ///     string ITranslations.LanguageCode => "en-GB";
     ///
-    ///     public override string Checkout => "Betalen";
+    ///     public override string Cart => "Basket";
     /// }
     /// </code>
     /// </example>
@@ -159,7 +166,7 @@ public interface ITranslations
         {
             throw new InvalidOperationException(
                 $"Cannot derive a language code from the name of {translationsType}: name the type with the language code as suffix "
-                + $"(e.g., ShopTranslationsDE for German, or ShopTranslationsNlBE for a declared nl-BE) or implement {nameof(ITranslations)}.{nameof(LanguageCode)}.");
+                + $"(e.g., ShopTranslationsDE for German, or ShopTranslationsEnGB for a declared en-GB) or implement {nameof(ITranslations)}.{nameof(LanguageCode)}.");
         }
 
         return name[^2..].ToLowerInvariant();

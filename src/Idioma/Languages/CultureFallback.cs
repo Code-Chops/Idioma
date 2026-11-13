@@ -8,7 +8,7 @@ namespace CodeChops.Idioma;
 /// </summary>
 // Through CultureInfo.Parent, because a parent need not be a prefix of the name (zh-TW falls back to zh-Hant), and by
 // name as well: under invariant globalization a culture either cannot be created at all (the default) or has the
-// invariant culture as its parent (PredefinedCulturesOnly off), while nl still serves nl-BE, as the build checks it.
+// invariant culture as its parent (PredefinedCulturesOnly off), while en still serves en-GB, as the build checks it.
 // By name alone for a language code, so that the walk never needs a CultureInfo. A plain struct enumerator, and a
 // name that dropping a subtag gives is kept for the next walk, so a lookup allocates nothing once its names are kept:
 // the parent cultures hold their names, and an app's default language (en-GB, then en) is walked by name for every

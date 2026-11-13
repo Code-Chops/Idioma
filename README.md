@@ -90,9 +90,14 @@ public class ShopTranslationsEnGB : ShopTranslationsEN
 }
 ```
 
-British users see "Basket", and the rest of your English. A class with nothing British about it needs no British class.
+British users see "Basket", and the rest of your English.
 
-Once you list `en-GB`, every inline text takes a British wording too: `LocalizableText.Translated(en: "Color", nl: "Kleur", enGB: "Colour")`. To leave inline texts as they are, see [Language codes](#language-codes).
+Once you list `en-GB`, the build asks for British wording everywhere, so that none is forgotten:
+
+- Every class of texts gets a British class. One with nothing British about it is a single line: `public class GridTranslationsEnGB : GridTranslationsEN;`.
+- Every inline text takes a British wording: `LocalizableText.Translated(en: "Color", nl: "Kleur", enGB: "Colour")`.
+
+To add British wording in one place only, see [Language codes](#language-codes).
 
 ### Format a text
 
@@ -117,6 +122,78 @@ To fill in placeholders for that culture as well, pass it to `Format`, which the
 ```csharp
 string greeting = ShopTranslations.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name);
 ```
+
+### Run an example
+
+Each example below is a complete app in one file, which .NET 10 runs without a project. Save it under the name above it, and run it with `dotnet run`, as in `dotnet run sets.cs`. The first line fetches the latest version of the package. Both examples support English, Dutch, and British English (`en-GB`), a [regional variant](#a-regional-variant-such-as-british-english) of English.
+
+One class per language, in `sets.cs`:
+
+```csharp
+#:package CodeChops.Idioma@*
+
+using System.Globalization;
+using CodeChops.Idioma;
+
+[assembly: SupportedLanguages("en", "nl", "en-GB")] // the first is the default
+
+foreach (var language in new[] { "en", "nl", "en-GB" })
+{
+    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
+    Console.WriteLine($"{ShopTranslations.Greeting.Format("Ada")} {ShopTranslations.Cart}");
+}
+
+public partial class ShopTranslationsEN : ITranslations
+{
+    public virtual string Cart => "Cart";
+    public virtual string Greeting => "Hello, {0}!";
+}
+
+public class ShopTranslationsNL : IShopTranslations
+{
+    public virtual string Cart => "Winkelwagen";
+    public virtual string Greeting => "Hallo, {0}!";
+}
+
+// British English: only the texts that differ from the English above.
+public class ShopTranslationsEnGB : ShopTranslationsEN
+{
+    public override string Cart => "Basket";
+}
+```
+
+```text
+Hello, Ada! Cart
+Hallo, Ada! Winkelwagen
+Hello, Ada! Basket
+```
+
+Inline texts, in `inline.cs`:
+
+```csharp
+#:package CodeChops.Idioma@*
+
+using System.Globalization;
+using CodeChops.Idioma;
+
+[assembly: SupportedLanguages("en", "nl", "en-GB")] // the first is the default
+
+LocalizableText choice = LocalizableText.Translated(en: "{0}, pick a color.", nl: "{0}, kies een kleur.", enGB: "{0}, pick a colour.");
+
+foreach (var language in new[] { "en", "nl", "en-GB" })
+{
+    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
+    Console.WriteLine(choice.Format("Ada"));
+}
+```
+
+```text
+Ada, pick a color.
+Ada, kies een kleur.
+Ada, pick a colour.
+```
+
+Remove a Dutch wording from either file, and it no longer builds.
 
 ### Switch language in Blazor WebAssembly
 
@@ -203,7 +280,7 @@ A name alone cannot tell `ShopTranslationsEnGB` (British English) from `AdminUiN
 
 For English in the United States and Britain, you need no `en-US` set: `ShopTranslationsEN` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. There are two ways to add one:
 
-- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`. The name is enough, but every inline text then takes a British wording too (`enGB:`).
+- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`. The name is enough. British English is then a language of its own to the build: every contract needs a British set (`LOC004`), which can derive from the English one and add nothing, and every inline text takes a British wording (`enGB:`).
 
   ```csharp
   public class ShopTranslationsEnGB : ShopTranslationsEN
@@ -212,7 +289,7 @@ For English in the United States and Britain, you need no `en-US` set: `ShopTran
   }
   ```
 
-- Leave it out, `("en", "nl")`, so that inline texts show their English in Britain, and implement `LanguageCode` in the set:
+- Leave it out, `("en", "nl")`, so that your other sets and your inline texts show their English in Britain, and implement `LanguageCode` in the set:
 
   ```csharp
   public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslations
@@ -231,7 +308,7 @@ A regional default language works the same way: with `[assembly: SupportedLangua
 
 ### Libraries and apps
 
-A library declares its languages, and so does an app. An app supporting a language a library does not have gets a build error naming the set to add. A library's inline texts cannot be given a language from outside, so for those the app gets a warning instead, and a library should use one class per language.
+A library declares its languages, and so does an app. An app supporting a language a library does not have gets a build error naming the set to add. A library's set covers the regions of its language: an app that lists `en-GB` owes a library with an English set no British one. A library's inline texts cannot be given a language from outside, so for those the app gets a warning instead, and a library should use one class per language.
 
 A library leaves its sets unsealed and its texts virtual, so an app can reword them: derive from the library's set in the same language, and override the texts to change, as in `public sealed class MyShopTranslationsEN : ShopTranslationsEN`. Such a rewording:
 
@@ -266,7 +343,7 @@ The build reports these mistakes. Most apply in an assembly that declares langua
 | `LOC001`           | A set in an assembly that declares no languages                                                                                                                              |
 | `LOC002`           | A default-language set the generator cannot extend: not partial, not named after its language, nested, file-local, generic, abstract, or without a parameterless constructor |
 | `LOC003` (warning) | A set that cannot register itself                                                                                                                                            |
-| `LOC004`           | A language without a set, for a generated contract or one written by hand                                                                                                    |
+| `LOC004`           | A language without a set of its own, also a listed region such as `en-GB` next to `en`, for a generated contract or one written by hand                                      |
 | `LOC005`           | A set for a language not listed, also one you register yourself                                                                                                              |
 | `LOC006`           | A set deriving from a set of another language, which would leave texts in that language, also in an assembly without languages                                               |
 | `LOC007`           | A set that does not implement its contract, which no text would read                                                                                                         |

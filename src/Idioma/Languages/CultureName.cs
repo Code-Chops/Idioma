@@ -1,7 +1,7 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// What a language code must look like, and how it is written: a culture name such as <c>nl</c>, <c>nl-BE</c>, or
+/// What a language code must look like, and how it is written: a culture name such as <c>en</c>, <c>en-GB</c>, or
 /// <c>zh-Hans</c>.
 /// </summary>
 internal static class CultureName

@@ -49,7 +49,7 @@ public sealed class TranslationsRegistry
 
     /// <summary>
     /// The language codes the source generator recorded for sets named after a code their assembly declares that is not
-    /// two letters (ShopTranslationsNlBE for nl-BE), which the last two letters of the name would get wrong. Read on
+    /// two letters (ShopTranslationsEnGB for en-GB), which the last two letters of the name would get wrong. Read on
     /// every LanguageCode a set does not implement, so lock-free to read.
     /// </summary>
     private static ConcurrentDictionary<Type, string> LanguageCodes { get; } = new();
@@ -141,8 +141,8 @@ public sealed class TranslationsRegistry
     /// the libraries your app uses, so it can list more languages than your app declares.
     /// </summary>
     /// <remarks>
-    /// Each language is written as culture names are, whatever letter case its sets give it: <c>nl-BE</c> for a set
-    /// whose code is <c>NL-be</c>.
+    /// Each language is written as culture names are, whatever letter case its sets give it: <c>en-GB</c> for a set
+    /// whose code is <c>EN-gb</c>.
     /// </remarks>
     public IReadOnlyCollection<string> Languages { get; }
 
@@ -191,7 +191,7 @@ public sealed class TranslationsRegistry
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>nl-BE</c>.
+    /// <c>en-GB</c>.
     /// </exception>
     public static TranslationsRegistry Create(IEnumerable<ITranslations> sets)
     {
@@ -210,16 +210,16 @@ public sealed class TranslationsRegistry
     /// <param name="sets">
     /// The sets, in the order they apply: for one contract and language, a later set wins for every text it changes.
     /// </param>
-    /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>nl-BE</c>.</param>
+    /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>en-GB</c>.</param>
     /// <param name="otherLanguages">The other languages, each a culture name.</param>
     /// <exception cref="ArgumentException">
-    /// When a language is not a culture name, such as an empty string or <c>nl_BE</c>; pass a culture name such as
-    /// <c>nl</c> or <c>nl-BE</c>.
+    /// When a language is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture name such as
+    /// <c>en</c> or <c>en-GB</c>.
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>nl-BE</c>.
+    /// <c>en-GB</c>.
     /// </exception>
     public static TranslationsRegistry Create(IEnumerable<ITranslations> sets, string defaultLanguage,
         params ReadOnlySpan<string> otherLanguages)
@@ -243,14 +243,14 @@ public sealed class TranslationsRegistry
     }
 
     /// <summary>
-    /// A language written as culture names are (<c>nl-BE</c> for <c>NL-be</c>), or an exception when it is none.
+    /// A language written as culture names are (<c>en-GB</c> for <c>EN-gb</c>), or an exception when it is none.
     /// </summary>
     private static string ToCultureName(string language, string parameterName)
     {
         ArgumentNullException.ThrowIfNull(language, parameterName);
 
         if (!CultureName.IsValid(language))
-            throw new ArgumentException($"\"{language}\" is no culture name: pass one such as nl or nl-BE.", parameterName);
+            throw new ArgumentException($"\"{language}\" is no culture name: pass one such as en or en-GB.", parameterName);
 
         return CultureName.Normalize(language);
     }
@@ -297,7 +297,7 @@ public sealed class TranslationsRegistry
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>nl-BE</c>.
+    /// <c>en-GB</c>.
     /// </exception>
     public static void Register<TTranslations>()
         where TTranslations : class, ITranslations, new()
@@ -324,7 +324,7 @@ public sealed class TranslationsRegistry
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>nl-BE</c>.
+    /// <c>en-GB</c>.
     /// </exception>
     public static void Register(params ReadOnlySpan<ITranslations> translations)
     {
@@ -346,7 +346,7 @@ public sealed class TranslationsRegistry
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
     /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>nl-BE</c>.
+    /// <c>en-GB</c>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static void RegisterDefaults(params ReadOnlySpan<ITranslations> translations)
@@ -401,7 +401,7 @@ public sealed class TranslationsRegistry
 
     /// <summary>
     /// The language code recorded for a set's type, or else for the nearest class it derives from that has one (a
-    /// rewording of a Belgian set serves Belgian Dutch too), or <see langword="null"/> when none has.
+    /// rewording of a British set serves British English too), or <see langword="null"/> when none has.
     /// </summary>
     internal static string? FindLanguageCode(Type type)
     {
@@ -414,7 +414,7 @@ public sealed class TranslationsRegistry
 
     /// <summary>
     /// The set implementing <typeparamref name="TTranslations"/> for a culture, or else for its parent culture
-    /// (<c>nl-BE</c> falls back to <c>nl</c>).
+    /// (<c>en-GB</c> falls back to <c>en</c>).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -425,8 +425,8 @@ public sealed class TranslationsRegistry
     /// </para>
     /// <para>
     /// The set's wording is not always what a user sees, as a text can take its wording from another set: a rewording
-    /// registered for <c>nl</c> also shows for <c>nl-BE</c>, for the texts the <c>nl-BE</c> set does not change, while
-    /// this returns the <c>nl-BE</c> set. For the wording a user of the culture sees, call
+    /// registered for <c>en</c> also shows for <c>en-GB</c>, for the texts the <c>en-GB</c> set does not change, while
+    /// this returns the <c>en-GB</c> set. For the wording a user of the culture sees, call
     /// <see cref="LocalizableText.GetText(CultureInfo)"/> on the text instead.
     /// </para>
     /// </remarks>
@@ -442,8 +442,8 @@ public sealed class TranslationsRegistry
     }
 
     /// <summary>
-    /// The set implementing a contract for a culture, or else for its parent culture (<c>nl-BE</c> falls back to
-    /// <c>nl</c>), for a contract you have as a <see cref="Type"/>.
+    /// The set implementing a contract for a culture, or else for its parent culture (<c>en-GB</c> falls back to
+    /// <c>en</c>), for a contract you have as a <see cref="Type"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -616,15 +616,15 @@ public sealed class TranslationsRegistry
         var languageCode = translations.LanguageCode;
 
         // Checked here, as the lookup tables cannot hold a null key, and every text reads them: an unchecked null
-        // would make each one throw, far from the registration that caused it. A code that is no culture name (nl_BE,
-        // or nl with a space after it) would file the set under a language no culture reaches, without a word.
+        // would make each one throw, far from the registration that caused it. A code that is no culture name (en_GB,
+        // or en with a space after it) would file the set under a language no culture reaches, without a word.
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (languageCode is null || !CultureName.IsValid(languageCode))
         {
             var given = languageCode is null ? "null" : $"\"{languageCode}\"";
 
             throw new InvalidOperationException(
-                $"{translations.GetType()} gives {given} as its {nameof(ITranslations)}.{nameof(ITranslations.LanguageCode)}: return a culture name, such as nl or nl-BE.");
+                $"{translations.GetType()} gives {given} as its {nameof(ITranslations)}.{nameof(ITranslations.LanguageCode)}: return a culture name, such as en or en-GB.");
         }
 
         return languageCode;

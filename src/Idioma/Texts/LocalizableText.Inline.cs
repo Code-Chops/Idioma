@@ -18,8 +18,8 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// a string or one from an <see cref="ITranslations"/> set.
     /// </summary>
     /// <remarks>
-    /// Each key is a culture name in any letter case: <c>nl</c> serves <c>nl-NL</c> and <c>nl-BE</c>, and <c>nl-BE</c>
-    /// serves only Belgian Dutch. This wording wins over a registered <see cref="ITranslations"/> set.
+    /// Each key is a culture name in any letter case: <c>en</c> serves <c>en-US</c> and <c>en-GB</c>, and <c>en-GB</c>
+    /// serves only British English. This wording wins over a registered <see cref="ITranslations"/> set.
     /// </remarks>
     public ImmutableDictionary<string, string> Translations
     {
@@ -91,7 +91,7 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// <param name="language">The language of the translation: a culture name, see <see cref="Translations"/>.</param>
     /// <param name="text">The wording to show for the language.</param>
     /// <exception cref="ArgumentException">
-    /// When <paramref name="language"/> is empty or white-space; pass a culture name such as <c>nl</c> or <c>nl-BE</c>.
+    /// When <paramref name="language"/> is empty or white-space; pass a culture name such as <c>en</c> or <c>en-GB</c>.
     /// </exception>
     // Internal: a text gets its translations from LocalizableText.Translated, which demands every language.
     internal LocalizableText WithTranslation(string language, string text)
@@ -117,7 +117,7 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     }
 
     /// <summary>
-    /// The text's own wording for a culture, or else for its parent culture (<c>nl-BE</c> falls back to <c>nl</c>), or
+    /// The text's own wording for a culture, or else for its parent culture (<c>en-GB</c> falls back to <c>en</c>), or
     /// <see langword="null"/> when it has none.
     /// </summary>
     /// <remarks>

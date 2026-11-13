@@ -231,14 +231,14 @@ internal sealed record TranslationSetsAnalysis(
 
             foreach (var code in codes.Skip(1))
             {
-                // The default set serves the regions of its own language (en-GB for en), as any set serves its
-                // regions, at run time and in the checks of a hand-written or referenced contract. An excluded set
-                // counts only for a language it plainly serves: it gets no LOC006 or LOC007 to say what is wrong with
-                // it, so the language it was perhaps meant for is still reported as missing.
-                if (SupportedLanguages.Serves(set.Language!, code)
-                    || implementers.Any(other => SupportedLanguages.Serves(other.Language!, code))
-                    || excludedImplementers.Any(other => SupportedLanguages.Serves(other.Language!, code))
-                    || misdeclared.Any(other => SupportedLanguages.Serves(other.Language!, code)))
+                // A set of the language itself, also for a region of a language that has a set (en-GB next to en):
+                // listing it says it has wording of its own, as every inline text takes one. At run time the set of
+                // its language would serve it, but so it would without listing it. An excluded set counts as well: it
+                // gets no LOC006 or LOC007 to say what is wrong with it, so only the language it plainly is of is not
+                // reported as missing.
+                if (implementers.Any(other => IsSetOf(other, code))
+                    || excludedImplementers.Any(other => IsSetOf(other, code))
+                    || misdeclared.Any(other => IsSetOf(other, code)))
                 {
                     continue;
                 }
@@ -246,7 +246,7 @@ internal sealed record TranslationSetsAnalysis(
                 findings.Add(new TranslationSetsFinding(
                     TranslationSetsRule.MissingLanguage,
                     set.Location,
-                    new EquatableArray<string>([baseName, code, SupportedLanguages.SuggestSet($"{baseName}{SupportedLanguages.ToTypeSuffix(code)}", contractName)])));
+                    new EquatableArray<string>([baseName, code, SuggestSet($"{baseName}{SupportedLanguages.ToTypeSuffix(code)}", contractName, code, implementers.Prepend(set))])));
             }
 
             var translators = implementers
@@ -339,9 +339,10 @@ internal sealed record TranslationSetsAnalysis(
 
             foreach (var code in declared.Codes)
             {
-                if (members.Any(set => SupportedLanguages.Serves(set.Language!, code))
-                    || excludedMembers.Any(set => SupportedLanguages.Serves(set.Language!, code))
-                    || misdeclared.Any(set => SupportedLanguages.Serves(set.Language!, code)))
+                // A set of the language itself, as for a generated contract.
+                if (members.Any(set => IsSetOf(set, code))
+                    || excludedMembers.Any(set => IsSetOf(set, code))
+                    || misdeclared.Any(set => IsSetOf(set, code)))
                 {
                     continue;
                 }
@@ -349,7 +350,7 @@ internal sealed record TranslationSetsAnalysis(
                 findings.Add(new TranslationSetsFinding(
                     TranslationSetsRule.MissingLanguage,
                     declared.Location,
-                    new EquatableArray<string>([contract, code, SupportedLanguages.SuggestSet(SuggestSetName(contract, code), simpleName)])));
+                    new EquatableArray<string>([contract, code, SuggestSet(SuggestSetName(contract, code), simpleName, code, members)])));
             }
         }
     }
@@ -390,7 +391,7 @@ internal sealed record TranslationSetsAnalysis(
 
     /// <summary>
     /// A set in another language than the set it derives from keeps that language for every text it does not override.
-    /// A regional set on top of its language (<c>nl-BE</c> on <c>nl</c>) is fine. A base that implements
+    /// A regional set on top of its language (<c>en-GB</c> on <c>en</c>) is fine. A base that implements
     /// <c>ITranslations</c> only through a contract generated here is a set once that contract exists.
     /// </summary>
     private static bool IsDerivedFromOtherLanguage(DiscoveredTranslations set, ImmutableArray<string> generatedContracts)
@@ -438,7 +439,7 @@ internal sealed record TranslationSetsAnalysis(
 
     /// <summary>
     /// A longer code a set's name looks like it ends in, for the advice of <c>LOC005</c> only: a language of two or three
-    /// letters followed by a region (<c>ShopTranslationsNlBE</c>: <c>nl-BE</c>) or a script (<c>ShopTranslationsZhHans</c>:
+    /// letters followed by a region (<c>ShopTranslationsEnGB</c>: <c>en-GB</c>) or a script (<c>ShopTranslationsZhHans</c>:
     /// <c>zh-Hans</c>). A name gives such a code only when the attribute lists it, as a name alone cannot tell it from
     /// <c>AdminUiNL</c>.
     /// </summary>
@@ -447,6 +448,35 @@ internal sealed record TranslationSetsAnalysis(
         var match = LongCodeSuffix.Match(setName);
 
         return match.Success ? $"{match.Groups[1].Value.ToLowerInvariant()}-{match.Groups[2].Value}" : null;
+    }
+
+    /// <summary>
+    /// Whether a set is of a language itself, and not of one that only serves it: a set of <c>en</c> is no set of
+    /// <c>en-GB</c>.
+    /// </summary>
+    private static bool IsSetOf(DiscoveredTranslations set, string code)
+    {
+        return String.Equals(set.Language, code, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The set to add for a language a contract of this assembly misses, as the diagnostic names it. A region of a
+    /// language that has a set derives from that set, to hold only the texts that differ:
+    /// <c>'class ShopTranslationsEnGB : ShopTranslationsEN'</c>. Any other language implements the contract.
+    /// </summary>
+    private static string SuggestSet(string setName, string contract, string code, IEnumerable<DiscoveredTranslations> sets)
+    {
+        // The nearest one: zh-Hans before zh for zh-Hans-CN. A sealed set has nothing deriving from it.
+        var above = sets
+            .Where(set => set is { Language: not null, IsSealed: false } && !IsSetOf(set, code) && SupportedLanguages.Serves(set.Language, code))
+            .OrderByDescending(static set => set.Language!.Length)
+            .ThenBy(static set => set.MetadataName, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        if (above.Language is null)
+            return SupportedLanguages.SuggestSet(setName, contract);
+
+        return $"'{(above.IsRecord ? "record" : "class")} {setName} : {above.Name}', which keeps the wording of '{above.Language}' for every text it does not override";
     }
 
     /// <summary>
