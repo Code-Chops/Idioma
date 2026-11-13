@@ -1,8 +1,8 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// All the <see cref="ITranslations"/> sets of your app, by language: where a text finds its wording for the current UI
-/// culture. You rarely need this class, as every set registers itself.
+/// All the <see cref="ITranslationSet">sets</see> of your app, by language: where a text finds its wording for the
+/// current UI culture. You rarely need this class, as every set registers itself.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -11,14 +11,15 @@ namespace CodeChops.Idioma;
 /// <list type="bullet">
 /// <item>register a set that does not register itself, such as one that needs constructor arguments: mark it
 /// <see cref="ExcludeFromTranslationDiscoveryAttribute">[ExcludeFromTranslationDiscovery]</see> and pass an instance to
-/// <see cref="Register(ReadOnlySpan{ITranslations})"/>;</item>
+/// <see cref="Register(ReadOnlySpan{ITranslationSet})"/>;</item>
 /// <item>read a set directly, such as the Dutch wording of a text whatever the current UI culture, with
-/// <see cref="Find{TTranslations}(CultureInfo)"/>;</item>
-/// <item>give part of an app, or a test, sets of its own, with <see cref="Create(IEnumerable{ITranslations})"/>.</item>
+/// <see cref="Find{TContract}(CultureInfo)"/>;</item>
+/// <item>give part of an app, or a test, sets of its own, with
+/// <see cref="Create(IEnumerable{ITranslationSet})"/>.</item>
 /// </list>
 /// <para>
 /// When several sets give a text wording for one language, the set registered last that changes the text wins: see
-/// <see cref="ITranslations"/>.
+/// <see cref="ITranslationSet"/>.
 /// </para>
 /// </remarks>
 /// <example>
@@ -44,8 +45,8 @@ public sealed class TranslationsRegistry
 
     // Each set with the language it had when it registered, so that a registration can replace an earlier one of the
     // same type and language without calling into the sets, which are consumer code, while holding the gate.
-    private static List<(ITranslations Set, string Language)> Defaults { get; } = [];
-    private static List<(ITranslations Set, string Language)> Overrides { get; } = [];
+    private static List<(ITranslationSet Set, string Language)> Defaults { get; } = [];
+    private static List<(ITranslationSet Set, string Language)> Overrides { get; } = [];
 
     /// <summary>
     /// The language codes the source generator recorded for sets named after a code their assembly declares that is not
@@ -80,7 +81,7 @@ public sealed class TranslationsRegistry
                 if (Snapshot is { } snapshot)
                     return snapshot;
 
-                ImmutableArray<ITranslations> sets;
+                ImmutableArray<ITranslationSet> sets;
                 ImmutableArray<string> languages;
                 int version;
 
@@ -133,11 +134,11 @@ public sealed class TranslationsRegistry
     /// text it changes. In <see cref="Current"/>, the sets declared next to their contract come first, then the sets
     /// that reword another assembly's texts and the sets you registered.
     /// </summary>
-    public ImmutableArray<ITranslations> Sets { get; }
+    public ImmutableArray<ITranslationSet> Sets { get; }
 
     /// <summary>
     /// The languages this registry has at least one set for, such as <c>en</c> and <c>nl</c>, as each set's
-    /// <see cref="ITranslations.LanguageCode"/> gives them. In <see cref="Current"/>, that includes the languages of
+    /// <see cref="ITranslationSet.LanguageCode"/> gives them. In <see cref="Current"/>, that includes the languages of
     /// the libraries your app uses, so it can list more languages than your app declares.
     /// </summary>
     /// <remarks>
@@ -149,7 +150,7 @@ public sealed class TranslationsRegistry
     /// <summary>
     /// The languages a text read from this registry shows, the default language first. In <see cref="Current"/>, these
     /// are your app's <see cref="SupportedLanguages"/>; in a registry of your own, the languages you passed to
-    /// <see cref="Create(IEnumerable{ITranslations}, string, ReadOnlySpan{string})"/>. Empty when none were given.
+    /// <see cref="Create(IEnumerable{ITranslationSet}, string, ReadOnlySpan{string})"/>. Empty when none were given.
     /// </summary>
     /// <remarks>
     /// A culture none of these languages serves gets the wording in the first of them, for every text. A registry
@@ -160,7 +161,7 @@ public sealed class TranslationsRegistry
 
     private FrozenDictionary<string, LanguageSets> ByLanguage { get; }
 
-    private TranslationsRegistry(ImmutableArray<ITranslations> sets, ImmutableArray<string> appLanguages,
+    private TranslationsRegistry(ImmutableArray<ITranslationSet> sets, ImmutableArray<string> appLanguages,
         FrozenDictionary<string, LanguageSets> byLanguage)
     {
         this.Sets = sets;
@@ -176,13 +177,13 @@ public sealed class TranslationsRegistry
     /// <remarks>
     /// <para>
     /// Read a text's wording from it with <see cref="LocalizableText.ToString(CultureInfo, TranslationsRegistry)"/>. To
-    /// add sets to your whole app, use <see cref="Register(ReadOnlySpan{ITranslations})"/> instead.
+    /// add sets to your whole app, use <see cref="Register(ReadOnlySpan{ITranslationSet})"/> instead.
     /// </para>
     /// <para>
     /// The registry stands apart from your app's languages too: a text read from it shows every language the registry
     /// has a set for, and a culture without wording gets the text's own default language. To give the registry
     /// languages of its own, pass them to
-    /// <see cref="Create(IEnumerable{ITranslations}, string, ReadOnlySpan{string})"/>.
+    /// <see cref="Create(IEnumerable{ITranslationSet}, string, ReadOnlySpan{string})"/>.
     /// </para>
     /// </remarks>
     /// <param name="sets">
@@ -191,10 +192,10 @@ public sealed class TranslationsRegistry
     /// <exception cref="ArgumentNullException">When <paramref name="sets"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
-    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>en-GB</c>.
+    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslationSet.LanguageCode"/> return a culture name such
+    /// as <c>en-GB</c>.
     /// </exception>
-    public static TranslationsRegistry Create(IEnumerable<ITranslations> sets)
+    public static TranslationsRegistry Create(IEnumerable<ITranslationSet> sets)
     {
         return Create(sets, appLanguages: []);
     }
@@ -222,10 +223,10 @@ public sealed class TranslationsRegistry
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
-    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>en-GB</c>.
+    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslationSet.LanguageCode"/> return a culture name such
+    /// as <c>en-GB</c>.
     /// </exception>
-    public static TranslationsRegistry Create(IEnumerable<ITranslations> sets, string defaultLanguage,
+    public static TranslationsRegistry Create(IEnumerable<ITranslationSet> sets, string defaultLanguage,
         params ReadOnlySpan<string> otherLanguages)
     {
         return Create(sets, ToCultureNames(defaultLanguage, otherLanguages));
@@ -259,21 +260,21 @@ public sealed class TranslationsRegistry
         return CultureName.Normalize(language);
     }
 
-    private static TranslationsRegistry Create(IEnumerable<ITranslations> sets, ImmutableArray<string> appLanguages)
+    private static TranslationsRegistry Create(IEnumerable<ITranslationSet> sets, ImmutableArray<string> appLanguages)
     {
         ArgumentNullException.ThrowIfNull(sets);
 
         var ordered = sets.ToImmutableArray();
 
-        var byLanguage = new Dictionary<string, List<ITranslations>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var translations in ordered)
+        var byLanguage = new Dictionary<string, List<ITranslationSet>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var set in ordered)
         {
-            var language = CultureName.Normalize(ReadLanguageCode(translations));
+            var language = CultureName.Normalize(ReadLanguageCode(set));
 
             if (!byLanguage.TryGetValue(language, out var list))
                 byLanguage[language] = list = [];
 
-            list.Add(translations);
+            list.Add(set);
         }
 
         return new TranslationsRegistry(ordered, appLanguages, byLanguage.ToFrozenDictionary(
@@ -290,23 +291,23 @@ public sealed class TranslationsRegistry
     /// That is a set marked
     /// <see cref="ExcludeFromTranslationDiscoveryAttribute">[ExcludeFromTranslationDiscovery]</see>, or one in an
     /// assembly loaded at run time whose code nothing calls, such as a plugin's set for one of your app's languages.
-    /// The set wins over the sets registered before it, for every text it changes: see <see cref="ITranslations"/>.
+    /// The set wins over the sets registered before it, for every text it changes: see <see cref="ITranslationSet"/>.
     /// </para>
     /// <para>
     /// A set for a language your app does not declare never shows: a culture outside <see cref="SupportedLanguages"/>
-    /// gets the app's default language. Only <see cref="Find{TTranslations}(CultureInfo)"/> returns such a set.
+    /// gets the app's default language. Only <see cref="Find{TContract}(CultureInfo)"/> returns such a set.
     /// </para>
     /// </remarks>
-    /// <typeparam name="TTranslations">The set.</typeparam>
+    /// <typeparam name="TSet">The set.</typeparam>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
-    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>en-GB</c>.
+    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslationSet.LanguageCode"/> return a culture name such
+    /// as <c>en-GB</c>.
     /// </exception>
-    public static void Register<TTranslations>()
-        where TTranslations : class, ITranslations, new()
+    public static void Register<TSet>()
+        where TSet : class, ITranslationSet, new()
     {
-        Register(new TTranslations());
+        Register(new TSet());
     }
 
     /// <summary>
@@ -314,26 +315,26 @@ public sealed class TranslationsRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each set wins over the sets registered before it, for every text it changes: see <see cref="ITranslations"/>.
+    /// Each set wins over the sets registered before it, for every text it changes: see <see cref="ITranslationSet"/>.
     /// Registering a set of the same type and language again replaces the earlier one.
     /// </para>
     /// <para>
     /// A set for a language your app does not declare never shows: a culture outside <see cref="SupportedLanguages"/>
-    /// gets the app's default language. Only <see cref="Find{TTranslations}(CultureInfo)"/> returns such a set.
+    /// gets the app's default language. Only <see cref="Find{TContract}(CultureInfo)"/> returns such a set.
     /// </para>
     /// </remarks>
-    /// <param name="translations">
+    /// <param name="sets">
     /// The sets, in the order they apply: for one contract and language, a later set wins for every text it changes.
     /// </param>
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
-    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>en-GB</c>.
+    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslationSet.LanguageCode"/> return a culture name such
+    /// as <c>en-GB</c>.
     /// </exception>
-    public static void Register(params ReadOnlySpan<ITranslations> translations)
+    public static void Register(params ReadOnlySpan<ITranslationSet> sets)
     {
-        Add(Overrides, translations);
+        Add(Overrides, sets);
     }
 
     /// <summary>
@@ -342,22 +343,22 @@ public sealed class TranslationsRegistry
     /// library's set that does not register itself.
     /// </summary>
     /// <remarks>
-    /// A set from <see cref="Register(ReadOnlySpan{ITranslations})"/> always wins over these. Registering a set of the
-    /// same type and language again replaces the earlier one.
+    /// A set from <see cref="Register(ReadOnlySpan{ITranslationSet})"/> always wins over these. Registering a set of
+    /// the same type and language again replaces the earlier one.
     /// </remarks>
-    /// <param name="translations">
+    /// <param name="sets">
     /// The sets, in the order they apply: for one contract and language, a later set wins for every text it changes.
     /// </param>
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that is not a culture name. Name the set after its language
-    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslations.LanguageCode"/> return a culture name such as
-    /// <c>en-GB</c>.
+    /// (<c>ShopTranslationsDE</c>), or have its <see cref="ITranslationSet.LanguageCode"/> return a culture name such
+    /// as <c>en-GB</c>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RegisterDefaults(params ReadOnlySpan<ITranslations> translations)
+    public static void RegisterDefaults(params ReadOnlySpan<ITranslationSet> sets)
     {
-        Add(Defaults, translations);
+        Add(Defaults, sets);
     }
 
     /// <summary>
@@ -387,8 +388,8 @@ public sealed class TranslationsRegistry
     /// Records the language a set's name gives it when the last two letters cannot hold it, for
     /// <see cref="Internals.GeneratedCode.RegisterLanguageCode"/>. Only the first call for a set counts.
     /// </summary>
-    internal static void RegisterLanguageCode<TTranslations>(string languageCode)
-        where TTranslations : class, ITranslations
+    internal static void RegisterLanguageCode<TSet>(string languageCode)
+        where TSet : class, ITranslationSet
     {
         // Checked here: a code that is no culture name would otherwise fail every text of the app once the lookup
         // tables are built again, far from this call.
@@ -396,7 +397,7 @@ public sealed class TranslationsRegistry
 
         lock (Gate)
         {
-            if (!LanguageCodes.TryAdd(typeof(TTranslations), languageCode))
+            if (!LanguageCodes.TryAdd(typeof(TSet), languageCode))
                 return;
 
             // A set registered before its code was recorded is filed under the language of its name until the lookup
@@ -419,7 +420,7 @@ public sealed class TranslationsRegistry
     }
 
     /// <summary>
-    /// The set implementing <typeparamref name="TTranslations"/> for a culture, or else for its parent culture
+    /// The set implementing <typeparamref name="TContract"/> for a culture, or else for its parent culture
     /// (<c>en-GB</c> falls back to <c>en</c>).
     /// </summary>
     /// <remarks>
@@ -436,16 +437,16 @@ public sealed class TranslationsRegistry
     /// <see cref="LocalizableText.ToString(CultureInfo)"/> on the text instead.
     /// </para>
     /// </remarks>
-    /// <typeparam name="TTranslations">The contract the set implements, such as <c>IShopTranslations</c>.</typeparam>
+    /// <typeparam name="TContract">The contract the set implements, such as <c>IShopTranslations</c>.</typeparam>
     /// <param name="culture">The culture to find a set for.</param>
     /// <returns>
     /// The set, or <see langword="null"/> when no set of the contract serves the culture.
     /// </returns>
     /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    public TTranslations? Find<TTranslations>(CultureInfo culture)
-        where TTranslations : class, ITranslations
+    public TContract? Find<TContract>(CultureInfo culture)
+        where TContract : class, ITranslationSet
     {
-        return (TTranslations?)this.Find(typeof(TTranslations), culture);
+        return (TContract?)this.Find(typeof(TContract), culture);
     }
 
     /// <summary>
@@ -454,11 +455,11 @@ public sealed class TranslationsRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This works as <see cref="Find{TTranslations}(CultureInfo)"/> does, which is simpler when you know the contract
+    /// This works as <see cref="Find{TContract}(CultureInfo)"/> does, which is simpler when you know the contract
     /// at compile time.
     /// </para>
     /// </remarks>
-    /// <param name="contract">The <see cref="ITranslations"/> interface the set implements.</param>
+    /// <param name="contract">The <see cref="ITranslationSet"/> interface the set implements.</param>
     /// <param name="culture">The culture to find a set for.</param>
     /// <returns>
     /// The set, or <see langword="null"/> when no set of the contract serves the culture.
@@ -466,24 +467,24 @@ public sealed class TranslationsRegistry
     /// <exception cref="ArgumentNullException">
     /// When <paramref name="contract"/> or <paramref name="culture"/> is <see langword="null"/>.
     /// </exception>
-    public ITranslations? Find(Type contract, CultureInfo culture)
+    public ITranslationSet? Find(Type contract, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(culture);
 
         foreach (var name in new CultureFallback(culture))
-            if (this.FindByLanguage(contract, name) is { } translations)
-                return translations;
+            if (this.FindByLanguage(contract, name) is { } set)
+                return set;
 
         return null;
     }
 
     /// <summary>
     /// The set implementing a contract that is registered for one language (an
-    /// <see cref="ITranslations.LanguageCode"/>, matched in any letter case, without the culture walk), or
+    /// <see cref="ITranslationSet.LanguageCode"/>, matched in any letter case, without the culture walk), or
     /// <see langword="null"/> when none is. Among several sets for the language the last registered wins.
     /// </summary>
-    internal ITranslations? FindByLanguage(Type contract, string language)
+    internal ITranslationSet? FindByLanguage(Type contract, string language)
     {
         return this.ByLanguage.TryGetValue(language, out var sets) && sets.Of(contract) is [.., var last]
             ? last.Set
@@ -506,9 +507,9 @@ public sealed class TranslationsRegistry
     // cannot see: a set that repeats the wording of the set it derives from gives way like one that inherits it. A set
     // deriving from no other set of its name, or a regional set deriving from no set of its language, gives way to
     // nothing, as it inherits none of its texts.
-    internal string? FindWording(Type contract, CultureFallback names, Func<ITranslations, string> select)
+    internal string? FindWording(Type contract, CultureFallback names, Func<ITranslationSet, string> select)
     {
-        ITranslations? found = null;
+        ITranslationSet? found = null;
         string? wording = null;
 
         foreach (var name in names)
@@ -540,8 +541,8 @@ public sealed class TranslationsRegistry
     /// registered last that words it differently than the candidate it derives from, or that derives from none;
     /// <see langword="null"/> when the name has no set of the contract.
     /// </summary>
-    private static (ITranslations Set, string Wording)? FindLevelWording(ImmutableArray<ContractSet> candidates,
-        Func<ITranslations, string> select)
+    private static (ITranslationSet Set, string Wording)? FindLevelWording(ImmutableArray<ContractSet> candidates,
+        Func<ITranslationSet, string> select)
     {
         // Ends at the latest at the candidate deriving from no other, as no class derives from itself.
         for (var i = candidates.Length - 1; i >= 0; i--)
@@ -562,7 +563,7 @@ public sealed class TranslationsRegistry
     /// The set registered last among the candidates that the class of <paramref name="derived"/> derives from, or
     /// <see langword="null"/>.
     /// </summary>
-    private static ITranslations? FindBase(ImmutableArray<ContractSet> candidates, ITranslations derived)
+    private static ITranslationSet? FindBase(ImmutableArray<ContractSet> candidates, ITranslationSet derived)
     {
         var type = derived.GetType();
 
@@ -577,7 +578,7 @@ public sealed class TranslationsRegistry
     /// A set of a contract, with the set registered last among those of its contract and language that its class
     /// derives from, or <see langword="null"/> when it derives from none.
     /// </summary>
-    private readonly record struct ContractSet(ITranslations Set, ITranslations? Basis);
+    private readonly record struct ContractSet(ITranslationSet Set, ITranslationSet? Basis);
 
     /// <summary>
     /// The sets of one language, and per contract the ones implementing it.
@@ -585,9 +586,9 @@ public sealed class TranslationsRegistry
     // A language holds the sets of every contract of the app, and a text needs only those of its own: found once per
     // contract and kept, so that a lookup does not test every set of the language against the contract, on every text
     // of every render. Never dropped, as a registry never changes: a registration builds a new one.
-    private sealed class LanguageSets(ImmutableArray<ITranslations> sets)
+    private sealed class LanguageSets(ImmutableArray<ITranslationSet> sets)
     {
-        private ImmutableArray<ITranslations> Sets { get; } = sets;
+        private ImmutableArray<ITranslationSet> Sets { get; } = sets;
 
         private ConcurrentDictionary<Type, ImmutableArray<ContractSet>> ByContract { get; } = new();
 
@@ -602,7 +603,7 @@ public sealed class TranslationsRegistry
                 : this.ByContract.GetOrAdd(contract, static (contract, sets) => Find(sets, contract), this.Sets);
         }
 
-        private static ImmutableArray<ContractSet> Find(ImmutableArray<ITranslations> sets, Type contract)
+        private static ImmutableArray<ContractSet> Find(ImmutableArray<ITranslationSet> sets, Type contract)
         {
             var implementing = sets.Where(contract.IsInstanceOfType).ToImmutableArray();
             var found = ImmutableArray.CreateBuilder<ContractSet>(implementing.Length);
@@ -621,9 +622,9 @@ public sealed class TranslationsRegistry
     /// <summary>
     /// A set's language code, read once to file the set under it.
     /// </summary>
-    private static string ReadLanguageCode(ITranslations translations)
+    private static string ReadLanguageCode(ITranslationSet set)
     {
-        var languageCode = translations.LanguageCode;
+        var languageCode = set.LanguageCode;
 
         // Checked here, as the lookup tables cannot hold a null key, and every text reads them: an unchecked null
         // would make each one throw, far from the registration that caused it. A code that is no culture name (en_GB,
@@ -634,21 +635,21 @@ public sealed class TranslationsRegistry
             var given = languageCode is null ? "null" : $"\"{languageCode}\"";
 
             throw new InvalidOperationException(
-                $"{translations.GetType()} gives {given} as its {nameof(ITranslations)}.{nameof(ITranslations.LanguageCode)}: return a culture name, such as en or en-GB.");
+                $"{set.GetType()} gives {given} as its {nameof(ITranslationSet)}.{nameof(ITranslationSet.LanguageCode)}: return a culture name, such as en or en-GB.");
         }
 
         return languageCode;
     }
 
-    private static void Add(List<(ITranslations Set, string Language)> tier, ReadOnlySpan<ITranslations> translations)
+    private static void Add(List<(ITranslationSet Set, string Language)> tier, ReadOnlySpan<ITranslationSet> sets)
     {
         // Read here so that a set without a language code fails at its registration, not at the first text rendered
         // afterwards, and before the gate is taken: a language code is consumer code.
-        var entries = new (ITranslations Set, string Language)[translations.Length];
-        for (var i = 0; i < translations.Length; i++)
+        var entries = new (ITranslationSet Set, string Language)[sets.Length];
+        for (var i = 0; i < sets.Length; i++)
         {
-            ArgumentNullException.ThrowIfNull(translations[i], nameof(translations));
-            entries[i] = (translations[i], ReadLanguageCode(translations[i]));
+            ArgumentNullException.ThrowIfNull(sets[i], nameof(sets));
+            entries[i] = (sets[i], ReadLanguageCode(sets[i]));
         }
 
         lock (Gate)

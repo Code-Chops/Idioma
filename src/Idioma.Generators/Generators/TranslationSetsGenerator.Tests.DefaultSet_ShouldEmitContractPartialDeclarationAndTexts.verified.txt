@@ -11,7 +11,7 @@ namespace TestApp;
 /// reports a language without a set. Because every member must be implemented, a text without a translation is a
 /// compile error rather than a fallback at run time. Each set registers itself, so there is nothing to register.
 /// </summary>
-public interface IShopTranslations : CodeChops.Idioma.ITranslations
+public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
 {
     /// <inheritdoc cref="ShopTranslationsEN.Checkout"/>
     /// <remarks>

@@ -3,8 +3,8 @@ namespace CodeChops.Idioma;
 // The inline-translation half of LocalizableText: translations carried by the text itself, per language. A plain
 // comment: the compiler merges the XML docs of every partial declaration, and the type's summary lives in
 // LocalizableText.cs.
-// Its own IInlineText: that is what the generated LocalizableText.Translated is written for, and what ResourceText,
-// which inherits everything else of this type, is not. So there is no ResourceText.Translated.
+// Its own IInlineText: that is what the generated LocalizableText.Inline is written for, and what ResourceText,
+// which inherits everything else of this type, is not. So there is no ResourceText.Inline.
 public partial record LocalizableText : Internals.IInlineText<LocalizableText>
 {
     /// <summary>
@@ -14,12 +14,12 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
 
     /// <summary>
     /// The wording of this text per language, the default language included, as passed to
-    /// <c>LocalizableText.Translated</c>. Empty for a text without translations of its own, such as one converted from
-    /// a string or one from an <see cref="ITranslations"/> set.
+    /// <c>LocalizableText.Inline</c>. Empty for a text without translations of its own, such as one converted from
+    /// a string or one from a <see cref="ITranslationSet">set</see>.
     /// </summary>
     /// <remarks>
     /// Each key is a culture name in any letter case: <c>en</c> serves <c>en-US</c> and <c>en-GB</c>, and <c>en-GB</c>
-    /// serves only British English. This wording wins over a registered <see cref="ITranslations"/> set.
+    /// serves only British English. This wording wins over a registered <see cref="ITranslationSet">set</see>.
     /// </remarks>
     public ImmutableDictionary<string, string> Translations
     {
@@ -50,7 +50,7 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
 
     /// <summary>
     /// Creates a text with its translations: what <see cref="Internals.GeneratedCode.CreateText"/> gives the generated
-    /// <c>LocalizableText.Translated</c>.
+    /// <c>LocalizableText.Inline</c>.
     /// </summary>
     internal static LocalizableText FromGeneratedCode(string defaultText, params ReadOnlySpan<(string Language, string Text)> translations)
     {
@@ -81,7 +81,7 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// In an assembly that declares two or more languages with
     /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, converting wording you write in the source
     /// is a build error (<c>LOC011</c>): <c>"Orders"</c>, <c>$"Order {number}"</c>, and
-    /// <c>"Order " + number</c> all need <c>LocalizableText.Translated</c>. A string without letters, such as
+    /// <c>"Order " + number</c> all need <c>LocalizableText.Inline</c>. A string without letters, such as
     /// <c>"-"</c> or <c>"1234"</c>, still converts, and so does a value read at run time.
     /// </remarks>
     [return: NotNullIfNotNull(nameof(text))]
@@ -95,7 +95,7 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// <exception cref="ArgumentException">
     /// When <paramref name="language"/> is empty or white-space; pass a culture name such as <c>en</c> or <c>en-GB</c>.
     /// </exception>
-    // Internal: a text gets its translations from LocalizableText.Translated, which demands every language.
+    // Internal: a text gets its translations from LocalizableText.Inline, which demands every language.
     internal LocalizableText WithTranslation(string language, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
@@ -123,8 +123,8 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// <see langword="null"/> when it has none.
     /// </summary>
     /// <remarks>
-    /// A registered <see cref="ITranslations"/> set and the <see cref="DefaultText"/> are left out: to get what a user
-    /// sees, call <see cref="ToString(CultureInfo)"/>.
+    /// A registered <see cref="ITranslationSet">set</see> and the <see cref="DefaultText"/> are left out: to get what a
+    /// user sees, call <see cref="ToString(CultureInfo)"/>.
     /// </remarks>
     /// <param name="culture">The culture to find a translation for.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>

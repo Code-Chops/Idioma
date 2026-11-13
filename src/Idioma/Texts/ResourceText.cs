@@ -7,7 +7,7 @@ namespace CodeChops.Idioma;
 /// </summary>
 /// <remarks>
 /// <para>
-/// You rarely create one yourself. Declare your texts in one class per language (see <see cref="ITranslations"/>) and
+/// You rarely create one yourself. Declare your texts in one class per language (see <see cref="ITranslationSet"/>) and
 /// use the texts of the generated class.
 /// </para>
 /// <para>
@@ -44,7 +44,7 @@ public sealed record ResourceText : LocalizableText
     public string Key { get; }
 
     /// <summary>
-    /// The <see cref="ITranslations"/> contract this text belongs to, such as <c>IShopTranslations</c>: every
+    /// The <see cref="ITranslationSet"/> contract this text belongs to, such as <c>IShopTranslations</c>: every
     /// registered set implementing it can give the text its wording. <see langword="null"/> for a text declared by key
     /// alone.
     /// </summary>
@@ -63,7 +63,7 @@ public sealed record ResourceText : LocalizableText
     /// <summary>
     /// Selects this text from a set implementing <see cref="Contract"/>.
     /// </summary>
-    private Func<ITranslations, string>? Selector { get; init; }
+    private Func<ITranslationSet, string>? Selector { get; init; }
 
     /// <summary>
     /// A text that a resource file can provide under <paramref name="key"/>, for an app or library that looks texts up
@@ -73,7 +73,7 @@ public sealed record ResourceText : LocalizableText
     /// In an assembly that declares two or more languages with
     /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, a default you write as wording is a build
     /// error (<c>LOC011</c>), as the build cannot see which languages a resource file holds. Pass a value instead, such as a customer's name, or declare the text in a set per language (see
-    /// <see cref="ITranslations"/>).
+    /// <see cref="ITranslationSet"/>).
     /// </remarks>
     /// <param name="key">The name of the text in a resource file, such as <c>Customer.Name</c>.</param>
     /// <param name="defaultText">The wording shown when nothing resolves the key.</param>
@@ -95,8 +95,8 @@ public sealed record ResourceText : LocalizableText
     /// Declares a text of a translations contract, with its default wording taken from a set: what
     /// <see cref="Internals.GeneratedCode.CreateResourceText"/> gives the class the source generator writes.
     /// </summary>
-    internal static ResourceText Create<TTranslations>(string key, Func<TTranslations, string> selector, TTranslations defaults)
-        where TTranslations : class, ITranslations
+    internal static ResourceText Create<TContract>(string key, Func<TContract, string> selector, TContract defaults)
+        where TContract : class, ITranslationSet
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(defaults);
@@ -107,15 +107,15 @@ public sealed record ResourceText : LocalizableText
     /// <summary>
     /// Declares a text of a translations contract with its default wording written out.
     /// </summary>
-    internal static ResourceText Create<TTranslations>(string key, string defaultText, Func<TTranslations, string> selector)
-        where TTranslations : class, ITranslations
+    internal static ResourceText Create<TContract>(string key, string defaultText, Func<TContract, string> selector)
+        where TContract : class, ITranslationSet
     {
         ArgumentNullException.ThrowIfNull(selector);
 
         var text = new ResourceText(key, defaultText)
         {
-            Contract = typeof(TTranslations),
-            Selector = translations => selector((TTranslations)translations),
+            Contract = typeof(TContract),
+            Selector = set => selector((TContract)set),
         };
         return text;
     }
@@ -124,18 +124,19 @@ public sealed record ResourceText : LocalizableText
     /// This text in the wording of a given set, whatever the current UI culture:
     /// <c>ShopTranslations.Checkout.GetTranslation(new ShopTranslationsNL())</c> gives <c>"Afrekenen"</c>.
     /// </summary>
-    /// <param name="translations">The set to read the text from.</param>
+    /// <param name="set">The set to read the text from.</param>
     /// <returns>
     /// The set's wording, or <see langword="null"/> when the set does not implement this text's <see cref="Contract"/>.
     /// </returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="translations"/> is <see langword="null"/>.</exception>
-    public string? GetTranslation(ITranslations translations)
+    /// <exception cref="ArgumentNullException">When <paramref name="set"/> is <see langword="null"/>.</exception>
+    public string? GetTranslation(ITranslationSet set)
     {
-        ArgumentNullException.ThrowIfNull(translations);
+        ArgumentNullException.ThrowIfNull(set);
 
-        var text = this.Contract is not null && this.Contract.IsInstanceOfType(translations)
-            ? this.Selector!(translations)
+        var text = this.Contract is not null && this.Contract.IsInstanceOfType(set)
+            ? this.Selector!(set)
             : null;
+
         return text;
     }
 
@@ -167,6 +168,7 @@ public sealed record ResourceText : LocalizableText
                && String.Equals(this.Key, other.Key, StringComparison.Ordinal)
                && this.Contract == other.Contract
                && String.Equals(this.DefaultLanguage, other.DefaultLanguage, StringComparison.Ordinal);
+
         return isEqual;
     }
 
@@ -185,6 +187,7 @@ public sealed record ResourceText : LocalizableText
         var text = this.Contract is not null
             ? registry.FindWording(this.Contract, names, this.Selector!)
             : null;
+
         return text;
     }
 
@@ -201,6 +204,7 @@ public sealed record ResourceText : LocalizableText
         var text = this.Contract is not null && this.DefaultLanguage is not null
             ? registry.FindWording(this.Contract, CultureFallback.OfLanguage(this.DefaultLanguage), this.Selector!)
             : null;
+
         return text;
     }
 }

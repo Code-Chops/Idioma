@@ -2,12 +2,13 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Finds the translation sets of the current compilation: concrete, non-generic, top-level, and assembly-accessible
-/// classes implementing <c>ITranslations</c>. A set marked <c>[ExcludeFromTranslationDiscovery]</c> is found too, but
+/// classes implementing <c>ITranslationSet</c>. A set marked <c>[ExcludeFromTranslationDiscovery]</c> is found too, but
 /// flagged (<see cref="DiscoveredTranslations.IsExcluded"/>): it is never registered or checked, and counts only as a
 /// set of its language. A generic, nested, or file-local set can still be registered by hand, and takes no part in the
 /// language checks, with two exceptions that the same pass finds (<see cref="Read"/>): a nested or file-local set that
 /// rewords another assembly's texts, which an app would otherwise lose without a word, and a partial class of such a
-/// shape, or abstract, that lists <c>ITranslations</c> itself as a default-language set does, and so gets no contract.
+/// shape, or abstract, that lists <c>ITranslationSet</c> itself as a default-language set does, and so gets no
+/// contract.
 /// </summary>
 /// <remarks>
 /// A contract written by <see cref="TranslationSetsGenerator"/> does not exist yet when the generators run (they all see
@@ -20,7 +21,7 @@ namespace CodeChops.Idioma.Generators;
 internal static class TranslationsDiscovery
 {
     private const string PackageAssemblyName = "CodeChops.Idioma";
-    private const string TranslationsInterfaceFullName = "CodeChops.Idioma.ITranslations";
+    private const string TranslationSetInterfaceFullName = "CodeChops.Idioma.ITranslationSet";
     private const string ExclusionAttributeFullName = "CodeChops.Idioma.ExcludeFromTranslationDiscoveryAttribute";
     private const string LanguageCodeMemberName = "LanguageCode";
 
@@ -49,8 +50,8 @@ internal static class TranslationsDiscovery
 
     /// <summary>
     /// What one pass over the classes of the current compilation finds: the candidate sets, the nested or file-local
-    /// sets that reword another assembly's texts, and the partial classes listing <c>ITranslations</c> that no contract
-    /// can come from because of their shape.
+    /// sets that reword another assembly's texts, and the partial classes listing <c>ITranslationSet</c> that no
+    /// contract can come from because of their shape.
     /// </summary>
     // One syntax provider for all three: a provider re-runs its transform for every class with a base list on every
     // edit, and each pass costs its own walk over them. The two generators calling this each build one; the binding the
@@ -151,7 +152,7 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// Whether a candidate is a set: it implements <c>ITranslations</c> in the input compilation, or one of its base
+    /// Whether a candidate is a set: it implements <c>ITranslationSet</c> in the input compilation, or one of its base
     /// types will bind to a contract the same compilation generates.
     /// </summary>
     public static bool IsSet(DiscoveredTranslations candidate, ImmutableArray<string> generatedContracts)
@@ -161,7 +162,7 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// Whether a set is where a contract comes from: it lists <c>ITranslations</c> itself, in the default language,
+    /// Whether a set is where a contract comes from: it lists <c>ITranslationSet</c> itself, in the default language,
     /// implements no contract already (<see cref="ImplementsContract"/>), and rewords no set (<see cref="RewordsSet"/>).
     /// </summary>
     public static bool IsDefaultSet(DiscoveredTranslations set, string defaultLanguage)
@@ -175,7 +176,7 @@ internal static class TranslationsDiscovery
 
     /// <summary>
     /// Whether a set implements a contract the input compilation knows: one written by hand in its own assembly,
-    /// whatever its accessibility, or a public one of any assembly. Listing <c>ITranslations</c> as well then adds
+    /// whatever its accessibility, or a public one of any assembly. Listing <c>ITranslationSet</c> as well then adds
     /// nothing, as the contract derives from it.
     /// </summary>
     public static bool ImplementsContract(DiscoveredTranslations set)
@@ -184,9 +185,9 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// Whether a set derives from a concrete set that implements <c>ITranslations</c> in the input compilation. Listing
-    /// <c>ITranslations</c> again is then how it implements <c>LanguageCode</c> (<c>en-GB</c> on <c>en</c>), not how it
-    /// starts a contract.
+    /// Whether a set derives from a concrete set that implements <c>ITranslationSet</c> in the input compilation.
+    /// Listing <c>ITranslationSet</c> again is then how it implements <c>LanguageCode</c> (<c>en-GB</c> on <c>en</c>),
+    /// not how it starts a contract.
     /// </summary>
     public static bool RewordsSet(DiscoveredTranslations set)
     {
@@ -235,7 +236,7 @@ internal static class TranslationsDiscovery
 
     /// <summary>
     /// What an abstract, generic, nested, or file-local class gives discovery: a set rewording another assembly's texts
-    /// where generated code cannot reach it (<c>LOC003</c>), or a partial class listing <c>ITranslations</c> as a
+    /// where generated code cannot reach it (<c>LOC003</c>), or a partial class listing <c>ITranslationSet</c> as a
     /// default-language set does, which its shape keeps the generator from extending (<c>LOC002</c> in the default
     /// language); <see langword="null"/> for anything else, such as a test fixture.
     /// </summary>
@@ -279,8 +280,9 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// Whether a class reads as the start of a contract, as a default-language set does: it lists <c>ITranslations</c>
-    /// itself, implements no contract, and derives from no concrete set (see <see cref="IsDefaultSet"/>).
+    /// Whether a class reads as the start of a contract, as a default-language set does: it lists
+    /// <c>ITranslationSet</c> itself, implements no contract, and derives from no concrete set (see
+    /// <see cref="IsDefaultSet"/>).
     /// </summary>
     private static bool StartsContract(INamedTypeSymbol type)
     {
@@ -318,7 +320,7 @@ internal static class TranslationsDiscovery
         var implementsTranslations = ImplementsTranslations(type);
 
         // Most classes with a base list are no set. Their base types are bound by now, so a class that implements no
-        // ITranslations, and whose own and ancestors' base types all bind, is ruled out before any declaration of an
+        // ITranslationSet, and whose own and ancestors' base types all bind, is ruled out before any declaration of an
         // ancestor gets a semantic model of its own.
         if (!implementsTranslations && !HasUnboundBaseType(type))
             return null;
@@ -396,7 +398,7 @@ internal static class TranslationsDiscovery
 
     private static bool IsTranslationsInterface(INamedTypeSymbol @interface)
     {
-        return String.Equals(@interface.ToDisplayString(), TranslationsInterfaceFullName, StringComparison.Ordinal);
+        return String.Equals(@interface.ToDisplayString(), TranslationSetInterfaceFullName, StringComparison.Ordinal);
     }
 
     private static bool IsExcluded(INamedTypeSymbol type)
@@ -476,7 +478,7 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The contracts another assembly could implement too: the public interfaces deriving from <c>ITranslations</c> that
+    /// The contracts another assembly could implement too: the public interfaces deriving from <c>ITranslationSet</c> that
     /// the type resolves in the input compilation.
     /// </summary>
     private static ImmutableArray<string> GetPublicContractNames(INamedTypeSymbol type)
@@ -491,7 +493,7 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The contracts written by hand in the type's own assembly: the interfaces deriving from <c>ITranslations</c>
+    /// The contracts written by hand in the type's own assembly: the interfaces deriving from <c>ITranslationSet</c>
     /// declared there, whatever their accessibility. A contract the generator writes is not among them, as it does not
     /// exist in the input compilation.
     /// </summary>
@@ -507,7 +509,7 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The language the set serves, as <c>ITranslations.LanguageCode</c> will at run time: its own constant when it
+    /// The language the set serves, as <c>ITranslationSet.LanguageCode</c> will at run time: its own constant when it
     /// implements the property, else the code the build records for it or a set it derives from
     /// (<see cref="FindRecordedLanguageCode"/>), else the last two letters of its name. <see langword="null"/> when that
     /// cannot be known here: the property is no constant, or comes from another assembly. A <c>LanguageCode</c> that
@@ -543,7 +545,7 @@ internal static class TranslationsDiscovery
 
     /// <summary>
     /// The code the build records for a set at run time (<c>GeneratedCode.RegisterLanguageCode</c>), or else for
-    /// the nearest set it derives from that has one, as <c>ITranslations.GetLanguageCode</c> looks it up; <see langword="null"/>
+    /// the nearest set it derives from that has one, as <c>ITranslationSet.GetLanguageCode</c> looks it up; <see langword="null"/>
     /// when none has. Only a set the generated registrar can name gets a record: one that discovery finds.
     /// </summary>
     /// <param name="type">The set.</param>
@@ -620,10 +622,10 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// Which <c>LanguageCode</c> of the set's classes implements <c>ITranslations.LanguageCode</c> at run time
+    /// Which <c>LanguageCode</c> of the set's classes implements <c>ITranslationSet.LanguageCode</c> at run time
     /// (<see langword="null"/>: the default, from the type's name), and the most derived one that implements nothing.
     /// </summary>
-    // A class maps the interface where it lists it (ITranslations, a contract, or a contract generated here, which binds
+    // A class maps the interface where it lists it (ITranslationSet, a contract, or a contract generated here, which binds
     // to nothing yet), looking up from there. A class deriving from it without listing the interface again inherits that
     // mapping, so a LanguageCode it declares implements nothing unless it overrides the implementation; an explicit one
     // does not compile there (CS0540).
@@ -673,8 +675,8 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// A contract's own implementation of <c>LanguageCode</c> (<c>string ITranslations.LanguageCode =&gt; "nl";</c> in
-    /// an interface), which applies when no class of the set implements it.
+    /// A contract's own implementation of <c>LanguageCode</c> (<c>string ITranslationSet.LanguageCode =&gt; "nl";</c>
+    /// in an interface), which applies when no class of the set implements it.
     /// </summary>
     private static IPropertySymbol? FindInterfaceLanguageCode(INamedTypeSymbol type)
     {
@@ -883,7 +885,7 @@ internal static class TranslationsDiscovery
     /// <summary>
     /// The texts: the public, instance, non-indexer <see cref="string"/> properties with a public getter declared by
     /// the class itself, in declaration order (an inherited property belongs to the base's own contract).
-    /// <c>LanguageCode</c> (the <c>ITranslations</c> member, which a set may override) and explicit interface
+    /// <c>LanguageCode</c> (the <c>ITranslationSet</c> member, which a set may override) and explicit interface
     /// implementations are not texts.
     /// </summary>
     private static ImmutableArray<TranslationsMember> GetTextMembers(INamedTypeSymbol type, Compilation compilation,
@@ -981,16 +983,16 @@ internal static class TranslationsDiscovery
 }
 
 /// <summary>
-/// A candidate set: its names; whether it implements <c>ITranslations</c> in the input compilation, and the base types
-/// that bind to nothing which it or a class it derives from lists; whether it wins over the default tier, and how many
-/// sets it derives from; why it cannot register itself, if so; whether it is marked
+/// A candidate set: its names; whether it implements <c>ITranslationSet</c> in the input compilation, and the base
+/// types that bind to nothing which it or a class it derives from lists; whether it wins over the default tier, and how
+/// many sets it derives from; why it cannot register itself, if so; whether it is marked
 /// <c>[ExcludeFromTranslationDiscovery]</c>, which leaves it unregistered and unchecked, counting only as a set of its
 /// language; the language code the generated registrar records for it, when its name ends in a declared code that is
 /// not two letters and it does not implement <c>LanguageCode</c>; and what the language checks and the generated
 /// contract need to know about it, among which the public contracts it implements, those written by hand in its
 /// assembly, the classes of its assembly it derives from, the set it derives from directly (with the unresolved base
 /// types through which that one would implement a contract generated here, empty when it implements
-/// <c>ITranslations</c> already), and the class whose <c>LanguageCode</c> implements nothing, if any.
+/// <c>ITranslationSet</c> already), and the class whose <c>LanguageCode</c> implements nothing, if any.
 /// </summary>
 internal readonly record struct DiscoveredTranslations(
     string MetadataName,
@@ -1051,7 +1053,7 @@ internal readonly record struct SourceAncestor(
     ImmutableArray<UnresolvedBaseType> UnresolvedBaseTypes);
 
 /// <summary>
-/// Which <c>LanguageCode</c> property implements <c>ITranslations.LanguageCode</c> for a set
+/// Which <c>LanguageCode</c> property implements <c>ITranslationSet.LanguageCode</c> for a set
 /// (<see langword="null"/>: the default, from the type's name), and the most derived one that implements nothing.
 /// </summary>
 internal readonly record struct LanguageCodeMapping(
@@ -1087,7 +1089,7 @@ internal readonly record struct UnregistrableTranslations(
     DiagnosticLocation Location);
 
 /// <summary>
-/// A partial class listing <c>ITranslations</c> as a default-language set does, which the generator cannot extend for
+/// A partial class listing <c>ITranslationSet</c> as a default-language set does, which the generator cannot extend for
 /// its shape (nested, file-local, generic, or abstract): what <c>LOC002</c> reports when its language is the default
 /// language. Its language is <see langword="null"/> when the build cannot read it.
 /// </summary>

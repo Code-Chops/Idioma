@@ -60,16 +60,16 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A translations set registers itself through generated code that creates an instance. That takes a top-level class with a parameterless constructor, and a language code: the end of the type's name (two letters, or a longer code [assembly: SupportedLanguages] lists, as in ShopTranslationsEnGB), or an implementation of ITranslations.LanguageCode. A set that cannot register itself would otherwise leave its texts in their default language without a word of warning. A nested or file-local set is reported only when it rewords another assembly's texts.");
+        description: "A translations set registers itself through generated code that creates an instance. That takes a top-level class with a parameterless constructor, and a language code: the end of the type's name (two letters, or a longer code [assembly: SupportedLanguages] lists, as in ShopTranslationsEnGB), or an implementation of ITranslationSet.LanguageCode. A set that cannot register itself would otherwise leave its texts in their default language without a word of warning. A nested or file-local set is reported only when it rewords another assembly's texts.");
 
     private static readonly DiagnosticDescriptor UnmappedLanguageCodeRule = new(
         id: UnmappedLanguageCodeDiagnosticId,
         title: "LanguageCode that implements nothing",
-        messageFormat: "The LanguageCode of '{0}' implements nothing, because '{0}' inherits ITranslations without listing it, so the set serves the language of its name instead. List the interface again: 'class {0} : {1}, ITranslations'.",
+        messageFormat: "The LanguageCode of '{0}' implements nothing, because '{0}' inherits ITranslationSet without listing it, so the set serves the language of its name instead. List the interface again: 'class {0} : {1}, ITranslationSet'.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A class implements an interface member only where it lists the interface. A set deriving from another set inherits that set's mapping of ITranslations.LanguageCode, so a LanguageCode it declares, unless it overrides the inherited one, is never read, and the set registers under the language its name gives it.");
+        description: "A class implements an interface member only where it lists the interface. A set deriving from another set inherits that set's mapping of ITranslationSet.LanguageCode, so a LanguageCode it declares, unless it overrides the inherited one, is never read, and the set registers under the language its name gives it.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {

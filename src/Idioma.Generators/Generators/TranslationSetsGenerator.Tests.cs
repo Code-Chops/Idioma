@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="TranslationSetsGenerator"/>: a partial <see cref="ITranslations"/> class named after the default
+/// Tests for <see cref="TranslationSetsGenerator"/>: a partial <see cref="ITranslationSet"/> class named after the default
 /// language yields its contract, the partial declaration implementing it, and the static class holding the texts, with
 /// crefs to every translation; every language of <c>[assembly: SupportedLanguages]</c> must have a set, in its own
 /// assembly and in the libraries it references.
@@ -32,7 +32,7 @@ public sealed class TranslationSetsGeneratorTests
     private const string ShopSets = $$"""
         {{Header}}
 
-        public sealed partial class ShopTranslationsEN : ITranslations
+        public sealed partial class ShopTranslationsEN : ITranslationSet
         {
             /// <summary>
             /// The caption of the checkout button.
@@ -54,7 +54,7 @@ public sealed class TranslationSetsGeneratorTests
 
         namespace GridLibrary;
 
-        public partial class GridTranslationsEN : ITranslations
+        public partial class GridTranslationsEN : ITranslationSet
         {
             public virtual string First => "First";
         }
@@ -77,7 +77,7 @@ public sealed class TranslationSetsGeneratorTests
 
         public static class InlineTexts
         {
-            public static LocalizableText Orders { get; } = LocalizableText.Translated(en: "Orders", nl: "Bestellingen");
+            public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
         }
         """);
 
@@ -92,7 +92,7 @@ public sealed class TranslationSetsGeneratorTests
 
         namespace Shop.Checkout
         {
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Pay => "Pay";
             }
@@ -100,7 +100,7 @@ public sealed class TranslationSetsGeneratorTests
 
         namespace Shop.Admin
         {
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Delete => "Delete";
             }
@@ -234,7 +234,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp.@event;
 
-            public partial class AgendaTranslationsEN : ITranslations
+            public partial class AgendaTranslationsEN : ITranslationSet
             {
                 /// <summary>
                 /// The title of an event.
@@ -282,7 +282,7 @@ public sealed class TranslationSetsGeneratorTests
         var source = $$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -310,7 +310,7 @@ public sealed class TranslationSetsGeneratorTests
         var source = $$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -343,7 +343,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Cart => "Cart";
                 public virtual string Checkout => "Checkout";
@@ -390,7 +390,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp
             {
-                public sealed partial class ShopTranslationsEN : ITranslations
+                public sealed partial class ShopTranslationsEN : ITranslationSet
                 {
                     public string Checkout => "Checkout";
                 }
@@ -417,7 +417,7 @@ public sealed class TranslationSetsGeneratorTests
         var source = $$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -455,7 +455,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 private const string Wording = "Pay now";
 
@@ -492,7 +492,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Summary => "{1} of {0} ({1,5:N0})";
                 public string Checkout => "Checkout";
@@ -534,7 +534,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Address => "Street{{lineBreak}}City";
             }
@@ -569,9 +569,11 @@ public sealed class TranslationSetsGeneratorTests
     [Test]
     [Arguments("ShopTextsEN", "IShopTexts", "ShopTexts", "ShopTexts.")]
     [Arguments("TranslationsEN", "ITranslations", "Translations", "Translations.")]
+    [Arguments("TranslationSetEN", "ITranslationSet", "TranslationSet", "TranslationSet.")]
     public void Names_ShouldDeriveFromClassName(string className, string contract, string texts, string keyPrefix)
     {
-        // Arrange & Act: the key stem drops a trailing "Translations", keeping it when nothing else is left.
+        // Arrange & Act: the key stem drops a trailing "Translations", keeping it when nothing else is left. The last
+        // set gets a contract named as the library's own interface is, which it therefore lists by its full name.
         var text = ContractText(Run($$"""
             using CodeChops.Idioma;
 
@@ -579,7 +581,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class {{className}} : CodeChops.Idioma.ITranslations
+            public sealed partial class {{className}} : CodeChops.Idioma.ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -602,9 +604,9 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsZhHans : ITranslations
+            public sealed partial class ShopTranslationsZhHans : ITranslationSet
             {
-                string ITranslations.LanguageCode => "zh-Hans";
+                string ITranslationSet.LanguageCode => "zh-Hans";
                 public string Checkout => "结账";
             }
 
@@ -622,7 +624,7 @@ public sealed class TranslationSetsGeneratorTests
     [Test]
     public void OnlyPublicInstanceStringPropertiesAreTexts()
     {
-        // Arrange: LanguageCode is the ITranslations member, a virtual property is a text (so a set can derive and
+        // Arrange: LanguageCode is the ITranslationSet member, a virtual property is a text (so a set can derive and
         // override), an inherited property belongs to the base (it is not redeclared), a property without a public
         // getter could not implement the contract member, and the rest are not texts by shape.
         const string source = """
@@ -637,7 +639,7 @@ public sealed class TranslationSetsGeneratorTests
                 public string Inherited => "Inherited";
             }
 
-            public partial class ShopTranslationsEN : ShopWordingBase, ITranslations
+            public partial class ShopTranslationsEN : ShopWordingBase, ITranslationSet
             {
                 public string LanguageCode => "en";
                 public string Checkout => "Checkout";
@@ -673,7 +675,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            internal sealed partial class ShopTranslationsEN : ITranslations
+            internal sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -684,7 +686,7 @@ public sealed class TranslationSetsGeneratorTests
 
         // Assert: no other assembly could implement it, so it is not recorded for them.
         var text = ContractText(result);
-        text.ShouldContain("internal interface IShopTranslations : CodeChops.Idioma.ITranslations");
+        text.ShouldContain("internal interface IShopTranslations : CodeChops.Idioma.ITranslationSet");
         text.ShouldContain("internal static partial class ShopTranslations");
         text.ShouldNotContain("public interface");
         text.ShouldNotContain("public static partial class");
@@ -702,7 +704,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial record ShopTranslationsEN : ITranslations
+            public sealed partial record ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -721,7 +723,7 @@ public sealed class TranslationSetsGeneratorTests
 
             [assembly: SupportedLanguages("en")]
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -747,7 +749,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations;
+            public sealed partial class ShopTranslationsEN : ITranslationSet;
             """));
 
         // Assert
@@ -788,7 +790,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class OptionTranslationsEN : ITranslations
+            public sealed partial class OptionTranslationsEN : ITranslationSet
             {
                 public string Default => "Default";
                 public string DefaultSet => "Default set";
@@ -832,7 +834,7 @@ public sealed class TranslationSetsGeneratorTests
 
             {{@namespace}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string {{text}} => "Text";
                 public string Other => "Other";
@@ -875,7 +877,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace {{@namespace}}
             {
-                public partial class ShopTranslationsEN : ITranslations
+                public partial class ShopTranslationsEN : ITranslationSet
                 {
                     public virtual string Cart => "Cart";
                 }
@@ -887,7 +889,7 @@ public sealed class TranslationSetsGeneratorTests
 
                 public static class InlineTexts
                 {
-                    public static LocalizableText Orders { get; } = LocalizableText.Translated(en: "Orders", nl: "Bestellingen");
+                    public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
                 }
             }
             """;
@@ -914,7 +916,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class OptionTranslationsEN : ITranslations
+            public sealed partial class OptionTranslationsEN : ITranslationSet
             {
                 public string {{name}} => "Text";
                 public string Other => "Other";
@@ -948,7 +950,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class FilterTranslationsEN : ITranslations
+            public sealed partial class FilterTranslationsEN : ITranslationSet
             {
                 public new string Equals => "Equals";
                 public new string GetHashCode => "Hash code";
@@ -998,7 +1000,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace RegionalLibrary;
 
-            public partial class GridTranslationsEN : ITranslations
+            public partial class GridTranslationsEN : ITranslationSet
             {
                 public virtual string Colour => "Color";
             }
@@ -1008,9 +1010,9 @@ public sealed class TranslationSetsGeneratorTests
                 public virtual string Colour => "Kleur";
             }
 
-            public class GridTranslationsEnGB : GridTranslationsEN, ITranslations
+            public class GridTranslationsEnGB : GridTranslationsEN, ITranslationSet
             {
-                string ITranslations.LanguageCode => "en-GB";
+                string ITranslationSet.LanguageCode => "en-GB";
 
                 public override string Colour => "Colour";
             }
@@ -1044,7 +1046,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1083,14 +1085,14 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("public sealed class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }", "it is not partial")]
-    [Arguments("public sealed partial class ShopTranslations : ITranslations { public string LanguageCode => \"en\"; public string Checkout => \"Checkout\"; }", "its name does not end in EN")]
-    [Arguments("public abstract partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }", "it is abstract")]
-    [Arguments("public sealed partial class ShopTranslationsEN<T> : ITranslations { public string Checkout => \"Checkout\"; }", "it is generic")]
-    [Arguments("file sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }", "it is file-local")]
-    [Arguments("public static partial class Container { public sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; } }", "it is nested in 'Container'")]
-    [Arguments("public sealed partial class ShopTranslationsEN(string shopName) : ITranslations { public string Checkout => shopName; }", "it has no parameterless constructor")]
-    [Arguments("public sealed partial class ShopTranslationsEN : ITranslations { private ShopTranslationsEN() { } public string Checkout => \"Checkout\"; }", "it has no parameterless constructor")]
+    [Arguments("public sealed class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }", "it is not partial")]
+    [Arguments("public sealed partial class ShopTranslations : ITranslationSet { public string LanguageCode => \"en\"; public string Checkout => \"Checkout\"; }", "its name does not end in EN")]
+    [Arguments("public abstract partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }", "it is abstract")]
+    [Arguments("public sealed partial class ShopTranslationsEN<T> : ITranslationSet { public string Checkout => \"Checkout\"; }", "it is generic")]
+    [Arguments("file sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }", "it is file-local")]
+    [Arguments("public static partial class Container { public sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; } }", "it is nested in 'Container'")]
+    [Arguments("public sealed partial class ShopTranslationsEN(string shopName) : ITranslationSet { public string Checkout => shopName; }", "it has no parameterless constructor")]
+    [Arguments("public sealed partial class ShopTranslationsEN : ITranslationSet { private ShopTranslationsEN() { } public string Checkout => \"Checkout\"; }", "it has no parameterless constructor")]
     public void DefaultSetGeneratorCannotExtend_ShouldReportLOC002AndEmitNothing(string declaration, string expectedReason)
     {
         // Arrange
@@ -1128,7 +1130,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN(string shopName) : ITranslations
+            public sealed partial class ShopTranslationsEN(string shopName) : ITranslationSet
             {
                 public string Checkout => $"Pay at {shopName}";
             }
@@ -1142,12 +1144,12 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("public abstract class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
-    [Arguments("file sealed class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
-    [Arguments("public static class Container { public sealed class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; } }")]
-    [Arguments("public static partial class Container { [ExcludeFromTranslationDiscovery] public sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; } }")]
-    [Arguments("public static partial class Container { public sealed partial class ShopTranslationsNL : ITranslations { public string Checkout => \"Afrekenen\"; } }")]
-    [Arguments("[ExcludeFromTranslationDiscovery] public sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+    [Arguments("public abstract class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
+    [Arguments("file sealed class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
+    [Arguments("public static class Container { public sealed class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; } }")]
+    [Arguments("public static partial class Container { [ExcludeFromTranslationDiscovery] public sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; } }")]
+    [Arguments("public static partial class Container { public sealed partial class ShopTranslationsNL : ITranslationSet { public string Checkout => \"Afrekenen\"; } }")]
+    [Arguments("[ExcludeFromTranslationDiscovery] public sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     public void SetTakingNoPart_ShouldReportNothingAndEmitNothing(string declaration)
     {
         // Arrange & Act: registered by hand, if at all, so it has no contract to generate. Nothing marks it as one: it
@@ -1175,7 +1177,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1206,7 +1208,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1233,7 +1235,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1252,10 +1254,10 @@ public sealed class TranslationSetsGeneratorTests
 
     [Test]
     [Arguments("public class GiftTranslationsNL : IShopTranslations { public virtual string Checkout => \"Afrekenen\"; public virtual string Total => \"Totaal\"; } [ExcludeFromTranslationDiscovery] public sealed class GiftTranslationsEN : GiftTranslationsNL;")]
-    [Arguments("[ExcludeFromTranslationDiscovery] public sealed class CartTranslationsNL : ITranslations { public string Checkout => \"Afrekenen\"; }")]
+    [Arguments("[ExcludeFromTranslationDiscovery] public sealed class CartTranslationsNL : ITranslationSet { public string Checkout => \"Afrekenen\"; }")]
     public void ExcludedSet_ShouldReportNothingAboutItself(string declaration)
     {
-        // Arrange & Act: a set deriving from a set of another language (LOC006), and one listing ITranslations in
+        // Arrange & Act: a set deriving from a set of another language (LOC006), and one listing ITranslationSet in
         // another language than the default (LOC007), were either not excluded. A language not listed is still LOC005.
         var result = Run($$"""
             {{ShopSets}}
@@ -1274,7 +1276,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1302,7 +1304,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1320,7 +1322,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public interface IGridTranslations : ITranslations
+            public interface IGridTranslations : ITranslationSet
             {
                 string First { get; }
             }
@@ -1346,7 +1348,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            internal interface IGridTranslations : ITranslations
+            internal interface IGridTranslations : ITranslationSet
             {
                 string First { get; }
             }
@@ -1380,7 +1382,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public interface IGridTranslations : ITranslations
+            public interface IGridTranslations : ITranslationSet
             {
                 string First { get; }
             }
@@ -1405,25 +1407,25 @@ public sealed class TranslationSetsGeneratorTests
     [Arguments("public", "partial ")]
     [Arguments("public", "")]
     [Arguments("internal", "")]
-    public void SetsListingITranslationsBesideHandWrittenContract_ShouldReportNothingAndEmitNoContract(string accessibility, string partial)
+    public void SetsListingITranslationSetBesideHandWrittenContract_ShouldReportNothingAndEmitNoContract(string accessibility, string partial)
     {
-        // Arrange & Act: listing ITranslations again adds nothing to a set of a contract written by hand. The English set
+        // Arrange & Act: listing ITranslationSet again adds nothing to a set of a contract written by hand. The English set
         // is no default-language set to generate a second contract from (LOC002, or a duplicate IGridTranslations once
         // partial), and the Dutch set does implement its contract (LOC007).
         var result = Run($$"""
             {{Header}}
 
-            {{accessibility}} interface IGridTranslations : ITranslations
+            {{accessibility}} interface IGridTranslations : ITranslationSet
             {
                 string Next { get; }
             }
 
-            {{accessibility}} {{partial}}class GridTranslationsEN : IGridTranslations, ITranslations
+            {{accessibility}} {{partial}}class GridTranslationsEN : IGridTranslations, ITranslationSet
             {
                 public string Next => "Next";
             }
 
-            {{accessibility}} sealed class GridTranslationsNL : IGridTranslations, ITranslations
+            {{accessibility}} sealed class GridTranslationsNL : IGridTranslations, ITranslationSet
             {
                 public string Next => "Volgende";
             }
@@ -1435,7 +1437,7 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void SetsListingITranslationsBesideHandWrittenContractWithoutDeclaredLanguages_ShouldReportNothing()
+    public void SetsListingITranslationSetBesideHandWrittenContractWithoutDeclaredLanguages_ShouldReportNothing()
     {
         // Arrange & Act: they start no contract, so they need no languages declared (LOC001).
         var result = Run("""
@@ -1443,17 +1445,17 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public interface IGridTranslations : ITranslations
+            public interface IGridTranslations : ITranslationSet
             {
                 string Next { get; }
             }
 
-            public sealed class GridTranslationsEN : IGridTranslations, ITranslations
+            public sealed class GridTranslationsEN : IGridTranslations, ITranslationSet
             {
                 public string Next => "Next";
             }
 
-            public sealed class GridTranslationsNL : IGridTranslations, ITranslations
+            public sealed class GridTranslationsNL : IGridTranslations, ITranslationSet
             {
                 public string Next => "Volgende";
             }
@@ -1470,7 +1472,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public interface IGridTranslations : ITranslations
+            public interface IGridTranslations : ITranslationSet
             {
                 string First { get; }
             }
@@ -1504,7 +1506,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations;
+            public sealed partial class ShopTranslationsEN : ITranslationSet;
             """);
 
         // Assert
@@ -1584,7 +1586,7 @@ public sealed class TranslationSetsGeneratorTests
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
                 public string Total => "Total";
@@ -1612,7 +1614,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Cart => "Cart";
             }
@@ -1633,7 +1635,7 @@ public sealed class TranslationSetsGeneratorTests
     [Arguments("public class ShopTranslationsEnGB : ShopTranslationsEN;")]
     [Arguments("public class ShopTranslationsEnGB : ShopTranslationsEN { public override string Cart => \"Basket\"; }")]
     [Arguments("public class ShopTranslationsEnGB : IShopTranslations { public string Cart => \"Basket\"; }")]
-    [Arguments("public class ShopTranslationsBritish : ShopTranslationsEN, ITranslations { string ITranslations.LanguageCode => \"en-GB\"; }")]
+    [Arguments("public class ShopTranslationsBritish : ShopTranslationsEN, ITranslationSet { string ITranslationSet.LanguageCode => \"en-GB\"; }")]
     public void ListedRegionWithSetOfItsOwn_ShouldReportNothing(string british)
     {
         // Arrange & Act: a set that derives from the English one and adds nothing will do, as will one that implements
@@ -1645,7 +1647,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Cart => "Cart";
             }
@@ -1677,7 +1679,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsNL : ITranslations
+            public partial class ShopTranslationsNL : ITranslationSet
             {
                 public virtual string Cart => "Winkelwagen";
             }
@@ -1705,7 +1707,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Cart => "Cart";
             }
@@ -1734,7 +1736,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public interface IGridTranslations : ITranslations
+            public interface IGridTranslations : ITranslationSet
             {
                 string First { get; }
             }
@@ -1809,7 +1811,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1844,7 +1846,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class MessagesEN : ITranslations
+            public sealed partial class MessagesEN : ITranslationSet
             {
                 public string Save => "Save";
             }
@@ -1880,7 +1882,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1897,7 +1899,7 @@ public sealed class TranslationSetsGeneratorTests
         var diagnostic = SingleDiagnostic(result, TranslationSetsGenerator.UnlistedLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldContain("'ShopTranslationsNlBE' translates into 'be'");
         diagnostic.GetMessage().ShouldContain("If it is meant for 'nl-BE', list 'nl-BE' in the attribute");
-        diagnostic.GetMessage().ShouldContain("implement 'string ITranslations.LanguageCode => \"nl-BE\";'");
+        diagnostic.GetMessage().ShouldContain("implement 'string ITranslationSet.LanguageCode => \"nl-BE\";'");
     }
 
     [Test]
@@ -1911,7 +1913,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace RegionalLibrary;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -1948,7 +1950,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsNlBE : ITranslations
+            public partial class ShopTranslationsNlBE : ITranslationSet
             {
                 public string Checkout => "Afrekenen";
             }
@@ -1975,14 +1977,14 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
 
             public sealed class ShopTranslationsNlBE : IShopTranslations
             {
-                string ITranslations.LanguageCode => "nl-BE";
+                string ITranslationSet.LanguageCode => "nl-BE";
                 public string Checkout => "Afrekenen";
             }
             """);
@@ -1998,7 +2000,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -2008,9 +2010,9 @@ public sealed class TranslationSetsGeneratorTests
                 public string Checkout => "Afrekenen";
             }
 
-            public sealed class ShopTranslationsGB : ShopTranslationsEN, ITranslations
+            public sealed class ShopTranslationsGB : ShopTranslationsEN, ITranslationSet
             {
-                string ITranslations.LanguageCode => "en-GB";
+                string ITranslationSet.LanguageCode => "en-GB";
             }
             """);
 
@@ -2026,7 +2028,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -2036,9 +2038,9 @@ public sealed class TranslationSetsGeneratorTests
                 public virtual string Checkout => "Afrekenen";
             }
 
-            public sealed class ShopTranslationsNlBE : ShopTranslationsNL, ITranslations
+            public sealed class ShopTranslationsNlBE : ShopTranslationsNL, ITranslationSet
             {
-                string ITranslations.LanguageCode => "nl-BE";
+                string ITranslationSet.LanguageCode => "nl-BE";
                 public override string Checkout => "Betalen";
             }
             """);
@@ -2059,14 +2061,14 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Colour => "Color";
             }
 
-            public sealed class ShopTranslationsGB : ShopTranslationsEN, ITranslations
+            public sealed class ShopTranslationsGB : ShopTranslationsEN, ITranslationSet
             {
-                string ITranslations.LanguageCode => "en-GB";
+                string ITranslationSet.LanguageCode => "en-GB";
                 public override string Colour => "Colour";
             }
             """);
@@ -2088,7 +2090,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Cart => "Cart";
             }
@@ -2103,7 +2105,7 @@ public sealed class TranslationSetsGeneratorTests
                 public override string Cart => "Basket";
             }
 
-            public partial class GridTranslationsEN : ITranslations
+            public partial class GridTranslationsEN : ITranslationSet
             {
                 public string Rows => "Rows";
             }
@@ -2128,7 +2130,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -2161,7 +2163,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -2201,16 +2203,16 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void SetListingITranslationsAgainWithoutDeclaredLanguages_ShouldReportNothing()
+    public void SetListingITranslationSetAgainWithoutDeclaredLanguages_ShouldReportNothing()
     {
-        // Arrange & Act: listing ITranslations again is how a set deriving from another implements LanguageCode, so it
-        // does not start a contract that would need languages (LOC001).
+        // Arrange & Act: listing ITranslationSet again is how a set deriving from another implements LanguageCode, so
+        // it does not start a contract that would need languages (LOC001).
         var result = Run("""
             using CodeChops.Idioma;
 
             namespace TestApp;
 
-            public sealed class MyGridTexts : GridLibrary.GridTranslationsEN, ITranslations
+            public sealed class MyGridTexts : GridLibrary.GridTranslationsEN, ITranslationSet
             {
                 public string LanguageCode => "en";
                 public override string First => "Begin";
@@ -2229,7 +2231,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -2253,7 +2255,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
                 public virtual string Total => "Total";
@@ -2298,7 +2300,7 @@ public sealed class TranslationSetsGeneratorTests
         var result = Run($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -2319,18 +2321,18 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void SetListingITranslationsInOtherLanguage_ShouldReportLOC007Only()
+    public void SetListingITranslationSetInOtherLanguage_ShouldReportLOC007Only()
     {
         // Arrange & Act: it compiles, and no text would ever read it.
         var result = Run($$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
 
-            public sealed class ShopTranslationsNL : ITranslations
+            public sealed class ShopTranslationsNL : ITranslationSet
             {
                 public string Checkout => "Afrekenen";
             }
@@ -2418,7 +2420,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace ExcludingLibrary;
 
-            public partial class ListTranslationsEN : ITranslations
+            public partial class ListTranslationsEN : ITranslationSet
             {
                 public virtual string Empty => "Nothing yet";
             }
@@ -2516,7 +2518,7 @@ public sealed class TranslationSetsGeneratorTests
 
             namespace MixedLibrary;
 
-            public partial class MixedTranslationsEN : ITranslations
+            public partial class MixedTranslationsEN : ITranslationSet
             {
                 public virtual string First => "First";
             }
@@ -2528,7 +2530,7 @@ public sealed class TranslationSetsGeneratorTests
 
             public static class MixedTexts
             {
-                public static LocalizableText Orders { get; } = LocalizableText.Translated(en: "Orders", nl: "Bestellingen");
+                public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 
@@ -2601,7 +2603,7 @@ public sealed class TranslationSetsGeneratorTests
         var (run, edited) = GeneratorTestHelper.RunAcrossEditInSameFile(new TranslationSetsGenerator(), $$"""
             {{Header}}
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }

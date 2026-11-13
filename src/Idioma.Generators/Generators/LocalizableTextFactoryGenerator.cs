@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes <c>LocalizableText.Translated</c> for the languages of <c>[assembly: SupportedLanguages(...)]</c>, one required
+/// Writes <c>LocalizableText.Inline</c> for the languages of <c>[assembly: SupportedLanguages(...)]</c>, one required
 /// parameter per language, so that leaving a language out is a compile error. It is a static extension on the one shared
 /// <c>LocalizableText</c>: a type of its own per assembly could not cross into a library's API. It reports <c>LOC010</c>
 /// for an invalid or repeated language, and still writes the factory for the valid ones, so that error stays the only
@@ -12,7 +12,7 @@ namespace CodeChops.Idioma.Generators;
 /// <remarks>
 /// <para>
 /// The extension is on <c>LocalizableText</c> alone. Written for that type as such, it would show on
-/// <c>ResourceText</c> too, which derives from it: <c>ResourceText.Translated</c> would give a <c>LocalizableText</c>
+/// <c>ResourceText</c> too, which derives from it: <c>ResourceText.Inline</c> would give a <c>LocalizableText</c>
 /// under the name of another type. So it is written for the text type that is its own <c>IInlineText</c>, which
 /// <c>LocalizableText</c> is and <c>ResourceText</c> is not.
 /// </para>
@@ -31,7 +31,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
     public const string InvalidLanguagesDiagnosticId = "LOC010";
 
     internal const string ClassName = "GeneratedLocalizableText";
-    internal const string FactoryName = "Translated";
+    internal const string FactoryName = "Inline";
 
     private const string TextName = "CodeChops.Idioma.LocalizableText";
     private const string InlineTextName = "CodeChops.Idioma.Internals.IInlineText";
@@ -39,7 +39,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
     /// <summary>
     /// A call of the factory in Razor markup, which other generators cannot see as C#: Razor's own generator writes it.
     /// </summary>
-    private static readonly Regex InlineTextInMarkup = new(@"\bLocalizableText\s*\.\s*Translated\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    private static readonly Regex InlineTextInMarkup = new(@"\bLocalizableText\s*\.\s*Inline\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private static readonly DiagnosticDescriptor InvalidLanguagesRule = new(
         id: InvalidLanguagesDiagnosticId,
@@ -48,7 +48,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A language becomes a parameter of LocalizableText.Translated and is matched against the UI culture at run time, so each must be a culture name, and appear once.");
+        description: "A language becomes a parameter of LocalizableText.Inline and is matched against the UI culture at run time, so each must be a culture name, and appear once.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -103,7 +103,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Whether a node calls the factory: <c>LocalizableText.Translated(...)</c>, also qualified. Read from the syntax
+    /// Whether a node calls the factory: <c>LocalizableText.Inline(...)</c>, also qualified. Read from the syntax
     /// alone, as the factory does not exist in the compilation a generator sees.
     /// </summary>
     private static bool IsFactoryCall(SyntaxNode node)
@@ -153,7 +153,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
                     where TText : {{TextName}}, {{InlineTextName}}<TText>
                 {
                     /// <summary>
-                    /// A text in every language this assembly supports: <c>LocalizableText.Translated({{sample}})</c>.
+                    /// A text in every language this assembly supports: <c>LocalizableText.Inline({{sample}})</c>.
                     /// It shows the wording for the current UI culture, and a culture none of them serves gets the wording in the app's
                     /// default language, else the <c>{{codes[0]}}</c> wording.
                     /// </summary>
@@ -171,7 +171,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
         }
 
         sb.AppendLine($$"""
-                    public static {{TextName}} Translated({{parameters}})
+                    public static {{TextName}} Inline({{parameters}})
                     {
                         return CodeChops.Idioma.Internals.GeneratedCode.CreateText({{defaultParameter}}{{translations}});
                     }

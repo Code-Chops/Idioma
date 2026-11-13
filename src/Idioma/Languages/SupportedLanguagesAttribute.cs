@@ -11,9 +11,9 @@ namespace CodeChops.Idioma;
 /// language:
 /// </para>
 /// <list type="bullet">
-/// <item>An inline text: <c>LocalizableText.Translated(en: "Checkout", nl: "Afrekenen")</c>. The source generator
+/// <item>An inline text: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. The source generator
 /// writes this method with one required argument per language, so leaving a language out does not compile.</item>
-/// <item>One class per language, for a library or a larger group of texts: see <see cref="ITranslations"/>.</item>
+/// <item>One class per language, for a library or a larger group of texts: see <see cref="ITranslationSet"/>.</item>
 /// </list>
 /// <para>
 /// Once you list two or more languages, wording you write as a plain string where a text is expected is a build error
@@ -37,7 +37,7 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// An assembly without this attribute has no texts of its own to translate: its strings convert to texts as they are,
-/// and <c>LocalizableText.Translated</c> does not exist there. It can still reword a library's set, or give a library's
+/// and <c>LocalizableText.Inline</c> does not exist there. It can still reword a library's set, or give a library's
 /// contract another language.
 /// </para>
 /// <para>
@@ -53,7 +53,7 @@ namespace CodeChops.Idioma;
 ///
 /// public static class ShopTexts
 /// {
-///     public static LocalizableText Checkout { get; } = LocalizableText.Translated(en: "Checkout", nl: "Afrekenen");
+///     public static LocalizableText Checkout { get; } = LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
 /// }
 /// </code>
 /// </example>

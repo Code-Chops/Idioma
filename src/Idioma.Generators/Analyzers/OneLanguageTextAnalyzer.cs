@@ -29,7 +29,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor OneLanguageRule = new(
         id: OneLanguageDiagnosticId,
         title: "Text written in one language",
-        messageFormat: "This text is written in one language, and this assembly supports {0}. Write it as LocalizableText.Translated({1}).",
+        messageFormat: "This text is written in one language, and this assembly supports {0}. Write it as LocalizableText.Inline({1}).",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -38,7 +38,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor GeneratedCodeOnlyRule = new(
         id: GeneratedCodeOnlyDiagnosticId,
         title: "Called by hand what only generated code should call",
-        messageFormat: "'{0}' is for generated code, and would let a text miss a language. Write the text as LocalizableText.Translated({1}), or in a set per language.",
+        messageFormat: "'{0}' is for generated code, and would let a text miss a language. Write the text as LocalizableText.Inline({1}), or in a set per language.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -47,11 +47,11 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor UnnamedLanguageRule = new(
         id: UnnamedLanguageDiagnosticId,
         title: "Language argument without its name",
-        messageFormat: "Name the language of this wording: LocalizableText.Translated({0}). Without names two languages can swap unnoticed.",
+        messageFormat: "Name the language of this wording: LocalizableText.Inline({0}). Without names two languages can swap unnoticed.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Every parameter of LocalizableText.Translated is a string, so wording in the wrong position compiles and shows in the wrong language.");
+        description: "Every parameter of LocalizableText.Inline is a string, so wording in the wrong position compiles and shows in the wrong language.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(OneLanguageRule, GeneratedCodeOnlyRule, UnnamedLanguageRule);
 

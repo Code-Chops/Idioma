@@ -2,9 +2,9 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Holds the language sets of an assembly to the languages of <c>[assembly: SupportedLanguages(...)]</c>, and writes the
-/// contract of each default-language set. For a top-level partial class listing <c>ITranslations</c> and named after the
+/// contract of each default-language set. For a top-level partial class listing <c>ITranslationSet</c> and named after the
 /// default language (<c>ShopTranslationsEN</c>) it emits the contract interface (<c>IShopTranslations</c>, one
-/// <see cref="string"/> member per public string property, deriving from <c>ITranslations</c>), a partial declaration
+/// <see cref="string"/> member per public string property, deriving from <c>ITranslationSet</c>), a partial declaration
 /// that makes the class implement it, and the static partial class named after the set without its language suffix
 /// (<c>ShopTranslations</c>, one <c>ResourceText</c> per member keyed <c>Shop.&lt;Name&gt;</c> and worded by the set,
 /// next to the constant <c>ResourceKeyPrefix</c>); the interface and the class take the set's accessibility. Each
@@ -35,7 +35,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     /// <summary>
     /// The property of a diagnostic that holds the name that resolves it, for its code fix to apply: the name the class
     /// should carry (<c>LOC002</c>, when a rename resolves it), or the contract it should implement instead of
-    /// <c>ITranslations</c> (<c>LOC007</c>, when this build generates that contract).
+    /// <c>ITranslationSet</c> (<c>LOC007</c>, when this build generates that contract).
     /// </summary>
     public const string SuggestedNameProperty = "SuggestedName";
 
@@ -53,7 +53,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         NoLanguagesDeclaredDiagnosticId,
         "Translations set in an assembly without languages",
         "'{0}' is a translations set, and this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
-        "The generator writes a contract from the set of the default language, and holds the other sets to it, so it has to know the languages. A set rewording a library's set, or adding a language to its contract, does not list ITranslations itself and needs no declaration.");
+        "The generator writes a contract from the set of the default language, and holds the other sets to it, so it has to know the languages. A set rewording a library's set, or adding a language to its contract, does not list ITranslationSet itself and needs no declaration.");
 
     private static readonly DiagnosticDescriptor CannotExtendRule = Error(
         CannotExtendDiagnosticId,
@@ -82,8 +82,8 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor MissingContractRule = Error(
         MissingContractDiagnosticId,
         "Translations set does not implement its contract",
-        "'{0}' translates into '{1}' but implements ITranslations, and no text reads a set outside its contract. Implement '{2}', generated from '{3}'.",
-        "Only the set of the default language lists ITranslations: the generator writes the contract from it. Every other language implements that contract, which is what demands every text.");
+        "'{0}' translates into '{1}' but implements ITranslationSet, and no text reads a set outside its contract. Implement '{2}', generated from '{3}'.",
+        "Only the set of the default language lists ITranslationSet: the generator writes the contract from it. Every other language implements that contract, which is what demands every text.");
 
     private static readonly DiagnosticDescriptor LibraryMissingLanguageRule = Error(
         LibraryMissingLanguageDiagnosticId,
@@ -277,7 +277,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             /// reports a language without a set. Because every member must be implemented, a text without a translation is a
             /// compile error rather than a fallback at run time. Each set registers itself, so there is nothing to register.
             /// </summary>
-            {{accessibility}} interface {{name}} : {{PackageNamespace}}.ITranslations
+            {{accessibility}} interface {{name}} : {{PackageNamespace}}.ITranslationSet
             {
             """);
         foreach (var member in contract.Members)

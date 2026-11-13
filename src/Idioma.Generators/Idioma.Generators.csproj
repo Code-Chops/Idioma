@@ -19,7 +19,7 @@
     </PackageReference>
     <!--
       Pinned to the compiler of the first .NET 10 SDK (10.0.100), not the central version: a compiler skips an analyzer
-      built against a newer Roslyn than its own (CS9057), and then LocalizableText.Translated vanishes from every build
+      built against a newer Roslyn than its own (CS9057), and then LocalizableText.Inline vanishes from every build
       of a consumer on an older SDK. C# 14 extension members, which the generated factory uses, need this compiler
       anyway. A bulk package update in Rider rewrites VersionOverride too: put it back.
     -->

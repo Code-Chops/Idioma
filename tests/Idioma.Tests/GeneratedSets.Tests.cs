@@ -6,7 +6,7 @@ using CodeChops.Idioma.Internals;
 
 namespace CodeChops.Idioma.Tests.GeneratedSets
 {
-    public partial class GeneratedTranslationsEN : ITranslations
+    public partial class GeneratedTranslationsEN : ITranslationSet
     {
         public virtual string Checkout => "Checkout";
         public virtual string Greeting => "Hello, {0}!";
@@ -50,7 +50,7 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     /// </summary>
     public static class InlineTexts
     {
-        public static LocalizableText Orders { get; } = LocalizableText.Translated(en: "Orders", nl: "Bestellingen");
+        public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
     }
 }
 #endregion

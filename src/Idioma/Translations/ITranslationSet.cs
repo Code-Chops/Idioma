@@ -8,13 +8,13 @@ namespace CodeChops.Idioma;
 /// <remarks>
 /// <para>
 /// Use a set per language for a library or a larger group of texts. A single text is simpler inline:
-/// <c>LocalizableText.Translated(en: "Checkout", nl: "Afrekenen")</c>. Either way, start by declaring your languages,
+/// <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. Either way, start by declaring your languages,
 /// the default one first: <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>.
 /// Then:
 /// </para>
 /// <list type="number">
 /// <item>Write the set for your default language as a partial class named after that language, with one public
-/// string property per text: <c>public partial class ShopTranslationsEN : ITranslations</c>.</item>
+/// string property per text: <c>public partial class ShopTranslationsEN : ITranslationSet</c>.</item>
 /// <item>Build. The source generator writes the contract <c>IShopTranslations</c>, which lists every text, and the
 /// class <c>ShopTranslations</c>, which holds them.</item>
 /// <item>Write a set for each other language that implements the contract:
@@ -34,7 +34,7 @@ namespace CodeChops.Idioma;
 /// file-local class is no set to the build, which reports its language as missing (<c>LOC004</c>). To register a set
 /// yourself, mark it
 /// <see cref="ExcludeFromTranslationDiscoveryAttribute">[ExcludeFromTranslationDiscovery]</see> and call
-/// <see cref="TranslationsRegistry.Register{TTranslations}">TranslationsRegistry.Register</see>.
+/// <see cref="TranslationsRegistry.Register{TSet}">TranslationsRegistry.Register</see>.
 /// </para>
 /// <para>
 /// To reword some of a library's texts, derive from its set in the same language, name your set after that language
@@ -63,7 +63,7 @@ namespace CodeChops.Idioma;
 /// <code>
 /// [assembly: SupportedLanguages("en", "nl")]
 ///
-/// public partial class ShopTranslationsEN : ITranslations
+/// public partial class ShopTranslationsEN : ITranslationSet
 /// {
 ///     public virtual string Cart => "Cart";
 ///     public virtual string Checkout => "Checkout";
@@ -82,7 +82,7 @@ namespace CodeChops.Idioma;
 /// string greeting = ShopTranslations.Greeting.Format(customer.Name);
 /// </code>
 /// </example>
-public interface ITranslations
+public interface ITranslationSet
 {
     /// <summary>
     /// The language this set serves, such as <c>nl</c>. A set named after its language does not implement this: the
@@ -116,17 +116,17 @@ public interface ITranslations
     /// </para>
     /// <para>
     /// Implement this property for such a code in an assembly that does not list it, or for a set whose name does
-    /// not end in its language: <c>string ITranslations.LanguageCode => "en-GB";</c>. A set deriving from another set
-    /// lists <see cref="ITranslations"/> again for that, as in the example below. Without it, the property implements
+    /// not end in its language: <c>string ITranslationSet.LanguageCode => "en-GB";</c>. A set deriving from another set
+    /// lists <see cref="ITranslationSet"/> again for that, as in the example below. Without it, the property implements
     /// nothing, and the build reports <c>LOC015</c>.
     /// </para>
     /// </remarks>
     /// <example>
     /// <code>
     /// // In an assembly declaring ("en", "nl"): en-GB is left out, so inline texts need no British wording.
-    /// public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslations
+    /// public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslationSet
     /// {
-    ///     string ITranslations.LanguageCode => "en-GB";
+    ///     string ITranslationSet.LanguageCode => "en-GB";
     ///
     ///     public override string Cart => "Basket";
     /// }
@@ -147,30 +147,30 @@ public interface ITranslations
     /// To get the language a set actually serves, read <see cref="LanguageCode"/> on the set, which also explains how
     /// a name gives a language.
     /// </remarks>
-    /// <param name="translationsType">The type of the set.</param>
+    /// <param name="setType">The type of the set.</param>
     /// <exception cref="ArgumentNullException">
-    /// When <paramref name="translationsType"/> is <see langword="null"/>.
+    /// When <paramref name="setType"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When the name does not end in a language. Name the set after its language, or implement
     /// <see cref="LanguageCode"/>.
     /// </exception>
-    static string GetLanguageCode(Type translationsType)
+    static string GetLanguageCode(Type setType)
     {
-        ArgumentNullException.ThrowIfNull(translationsType);
+        ArgumentNullException.ThrowIfNull(setType);
 
         // Recorded by the generated registrar of the set's assembly, which runs before any of its code: a name ending in
         // a longer code that assembly declares, on the set or a set it derives from.
-        if (TranslationsRegistry.FindLanguageCode(translationsType) is { } recorded)
+        if (TranslationsRegistry.FindLanguageCode(setType) is { } recorded)
             return recorded;
 
         // ASCII letters only: culture names are ASCII, so a suffix of other letters would file the set under a language
         // no UI culture resolves through, without a word of warning.
-        var name = translationsType.Name;
+        var name = setType.Name;
         if (name.Length < 2 || !Char.IsAsciiLetter(name[^1]) || !Char.IsAsciiLetter(name[^2]))
             throw new InvalidOperationException(
-                $"Cannot derive a language code from the name of {translationsType}: name the type with the language code as suffix "
-                + $"(e.g., ShopTranslationsDE for German, or ShopTranslationsEnGB for a declared en-GB) or implement {nameof(ITranslations)}.{nameof(LanguageCode)}.");
+                $"Cannot derive a language code from the name of {setType}: name the type with the language code as suffix "
+                + $"(e.g., ShopTranslationsDE for German, or ShopTranslationsEnGB for a declared en-GB) or implement {nameof(ITranslationSet)}.{nameof(LanguageCode)}.");
 
         return name[^2..].ToLowerInvariant();
     }

@@ -6,7 +6,7 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// Holds the wording of a text in every language to the placeholders of its default wording (<c>LOC016</c>), so that
 /// <c>Format</c> neither throws nor leaves a value out for the users of one language: each argument of
-/// <c>LocalizableText.Translated</c> to the default language's, and each text of a set to the placeholders the generated
+/// <c>LocalizableText.Inline</c> to the default language's, and each text of a set to the placeholders the generated
 /// contract records for it (<c>[FormatPlaceholders]</c>), also a set of another assembly's contract.
 /// </summary>
 /// <remarks>
@@ -19,7 +19,7 @@ public sealed class FormatPlaceholdersAnalyzer : DiagnosticAnalyzer
 {
     public const string PlaceholdersDifferDiagnosticId = "LOC016";
 
-    private const string TranslationsFullName = "CodeChops.Idioma.ITranslations";
+    private const string TranslationSetFullName = "CodeChops.Idioma.ITranslationSet";
 
     private static readonly DiagnosticDescriptor PlaceholdersDifferRule = new(
         id: PlaceholdersDifferDiagnosticId,
@@ -44,7 +44,7 @@ public sealed class FormatPlaceholdersAnalyzer : DiagnosticAnalyzer
 
     private static void Start(CompilationStartAnalysisContext context)
     {
-        if (context.Compilation.GetTypeByMetadataName(TranslationsFullName) is not { } translations)
+        if (context.Compilation.GetTypeByMetadataName(TranslationSetFullName) is not { } translations)
             return;
 
         context.RegisterOperationAction(AnalyzeInvocation, OperationKind.Invocation);
@@ -55,7 +55,7 @@ public sealed class FormatPlaceholdersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Holds each language argument of <c>LocalizableText.Translated</c> to the default language's.
+    /// Holds each language argument of <c>LocalizableText.Inline</c> to the default language's.
     /// </summary>
     private static void AnalyzeInvocation(OperationAnalysisContext context)
     {

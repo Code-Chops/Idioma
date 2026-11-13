@@ -11,7 +11,7 @@ foreach (var language in new[] { "en", "nl", "en-GB" })
     Console.WriteLine($"{ShopTranslations.Greeting.Format("Ada")} {ShopTranslations.Cart}");
 }
 
-public partial class ShopTranslationsEN : ITranslations
+public partial class ShopTranslationsEN : ITranslationSet
 {
     public virtual string Cart => "Cart";
     public virtual string Greeting => "Hello, {0}!";

@@ -2,7 +2,7 @@ namespace CodeChops.Idioma.Internals;
 
 /// <summary>
 /// What the code written by the source generator calls. You never need this type: write a text as
-/// <c>LocalizableText.Translated</c>, or in a set per language (see <see cref="ITranslations"/>). In an assembly that
+/// <c>LocalizableText.Inline</c>, or in a set per language (see <see cref="ITranslationSet"/>). In an assembly that
 /// declares <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, calling it by hand is a build error
 /// (<c>LOC012</c>).
 /// </summary>
@@ -12,7 +12,7 @@ namespace CodeChops.Idioma.Internals;
 public static class GeneratedCode
 {
     /// <summary>
-    /// Creates a text with its translations, for the generated <c>LocalizableText.Translated</c>, which demands every
+    /// Creates a text with its translations, for the generated <c>LocalizableText.Inline</c>, which demands every
     /// language of <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>.
     /// </summary>
     /// <param name="defaultText">
@@ -43,7 +43,7 @@ public static class GeneratedCode
     /// <c>GeneratedCode.CreateResourceText&lt;IShopTranslations&gt;("Shop.Checkout", t => t.Checkout, new ShopTranslationsEN())</c>.
     /// The class the source generator writes declares its texts this way.
     /// </summary>
-    /// <typeparam name="TTranslations">
+    /// <typeparam name="TContract">
     /// The contract the text belongs to; every registered set implementing it provides the text. Name it: inferred from
     /// <paramref name="defaults"/> it would be that set's own type, and no other language's set would match.
     /// </typeparam>
@@ -55,12 +55,12 @@ public static class GeneratedCode
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When <paramref name="defaults"/> has no language code: its name does not end in one and it does not implement
-    /// <see cref="ITranslations.LanguageCode"/>. Name the set after its language (<c>ShopTranslationsEN</c>), or
+    /// <see cref="ITranslationSet.LanguageCode"/>. Name the set after its language (<c>ShopTranslationsEN</c>), or
     /// implement that property.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static ResourceText CreateResourceText<TTranslations>(string key, Func<TTranslations, string> selector, TTranslations defaults)
-        where TTranslations : class, ITranslations
+    public static ResourceText CreateResourceText<TContract>(string key, Func<TContract, string> selector, TContract defaults)
+        where TContract : class, ITranslationSet
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
@@ -92,18 +92,18 @@ public static class GeneratedCode
     /// <c>ShopTranslationsEnGB</c>, for a set named after a language its assembly declares, before the set registers.
     /// Only the first call for a set counts.
     /// </summary>
-    /// <typeparam name="TTranslations">The set.</typeparam>
+    /// <typeparam name="TSet">The set.</typeparam>
     /// <param name="languageCode">The language: a culture name such as <c>en-GB</c>.</param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="languageCode"/> is not a culture name, such as an empty string or <c>en_GB</c>; pass a culture
     /// name such as <c>en-GB</c>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RegisterLanguageCode<TTranslations>(string languageCode)
-        where TTranslations : class, ITranslations
+    public static void RegisterLanguageCode<TSet>(string languageCode)
+        where TSet : class, ITranslationSet
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(languageCode);
 
-        TranslationsRegistry.RegisterLanguageCode<TTranslations>(languageCode);
+        TranslationsRegistry.RegisterLanguageCode<TSet>(languageCode);
     }
 }

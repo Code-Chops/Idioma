@@ -39,29 +39,29 @@ public sealed class CannotExtendCodeFixProviderTests
 
     [Test]
     [Arguments(
-        "public sealed class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }",
+        "public sealed class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }",
         "Make 'ShopTranslationsEN' partial",
-        "public sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+        "public sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     [Arguments(
-        "/// <summary>The shop.</summary>\nclass ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }",
+        "/// <summary>The shop.</summary>\nclass ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }",
         "Make 'ShopTranslationsEN' partial",
-        "/// <summary>The shop.</summary>\npartial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+        "/// <summary>The shop.</summary>\npartial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     [Arguments(
-        "public sealed record ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }",
+        "public sealed record ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }",
         "Make 'ShopTranslationsEN' partial",
-        "public sealed partial record ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+        "public sealed partial record ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     [Arguments(
-        "public abstract partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }",
+        "public abstract partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }",
         "Remove 'abstract' from 'ShopTranslationsEN'",
-        "public partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+        "public partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     [Arguments(
-        "// The shop.\nabstract partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }",
+        "// The shop.\nabstract partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }",
         "Remove 'abstract' from 'ShopTranslationsEN'",
-        "// The shop.\npartial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+        "// The shop.\npartial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     [Arguments(
-        "file sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }",
+        "file sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }",
         "Remove 'file' from 'ShopTranslationsEN'",
-        "sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }")]
+        "sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }")]
     public async Task SetOneEditFixes_ShouldGetThatEdit(string declaration, string expectedTitle, string expectedDeclaration)
     {
         // Arrange & Act
@@ -79,7 +79,7 @@ public sealed class CannotExtendCodeFixProviderTests
     {
         // Arrange
         var set = File("""
-            public sealed partial class ShopTranslations : ITranslations
+            public sealed partial class ShopTranslations : ITranslationSet
             {
                 public string LanguageCode => "en";
                 public string Checkout => "Checkout";
@@ -109,7 +109,7 @@ public sealed class CannotExtendCodeFixProviderTests
     public async Task PartialSetRepeatingModifier_ShouldLoseItInEveryPart()
     {
         // Arrange
-        var first = File("public abstract partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; }");
+        var first = File("public abstract partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; }");
         const string Second = "namespace TestApp; public abstract partial class ShopTranslationsEN { public string Pay => \"Pay\"; }";
 
         // Act
@@ -126,7 +126,7 @@ public sealed class CannotExtendCodeFixProviderTests
     public async Task AbstractSetWithAbstractMember_ShouldStayAsItIs()
     {
         // Arrange: without the modifier the class would no longer compile.
-        var source = File("public abstract partial class ShopTranslationsEN : ITranslations { public abstract string Checkout { get; } }");
+        var source = File("public abstract partial class ShopTranslationsEN : ITranslationSet { public abstract string Checkout { get; } }");
 
         // Act
         var fixes = await FixAsync(source);
@@ -136,9 +136,9 @@ public sealed class CannotExtendCodeFixProviderTests
     }
 
     [Test]
-    [Arguments("public sealed partial class ShopTranslationsEN<T> : ITranslations { public string Checkout => \"Checkout\"; }")]
-    [Arguments("public static partial class Container { public sealed partial class ShopTranslationsEN : ITranslations { public string Checkout => \"Checkout\"; } }")]
-    [Arguments("public sealed partial class ShopTranslationsEN(string shopName) : ITranslations { public string Checkout => shopName; }")]
+    [Arguments("public sealed partial class ShopTranslationsEN<T> : ITranslationSet { public string Checkout => \"Checkout\"; }")]
+    [Arguments("public static partial class Container { public sealed partial class ShopTranslationsEN : ITranslationSet { public string Checkout => \"Checkout\"; } }")]
+    [Arguments("public sealed partial class ShopTranslationsEN(string shopName) : ITranslationSet { public string Checkout => shopName; }")]
     public async Task SetNoSingleEditFixes_ShouldGetNoFix(string declaration)
     {
         // Arrange & Act: where the class moves to, what closes its type parameter, or what its constructor can do

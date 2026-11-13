@@ -5,7 +5,7 @@ using CodeChops.Idioma;
 
 [assembly: SupportedLanguages("en", "nl", "en-GB")] // the first is the default
 
-var choice = LocalizableText.Translated(en: "{0}, pick a color.", nl: "{0}, kies een kleur.", enGB: "{0}, pick a colour.");
+var choice = LocalizableText.Inline(en: "{0}, pick a color.", nl: "{0}, kies een kleur.", enGB: "{0}, pick a colour.");
 
 foreach (var language in new[] { "en", "nl", "en-GB" })
 {

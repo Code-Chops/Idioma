@@ -13,7 +13,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed class LocalizableTextJsonConverterTests
 {
     #region Fixture
-    private interface IJsonTranslations : ITranslations
+    private interface IJsonTranslations : ITranslationSet
     {
         string Greeting { get; }
     }
@@ -39,9 +39,9 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// A British set that keeps the English wording.
     /// </summary>
-    private sealed class JsonBritishTranslations : JsonTranslationsEN, ITranslations
+    private sealed class JsonBritishTranslations : JsonTranslationsEN, ITranslationSet
     {
-        string ITranslations.LanguageCode => "en-GB";
+        string ITranslationSet.LanguageCode => "en-GB";
     }
 
     /// <summary>
@@ -49,7 +49,7 @@ public sealed class LocalizableTextJsonConverterTests
     /// </summary>
     private sealed class JsonBelgianTranslations : IJsonTranslations
     {
-        string ITranslations.LanguageCode => "NL-be";
+        string ITranslationSet.LanguageCode => "NL-be";
 
         public string Greeting => "Dag";
     }
@@ -62,14 +62,14 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// A set of another contract, whose language the texts of this contract have no wording for.
     /// </summary>
-    private sealed class JsonOtherTranslationsDE : ITranslations;
+    private sealed class JsonOtherTranslationsDE : ITranslationSet;
 
     /// <summary>
     /// A set for Traditional Chinese, the parent culture of <c>zh-TW</c>, which is no prefix of that name.
     /// </summary>
-    private class JsonTraditionalChineseTranslations : IJsonTranslations, ITranslations
+    private class JsonTraditionalChineseTranslations : IJsonTranslations, ITranslationSet
     {
-        string ITranslations.LanguageCode => "zh-Hant";
+        string ITranslationSet.LanguageCode => "zh-Hant";
 
         public virtual string Greeting => "你好";
     }
@@ -77,9 +77,9 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// A Taiwanese set that keeps the Traditional Chinese wording.
     /// </summary>
-    private sealed class JsonTaiwaneseTranslations : JsonTraditionalChineseTranslations, ITranslations
+    private sealed class JsonTaiwaneseTranslations : JsonTraditionalChineseTranslations, ITranslationSet
     {
-        string ITranslations.LanguageCode => "zh-TW";
+        string ITranslationSet.LanguageCode => "zh-TW";
     }
 
     /// <summary>

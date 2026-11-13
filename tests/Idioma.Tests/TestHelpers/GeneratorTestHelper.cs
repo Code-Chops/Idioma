@@ -407,7 +407,7 @@ internal static class GeneratorTestHelper
         return
         [
             .. platform.Select(static path => (MetadataReference)MetadataReference.CreateFromFile(path)),
-            MetadataReference.CreateFromFile(typeof(ITranslations).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(ITranslationSet).Assembly.Location),
         ];
     }
 }

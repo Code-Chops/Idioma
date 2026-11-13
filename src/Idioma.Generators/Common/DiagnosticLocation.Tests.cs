@@ -71,7 +71,7 @@ public sealed class DiagnosticLocationTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -104,7 +104,7 @@ public sealed class DiagnosticLocationTests
             namespace TestApp;
 
             #pragma warning disable LOC004
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             #pragma warning restore LOC004
             {
                 public virtual string Checkout => "Checkout";

@@ -1,14 +1,14 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Keeps an <see cref="ITranslations"/> set from registering itself, so that it applies only once you register it
-/// with <see cref="TranslationsRegistry.Register(ReadOnlySpan{ITranslations})">TranslationsRegistry.Register</see>.
+/// Keeps a <see cref="ITranslationSet">set</see> from registering itself, so that it applies only once you register it
+/// with <see cref="TranslationsRegistry.Register(ReadOnlySpan{ITranslationSet})">TranslationsRegistry.Register</see>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Use it for a set that cannot register itself, such as one that needs constructor arguments, which build warning
 /// <c>LOC003</c> points out. Or use it for a set meant only for a registry of its own, such as one a test creates
-/// with <see cref="TranslationsRegistry.Create(IEnumerable{ITranslations})">TranslationsRegistry.Create</see>.
+/// with <see cref="TranslationsRegistry.Create(IEnumerable{ITranslationSet})">TranslationsRegistry.Create</see>.
 /// </para>
 /// <para>
 /// The build still counts an excluded set as the set of its language, for the apps that use your library as well, so

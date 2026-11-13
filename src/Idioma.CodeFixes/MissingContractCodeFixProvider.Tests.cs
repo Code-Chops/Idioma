@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="MissingContractCodeFixProvider"/>: a set that lists <c>ITranslations</c> instead of its contract
+/// Tests for <see cref="MissingContractCodeFixProvider"/>: a set that lists <c>ITranslationSet</c> instead of its contract
 /// (<c>LOC007</c>) gets the contract in its place, when the build generates one.
 /// </summary>
 public sealed class MissingContractCodeFixProviderTests
@@ -22,7 +22,7 @@ public sealed class MissingContractCodeFixProviderTests
         """;
 
     private const string DefaultSet = """
-        public sealed partial class ShopTranslationsEN : ITranslations
+        public sealed partial class ShopTranslationsEN : ITranslationSet
         {
             public string Checkout => "Checkout";
         }
@@ -42,10 +42,10 @@ public sealed class MissingContractCodeFixProviderTests
     #endregion
 
     [Test]
-    [Arguments("public sealed class ShopTranslationsNL : ITranslations", "public sealed class ShopTranslationsNL : IShopTranslations")]
-    [Arguments("public sealed class ShopTranslationsNL : CodeChops.Idioma.ITranslations // Dutch", "public sealed class ShopTranslationsNL : IShopTranslations // Dutch")]
-    [Arguments("public sealed class ShopTranslationsNL : System.IDisposable, ITranslations", "public sealed class ShopTranslationsNL : System.IDisposable, IShopTranslations")]
-    public async Task SetListingITranslations_ShouldImplementItsContractInstead(string declaration, string expectedDeclaration)
+    [Arguments("public sealed class ShopTranslationsNL : ITranslationSet", "public sealed class ShopTranslationsNL : IShopTranslations")]
+    [Arguments("public sealed class ShopTranslationsNL : CodeChops.Idioma.ITranslationSet // Dutch", "public sealed class ShopTranslationsNL : IShopTranslations // Dutch")]
+    [Arguments("public sealed class ShopTranslationsNL : System.IDisposable, ITranslationSet", "public sealed class ShopTranslationsNL : System.IDisposable, IShopTranslations")]
+    public async Task SetListingITranslationSet_ShouldImplementItsContractInstead(string declaration, string expectedDeclaration)
     {
         // Arrange
         const string Body = """
@@ -67,7 +67,7 @@ public sealed class MissingContractCodeFixProviderTests
     }
 
     [Test]
-    public async Task PartialSetListingITranslationsInAnotherFile_ShouldBeFixedThere()
+    public async Task PartialSetListingITranslationSetInAnotherFile_ShouldBeFixedThere()
     {
         // Arrange: the part the diagnostic sits on is not the part that lists the interface.
         var first = $$"""
@@ -80,7 +80,7 @@ public sealed class MissingContractCodeFixProviderTests
                 public string Checkout => "Afrekenen";
             }
             """;
-        const string Second = "using CodeChops.Idioma; namespace TestApp; public sealed partial class ShopTranslationsNL : ITranslations;";
+        const string Second = "using CodeChops.Idioma; namespace TestApp; public sealed partial class ShopTranslationsNL : ITranslationSet;";
 
         // Act
         var fixes = await FixAsync(first, Second);
@@ -88,7 +88,7 @@ public sealed class MissingContractCodeFixProviderTests
         // Assert
         var fix = fixes.ShouldHaveSingleItem();
         fix.Sources[0].ShouldBe(first);
-        fix.Sources[1].ShouldBe(Second.Replace(": ITranslations", ": IShopTranslations", StringComparison.Ordinal));
+        fix.Sources[1].ShouldBe(Second.Replace(": ITranslationSet", ": IShopTranslations", StringComparison.Ordinal));
         ShouldReportNothing([.. fix.Sources]);
     }
 
@@ -99,7 +99,7 @@ public sealed class MissingContractCodeFixProviderTests
         var source = $$"""
             {{Header}}
 
-            public sealed class ShopTranslationsNL : ITranslations
+            public sealed class ShopTranslationsNL : ITranslationSet
             {
                 public string Checkout => "Afrekenen";
             }

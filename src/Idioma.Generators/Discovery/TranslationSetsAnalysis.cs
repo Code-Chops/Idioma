@@ -330,7 +330,7 @@ internal sealed record TranslationSetsAnalysis(
             var simpleName = contract.Substring(separator + 1);
             var baseName = GetContractBaseName(contract);
 
-            // A set reported for listing ITranslations instead of this contract already says what to do about its
+            // A set reported for listing ITranslationSet instead of this contract already says what to do about its
             // language.
             var misdeclared = sets.Where(other => other.Language is not null
                 && String.Equals(other.Namespace, contractNamespace, StringComparison.Ordinal)
@@ -392,7 +392,7 @@ internal sealed record TranslationSetsAnalysis(
     /// <summary>
     /// A set in another language than the set it derives from keeps that language for every text it does not override.
     /// A regional set on top of its language (<c>en-GB</c> on <c>en</c>) is fine. A base that implements
-    /// <c>ITranslations</c> only through a contract generated here is a set once that contract exists.
+    /// <c>ITranslationSet</c> only through a contract generated here is a set once that contract exists.
     /// </summary>
     private static bool IsDerivedFromOtherLanguage(DiscoveredTranslations set, ImmutableArray<string> generatedContracts)
     {
@@ -412,15 +412,15 @@ internal sealed record TranslationSetsAnalysis(
     private static TranslationSetsFinding UnlistedLanguage(DiscoveredTranslations set, string language)
     {
         var advice = GuessLongCode(set.Name) is { } meant
-            ? $"If it is meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ITranslations.LanguageCode => \"{meant}\";'. Otherwise add '{language}' to the attribute, or remove the set."
+            ? $"If it is meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ITranslationSet.LanguageCode => \"{meant}\";'. Otherwise add '{language}' to the attribute, or remove the set."
             : "Add the language to the attribute, or remove the set.";
 
         return new TranslationSetsFinding(TranslationSetsRule.UnlistedLanguage, set.Location, new EquatableArray<string>([set.Name, language, advice]));
     }
 
     /// <summary>
-    /// A set that lists <c>ITranslations</c> in another language than the default, and implements no contract besides,
-    /// so no text would ever read it.
+    /// A set that lists <c>ITranslationSet</c> in another language than the default, and implements no contract
+    /// besides, so no text would ever read it.
     /// </summary>
     private static bool IsMissingContract(DiscoveredTranslations set, string defaultLanguage)
     {
@@ -575,7 +575,7 @@ internal readonly record struct TranslationSetsFinding(
 internal enum TranslationSetsRule
 {
     /// <summary>
-    /// <c>LOC001</c>: a set lists <c>ITranslations</c> in an assembly that declares no languages.
+    /// <c>LOC001</c>: a set lists <c>ITranslationSet</c> in an assembly that declares no languages.
     /// </summary>
     NoLanguagesDeclared,
 
@@ -601,7 +601,7 @@ internal enum TranslationSetsRule
     DerivedFromOtherLanguage,
 
     /// <summary>
-    /// <c>LOC007</c>: a set lists <c>ITranslations</c> instead of implementing its contract.
+    /// <c>LOC007</c>: a set lists <c>ITranslationSet</c> instead of implementing its contract.
     /// </summary>
     MissingContract,
 

@@ -21,7 +21,7 @@ public sealed class IInlineTextTests
         // Arrange & Act
         var interfaces = typeof(ResourceText).GetInterfaces();
 
-        // Assert: it inherits the interface as LocalizableText implements it, which is what keeps Translated off it.
+        // Assert: it inherits the interface as LocalizableText implements it, which is what keeps Inline off it.
         interfaces.ShouldContain(typeof(IInlineText<LocalizableText>));
         interfaces.ShouldNotContain(typeof(IInlineText<ResourceText>));
     }

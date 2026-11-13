@@ -41,7 +41,7 @@ Write a text in one of two ways, and mix them as you like:
 A set is a class that holds your texts in one language. Write the set of your default language as a partial class named after that language, with one property per text:
 
 ```csharp
-public partial class ShopTranslationsEN : ITranslations
+public partial class ShopTranslationsEN : ITranslationSet
 {
     public virtual string Cart => "Cart";
     public virtual string Checkout => "Checkout";
@@ -74,11 +74,11 @@ A missing text or a missing language is a build error. There is nothing to regis
 
 ```razor
 <button>
-  @LocalizableText.Translated(en: "Checkout", nl: "Afrekenen")
+  @LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")
 </button>
 ```
 
-`Translated` takes one argument per language you declared, so leaving a language out does not compile.
+`Inline` takes one argument per language you declared, so leaving a language out does not compile.
 
 #### A regional variant, such as British English
 
@@ -98,7 +98,7 @@ British users see "Basket" and the rest of your English.
 Once you list `en-GB`, the build asks for British wording everywhere, so that none is forgotten:
 
 - Every contract gets a British set. One with nothing British about it is a single line: `public class GridTranslationsEnGB : GridTranslationsEN;`.
-- Every inline text takes a British wording: `LocalizableText.Translated(en: "Color", nl: "Kleur", enGB: "Colour")`.
+- Every inline text takes a British wording: `LocalizableText.Inline(en: "Color", nl: "Kleur", enGB: "Colour")`.
 
 To add British wording in one place only, see [Language codes](#language-codes).
 
@@ -190,11 +190,11 @@ Three things do allocate:
 
 - `Format`, which builds a new string from the wording and your values.
 - A text of a set that builds its wording on every read (`public string Checkout => $"Pay at {this.ShopName}";`) instead of returning a constant.
-- An inline text written where it is shown, such as `@LocalizableText.Translated(en: "Checkout", nl: "Afrekenen")` in markup. Showing it allocates nothing, but every render creates the text itself anew: two small objects, which rarely matters. In a row of a long list that renders often it adds up, so keep the text in a static field or property there, and it is created once.
+- An inline text written where it is shown, such as `@LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")` in markup. Showing it allocates nothing, but every render creates the text itself anew: two small objects, which rarely matters. In a row of a long list that renders often it adds up, so keep the text in a static field or property there, and it is created once.
 
 ### What the source generator writes
 
-`LocalizableText.Translated` gets one required parameter per declared language, named after it: `enGB` for `en-GB`.
+`LocalizableText.Inline` gets one required parameter per declared language, named after it: `enGB` for `en-GB`.
 
 From the set of the default language, `ShopTranslationsEN`, it writes the contract `IShopTranslations` and the class `ShopTranslations`. Each generated text links to its wording in every language, so you can jump from `ShopTranslations.Checkout` to `ShopTranslationsNL.Checkout`. The generated class is partial, so a helper can sit next to the texts, and it holds the constant `ResourceKeyPrefix` (`"Shop."`) next to them, so no text can take that name.
 
@@ -242,19 +242,19 @@ For English in the United States and Britain, you need no `en-US` set: `ShopTran
 - Leave it out, `("en", "nl")`, so that your other sets and your inline texts show their English in Britain, and implement `LanguageCode` in the set:
 
   ```csharp
-  public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslations
+  public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslationSet
   {
-      string ITranslations.LanguageCode => "en-GB";
+      string ITranslationSet.LanguageCode => "en-GB";
 
       public override string Cart => "Basket";
   }
   ```
 
-A set deriving from another set lists `ITranslations` again to implement `LanguageCode`, as in the second example; without it, its `LanguageCode` implements nothing (`LOC015`).
+A set deriving from another set lists `ITranslationSet` again to implement `LanguageCode`, as in the second example; without it, its `LanguageCode` implements nothing (`LOC015`).
 
 Separate `en-US` and `en-GB` sets without an `en` set work as well, with two drawbacks. Each set then has every text, as one region cannot derive from another (`LOC006`: texts it does not override would stay American). And a user whose culture is plain `en`, or `en-AU`, gets your default language.
 
-A regional default language works the same way: with `[assembly: SupportedLanguages("en-GB", "nl")]`, `public partial class ShopTranslationsEnGB : ITranslations` gives the contract `IShopTranslations`.
+A regional default language works the same way: with `[assembly: SupportedLanguages("en-GB", "nl")]`, `public partial class ShopTranslationsEnGB : ITranslationSet` gives the contract `IShopTranslations`.
 
 ### Libraries and apps
 
@@ -268,7 +268,7 @@ A library leaves its sets unsealed and its texts virtual, so an app can reword t
 
 An app rewords a sealed set by implementing the library's contract in full, in the same language. That rewording does not reach the library's regional sets, as none can derive from a sealed set: reword each of those the same way.
 
-An assembly without `[assembly: SupportedLanguages]` has no texts of its own to translate: its plain strings work as texts, and it has no `LocalizableText.Translated` and no contract of its own. It can still reword a library's set, or give a library's contract another language.
+An assembly without `[assembly: SupportedLanguages]` has no texts of its own to translate: its plain strings work as texts, and it has no `LocalizableText.Inline` and no contract of its own. It can still reword a library's set, or give a library's contract another language.
 
 ### Texts in JSON
 
@@ -302,12 +302,12 @@ The build reports these mistakes. Most apply in an assembly that declares langua
 | `LOC012`           | Calling by hand what only generated code should call                                                                                                                         |
 | `LOC013`           | A language argument without its name, which could swap two languages unnoticed                                                                                               |
 | `LOC014`           | A text named `ResourceKeyPrefix`, or named like the generated class itself                                                                                                   |
-| `LOC015`           | A `LanguageCode` that implements nothing, on a set deriving from another set without listing `ITranslations`, also in an assembly without languages                          |
-| `LOC016`           | Placeholders differing between languages, as in `Translated(en: "Hello, {0}!", nl: "Hallo!")`, also in a set, also in an assembly without languages                          |
+| `LOC015`           | A `LanguageCode` that implements nothing, on a set deriving from another set without listing `ITranslationSet`, also in an assembly without languages                        |
+| `LOC016`           | Placeholders differing between languages, as in `Inline(en: "Hello, {0}!", nl: "Hallo!")`, also in a set, also in an assembly without languages                              |
 
 A value that is not wording of yours still converts to a text, because it has no translations to demand: `Title = customer.Name`, `$"{first} {last}"`, `"-"`, and `"1234"`.
 
-The build misses two things. It cannot tell such a value from wording kept in a local variable or returned by a helper method, so those compile too. And plain text in Razor markup, such as `<h1>Orders</h1>`, is not a text at all, so the build does not see it either: write `<h1>@LocalizableText.Translated(en: "Orders", nl: "Bestellingen")</h1>`.
+The build misses two things. It cannot tell such a value from wording kept in a local variable or returned by a helper method, so those compile too. And plain text in Razor markup, such as `<h1>Orders</h1>`, is not a text at all, so the build does not see it either: write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
 
 ## License
 

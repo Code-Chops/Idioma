@@ -12,8 +12,8 @@ namespace CodeChops.Idioma;
 /// one of two ways. Either way, a text that lacks a language does not build:
 /// </para>
 /// <list type="bullet">
-/// <item>Inline: <c>LocalizableText.Translated(en: "Checkout", nl: "Afrekenen")</c>.</item>
-/// <item>In one class per language, for a library or a larger group of texts: see <see cref="ITranslations"/>.</item>
+/// <item>Inline: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
+/// <item>In one class per language, for a library or a larger group of texts: see <see cref="ITranslationSet"/>.</item>
 /// </list>
 /// <para>
 /// For wording that differs in a region, list the region next to its language:
@@ -30,7 +30,8 @@ namespace CodeChops.Idioma;
 /// <item>The wording for your app's default language. A culture your app does not declare starts here, even for a
 /// library's text that has that culture's language, so no screen ends up in two languages.</item>
 /// <item>The wording for the text's own default language: that of the project that wrote it. This is its
-/// <see cref="DefaultText"/>, unless a registered <see cref="ITranslations"/> set for that language rewords it.</item>
+/// <see cref="DefaultText"/>, unless a registered <see cref="ITranslationSet">set</see> for that language rewords
+/// it.</item>
 /// </list>
 /// <para>
 /// To show the wording for another culture, such as the language of an email's recipient, call
@@ -61,9 +62,9 @@ namespace CodeChops.Idioma;
 ///
 /// public static class ShopTexts
 /// {
-///     public static LocalizableText Checkout { get; } = LocalizableText.Translated(en: "Checkout", nl: "Afrekenen");
+///     public static LocalizableText Checkout { get; } = LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
 ///     public static LocalizableText Greeting { get; } =
-///         LocalizableText.Translated(en: "Hello, {0}!", nl: "Hallo, {0}!");
+///         LocalizableText.Inline(en: "Hello, {0}!", nl: "Hallo, {0}!");
 /// }
 ///
 /// // For a user whose UI culture is nl-NL: "Afrekenen" and "Hallo, Anna!".
@@ -107,7 +108,7 @@ public partial record LocalizableText
     /// <remarks>
     /// In an assembly that declares two or more languages with
     /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, passing wording you write in the source is a
-    /// build error (<c>LOC011</c>): write <c>LocalizableText.Translated</c> instead.
+    /// build error (<c>LOC011</c>): write <c>LocalizableText.Inline</c> instead.
     /// </remarks>
     /// <param name="defaultText">The wording every culture gets. It may be empty, as a value read at run time can be.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="defaultText"/> is <see langword="null"/>.</exception>
@@ -118,7 +119,7 @@ public partial record LocalizableText
     public LocalizableText(string defaultText)
     {
         // Null alone: an empty or blank value read at run time, such as a customer's name, is a text too, and so is
-        // empty wording passed to LocalizableText.Translated.
+        // empty wording passed to LocalizableText.Inline.
         ArgumentNullException.ThrowIfNull(defaultText);
 
         this.ThrowIfDerived();
@@ -264,11 +265,11 @@ public partial record LocalizableText
 
     /// <summary>
     /// The wording for a culture, looked up in the sets of the given registry instead of those of the whole app: for a
-    /// part of an app that keeps its own <see cref="ITranslations"/> sets.
+    /// part of an app that keeps its own <see cref="ITranslationSet">sets</see>.
     /// </summary>
     /// <remarks>
     /// Create such a registry with
-    /// <see cref="TranslationsRegistry.Create(IEnumerable{ITranslations})">TranslationsRegistry.Create</see>. Its
+    /// <see cref="TranslationsRegistry.Create(IEnumerable{ITranslationSet})">TranslationsRegistry.Create</see>. Its
     /// <see cref="TranslationsRegistry.AppLanguages"/> decide which languages show and which one a culture without
     /// wording gets, not the languages of your app.
     /// </remarks>

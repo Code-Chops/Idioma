@@ -9,7 +9,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed class TranslationsRegistryTests
 {
     #region Fixture
-    private interface IRegistryTranslations : ITranslations;
+    private interface IRegistryTranslations : ITranslationSet;
 
     private sealed class RegistryTranslationsEN : IRegistryTranslations;
 
@@ -20,33 +20,33 @@ public sealed class TranslationsRegistryTests
     /// <summary>
     /// A contract no set in <see cref="RegistryTranslationsNL"/>'s family implements.
     /// </summary>
-    private interface IRegistryOtherTranslations : ITranslations;
+    private interface IRegistryOtherTranslations : ITranslationSet;
 
     /// <summary>
     /// A set serving two contracts at once.
     /// </summary>
     private sealed class RegistryCombinedTranslationsNL : IRegistryTranslations, IRegistryOtherTranslations;
 
-    private interface IRegistryTierTranslations : ITranslations;
+    private interface IRegistryTierTranslations : ITranslationSet;
 
     private sealed class RegistryTierDefaultTranslationsNL : IRegistryTierTranslations;
 
     private sealed class RegistryTierOverrideTranslationsNL : IRegistryTierTranslations;
 
-    private interface IRegistryOrderTranslations : ITranslations;
+    private interface IRegistryOrderTranslations : ITranslationSet;
 
     private sealed class RegistryOrderFirstTranslationsNL : IRegistryOrderTranslations;
 
     private sealed class RegistryOrderSecondTranslationsNL : IRegistryOrderTranslations;
 
-    private interface IRegistryGenericTranslations : ITranslations;
+    private interface IRegistryGenericTranslations : ITranslationSet;
 
     private sealed class RegistryGenericTranslationsNL : IRegistryGenericTranslations;
 
     /// <summary>
     /// A set whose language is a constructor argument, so two instances of the type can serve two languages.
     /// </summary>
-    private sealed class RegistryConfiguredTranslations(string language) : ITranslations
+    private sealed class RegistryConfiguredTranslations(string language) : ITranslationSet
     {
         public string LanguageCode { get; } = language;
     }
@@ -54,7 +54,7 @@ public sealed class TranslationsRegistryTests
     /// <summary>
     /// A name no language code can be derived from.
     /// </summary>
-    private sealed class RegistryInvalidTranslations1 : ITranslations;
+    private sealed class RegistryInvalidTranslations1 : ITranslationSet;
 
     /// <summary>
     /// A culture whose parent is the invariant culture, as every culture's is under invariant globalization.
@@ -141,7 +141,7 @@ public sealed class TranslationsRegistryTests
 
         // Assert: found in any letter case, listed in one.
         registry.Languages.ShouldBe(["nl-BE", "zh-Hans"], ignoreOrder: true);
-        registry.Find<ITranslations>(CultureInfo.GetCultureInfo("nl-BE")).ShouldBeSameAs(belgian);
+        registry.Find<ITranslationSet>(CultureInfo.GetCultureInfo("nl-BE")).ShouldBeSameAs(belgian);
     }
 
     [Test]

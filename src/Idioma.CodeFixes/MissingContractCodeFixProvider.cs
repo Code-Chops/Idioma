@@ -6,8 +6,8 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a set that lists <c>ITranslations</c> instead of implementing its contract (<c>LOC007</c>): it replaces
-/// <c>ITranslations</c> in the base list with the contract generated from the default-language set
+/// Fixes a set that lists <c>ITranslationSet</c> instead of implementing its contract (<c>LOC007</c>): it replaces
+/// <c>ITranslationSet</c> in the base list with the contract generated from the default-language set
 /// (<c>IShopTranslations</c> for <c>ShopTranslationsNL</c>), which then demands every text.
 /// </summary>
 /// <remarks>
@@ -18,7 +18,7 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class MissingContractCodeFixProvider : CodeFixProvider
 {
-    private const string TranslationsInterfaceFullName = "CodeChops.Idioma.ITranslations";
+    private const string TranslationSetInterfaceFullName = "CodeChops.Idioma.ITranslationSet";
 
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [TranslationSetsGenerator.MissingContractDiagnosticId];
 
@@ -49,8 +49,8 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Replaces <c>ITranslations</c> with the contract in the base list of whichever part of the class lists it. The
-    /// contract derives from <c>ITranslations</c>, so a member implemented explicitly for it stays valid.
+    /// Replaces <c>ITranslationSet</c> with the contract in the base list of whichever part of the class lists it. The
+    /// contract derives from <c>ITranslationSet</c>, so a member implemented explicitly for it stays valid.
     /// </summary>
     private static async Task<Solution> ImplementAsync(Document document, TypeDeclarationSyntax declaration, string contract, CancellationToken cancellationToken)
     {
@@ -69,7 +69,7 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
             var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
 
             foreach (var baseType in baseList.Types)
-                if (String.Equals(partModel.GetTypeInfo(baseType.Type, cancellationToken).Type?.ToDisplayString(), TranslationsInterfaceFullName, StringComparison.Ordinal))
+                if (String.Equals(partModel.GetTypeInfo(baseType.Type, cancellationToken).Type?.ToDisplayString(), TranslationSetInterfaceFullName, StringComparison.Ordinal))
                     listed.Add(baseType.Type);
         }
 

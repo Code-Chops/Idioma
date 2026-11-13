@@ -20,7 +20,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
         namespace TestApp;
 
-        public interface IShopTranslations : ITranslations
+        public interface IShopTranslations : ITranslationSet
         {
             string Checkout { get; }
         }
@@ -37,7 +37,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
         namespace TestApp;
 
-        public partial class ShopTranslationsEN : ITranslations
+        public partial class ShopTranslationsEN : ITranslationSet
         {
             public virtual string Checkout => "Checkout";
         }
@@ -51,7 +51,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
         namespace ShopLibrary;
 
-        public interface ILibraryTranslations : ITranslations
+        public interface ILibraryTranslations : ITranslationSet
         {
             string Checkout { get; }
         }
@@ -70,7 +70,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
         namespace SetsLibrary;
 
-        public interface ISetsTranslations : ITranslations
+        public interface ISetsTranslations : ITranslationSet
         {
             string Checkout { get; }
         }
@@ -187,7 +187,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace RegionalLibrary;
 
-            public partial class GridTranslationsEN : ITranslations
+            public partial class GridTranslationsEN : ITranslationSet
             {
                 public virtual string Colour => "Color";
             }
@@ -197,9 +197,9 @@ public sealed class TranslationsRegistrationGeneratorTests
                 public virtual string Colour => "Kleur";
             }
 
-            public class GridTranslationsEnGB : GridTranslationsEN, ITranslations
+            public class GridTranslationsEnGB : GridTranslationsEN, ITranslationSet
             {
-                string ITranslations.LanguageCode => "en-GB";
+                string ITranslationSet.LanguageCode => "en-GB";
 
                 public override string Colour => "Colour";
             }
@@ -335,7 +335,7 @@ public sealed class TranslationsRegistrationGeneratorTests
                 public string Checkout => "Afrekenen";
             }
 
-            public sealed partial class ShopTranslationsNL : ITranslations;
+            public sealed partial class ShopTranslationsNL : ITranslationSet;
 
             public sealed class ShopTranslationsDE : IShopTranslations
             {
@@ -367,7 +367,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public sealed partial class ShopTranslationsEN : ITranslations
+            public sealed partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -625,7 +625,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN(string shopName) : ITranslations
+            public partial class ShopTranslationsEN(string shopName) : ITranslationSet
             {
                 public virtual string Checkout => $"Pay at {shopName}";
             }
@@ -674,7 +674,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public interface IShopTranslations : ITranslations
+            public interface IShopTranslations : ITranslationSet
             {
                 string Checkout { get; }
             }
@@ -701,7 +701,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public interface IShopTranslations : ITranslations
+            public interface IShopTranslations : ITranslationSet
             {
                 string Checkout { get; }
             }
@@ -743,7 +743,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public interface IShopTranslations : ITranslations
+            public interface IShopTranslations : ITranslationSet
             {
                 string Checkout { get; }
             }
@@ -762,7 +762,7 @@ public sealed class TranslationsRegistrationGeneratorTests
     }
 
     [Test]
-    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ITranslations.LanguageCode => \"nl-BE\";")]
+    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ITranslationSet.LanguageCode => \"nl-BE\";")]
     [Arguments("[assembly: SupportedLanguages(\"en\", \"nl\")]", "")]
     public void SetWhoseNameGivesNoDeclaredLongCode_RecordsNothing(string attribute, string languageCode)
     {
@@ -774,7 +774,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public interface IShopTranslations : ITranslations
+            public interface IShopTranslations : ITranslationSet
             {
                 string Checkout { get; }
             }
@@ -802,7 +802,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public interface IMessages : ITranslations
+            public interface IMessages : ITranslationSet
             {
                 string Save { get; }
             }
@@ -831,7 +831,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
     [Test]
     [Arguments("public string LanguageCode => \"de\";")]
-    [Arguments("string ITranslations.LanguageCode => \"de\";")]
+    [Arguments("string ITranslationSet.LanguageCode => \"de\";")]
     public void SetImplementingLanguageCode_NeedsNoLanguageInItsName(string languageCode)
     {
         // Arrange & Act
@@ -854,8 +854,8 @@ public sealed class TranslationsRegistrationGeneratorTests
     [Test]
     public void LanguageCodeOfDerivedSetNotListingInterface_ReportsLOC015()
     {
-        // Arrange & Act: the set inherits the mapping of ITranslations from its base, so its own LanguageCode is never
-        // read, and it registers under the last two letters of its name (sh).
+        // Arrange & Act: the set inherits the mapping of ITranslationSet from its base, so its own LanguageCode is
+        // never read, and it registers under the last two letters of its name (sh).
         var result = Run($$"""
             {{ShopContract}}
 
@@ -875,7 +875,7 @@ public sealed class TranslationsRegistrationGeneratorTests
         diagnostic.Id.ShouldBe(TranslationsRegistrationGenerator.UnmappedLanguageCodeDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("The LanguageCode of 'ShopTranslationsBritish' implements nothing");
-        diagnostic.GetMessage().ShouldContain("'class ShopTranslationsBritish : ShopTranslationsEN, ITranslations'");
+        diagnostic.GetMessage().ShouldContain("'class ShopTranslationsBritish : ShopTranslationsEN, ITranslationSet'");
     }
 
     [Test]
@@ -902,8 +902,8 @@ public sealed class TranslationsRegistrationGeneratorTests
     }
 
     [Test]
-    [Arguments("ShopTranslationsEN, ITranslations", "public string LanguageCode => \"en-GB\";")]
-    [Arguments("ShopTranslationsEN, ITranslations", "string ITranslations.LanguageCode => \"en-GB\";")]
+    [Arguments("ShopTranslationsEN, ITranslationSet", "public string LanguageCode => \"en-GB\";")]
+    [Arguments("ShopTranslationsEN, ITranslationSet", "string ITranslationSet.LanguageCode => \"en-GB\";")]
     [Arguments("ShopTranslationsEN, IShopTranslations", "public string LanguageCode => \"en-GB\";")]
     public void LanguageCodeOfDerivedSetListingInterface_ReportsNothing(string baseList, string languageCode)
     {
@@ -1026,7 +1026,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -1163,7 +1163,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace TestApp;
 
-            public interface IShopTranslations : ITranslations
+            public interface IShopTranslations : ITranslationSet
             {
                 string Checkout { get; }
             }
@@ -1387,7 +1387,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace UnusedAddOnLibrary;
 
-            public partial class AddOnShopTranslationsEN : ITranslations
+            public partial class AddOnShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -1443,7 +1443,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace AbsentLibrary;
 
-            public interface IAbsentTranslations : ITranslations
+            public interface IAbsentTranslations : ITranslationSet
             {
                 string Checkout { get; }
             }
@@ -1460,7 +1460,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace AbsentLibraryApp;
 
-            public partial class AbsentAppTranslationsEN : ITranslations
+            public partial class AbsentAppTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1501,7 +1501,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace LateLibrary;
 
-            public partial class LateTranslationsEN : ITranslations
+            public partial class LateTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -1573,7 +1573,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace AbstractBaseLibrary;
 
-            public partial class BaseShopTranslationsEN : ITranslations
+            public partial class BaseShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }
@@ -1615,7 +1615,7 @@ public sealed class TranslationsRegistrationGeneratorTests
 
             namespace RegionalNameLibrary;
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public virtual string Checkout => "Checkout";
                 public virtual string Total => "Total";
@@ -1642,8 +1642,8 @@ public sealed class TranslationsRegistrationGeneratorTests
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
 
         // Assert: both serve nl-BE, not be; the rewording wins over its base, and keeps the base's other texts.
-        var belgian = (ITranslations)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopTranslationsNlBE")!)!;
-        var rewording = (ITranslations)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopRewording")!)!;
+        var belgian = (ITranslationSet)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopTranslationsNlBE")!)!;
+        var rewording = (ITranslationSet)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopRewording")!)!;
         belgian.LanguageCode.ShouldBe("nl-BE");
         rewording.LanguageCode.ShouldBe("nl-BE");
 

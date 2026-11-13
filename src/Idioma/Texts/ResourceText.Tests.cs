@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed class ResourceTextTests
 {
     #region Fixture
-    private interface IResourceTranslations : ITranslations
+    private interface IResourceTranslations : ITranslationSet
     {
         string Greeting { get; }
         string Farewell { get; }
@@ -56,9 +56,9 @@ public sealed class ResourceTextTests
     /// <summary>
     /// A set of another contract.
     /// </summary>
-    private sealed class ResourceOtherTranslationsNL : ITranslations;
+    private sealed class ResourceOtherTranslationsNL : ITranslationSet;
 
-    private interface IResourceRegisteredTranslations : ITranslations
+    private interface IResourceRegisteredTranslations : ITranslationSet
     {
         string Greeting { get; }
     }
@@ -76,9 +76,9 @@ public sealed class ResourceTextTests
     /// <summary>
     /// A library's British set, deriving from its English set and wording one text its own way.
     /// </summary>
-    private sealed class ResourceBritishTranslations : ResourceTranslationsEN, ITranslations
+    private sealed class ResourceBritishTranslations : ResourceTranslationsEN, ITranslationSet
     {
-        string ITranslations.LanguageCode => "en-GB";
+        string ITranslationSet.LanguageCode => "en-GB";
 
         public override string Farewell => "Cheerio";
     }
@@ -138,7 +138,7 @@ public sealed class ResourceTextTests
         Greeting.GetTranslation(new ResourceTranslationsEN()).ShouldBe("Hello");
         Greeting.GetTranslation(new ResourceOtherTranslationsNL()).ShouldBeNull();
         new ResourceText("MyApp.Greeting", "Hello").GetTranslation(new ResourceTranslationsNL()).ShouldBeNull();
-        Should.Throw<ArgumentNullException>(() => Greeting.GetTranslation((ITranslations)null!));
+        Should.Throw<ArgumentNullException>(() => Greeting.GetTranslation((ITranslationSet)null!));
     }
 
     [Test]
@@ -169,7 +169,7 @@ public sealed class ResourceTextTests
     public void ToString_FromRegistryWithLanguages_ShouldShowOnlyThoseAndFallBackToItsDefault()
     {
         // Arrange: a registry that has Dutch, with and without Dutch among its languages.
-        ITranslations[] sets = [new ResourceTranslationsEN(), new ResourceTranslationsNL()];
+        ITranslationSet[] sets = [new ResourceTranslationsEN(), new ResourceTranslationsNL()];
         var dutchFirst = TranslationsRegistry.Create(sets, "nl", "en");
         var withoutDutch = TranslationsRegistry.Create(sets, "en", "fr");
 

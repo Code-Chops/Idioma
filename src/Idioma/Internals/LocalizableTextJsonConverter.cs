@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.Internals;
 /// <remarks>
 /// <para>
 /// A text is written with every wording it can show: its default wording, its own translations, and for a text of an
-/// <see cref="ITranslations"/> contract the wording of every language your app declares that a set is registered for,
+/// <see cref="ITranslationSet"/> contract the wording of every language your app declares that a set is registered for,
 /// their regions included, as a user of that language sees it when the text is written. A resource text keeps its
 /// <see cref="ResourceText.Key"/>:
 /// <c>{"key":"Shop.Checkout","defaultText":"Checkout","translations":{"en":"Checkout","nl":"Afrekenen"}}</c>.

@@ -30,7 +30,7 @@ public sealed class FormatPlaceholdersAnalyzerTests
 
         namespace ShopLibrary;
 
-        public partial class ShopTranslationsEN : ITranslations
+        public partial class ShopTranslationsEN : ITranslationSet
         {
             public virtual string Greeting => "Hello, {0}!";
             public virtual string Total => "Total";
@@ -48,7 +48,7 @@ public sealed class FormatPlaceholdersAnalyzerTests
 
         public static class Texts
         {
-            public static LocalizableText Text { get; } = LocalizableText.Translated({{arguments}});
+            public static LocalizableText Text { get; } = LocalizableText.Inline({{arguments}});
         }
         """;
 
@@ -58,7 +58,7 @@ public sealed class FormatPlaceholdersAnalyzerTests
     private static string Sets(string dutch, string british = "") => $$"""
         {{Header}}
 
-        public partial class ShopTranslationsEN : ITranslations
+        public partial class ShopTranslationsEN : ITranslationSet
         {
             public virtual string Greeting => "Hello, {0}!";
             public virtual string Summary => "{1} of {0}";
@@ -158,7 +158,7 @@ public sealed class FormatPlaceholdersAnalyzerTests
         var source = $$"""
             {{Header}}
 
-            public partial class GreetingTranslationsEN : ITranslations
+            public partial class GreetingTranslationsEN : ITranslationSet
             {
                 public virtual string Greeting { get; } = "Hello, {0}!";
             }
@@ -221,7 +221,7 @@ public sealed class FormatPlaceholdersAnalyzerTests
 
             public static class Page
             {
-                public static LocalizableText Text => LocalizableText.Translated(en: "{0} items", nl: "Items", enGB: "{0} items");
+                public static LocalizableText Text => LocalizableText.Inline(en: "{0} items", nl: "Items", enGB: "{0} items");
             }
             """;
 

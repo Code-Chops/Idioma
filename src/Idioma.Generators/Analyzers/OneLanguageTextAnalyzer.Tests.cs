@@ -62,7 +62,7 @@ public sealed class OneLanguageTextAnalyzerTests
         diagnostic.Id.ShouldBe("LOC011");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("en, nl");
-        diagnostic.GetMessage().ShouldContain("LocalizableText.Translated(en: \"...\", nl: \"...\")");
+        diagnostic.GetMessage().ShouldContain("LocalizableText.Inline(en: \"...\", nl: \"...\")");
     }
 
     [Test]
@@ -77,8 +77,8 @@ public sealed class OneLanguageTextAnalyzerTests
     [Arguments("""public static LocalizableText Number { get; } = "1234";""")]
     [Arguments("""public static LocalizableText Empty { get; } = "";""")]
     [Arguments("""public static LocalizableText? Nothing { get; } = null;""")]
-    [Arguments("""public static LocalizableText Good { get; } = LocalizableText.Translated(en: "Orders", nl: "Bestellingen");""")]
-    public async Task ValueOrTranslatedText_ShouldReportNothing(string member)
+    [Arguments("""public static LocalizableText Good { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");""")]
+    public async Task ValueOrInlineText_ShouldReportNothing(string member)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeMemberAsync(member);
@@ -111,7 +111,7 @@ public sealed class OneLanguageTextAnalyzerTests
 
     [Test]
     [Arguments("""public static LocalizableText Bad { get; } = CodeChops.Idioma.Internals.GeneratedCode.CreateText("Orders");""", "GeneratedCode.CreateText")]
-    [Arguments("""public static LocalizableText Bad(string value) => CodeChops.Idioma.Internals.GeneratedCode.CreateResourceText<ITranslations>("Shop.Orders", static translations => translations.LanguageCode, null!);""", "GeneratedCode.CreateResourceText")]
+    [Arguments("""public static LocalizableText Bad(string value) => CodeChops.Idioma.Internals.GeneratedCode.CreateResourceText<ITranslationSet>("Shop.Orders", static translations => translations.LanguageCode, null!);""", "GeneratedCode.CreateResourceText")]
     public async Task CalledByHand_ShouldReportLOC012(string member, string expected)
     {
         // Arrange & Act
@@ -126,8 +126,8 @@ public sealed class OneLanguageTextAnalyzerTests
     }
 
     [Test]
-    [Arguments("""LocalizableText.Translated("Orders", "Bestellingen")""")]
-    [Arguments("""LocalizableText.Translated("Orders", nl: "Bestellingen")""")]
+    [Arguments("""LocalizableText.Inline("Orders", "Bestellingen")""")]
+    [Arguments("""LocalizableText.Inline("Orders", nl: "Bestellingen")""")]
     public async Task UnnamedLanguage_ShouldReportLOC013(string text)
     {
         // Arrange & Act
@@ -144,7 +144,7 @@ public sealed class OneLanguageTextAnalyzerTests
     public async Task NamedLanguagesInAnyOrder_ShouldReportNothing()
     {
         // Arrange & Act
-        var diagnostics = await AnalyzeMemberAsync("""public static LocalizableText Good { get; } = LocalizableText.Translated(nl: "Bestellingen", en: "Orders");""");
+        var diagnostics = await AnalyzeMemberAsync("""public static LocalizableText Good { get; } = LocalizableText.Inline(nl: "Bestellingen", en: "Orders");""");
 
         // Assert
         diagnostics.ShouldBeEmpty();
@@ -157,7 +157,7 @@ public sealed class OneLanguageTextAnalyzerTests
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslations
+            public partial class ShopTranslationsEN : ITranslationSet
             {
                 public string Checkout => "Checkout";
             }

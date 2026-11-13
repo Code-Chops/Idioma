@@ -33,7 +33,7 @@ public sealed class LocalizableTextTests
         public void Dispose() => CultureInfo.CurrentCulture = this.Previous;
     }
 
-    private interface ITextTranslations : ITranslations
+    private interface ITextTranslations : ITranslationSet
     {
         string Greeting { get; }
     }
