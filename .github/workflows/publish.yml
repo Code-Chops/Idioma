@@ -1,0 +1,56 @@
+name: Publish
+
+# Publishes CodeChops.Idioma to nuget.org: push a tag named after the version (v0.1.0), or run it by hand. It signs in
+# through trusted publishing, so the repository holds no API key: nuget.org needs a trusted publishing policy for this
+# repository and this workflow file (publish.yml).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  publish:
+    name: Test, pack, and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets GitHub issue the token that nuget.org exchanges for a short-lived API key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build Idioma.slnx -c Release
+
+      - name: Tests (net10.0)
+        run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net10.0 --no-build
+
+      - name: Tests (net11.0)
+        run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net11.0 --no-build
+
+      - name: Pack
+        run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts
+
+      # A tag that names another version than the project file would publish something else than it says.
+      - name: Check the tag against the version
+        if: github.ref_type == 'tag'
+        run: test -f "artifacts/CodeChops.Idioma.${GITHUB_REF_NAME#v}.nupkg"
+
+      - name: Sign in to nuget.org
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: CodeChops
+
+      # The symbols package (.snupkg) next to the package is pushed along.
+      - name: Push
+        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
