@@ -9,6 +9,7 @@
     <File Path="LICENSE" />
     <File Path="nuget.config" />
     <File Path="README.md" />
+    <File Path="docs/how-it-works.md" />
   </Folder>
   <Project Path="src/Idioma/Idioma.csproj" />
   <Project Path="src/Idioma.CodeFixes/Idioma.CodeFixes.csproj" />

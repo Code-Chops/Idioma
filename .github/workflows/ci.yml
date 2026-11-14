@@ -14,10 +14,10 @@ jobs:
     name: Build, test, and pack
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The package targets net10.0, and the tests run on every supported runtime.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             10.0.x
@@ -38,9 +38,31 @@ jobs:
       - name: Pack
         run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts -warnaserror
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages
           path: |
             artifacts/*.nupkg
             artifacts/*.snupkg
+
+  # The package says it is safe to trim, and that it works with the compiler of .NET SDK 10.0.100, which the build above
+  # (SDK 11, by global.json) does not show. So an app of its own consumes the packed package, is built with SDK 10 and
+  # published with NativeAOT, and checks its texts when it runs.
+  aot-smoke:
+    name: NativeAOT smoke test of the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      # NativeAOT links with the toolchain of the platform.
+      - name: Native toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Pack, publish a consumer with NativeAOT, and run it
+        run: ./tests/Idioma.AotSmoke/run.sh

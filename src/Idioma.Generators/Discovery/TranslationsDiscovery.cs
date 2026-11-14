@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
@@ -20,10 +22,18 @@ namespace CodeChops.Idioma.Generators;
 /// </remarks>
 internal static class TranslationsDiscovery
 {
-    private const string PackageAssemblyName = "CodeChops.Idioma";
-    private const string TranslationSetInterfaceFullName = "CodeChops.Idioma.ITranslationSet";
-    private const string ExclusionAttributeFullName = "CodeChops.Idioma.ExcludeFromTranslationDiscoveryAttribute";
     private const string LanguageCodeMemberName = "LanguageCode";
+
+    /// <summary>
+    /// Per file of a compilation, whether a base type written in a scope of that file leads to a set
+    /// (<see cref="LeadsToSet"/>), by the scope and the words it is written in.
+    /// </summary>
+    // Discovery asks this of every class with a base list on every edit, and nearly all of them list what leads to no
+    // set. The same words in the same scope name the same type, so each is bound once per file instead of once per
+    // class, and a class that lists nothing of interest is passed by without its own base list being bound at all.
+    // Held by the semantic model, which is made anew for every file of every compilation: nothing outlives the
+    // compilation it was read from, and nothing is shared between two of them.
+    private static readonly ConditionalWeakTable<SemanticModel, Dictionary<(SyntaxNode Scope, string Name), bool>> BaseTypesLeadingToSet = new();
 
     private static SymbolDisplayFormat FullyQualifiedFormat { get; } = new(
         globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
@@ -32,16 +42,7 @@ internal static class TranslationsDiscovery
         miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
 
     /// <summary>
-    /// A class as a cref names it from another namespace, with its type parameters: <c>Wording.DutchBase&lt;T&gt;</c>.
-    /// </summary>
-    private static SymbolDisplayFormat CrefFullNameFormat { get; } = new(
-        globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
-        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
-        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
-        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
-
-    /// <summary>
-    /// A class as a cref names it from its own namespace, with its type parameters: <c>DutchBase&lt;T&gt;</c>.
+    /// A class as a cref names it inside its namespace, with its type parameters: <c>DutchBase&lt;T&gt;</c>.
     /// </summary>
     private static SymbolDisplayFormat CrefNameFormat { get; } = new(
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypes,
@@ -55,10 +56,11 @@ internal static class TranslationsDiscovery
     /// </summary>
     // One syntax provider for all three: a provider re-runs its transform for every class with a base list on every
     // edit, and each pass costs its own walk over them. The two generators calling this each build one; the binding the
-    // first does is reused by the second.
+    // first does is reused by the second. Nearly every such class is no set, so the transform first asks what its base
+    // list names (MayBeSet), which costs one binding per name and file, and resolves the class only when that leads on.
     public static IncrementalValueProvider<Discovery> Read(IncrementalGeneratorInitializationContext context)
     {
-        return context.SyntaxProvider
+        var valueProvider = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: IsCandidate,
                 transform: Discover)
@@ -81,6 +83,8 @@ internal static class TranslationsDiscovery
                         .Distinct()
                         .OrderBy(static set => set.MetadataName, StringComparer.Ordinal),
                 ])));
+
+        return valueProvider;
     }
 
     /// <summary>
@@ -91,9 +95,11 @@ internal static class TranslationsDiscovery
     /// </summary>
     public static string? DeriveBaseName(string className, string language)
     {
-        return SupportedLanguages.EndsInTypeSuffix(className, language)
+        var baseName = SupportedLanguages.EndsInTypeSuffix(className, language)
             ? className.Substring(startIndex: 0, className.Length - SupportedLanguages.ToTypeSuffix(language).Length)
             : null;
+
+        return baseName;
     }
 
     /// <summary>
@@ -102,7 +108,7 @@ internal static class TranslationsDiscovery
     /// </summary>
     public static ImmutableArray<string> GetGeneratedContractNames(IEnumerable<DiscoveredTranslations> sets, DeclaredLanguages? languages)
     {
-        if (languages is not { Codes.Length: > 0 } declared)
+        if (languages is not { } declared)
             return ImmutableArray<string>.Empty;
 
         var names = ImmutableArray.CreateBuilder<string>();
@@ -112,15 +118,17 @@ internal static class TranslationsDiscovery
         foreach (var set in sets)
         {
             if (!set.IsExcluded
-                && IsDefaultSet(set, declared.Codes[0])
-                && set is { IsPartial: true, RegistrationProblem: null }
+                && IsDefaultSet(set, declared.DefaultLanguage)
+                && set.IsPartial
+                && GetCreationProblem(set) is null
                 && DeriveBaseName(set.Name, set.Language!) is { } baseName)
             {
                 names.Add(GetContractFullName(set.Namespace, baseName));
             }
         }
 
-        return names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
+        var contractNames = names.Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToImmutableArray();
+        return contractNames;
     }
 
     /// <summary>
@@ -129,7 +137,8 @@ internal static class TranslationsDiscovery
     /// </summary>
     public static string GetContractFullName(string @namespace, string baseName)
     {
-        return @namespace.Length > 0 ? $"{@namespace}.I{baseName}" : $"I{baseName}";
+        var contractName = @namespace.Length > 0 ? $"{@namespace}.I{baseName}" : $"I{baseName}";
+        return contractName;
     }
 
     /// <summary>
@@ -157,21 +166,41 @@ internal static class TranslationsDiscovery
     /// </summary>
     public static bool IsSet(DiscoveredTranslations candidate, ImmutableArray<string> generatedContracts)
     {
-        return candidate.ImplementsTranslations
-               || candidate.UnresolvedBaseTypes.Any(baseType => FindGeneratedContract(baseType, generatedContracts) is not null);
+        var isSet = candidate.ImplementsTranslations
+                    || candidate.UnresolvedBaseTypes.Any(baseType => FindGeneratedContract(baseType, generatedContracts) is not null);
+        return isSet;
     }
 
     /// <summary>
     /// Whether a set is where a contract comes from: it lists <c>ITranslationSet</c> itself, in the default language,
     /// implements no contract already (<see cref="ImplementsContract"/>), and rewords no set (<see cref="RewordsSet"/>).
+    /// Without a default language to go by (<see cref="DeclaredLanguages.DefaultLanguage"/>), a set of any language the
+    /// build can read: only the set of the default language lists <c>ITranslationSet</c> itself, so such a set is taken
+    /// for it, and its contract is still written while the attribute is wrong.
     /// </summary>
-    public static bool IsDefaultSet(DiscoveredTranslations set, string defaultLanguage)
+    public static bool IsDefaultSet(DiscoveredTranslations set, string? defaultLanguage)
     {
-        return set.ListsTranslations
+        var isSet = set.ListsTranslations
                && !ImplementsContract(set)
                && !RewordsSet(set)
                && set.Language is not null
-               && String.Equals(set.Language, defaultLanguage, StringComparison.OrdinalIgnoreCase);
+               && (defaultLanguage is null || String.Equals(set.Language, defaultLanguage, StringComparison.OrdinalIgnoreCase));
+
+        return isSet;
+    }
+
+    /// <summary>
+    /// What keeps generated code from creating a default-language set, as the clause of the <c>LOC002</c> message, or
+    /// <see langword="null"/> when it can: what keeps any set from registering (<c>new T()</c>), and besides that a
+    /// parameterless constructor that is not public, which the texts' <c>DefaultSet&lt;TSet&gt;</c> asks for
+    /// (<c>where TSet : new()</c>).
+    /// </summary>
+    public static string? GetCreationProblem(DiscoveredTranslations set)
+    {
+        var problem = set.RegistrationProblem
+               ?? (set.HasPublicParameterlessConstructor ? null : "it has no public parameterless constructor");
+
+        return problem;
     }
 
     /// <summary>
@@ -181,7 +210,8 @@ internal static class TranslationsDiscovery
     /// </summary>
     public static bool ImplementsContract(DiscoveredTranslations set)
     {
-        return set.ContractNames.Length > 0 || set.OwnContractNames.Length > 0;
+        var implementsContract = set.ContractNames.Length > 0 || set.OwnContractNames.Length > 0;
+        return implementsContract;
     }
 
     /// <summary>
@@ -191,10 +221,14 @@ internal static class TranslationsDiscovery
     /// </summary>
     public static bool RewordsSet(DiscoveredTranslations set)
     {
-        return set is { BaseSetName: not null, BaseSetContracts.Length: 0 };
+        var rewordsSet = set is { BaseSetName: not null, BaseSetContracts.Length: 0 };
+        return rewordsSet;
     }
 
-    public static string GetFullyQualifiedName(INamedTypeSymbol type) => type.ToDisplayString(FullyQualifiedFormat);
+    private static string GetFullyQualifiedName(INamedTypeSymbol type)
+    {
+        return type.ToDisplayString(FullyQualifiedFormat);
+    }
 
     /// <summary>
     /// Whether an assembly references this package: only such an assembly can hold its attributes or a generated
@@ -203,15 +237,19 @@ internal static class TranslationsDiscovery
     public static bool ReferencesPackage(IAssemblySymbol assembly)
     {
         return assembly.Modules.First().ReferencedAssemblies.Any(
-            static identity => String.Equals(identity.Name, PackageAssemblyName, StringComparison.Ordinal));
+            static identity => String.Equals(identity.Name, PackageNames.Assembly, StringComparison.Ordinal));
     }
 
     /// <summary>
-    /// Cheap syntactic pre-filter: a class or record with a base list could implement the interface.
+    /// Cheap syntactic pre-filter: a class or record class with a base list could implement the interface. A record
+    /// struct is no set, and is left out before anything is bound.
     /// </summary>
     private static bool IsCandidate(SyntaxNode node, CancellationToken _)
     {
-        return node is ClassDeclarationSyntax { BaseList: not null } or RecordDeclarationSyntax { BaseList: not null };
+        var isCandidate = node is ClassDeclarationSyntax { BaseList: not null }
+            or RecordDeclarationSyntax { BaseList: not null, ClassOrStructKeyword.RawKind: not (int)SyntaxKind.StructKeyword };
+
+        return isCandidate;
     }
 
     /// <summary>
@@ -219,19 +257,83 @@ internal static class TranslationsDiscovery
     /// </summary>
     private static DiscoveryResult? Discover(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
-        if (context.SemanticModel.GetDeclaredSymbol(context.Node, cancellationToken) is not INamedTypeSymbol { TypeKind: TypeKind.Class } type)
-            return null;
-
         var declaration = (TypeDeclarationSyntax)context.Node;
+
+        if (!MayBeSet(declaration, context.SemanticModel, cancellationToken)
+            || context.SemanticModel.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol { TypeKind: TypeKind.Class } type)
+        {
+            return null;
+        }
 
         // Generated code writes new T(), so the type must be concrete and closed, and nameable from another file: a
         // nested set could be private, and a file-local type reports internal while no other file can name it.
         if (type.IsAbstract || type.IsGenericType || type.ContainingType is not null || type.IsFileLocal)
             return DiscoverUnnameable(type, declaration, context.SemanticModel.Compilation, cancellationToken);
 
-        return DiscoverSet(type, declaration, context.SemanticModel, cancellationToken) is { } set
+        var result = DiscoverSet(type, declaration, context.SemanticModel, cancellationToken) is { } set
             ? new DiscoveryResult(set, UnnameableOverride: null, UnextendableSet: null)
             : null;
+
+        return result;
+    }
+
+    /// <summary>
+    /// Whether a declaration may be that of a set: one of the base types it lists leads to a set
+    /// (<see cref="LeadsToSet"/>). A class is a set, or a candidate for one, only through what its base lists name, so a
+    /// declaration that lists nothing of the kind is none, and a partial class is found through the part that does.
+    /// </summary>
+    private static bool MayBeSet(TypeDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        // The type parameters of a class are in reach of its own base list, where the same words may name another type
+        // than they do for the class next to it. Such a class is asked by itself.
+        var known = declaration is { TypeParameterList: null, Parent: not null }
+            ? BaseTypesLeadingToSet.GetOrCreateValue(semanticModel)
+            : null;
+
+        foreach (var baseType in declaration.BaseList!.Types)
+        {
+            if (known is null)
+            {
+                if (LeadsToSet(baseType.Type, semanticModel, cancellationToken))
+                    return true;
+
+                continue;
+            }
+
+            var key = (declaration.Parent!, baseType.Type.ToString());
+            bool leadsToSet;
+
+            // The files of a compilation may be read at the same time, each with a model of its own; the lock is for a
+            // host that would read one file from two threads.
+            lock (known)
+            {
+                if (!known.TryGetValue(key, out leadsToSet))
+                    known[key] = leadsToSet = LeadsToSet(baseType.Type, semanticModel, cancellationToken);
+            }
+
+            if (leadsToSet)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a base type, as a base list names it, leads to a set: it is <c>ITranslationSet</c> or implements it, it
+    /// is a class that lists, itself or through a class it derives from, a type that binds to nothing, as a contract
+    /// generated here does, or it binds to nothing itself.
+    /// </summary>
+    // Whatever does not bind to a type counts, so that nothing is passed by for a reason this does not know.
+    private static bool LeadsToSet(TypeSyntax baseType, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        if (semanticModel.GetSymbolInfo(baseType, cancellationToken).Symbol is not INamedTypeSymbol { TypeKind: not TypeKind.Error } type)
+            return true;
+
+        var leadsToSet = IsTranslationsInterface(type)
+               || ImplementsTranslations(type)
+               || (type.TypeKind is TypeKind.Class && HasUnboundBaseType(type));
+
+        return leadsToSet;
     }
 
     /// <summary>
@@ -274,9 +376,11 @@ internal static class TranslationsDiscovery
                 Location: DiagnosticLocation.From(type.Locations[0]));
         }
 
-        return unnameableOverride is null && unextendableSet is null
+        var result = unnameableOverride is null && unextendableSet is null
             ? null
             : new DiscoveryResult(Set: null, unnameableOverride, unextendableSet);
+
+        return result;
     }
 
     /// <summary>
@@ -292,7 +396,8 @@ internal static class TranslationsDiscovery
             return false;
         }
 
-        return type.BaseType is not { IsAbstract: false, TypeKind: TypeKind.Class } baseType || !ImplementsTranslations(baseType);
+        var result = type.BaseType is not { IsAbstract: false, TypeKind: TypeKind.Class } baseType || !ImplementsTranslations(baseType);
+        return result;
     }
 
     /// <summary>
@@ -300,13 +405,15 @@ internal static class TranslationsDiscovery
     /// </summary>
     private static string DescribeShape(INamedTypeSymbol type)
     {
-        return type switch
+        var shape = type switch
         {
             { ContainingType: { } container } => $"it is nested in '{container.Name}'",
             { IsFileLocal: true } => "it is file-local",
             { IsGenericType: true } => "it is generic",
             _ => "it is abstract",
         };
+
+        return shape;
     }
 
     /// <summary>
@@ -343,8 +450,11 @@ internal static class TranslationsDiscovery
             ? baseType
             : null;
         var unmappedLanguageCode = MapLanguageCode(type).Unmapped;
+        var constructor = FindConstructorCalledWithoutArguments(type, semanticModel, cancellationToken);
+        var language = GetLanguage(type, ancestors, compilation, cancellationToken, out var invalidLanguageCode);
+        var location = DiagnosticLocation.From(type.Locations[0]);
 
-        return new DiscoveredTranslations(
+        var translations = new DiscoveredTranslations(
             MetadataName: type.ToDisplayString(),
             FullyQualifiedName: GetFullyQualifiedName(type),
             Name: type.Name,
@@ -353,10 +463,13 @@ internal static class TranslationsDiscovery
             IsOverride: IsOverride(type),
             Depth: GetDepth(type, ancestors),
             UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
-            RegistrationProblem: GetRegistrationProblem(type, ancestors),
+            RegistrationProblem: GetRegistrationProblem(type, ancestors, constructor),
+            HasPublicParameterlessConstructor: Enumerable.Any(type.InstanceConstructors, static candidate => candidate is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }),
+            IsObsolete: IsObsolete(type) || (constructor is not null && IsObsolete(constructor)),
             IsExcluded: IsExcluded(type),
-            Location: DiagnosticLocation.From(type.Locations[0]),
-            Language: GetLanguage(type, ancestors, compilation, cancellationToken),
+            Location: location,
+            Language: language,
+            InvalidLanguageCode: invalidLanguageCode,
             RecordedLanguageCode: DeclaresLanguageCode(type) ? null : FindOwnRecordedLanguageCode(type),
             ListsTranslations: listsTranslations,
             ContractNames: new EquatableArray<string>(GetPublicContractNames(type)),
@@ -369,18 +482,27 @@ internal static class TranslationsDiscovery
                 : new EquatableArray<UnresolvedBaseType>(inheritedBaseTypes),
             UnmappedLanguageCodeType: unmappedLanguageCode?.ContainingType.Name,
             UnmappedLanguageCodeBaseType: unmappedLanguageCode?.ContainingType.BaseType?.Name,
+            // At the class that declares it, so that the sets deriving from that class report one error, where the fix
+            // is. A class of another assembly has no place in this one, and is reported at the set.
+            UnmappedLanguageCodeLocation: unmappedLanguageCode is { ContainingType: { } declaring } && IsDeclaredIn(declaring, type.ContainingAssembly)
+                ? DiagnosticLocation.From(declaring.Locations[0])
+                : location,
             IsPartial: declaration.Modifiers.Any(SyntaxKind.PartialKeyword),
             IsRecord: type.IsRecord,
             IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
             StringProperties: new EquatableArray<string>(GetStringProperties(type)),
             InheritedTexts: new EquatableArray<InheritedText>(GetInheritedTexts(type)),
+            Wordings: new EquatableArray<TextWording>(GetWordings(type, compilation, cancellationToken)),
             Texts: new EquatableArray<TranslationsMember>(listsTranslations ? GetTextMembers(type, compilation, cancellationToken) : ImmutableArray<TranslationsMember>.Empty));
+
+        return translations;
     }
 
     private static bool ImplementsTranslations(ITypeSymbol type)
     {
-        return Enumerable.Any(type.AllInterfaces, IsTranslationsInterface);
+        var implements = Enumerable.Any(type.AllInterfaces, IsTranslationsInterface);
+        return implements;
     }
 
     /// <summary>
@@ -398,13 +520,16 @@ internal static class TranslationsDiscovery
 
     private static bool IsTranslationsInterface(INamedTypeSymbol @interface)
     {
-        return String.Equals(@interface.ToDisplayString(), TranslationSetInterfaceFullName, StringComparison.Ordinal);
+        var isSet = PackageNames.IsTranslationSet(@interface);
+        return isSet;
     }
 
     private static bool IsExcluded(INamedTypeSymbol type)
     {
-        return Enumerable.Any(type.GetAttributes(), attribute
-            => String.Equals(attribute.AttributeClass?.ToDisplayString(), ExclusionAttributeFullName, StringComparison.Ordinal));
+        var isExcluded = Enumerable.Any(type.GetAttributes(), attribute
+            => String.Equals(attribute.AttributeClass?.ToDisplayString(), PackageNames.ExcludeFromTranslationDiscoveryAttribute, StringComparison.Ordinal));
+
+        return isExcluded;
     }
 
     /// <summary>
@@ -419,10 +544,11 @@ internal static class TranslationsDiscovery
             if (!baseType.IsAbstract && ImplementsTranslations(baseType) && !IsDeclaredIn(baseType, type.ContainingAssembly))
                 return true;
 
-        return type.AllInterfaces.Any(@interface
+        var isOverride = type.AllInterfaces.Any(@interface
             => !IsTranslationsInterface(@interface)
                && ImplementsTranslations(@interface)
                && !IsDeclaredIn(@interface, type.ContainingAssembly));
+        return isOverride;
     }
 
     /// <summary>
@@ -474,7 +600,8 @@ internal static class TranslationsDiscovery
 
     private static bool IsDeclaredIn(ISymbol symbol, IAssemblySymbol assembly)
     {
-        return SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, assembly);
+        var isDeclaredIn = SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, assembly);
+        return isDeclaredIn;
     }
 
     /// <summary>
@@ -483,13 +610,15 @@ internal static class TranslationsDiscovery
     /// </summary>
     private static ImmutableArray<string> GetPublicContractNames(INamedTypeSymbol type)
     {
-        return type.AllInterfaces
+        var contractNames = type.AllInterfaces
             .Where(static @interface => !IsTranslationsInterface(@interface)
                                         && ImplementsTranslations(@interface)
                                         && @interface.DeclaredAccessibility is Accessibility.Public)
             .Select(static @interface => @interface.ToDisplayString())
             .OrderBy(static name => name, StringComparer.Ordinal)
             .ToImmutableArray();
+
+        return contractNames;
     }
 
     /// <summary>
@@ -499,22 +628,24 @@ internal static class TranslationsDiscovery
     /// </summary>
     private static ImmutableArray<string> GetOwnContractNames(INamedTypeSymbol type)
     {
-        return type.AllInterfaces
+        var contractNames = type.AllInterfaces
             .Where(@interface => !IsTranslationsInterface(@interface)
                                  && ImplementsTranslations(@interface)
                                  && IsDeclaredIn(@interface, type.ContainingAssembly))
             .Select(static @interface => @interface.ToDisplayString())
             .OrderBy(static name => name, StringComparer.Ordinal)
             .ToImmutableArray();
+
+        return contractNames;
     }
 
     /// <summary>
     /// The language the set serves, as <c>ITranslationSet.LanguageCode</c> will at run time: its own constant when it
     /// implements the property, else the code the build records for it or a set it derives from
     /// (<see cref="FindRecordedLanguageCode"/>), else the last two letters of its name. <see langword="null"/> when that
-    /// cannot be known here: the property is no constant, or comes from another assembly. A <c>LanguageCode</c> that
-    /// implements nothing counts as meant (<c>LOC015</c> reports it), so the language checks add no errors of their own
-    /// about it.
+    /// cannot be known here: the property is no constant, comes from another assembly, or holds a constant that is no
+    /// culture name. A <c>LanguageCode</c> that implements nothing counts as meant (<c>LOC015</c> reports it), so the
+    /// language checks add no errors of their own about it.
     /// </summary>
     /// <param name="type">The set.</param>
     /// <param name="ancestors">The classes of this assembly it derives from, nearest first.</param>
@@ -522,25 +653,45 @@ internal static class TranslationsDiscovery
     /// <param name="cancellationToken">Cancels the read.</param>
     private static string? GetLanguage(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, Compilation compilation, CancellationToken cancellationToken)
     {
+        var language = GetLanguage(type, ancestors, compilation, cancellationToken, out _);
+        return language;
+    }
+
+    /// <summary>
+    /// The language the set serves (see the overload without <paramref name="invalidLanguageCode"/>), and the constant
+    /// its <c>LanguageCode</c> holds when that is no culture name: what <c>LOC018</c> reports.
+    /// </summary>
+    // Every language the checks and the generated code work with comes through here, so it is a culture name or nothing:
+    // a constant such as "" or "en_GB" is in no language, and is held to none, like one that could not be read.
+    private static string? GetLanguage(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, Compilation compilation,
+        CancellationToken cancellationToken, out InvalidLanguageCode? invalidLanguageCode)
+    {
+        invalidLanguageCode = null;
+
         var mapping = MapLanguageCode(type);
 
         if ((mapping.Unmapped ?? mapping.Implementation ?? FindInterfaceLanguageCode(type)) is { } property)
-            return ReadConstant(property, compilation, cancellationToken);
+        {
+            var code = ReadWording(property, compilation, cancellationToken);
+
+            if (code is null || SupportedLanguages.IsCultureName(code))
+                return code;
+
+            // Not for a LanguageCode that implements nothing: nothing reads it at run time, and LOC015 reports it.
+            if (mapping.Unmapped is null)
+                invalidLanguageCode = new InvalidLanguageCode(property.ContainingType.Name, code, DiagnosticLocation.From(property.Locations[0]));
+
+            return null;
+        }
 
         if (FindRecordedLanguageCode(type, ancestors) is { } recorded)
             return recorded;
 
-        return EndsInTwoAsciiLetters(type.Name)
+        var language = EndsInTwoAsciiLetters(type.Name)
             ? type.Name.Substring(type.Name.Length - 2).ToLowerInvariant()
             : null;
 
-        static string? ReadConstant(IPropertySymbol property, Compilation compilation, CancellationToken cancellationToken)
-        {
-            return property.DeclaringSyntaxReferences.Length > 0
-                   && property.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) is PropertyDeclarationSyntax declaration
-                ? GetConstantText(declaration, compilation, cancellationToken)
-                : null;
-        }
+        return language;
     }
 
     /// <summary>
@@ -576,7 +727,8 @@ internal static class TranslationsDiscovery
     /// </summary>
     private static string? FindOwnRecordedLanguageCode(INamedTypeSymbol type)
     {
-        return SupportedLanguages.FindNamedLanguage(type.Name, SupportedLanguages.ReadCodes(type.ContainingAssembly));
+        var languageCode = SupportedLanguages.FindNamedLanguage(type.Name, SupportedLanguages.ReadCodes(type.ContainingAssembly));
+        return languageCode;
     }
 
     /// <summary>
@@ -585,24 +737,28 @@ internal static class TranslationsDiscovery
     /// </summary>
     private static bool IsNameableSet(INamedTypeSymbol type)
     {
-        return type is { IsAbstract: false, TypeKind: TypeKind.Class, IsGenericType: false, ContainingType: null, IsFileLocal: false };
+        var isNameable = type is { IsAbstract: false, TypeKind: TypeKind.Class, IsGenericType: false, ContainingType: null, IsFileLocal: false };
+        return isNameable;
     }
 
     /// <summary>
     /// Why generated code cannot register the set, as the clause of the <c>LOC003</c> message, or
     /// <see langword="null"/> when it can.
     /// </summary>
-    private static string? GetRegistrationProblem(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors)
+    /// <param name="type">The set.</param>
+    /// <param name="ancestors">The classes of this assembly it derives from, nearest first.</param>
+    /// <param name="constructor">
+    /// The constructor <c>new T()</c> calls (<see cref="FindConstructorCalledWithoutArguments"/>), or
+    /// <see langword="null"/> when it calls none.
+    /// </param>
+    private static string? GetRegistrationProblem(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, IMethodSymbol? constructor)
     {
-        // new T() also calls a constructor whose parameters all have defaults or take params, when it is the only such
-        // constructor; two of them, without a parameterless one, make the call ambiguous.
-        var callable = type.InstanceConstructors
-            .Where(static constructor => constructor.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal
-                                         && constructor.Parameters.All(static parameter => parameter.IsOptional || parameter.IsParams))
-            .ToArray();
-
-        if (callable.Length is not 1 && !callable.Any(static constructor => constructor.Parameters.Length is 0))
+        if (constructor is null)
             return "it has no parameterless constructor";
+
+        // new T() sets no member, and compiles only when the constructor says it sets the required ones itself.
+        if (FindUnsetRequiredMember(type, constructor) is { } required)
+            return $"it has a required member ('{required}'), which generated code cannot set";
 
         // At run time this would throw while the assembly loads, where the cause is hard to see.
         if (!EndsInTwoAsciiLetters(type.Name) && !DeclaresLanguageCode(type) && FindRecordedLanguageCode(type, ancestors) is null)
@@ -611,14 +767,90 @@ internal static class TranslationsDiscovery
         return null;
     }
 
+    /// <summary>
+    /// The constructor <c>new T()</c> calls from generated code, which lies in another file of the set's assembly, or
+    /// <see langword="null"/> when that does not compile: no constructor it can reach takes no arguments, or several do
+    /// and none is better than the others.
+    /// </summary>
+    private static IMethodSymbol? FindConstructorCalledWithoutArguments(INamedTypeSymbol type, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        // A constructor whose parameters all have defaults or take params is called without arguments too.
+        IMethodSymbol? callable = null;
+        var count = 0;
+
+        foreach (var constructor in type.InstanceConstructors)
+        {
+            if (constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
+                || !constructor.Parameters.All(static parameter => parameter.IsOptional || parameter.IsParams))
+            {
+                continue;
+            }
+
+            // The one that is better than every other.
+            if (constructor.Parameters.Length is 0)
+                return constructor;
+
+            callable = constructor;
+            count++;
+        }
+
+        if (count < 2)
+            return callable;
+
+        // Several of them: which one new T() calls, if any, is for the compiler to say, as it will for the generated
+        // code. A default is better than params, and two defaults are ambiguous. Bound at the start of the file, outside
+        // every type, as generated code is: there a private constructor is out of reach.
+        var creation = SyntaxFactory.ParseExpression($"new {type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}()");
+
+        var methodSymbol = semanticModel.GetSpeculativeSymbolInfo(position: 0, creation, SpeculativeBindingOption.BindAsExpression).Symbol as IMethodSymbol;
+        return methodSymbol;
+    }
+
+    /// <summary>
+    /// A required member of the set that <c>new T()</c> leaves unset (<c>CS9035</c>), or <see langword="null"/> when
+    /// it has none, or the constructor sets them all (<c>[SetsRequiredMembers]</c>).
+    /// </summary>
+    private static string? FindUnsetRequiredMember(INamedTypeSymbol type, IMethodSymbol constructor)
+    {
+        if (Enumerable.Any(constructor.GetAttributes(), static attribute
+                => String.Equals(attribute.AttributeClass?.ToDisplayString(), "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute", StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        for (var current = type; current is not null; current = current.BaseType)
+            foreach (var member in current.GetMembers())
+                if (member is IPropertySymbol { IsRequired: true } or IFieldSymbol { IsRequired: true })
+                    return member.Name;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether naming or calling a symbol warns that it is obsolete (<c>CS0612</c>, <c>CS0618</c>), which generated
+    /// code then silences for itself: a set stays registered for as long as it exists.
+    /// </summary>
+    private static bool IsObsolete(ISymbol symbol)
+    {
+        var isObsolete = Enumerable.Any(symbol.GetAttributes(), static attribute => attribute.AttributeClass is
+        {
+            Name: "ObsoleteAttribute",
+            ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true },
+        });
+
+        return isObsolete;
+    }
+
     private static bool EndsInTwoAsciiLetters(string name)
     {
-        return name.Length >= 2 && Ascii.IsLetter(name[name.Length - 1]) && Ascii.IsLetter(name[name.Length - 2]);
+        var endsInTwoAsciiLetters = name.Length >= 2 && Ascii.IsLetter(name[name.Length - 1]) && Ascii.IsLetter(name[name.Length - 2]);
+        return endsInTwoAsciiLetters;
     }
 
     private static bool DeclaresLanguageCode(INamedTypeSymbol type)
     {
-        return MapLanguageCode(type).Implementation is not null || FindInterfaceLanguageCode(type) is not null;
+        var declaresLanguageCode = MapLanguageCode(type).Implementation is not null || FindInterfaceLanguageCode(type) is not null;
+        return declaresLanguageCode;
     }
 
     /// <summary>
@@ -656,7 +888,8 @@ internal static class TranslationsDiscovery
                 unmapped ??= declared;
         }
 
-        return new LanguageCodeMapping(@override ?? implementation, unmapped);
+        var mappedLanguageCode = new LanguageCodeMapping(@override ?? implementation, unmapped);
+        return mappedLanguageCode;
 
         static bool ListsContract(INamedTypeSymbol type)
         {
@@ -688,18 +921,21 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The <c>LanguageCode</c> a type declares itself: a public instance property of that name, or an explicit
-    /// implementation of the interface's.
+    /// The <c>LanguageCode</c> a type declares itself: a public instance <see cref="string"/> property of that name,
+    /// or an explicit implementation of <c>ITranslationSet.LanguageCode</c>. A property that implements the
+    /// <c>LanguageCode</c> of another interface explicitly, or one of another type, is not it: the set does not serve
+    /// what that returns.
     /// </summary>
     private static IPropertySymbol? FindDeclaredLanguageCode(INamedTypeSymbol type)
     {
         foreach (var member in type.GetMembers())
         {
-            if (member is not IPropertySymbol { IsStatic: false } property)
+            if (member is not IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String } property)
                 continue;
 
             if ((property.DeclaredAccessibility is Accessibility.Public && String.Equals(property.Name, LanguageCodeMemberName, StringComparison.Ordinal))
-                || Enumerable.Any(property.ExplicitInterfaceImplementations, static implemented => String.Equals(implemented.Name, LanguageCodeMemberName, StringComparison.Ordinal)))
+                || Enumerable.Any(property.ExplicitInterfaceImplementations, static implemented
+                    => String.Equals(implemented.Name, LanguageCodeMemberName, StringComparison.Ordinal) && IsTranslationsInterface(implemented.ContainingType)))
             {
                 return property;
             }
@@ -796,14 +1032,16 @@ internal static class TranslationsDiscovery
                 if (import.NamespaceOrType is INamespaceSymbol imported)
                     namespaces.Add(GetNamespaceName(imported));
 
-        return namespaces.Distinct(StringComparer.Ordinal).ToImmutableArray();
+        var lookupNamespaces = namespaces.Distinct(StringComparer.Ordinal).ToImmutableArray();
+        return lookupNamespaces;
 
         static int CountNameParts(NameSyntax name) => name is QualifiedNameSyntax qualified ? CountNameParts(qualified.Left) + 1 : 1;
     }
 
     private static string GetNamespaceName(INamespaceSymbol @namespace)
     {
-        return @namespace.IsGlobalNamespace ? "" : @namespace.ToDisplayString();
+        var namespaceName = @namespace.IsGlobalNamespace ? "" : @namespace.ToDisplayString();
+        return namespaceName;
     }
 
     /// <summary>
@@ -820,7 +1058,8 @@ internal static class TranslationsDiscovery
             if (IsPublicStringProperty(member, out var property) && !String.Equals(property.Name, LanguageCodeMemberName, StringComparison.Ordinal))
                 names.Add(property.Name);
 
-        return names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
+        var stringProperties = names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
+        return stringProperties;
     }
 
     /// <summary>
@@ -848,8 +1087,7 @@ internal static class TranslationsDiscovery
                 texts.Add(new InheritedText(
                     Name: property.Name,
                     Namespace: GetNamespaceName(current.ContainingNamespace),
-                    TypeName: GetCrefName(current, CrefNameFormat),
-                    FullyQualifiedTypeName: GetCrefName(current, CrefFullNameFormat)));
+                    TypeName: GetCrefName(current)));
             }
 
             // After the properties a cref can name, so that a class holding both is linked at the one with a name.
@@ -858,15 +1096,72 @@ internal static class TranslationsDiscovery
                     settled.Add(name);
         }
 
-        return texts.OrderBy(static text => text.Name, StringComparer.Ordinal).ToImmutableArray();
+        var orderedTexts = texts.OrderBy(static text => text.Name, StringComparer.Ordinal).ToImmutableArray();
+        return orderedTexts;
     }
 
     /// <summary>
-    /// A class as a cref names it, its type parameters in braces: <c>Wording.DutchBase{T}</c>.
+    /// The wording this set gives each of its texts that returns a constant, from the nearest class implementing the
+    /// text, in the order of the names: its own property, the property it inherits (<see cref="GetInheritedTexts"/>), or
+    /// an explicit implementation, which wins over a property of the same name in its class. A text a class implements
+    /// explicitly for two interfaces has no one wording, and a text whose wording is no constant, or is declared where
+    /// this compilation has no syntax for it, has none either.
     /// </summary>
-    private static string GetCrefName(INamedTypeSymbol type, SymbolDisplayFormat format)
+    private static ImmutableArray<TextWording> GetWordings(INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
     {
-        return type.OriginalDefinition.ToDisplayString(format).Replace('<', '{').Replace('>', '}');
+        var wordings = ImmutableArray.CreateBuilder<TextWording>();
+
+        // The names a nearer class has settled, with a wording or without one.
+        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var members = current.GetMembers();
+
+            // Null for a name the class implements explicitly more than once.
+            var explicitImplementations = new Dictionary<string, IPropertySymbol?>(StringComparer.Ordinal);
+            foreach (var member in members)
+            {
+                if (member is IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String } property && GetExplicitlyImplementedName(property) is { } name)
+                    explicitImplementations[name] = explicitImplementations.ContainsKey(name) ? null : property;
+            }
+
+            foreach (var pair in explicitImplementations)
+            {
+                if (settled.Add(pair.Key) && pair.Value is not null && ReadWording(pair.Value, compilation, cancellationToken) is { } wording)
+                    wordings.Add(new TextWording(pair.Key, wording));
+            }
+
+            foreach (var member in members)
+            {
+                if (IsPublicStringProperty(member, out var property) && settled.Add(property.Name) && ReadWording(property, compilation, cancellationToken) is { } wording)
+                    wordings.Add(new TextWording(property.Name, wording));
+            }
+        }
+
+        var orderedWordings = wordings.OrderBy(static wording => wording.Name, StringComparer.Ordinal).ToImmutableArray();
+        return orderedWordings;
+    }
+
+    /// <summary>
+    /// The constant a property returns, when this compilation holds its declaration, else <see langword="null"/>.
+    /// </summary>
+    private static string? ReadWording(IPropertySymbol property, Compilation compilation, CancellationToken cancellationToken)
+    {
+        var wording = property.DeclaringSyntaxReferences.Length > 0
+                      && property.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) is PropertyDeclarationSyntax declaration
+            ? GetConstantText(declaration, compilation, cancellationToken)
+            : null;
+        return wording;
+    }
+
+    /// <summary>
+    /// A class as a cref names it inside its namespace, its type parameters in braces: <c>DutchBase{T}</c>.
+    /// </summary>
+    private static string GetCrefName(INamedTypeSymbol type)
+    {
+        var crefName = type.OriginalDefinition.ToDisplayString(CrefNameFormat).Replace('<', '{').Replace('>', '}');
+        return crefName;
     }
 
     /// <summary>
@@ -879,7 +1174,8 @@ internal static class TranslationsDiscovery
     {
         var separator = property.Name.LastIndexOf('.');
 
-        return separator < 0 ? null : property.Name.Substring(separator + 1);
+        var explicitlyImplementedName = separator < 0 ? null : property.Name.Substring(separator + 1);
+        return explicitlyImplementedName;
     }
 
     /// <summary>
@@ -915,7 +1211,7 @@ internal static class TranslationsDiscovery
     {
         property = (member as IPropertySymbol)!;
 
-        return member is IPropertySymbol
+        var isPublicStringProperty = member is IPropertySymbol
         {
             DeclaredAccessibility: Accessibility.Public,
             IsStatic: false,
@@ -924,6 +1220,8 @@ internal static class TranslationsDiscovery
             ExplicitInterfaceImplementations.Length: 0,
             Type.SpecialType: SpecialType.System_String,
         };
+
+        return isPublicStringProperty;
     }
 
     /// <summary>
@@ -948,51 +1246,35 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The property's wording when it is a constant (<c>=> "Submit"</c>, a getter returning a literal or a
-    /// <see langword="const"/>, or an initializer such as <c>{ get; } = "Submit";</c>), else <see langword="null"/>.
+    /// The property's wording when it is a constant (<see cref="ConstantWording"/>), else <see langword="null"/>.
     /// </summary>
-    // The same shapes as FormatPlaceholdersAnalyzer reads in the sets of the other languages: wording the analyzer
-    // reads there and this did not read here would be held to no placeholders at all.
     private static string? GetConstantText(PropertyDeclarationSyntax declaration, Compilation compilation,
         CancellationToken cancellationToken)
     {
-        var expression = declaration.ExpressionBody?.Expression ?? declaration.Initializer?.Value;
-
-        if (expression is null && declaration.AccessorList is not null)
-        {
-            foreach (var accessor in declaration.AccessorList.Accessors)
-            {
-                if (!accessor.IsKind(SyntaxKind.GetAccessorDeclaration))
-                    continue;
-
-                expression = accessor.ExpressionBody?.Expression
-                             ?? (accessor.Body is { Statements: [ReturnStatementSyntax { Expression: { } returned }] } ? returned : null);
-            }
-        }
-
         // A property of another assembly has its syntax here only where an IDE references that project as a
         // compilation, and then in a tree this compilation has no semantic model for. Left unread, as in a build,
         // which references the project's assembly and sees no syntax at all.
-        if (expression is null || !compilation.ContainsSyntaxTree(expression.SyntaxTree))
-            return null;
-
-        var constant = compilation.GetSemanticModel(expression.SyntaxTree).GetConstantValue(expression, cancellationToken);
-
-        return constant.HasValue ? constant.Value as string : null;
+        var constantText = compilation.ContainsSyntaxTree(declaration.SyntaxTree)
+            ? ConstantWording.Read(declaration, compilation.GetSemanticModel(declaration.SyntaxTree), cancellationToken)
+            : null;
+        return constantText;
     }
 }
 
 /// <summary>
 /// A candidate set: its names; whether it implements <c>ITranslationSet</c> in the input compilation, and the base
 /// types that bind to nothing which it or a class it derives from lists; whether it wins over the default tier, and how
-/// many sets it derives from; why it cannot register itself, if so; whether it is marked
-/// <c>[ExcludeFromTranslationDiscovery]</c>, which leaves it unregistered and unchecked, counting only as a set of its
-/// language; the language code the generated registrar records for it, when its name ends in a declared code that is
-/// not two letters and it does not implement <c>LanguageCode</c>; and what the language checks and the generated
-/// contract need to know about it, among which the public contracts it implements, those written by hand in its
-/// assembly, the classes of its assembly it derives from, the set it derives from directly (with the unresolved base
-/// types through which that one would implement a contract generated here, empty when it implements
-/// <c>ITranslationSet</c> already), and the class whose <c>LanguageCode</c> implements nothing, if any.
+/// many sets it derives from; why it cannot register itself, if so, whether its parameterless constructor is public,
+/// as the texts of a default-language set need it, and whether generated code that names or creates it is warned that
+/// it is obsolete; whether it is marked <c>[ExcludeFromTranslationDiscovery]</c>, which leaves it unregistered and
+/// unchecked, counting only as a set of its language; its language, always a culture name, or <see langword="null"/>
+/// when the build cannot read one, and the constant its <c>LanguageCode</c> holds when that is no culture name; the
+/// language code the generated registrar records for it, when its name ends in a declared code that is not two
+/// letters and it does not implement <c>LanguageCode</c>; and what the language checks and the generated contract
+/// need to know about it, among which the public contracts it implements, those written by hand in its assembly, the
+/// classes of its assembly it derives from, the set it derives from directly (with the unresolved base types through
+/// which that one would implement a contract generated here, empty when it implements <c>ITranslationSet</c>
+/// already), and the class whose <c>LanguageCode</c> implements nothing, if any, with where to report it.
 /// </summary>
 internal readonly record struct DiscoveredTranslations(
     string MetadataName,
@@ -1004,9 +1286,12 @@ internal readonly record struct DiscoveredTranslations(
     int Depth,
     EquatableArray<UnresolvedBaseType> UnresolvedBaseTypes,
     string? RegistrationProblem,
+    bool HasPublicParameterlessConstructor,
+    bool IsObsolete,
     bool IsExcluded,
     DiagnosticLocation Location,
     string? Language,
+    InvalidLanguageCode? InvalidLanguageCode,
     string? RecordedLanguageCode,
     bool ListsTranslations,
     EquatableArray<string> ContractNames,
@@ -1017,24 +1302,41 @@ internal readonly record struct DiscoveredTranslations(
     EquatableArray<UnresolvedBaseType> BaseSetContracts,
     string? UnmappedLanguageCodeType,
     string? UnmappedLanguageCodeBaseType,
+    DiagnosticLocation UnmappedLanguageCodeLocation,
     bool IsPartial,
     bool IsRecord,
     bool IsSealed,
     bool IsPublic,
     EquatableArray<string> StringProperties,
     EquatableArray<InheritedText> InheritedTexts,
+    EquatableArray<TextWording> Wordings,
     EquatableArray<TranslationsMember> Texts);
 
 /// <summary>
+/// The wording a set gives one of its texts, when that is a constant.
+/// </summary>
+internal readonly record struct TextWording(
+    string Name,
+    string Wording);
+
+/// <summary>
 /// A text a set inherits, with the nearest class declaring it as a cref names that class: its namespace (<c>""</c> for
-/// the global namespace), its name there, and its full name, the last two with containing types and with type
-/// parameters in braces (<c>DutchBase{T}</c>).
+/// the global namespace), and its name there, with containing types and with type parameters in braces
+/// (<c>DutchBase{T}</c>).
 /// </summary>
 internal readonly record struct InheritedText(
     string Name,
     string Namespace,
-    string TypeName,
-    string FullyQualifiedTypeName);
+    string TypeName);
+
+/// <summary>
+/// A <c>LanguageCode</c> holding a constant that is no culture name: the class or interface that declares it, the
+/// constant, and where the property is. What <c>LOC018</c> reports.
+/// </summary>
+internal readonly record struct InvalidLanguageCode(
+    string DeclaringType,
+    string Code,
+    DiagnosticLocation Location);
 
 /// <summary>
 /// A base type a candidate lists that binds to nothing in the input compilation: its simple name, and the namespaces the
@@ -1071,14 +1373,16 @@ internal readonly record struct TranslationsMember(
     string? DefaultText);
 
 /// <summary>
-/// A set the generated code registers, in which tier, and how many sets it derives from. Holds no location, so that
-/// an edit in the file of a set does not rewrite the generated code.
+/// A set the generated code registers, in which tier, how many sets it derives from, and whether creating it is
+/// warned about as obsolete. Holds no location, so that an edit in the file of a set does not rewrite the generated
+/// code.
 /// </summary>
 internal readonly record struct RegisteredTranslations(
     string MetadataName,
     string FullyQualifiedName,
     bool IsOverride,
-    int Depth);
+    int Depth,
+    bool IsObsolete);
 
 /// <summary>
 /// A set that cannot register itself: what <c>LOC003</c> reports.

@@ -18,8 +18,6 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class MissingContractCodeFixProvider : CodeFixProvider
 {
-    private const string TranslationSetInterfaceFullName = "CodeChops.Idioma.ITranslationSet";
-
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [TranslationSetsGenerator.MissingContractDiagnosticId];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
@@ -27,11 +25,8 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
         var document = context.Document;
-        var root = await document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
 
-        // The diagnostic sits on the name of the class.
-        var declaration = root?.FindToken(context.Span.Start).Parent?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
-        if (declaration is null)
+        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration)
             return;
 
         foreach (var diagnostic in context.Diagnostics)
@@ -55,35 +50,27 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     private static async Task<Solution> ImplementAsync(Document document, TypeDeclarationSyntax declaration, string contract, CancellationToken cancellationToken)
     {
         var solution = document.Project.Solution;
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
 
-        if (semanticModel?.GetDeclaredSymbol(declaration, cancellationToken) is not { } type)
+        if (await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is not var (type, semanticModel))
             return solution;
 
         var listed = new List<TypeSyntax>();
-        foreach (var reference in type.DeclaringSyntaxReferences)
+        foreach (var part in await CodeFixSupport.GetPartsAsync(type, cancellationToken).ConfigureAwait(false))
         {
-            if (await reference.GetSyntaxAsync(cancellationToken).ConfigureAwait(false) is not TypeDeclarationSyntax { BaseList: { } baseList } part)
+            if (part.BaseList is not { } baseList)
                 continue;
 
             var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
 
             foreach (var baseType in baseList.Types)
-                if (String.Equals(partModel.GetTypeInfo(baseType.Type, cancellationToken).Type?.ToDisplayString(), TranslationSetInterfaceFullName, StringComparison.Ordinal))
+                if (partModel.GetTypeInfo(baseType.Type, cancellationToken).Type is INamedTypeSymbol listedType && PackageNames.IsTranslationSet(listedType))
                     listed.Add(baseType.Type);
         }
 
-        foreach (var tree in listed.GroupBy(static name => name.SyntaxTree))
-        {
-            if (solution.GetDocument(tree.Key) is not { } partDocument)
-                continue;
-
-            var root = await tree.Key.GetRootAsync(cancellationToken).ConfigureAwait(false);
-            var newRoot = root.ReplaceNodes(tree, (original, _) => SyntaxFactory.IdentifierName(contract).WithTriviaFrom(original));
-
-            solution = solution.WithDocumentSyntaxRoot(partDocument.Id, newRoot);
-        }
-
-        return solution;
+        return await CodeFixSupport.ReplaceNodesAsync(
+            solution,
+            listed,
+            original => SyntaxFactory.IdentifierName(contract).WithTriviaFrom(original),
+            cancellationToken).ConfigureAwait(false);
     }
 }

@@ -6,15 +6,15 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 internal static class FormatPlaceholders
 {
-    public const string AttributeFullName = "CodeChops.Idioma.Internals.FormatPlaceholdersAttribute";
-
     /// <summary>
     /// What a message says about a wording that is no valid format string.
     /// </summary>
     public const string InvalidDescription = "a brace that is no placeholder (write a literal brace as {{ or }})";
 
     /// <summary>
-    /// The largest index <c>String.Format</c> accepts, plus one.
+    /// The index from which a placeholder is read as invalid. Not a limit of <c>String.Format</c>, which parses any
+    /// number, but no wording needs a million arguments: <c>Format</c> would throw for an index that no call can fill,
+    /// and a bound keeps the number from overflowing.
     /// </summary>
     private const int IndexLimit = 1_000_000;
 
@@ -72,9 +72,11 @@ internal static class FormatPlaceholders
 
         var items = placeholders.Select(static index => $"{{{index}}}").ToArray();
 
-        return items.Length is 1
+        var description = items.Length is 1
             ? $"placeholder {items[0]}"
             : $"placeholders {String.Join(", ", items, startIndex: 0, items.Length - 1)}{(items.Length > 2 ? "," : "")} and {items[items.Length - 1]}";
+
+        return description;
     }
 
     /// <summary>

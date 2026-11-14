@@ -27,6 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- For the names of the package's types, which the code fixes find the same way (PackageNames). -->
+    <InternalsVisibleTo Include="CodeChops.Idioma.CodeFixes" />
     <InternalsVisibleTo Include="CodeChops.Idioma.Tests" />
   </ItemGroup>
 

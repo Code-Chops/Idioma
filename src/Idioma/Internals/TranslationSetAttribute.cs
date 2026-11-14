@@ -17,7 +17,8 @@ public sealed class TranslationSetAttribute : Attribute
     public string Contract { get; }
 
     /// <summary>
-    /// The language the set serves.
+    /// The language the set serves, or <c>*</c> for a set whose language the build could not read, as its
+    /// <see cref="ITranslationSet.LanguageCode"/> is no constant: such a set may serve any language.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public string Language { get; }
@@ -26,7 +27,7 @@ public sealed class TranslationSetAttribute : Attribute
     /// Records a set.
     /// </summary>
     /// <param name="contract">The full name of the contract. A string, so that nothing keeps the type when trimming.</param>
-    /// <param name="language">The language the set serves.</param>
+    /// <param name="language">The language the set serves, or <c>*</c> when the build could not read it.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public TranslationSetAttribute(string contract, string language)
     {

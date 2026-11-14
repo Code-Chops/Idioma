@@ -13,14 +13,14 @@ namespace CodeChops.Idioma.Tests;
 public sealed class CannotExtendCodeFixProviderTests
 {
     #region Fixture
-    private static string File(string declarations) => $$"""
+    private static string File(string declarations) => $"""
         using CodeChops.Idioma;
 
         [assembly: SupportedLanguages("en")]
 
         namespace TestApp;
 
-        {{declarations}}
+        {declarations}
         """;
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(params string[] sources)
@@ -102,6 +102,27 @@ public sealed class CannotExtendCodeFixProviderTests
         fix.Title.ShouldBe("Rename to 'ShopTranslationsEN'");
         fix.Sources[0].ShouldBe(set.Replace("class ShopTranslations ", "class ShopTranslationsEN ", StringComparison.Ordinal));
         fix.Sources[1].ShouldBe(User.Replace("new ShopTranslations()", "new ShopTranslationsEN()", StringComparison.Ordinal));
+        ShouldBeExtended([.. fix.Sources]);
+    }
+
+    [Test]
+    public async Task SetNamedAfterItsLanguageInOtherLetterCase_ShouldGetItsSuffixInPlaceOfThatEnding()
+    {
+        // Arrange: the last two letters give the set its language, and the generator takes the suffix in upper case.
+        var set = File("""
+            public sealed partial class ShopTranslationsEn : ITranslationSet
+            {
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Act
+        var fixes = await FixAsync(set);
+
+        // Assert: not ShopTranslationsEnEN, whose generated class would be ShopTranslationsEn.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Title.ShouldBe("Rename to 'ShopTranslationsEN'");
+        fix.Sources[0].ShouldBe(set.Replace("class ShopTranslationsEn ", "class ShopTranslationsEN ", StringComparison.Ordinal));
         ShouldBeExtended([.. fix.Sources]);
     }
 

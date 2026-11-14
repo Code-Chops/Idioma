@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    An app that shows texts the way the README does, published with NativeAOT, so that what the package says about
+    trimming is run and not only analyzed: the language of a set from the end of its name, the sets of a referenced
+    library found by name, and a text through JSON written by the System.Text.Json source generator. It is
+    published without ICU, as a NativeAOT console app often is, where any culture but the invariant one is made up by
+    name, which the lookups of the package must work with.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
+    <!-- A trim or AOT warning in the package or in this app fails the build. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Not an advisory about the compiler the SDK picks for NativeAOT (Microsoft.DotNet.ILCompiler), which this test
+         does not choose: it stays a warning. The package under test has no dependencies to be advised about. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+    <IdiomaVersion Condition="'$(IdiomaVersion)' == ''">*</IdiomaVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CodeChops.Idioma" Version="$(IdiomaVersion)" />
+    <ProjectReference Include="..\AotSmokeLibrary\AotSmokeLibrary.csproj" />
+  </ItemGroup>
+
+</Project>

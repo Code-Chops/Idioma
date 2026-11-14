@@ -3,11 +3,12 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace CodeChops.Idioma.Tests.TestHelpers;
 
 /// <summary>
-/// Offers a generator's diagnostics to a code fix, as an IDE does, and applies what it suggests.
+/// Offers a generator's or an analyzer's diagnostics to a code fix, as an IDE does, and applies what it suggests.
 /// </summary>
 internal static class CodeFixTestHelper
 {
@@ -16,7 +17,32 @@ internal static class CodeFixTestHelper
     /// diagnostics to <paramref name="provider"/>. Returns every suggested fix by its title, with the files as the fix
     /// leaves them, in the order given.
     /// </summary>
-    internal static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(CodeFixProvider provider, IIncrementalGenerator generator, params string[] sources)
+    internal static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(CodeFixProvider provider,
+        IIncrementalGenerator generator, params string[] sources)
+    {
+        var result = FixAsync(provider, compilation => Task.FromResult(CSharpGeneratorDriver
+            .Create(generators: [generator.AsSourceGenerator()], parseOptions: GeneratorTestHelper.ParseOptions)
+            .RunGenerators(compilation)
+            .GetRunResult()
+            .Diagnostics), sources);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="analyzer"/> over <paramref name="sources"/>, each a file of one project, without the
+    /// generators, and offers its diagnostics to <paramref name="provider"/>. Returns every suggested fix by its title,
+    /// with the files as the fix leaves them, in the order given.
+    /// </summary>
+    internal static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(CodeFixProvider provider,
+        DiagnosticAnalyzer analyzer, params string[] sources)
+    {
+        var result = FixAsync(provider, compilation => compilation.WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync(), sources);
+        return result;
+    }
+
+    private static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(CodeFixProvider provider,
+        Func<Compilation, Task<ImmutableArray<Diagnostic>>> diagnose, string[] sources)
     {
         using var workspace = new AdhocWorkspace();
 
@@ -42,11 +68,7 @@ internal static class CodeFixTestHelper
         }
 
         var compilation = await project.GetCompilationAsync();
-        var diagnostics = CSharpGeneratorDriver
-            .Create(generators: [generator.AsSourceGenerator()], parseOptions: GeneratorTestHelper.ParseOptions)
-            .RunGenerators(compilation!)
-            .GetRunResult()
-            .Diagnostics;
+        var diagnostics = await diagnose(compilation!);
 
         var actions = new List<CodeAction>();
         foreach (var diagnostic in diagnostics.Where(diagnostic => provider.FixableDiagnosticIds.Contains(diagnostic.Id, StringComparer.Ordinal)))

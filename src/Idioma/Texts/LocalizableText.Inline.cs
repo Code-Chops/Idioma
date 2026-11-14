@@ -178,8 +178,8 @@ public partial record LocalizableText : Internals.IInlineText<LocalizableText>
     /// <remarks>
     /// A string becomes a text without translations here, so <c>text.Equals("Naam")</c> and
     /// <c>list.Contains("Naam")</c> are <see langword="false"/> for a translated text, even while it shows that
-    /// wording. In an assembly that declares two or more languages the build rejects both, as wording written in one
-    /// language (<c>LOC011</c>). To compare with the wording a user sees, write <c>text == "Naam"</c>. A
+    /// wording. The build rejects both, whether the string is written in the source or not (<c>LOC017</c>). To compare
+    /// with the wording a user sees, write <c>text == "Naam"</c>. A
     /// <see cref="ResourceText"/> also compares its key, contract, and default language.
     /// </remarks>
     public virtual bool Equals(LocalizableText? other)

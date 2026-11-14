@@ -214,6 +214,61 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        [NotInParallel(nameof(TranslationsRegistry))]
+        [Arguments("nl-NL")]
+        [Arguments("nl-BE")]
+        [Arguments("en-US")]
+        [Arguments("en-GB")]
+        [Arguments("fr-FR")]
+        public void ShowingAText_ShouldAllocateNothing(string culture)
+        {
+            // Arrange: what the docs promise a page full of texts costs. Apart from the other tests that register sets,
+            // which make the next read build the registry anew: that read is this thread's, and would count.
+            using var _ = new UICultureScope(culture);
+            var uiCulture = CultureInfo.CurrentUICulture;
+            var checkout = GeneratedTranslations.Checkout;
+            var orders = InlineTexts.Orders;
+
+            // Act & Assert: a text of a set and an inline one, the way each is shown, and compared with a string.
+            Allocated(() => checkout.ToString()).ShouldBe(0, "text of a set, ToString()");
+            Allocated(() => (string)checkout).ShouldBe(0, "text of a set, as a string");
+            Allocated(() => checkout.ToString(uiCulture)).ShouldBe(0, "text of a set, ToString(culture)");
+            Allocated(() => checkout == "Afrekenen").ShouldBe(0, "text of a set, == a string");
+            Allocated(() => "Afrekenen" != checkout).ShouldBe(0, "a string != text of a set");
+            Allocated(() => orders.ToString()).ShouldBe(0, "inline text, ToString()");
+            Allocated(() => orders.ToString(uiCulture)).ShouldBe(0, "inline text, ToString(culture)");
+            Allocated(() => orders == "Bestellingen").ShouldBe(0, "inline text, == a string");
+        }
+
+        /// <summary>
+        /// The bytes this thread allocates in an action, the least of a few rounds after a warm-up: a round that meets the
+        /// JIT or a lazily built table is not what a page that shows texts pays for each time.
+        /// </summary>
+        private static long Allocated<T>(Func<T> action)
+        {
+            T? sink = default;
+
+            for (var i = 0; i < 20_000; i++)
+                sink = action();
+
+            var least = long.MaxValue;
+
+            for (var round = 0; round < 3; round++)
+            {
+                var before = GC.GetAllocatedBytesForCurrentThread();
+
+                for (var i = 0; i < 10_000; i++)
+                    sink = action();
+
+                least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
+            }
+
+            GC.KeepAlive(sink);
+
+            return least;
+        }
+
+        [Test]
         public void GeneratedFactory_ShouldHoldEveryLanguage()
         {
             // Arrange & Act

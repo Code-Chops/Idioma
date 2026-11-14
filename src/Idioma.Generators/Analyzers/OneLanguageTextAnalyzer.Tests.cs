@@ -66,17 +66,17 @@ public sealed class OneLanguageTextAnalyzerTests
     }
 
     [Test]
-    [Arguments("""public static LocalizableText Good(string customerName) => customerName;""")]
-    [Arguments("""public static LocalizableText Good(Customer customer) => customer.Name;""")]
-    [Arguments("""public static LocalizableText Good(Customer customer) => customer.ToString();""")]
+    [Arguments("public static LocalizableText Good(string customerName) => customerName;")]
+    [Arguments("public static LocalizableText Good(Customer customer) => customer.Name;")]
+    [Arguments("public static LocalizableText Good(Customer customer) => customer.ToString();")]
     [Arguments("""public static LocalizableText Good(Customer customer) => $"{customer.Name} - {customer.City}";""")]
-    [Arguments("""public static LocalizableText Good(Customer customer, bool flag) => flag ? customer.Name : customer.City;""")]
-    [Arguments("""public static LocalizableText Good(Customer customer) => new LocalizableText(customer.Name);""")]
+    [Arguments("public static LocalizableText Good(Customer customer, bool flag) => flag ? customer.Name : customer.City;")]
+    [Arguments("public static LocalizableText Good(Customer customer) => new LocalizableText(customer.Name);")]
     [Arguments("""public static LocalizableText Good(Customer customer) => new ResourceText("Customer.Name", customer.Name);""")]
     [Arguments("""public static LocalizableText Dash { get; } = "-";""")]
     [Arguments("""public static LocalizableText Number { get; } = "1234";""")]
     [Arguments("""public static LocalizableText Empty { get; } = "";""")]
-    [Arguments("""public static LocalizableText? Nothing { get; } = null;""")]
+    [Arguments("public static LocalizableText? Nothing { get; } = null;")]
     [Arguments("""public static LocalizableText Good { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");""")]
     public async Task ValueOrInlineText_ShouldReportNothing(string member)
     {
@@ -104,6 +104,18 @@ public sealed class OneLanguageTextAnalyzerTests
     {
         // Arrange & Act: the span operator converts nothing to a text.
         var diagnostics = await AnalyzeMemberAsync("""public static bool Same(LocalizableText text) => text == "Orders";""");
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("""public static bool Compared(LocalizableText text) => text.Equals("Orders");""")]
+    [Arguments("""public static bool Compared(System.Collections.Generic.List<LocalizableText> texts) => texts.Contains("Orders");""")]
+    public async Task WordingComparedAsText_ShouldLeaveItToLOC017(string member)
+    {
+        // Arrange & Act: translating the wording would not make the comparison hold, so LOC017 reports it instead.
+        var diagnostics = await AnalyzeMemberAsync(member);
 
         // Assert
         diagnostics.ShouldBeEmpty();

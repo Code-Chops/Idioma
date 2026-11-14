@@ -7,9 +7,9 @@ namespace CodeChops.Idioma.Generators;
 /// <see cref="string"/> member per public string property, deriving from <c>ITranslationSet</c>), a partial declaration
 /// that makes the class implement it, and the static partial class named after the set without its language suffix
 /// (<c>ShopTranslations</c>, one <c>ResourceText</c> per member keyed <c>Shop.&lt;Name&gt;</c> and worded by the set,
-/// next to the constant <c>ResourceKeyPrefix</c>); the interface and the class take the set's accessibility. Each
+/// and no other member); the interface and the class take the set's accessibility. Each
 /// generated member inherits the property's doc comment through <c>&lt;inheritdoc cref/&gt;</c>, or else is documented
-/// with its default-language wording, and links to its wording in every language. Each member of the contract whose
+/// with its default-language wording, and links to its wording in every language, which it shows next to the link. Each member of the contract whose
 /// default wording is a constant records its placeholders (<c>[FormatPlaceholders]</c>), which
 /// <see cref="FormatPlaceholdersAnalyzer"/> holds every other set to, in this assembly and in those referencing it.
 /// </summary>
@@ -39,15 +39,16 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     /// </summary>
     public const string SuggestedNameProperty = "SuggestedName";
 
-    private const string PackageNamespace = "CodeChops.Idioma";
-    private const string InternalsNamespace = PackageNamespace + ".Internals";
-    private const string TranslationSetAttributeFullName = "CodeChops.Idioma.Internals.TranslationSetAttribute";
-    private const string InlineTextsAttributeFullName = "CodeChops.Idioma.Internals.InlineTextsAttribute";
-
     /// <summary>
     /// The line terminators of C#, the pair first so that it counts as one break.
     /// </summary>
     private static readonly string[] LineBreaks = ["\r\n", "\r", "\n", "\u0085", "\u2028", "\u2029"];
+
+    /// <summary>
+    /// The longest a wording stands next to its link, in characters: a tooltip lists every language, and a long wording
+    /// in each would bury the rest.
+    /// </summary>
+    private const int MaxWordingLength = 80;
 
     private static readonly DiagnosticDescriptor NoLanguagesDeclaredRule = Error(
         NoLanguagesDeclaredDiagnosticId,
@@ -58,7 +59,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor CannotExtendRule = Error(
         CannotExtendDiagnosticId,
         "Default-language set cannot be extended by the generator",
-        "'{0}' is the default-language set of a translations contract, but {1}, so no contract or texts are generated for it. Declare it as a top-level partial class named with its language as suffix (ShopTranslationsEN), with a parameterless constructor, neither generic, abstract, nor file-local.",
+        "'{0}' is the default-language set of a translations contract, but {1}, so no contract or texts are generated for it. Declare it as a top-level partial class named with its language as suffix (ShopTranslationsEN), with a public parameterless constructor, neither generic, abstract, nor file-local.",
         "The generator adds a partial declaration to the set, making it implement the generated contract, names the generated class after the set without its language suffix, and creates the set for the default wording of every text, so the set must be one generated code in another file can name and create.");
 
     private static readonly DiagnosticDescriptor MissingLanguageRule = Error(
@@ -102,9 +103,9 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
 
     private static readonly DiagnosticDescriptor ReservedTextNameRule = Error(
         ReservedTextNameDiagnosticId,
-        "Text named like a member of the generated class",
+        "Text named like the generated class",
         "'{0}' has a text named '{1}', which the generated class '{2}' cannot hold, so '{2}.{1}' is not generated. Rename the text.",
-        "The generated texts class declares the constant ResourceKeyPrefix, and a member cannot carry the name of its own class.");
+        "A member cannot carry the name of its own class, so no text can be named like the class that holds the texts.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -148,7 +149,8 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
 
     private static DiagnosticDescriptor Error(string id, string title, string message, string description)
     {
-        return new DiagnosticDescriptor(id, title, message, "Design", DiagnosticSeverity.Error, isEnabledByDefault: true, description);
+        var error = new DiagnosticDescriptor(id, title, message, "Design", DiagnosticSeverity.Error, isEnabledByDefault: true, description);
+        return error;
     }
 
     private static void Report(SourceProductionContext context, EquatableArray<TranslationSetsFinding> findings)
@@ -196,14 +198,14 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             {
                 var name = attribute.AttributeClass?.ToDisplayString();
 
-                if (String.Equals(name, TranslationSetAttributeFullName, StringComparison.Ordinal)
+                if (String.Equals(name, PackageNames.TranslationSetAttribute, StringComparison.Ordinal)
                     && attribute.ConstructorArguments.Length is 2
                     && attribute.ConstructorArguments[0].Value is string contract
                     && attribute.ConstructorArguments[1].Value is string language)
                 {
                     sets.Add(new ProvidedTranslationSet(contract, language));
                 }
-                else if (String.Equals(name, InlineTextsAttributeFullName, StringComparison.Ordinal))
+                else if (String.Equals(name, PackageNames.InlineTextsAttribute, StringComparison.Ordinal))
                 {
                     hasInlineTexts = true;
                 }
@@ -221,7 +223,11 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             }
         }
 
-        return new EquatableArray<ReferencedTranslations>(references.OrderBy(static reference => reference.AssemblyName, StringComparer.Ordinal).ToImmutableArray());
+        var referencedTranslations = new EquatableArray<ReferencedTranslations>(
+            references.OrderBy(static reference => reference.AssemblyName, StringComparer.Ordinal)
+                .ToImmutableArray());
+
+        return referencedTranslations;
     }
 
     private static string GenerateProvidedSets(EquatableArray<ProvidedTranslationSet> sets)
@@ -230,7 +236,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         sb.AppendLine("// <auto-generated/>");
 
         foreach (var set in sets)
-            sb.AppendLine($"[assembly: {InternalsNamespace}.TranslationSetAttribute({SymbolDisplay.FormatLiteral(set.Contract, quote: true)}, {SymbolDisplay.FormatLiteral(set.Language, quote: true)})]");
+            sb.AppendLine($"[assembly: {PackageNames.TranslationSetAttribute}({SymbolDisplay.FormatLiteral(set.Contract, quote: true)}, {SymbolDisplay.FormatLiteral(set.Language, quote: true)})]");
 
         return sb.ToString();
     }
@@ -243,28 +249,47 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         var name = contract.ContractName;
         var textsName = EscapeIdentifier(contract.TextsName);
         var @namespace = EscapeNamespace(contract.Namespace);
-        var keyPrefixLiteral = SymbolDisplay.FormatLiteral(contract.KeyPrefix, quote: true);
         var texts = contract.Members.Where(member => !TranslationSetsAnalysis.IsReservedTextName(member.Name, contract.TextsName)).ToArray();
         var typeKeyword = contract.IsRecord ? "record" : "class";
         var accessibility = contract.IsPublic ? "public" : "internal";
         var sampleMember = texts.Length > 0 ? texts[0].Name : "Name";
 
+        var aliases = GetNamespaceAliases(contract);
+
         // What creates a text is imported here, at the top of the file, and called by its name alone. Inside the
         // generated class a text stands before every namespace of its name, so behind a text named CodeChops the
         // package's namespace could not be reached to call it.
         var sb = new StringBuilder();
-        sb.AppendLine($$"""
+        sb.AppendLine($"""
             // <auto-generated/>
             #nullable enable
 
-            using static {{InternalsNamespace}}.GeneratedCode;
-
+            using static {PackageNames.GeneratedCode};
             """);
+
+        // The namespace of a set that lies outside the contract's own is named here too, where a name is looked for
+        // from the global namespace on, and reached through its alias below. Inside the contract's namespace its full
+        // name would start with a name that namespace may hold something else under, as a namespace Shop that holds a
+        // class Shop does, and the link to the set would name nothing (CS1574).
+        foreach (var alias in aliases)
+            sb.AppendLine($"using {alias.Value} = {EscapeNamespace(alias.Key)};");
+
+        sb.AppendLine();
 
         if (@namespace.Length > 0)
         {
-            sb.AppendLine($$"""
-                namespace {{@namespace}};
+            sb.AppendLine($"""
+                namespace {@namespace};
+
+                """);
+        }
+
+        // The set's texts are read for as long as it exists, and the warning about naming it is one its author cannot
+        // act on in generated code.
+        if (contract.IsObsolete)
+        {
+            sb.AppendLine($"""
+                #pragma warning disable {TranslationsRegistrationGenerator.ObsoleteWarnings} // The set is marked [Obsolete], and its texts read it for as long as it exists.
 
                 """);
         }
@@ -277,16 +302,16 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             /// reports a language without a set. Because every member must be implemented, a text without a translation is a
             /// compile error rather than a fallback at run time. Each set registers itself, so there is nothing to register.
             /// </summary>
-            {{accessibility}} interface {{name}} : {{PackageNamespace}}.ITranslationSet
+            {{accessibility}} interface {{name}} : {{PackageNames.TranslationSet}}
             {
             """);
         foreach (var member in contract.Members)
         {
-            AppendMemberDocs(sb, contract, className, member);
+            AppendMemberDocs(sb, contract, aliases, className, member);
 
             // Not for wording that is no constant, or no valid format string: nothing then to hold the others to.
             if (member.DefaultText is { } defaultText && FormatPlaceholders.TryRead(defaultText, out var placeholders))
-                sb.AppendLine($"    [{InternalsNamespace}.FormatPlaceholders({String.Join(", ", placeholders)})]");
+                sb.AppendLine($"    [{PackageNames.InternalsNamespace}.FormatPlaceholders({String.Join(", ", placeholders)})]");
 
             sb.AppendLine($"    string {EscapeIdentifier(member.Name)} {{ get; }}");
         }
@@ -299,27 +324,29 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             partial {{typeKeyword}} {{className}} : {{name}};
 
             /// <summary>
-            /// The texts declared by <see cref="{{className}}"/>, one <see cref="{{PackageNamespace}}.ResourceText"/> per text,
+            /// The texts declared by <see cref="{{className}}"/>, one <see cref="{{PackageNames.ResourceText}}"/> per text,
             /// each following the current UI culture: <c>@{{contract.TextsName}}.{{sampleMember}}</c> in markup shows the <see cref="{{name}}"/> set
-            /// registered for <see cref="System.Globalization.CultureInfo.CurrentUICulture"/>, else the set registered for
-            /// the app's <see cref="{{PackageNamespace}}.TranslationsRegistry.DefaultLanguage"/>, else the set registered for the
+            /// registered for <c>CultureInfo.CurrentUICulture</c>, else the set registered for
+            /// the app's <see cref="{{PackageNames.TranslationsRegistry}}.DefaultLanguage"/>, else the set registered for the
             /// language of <see cref="{{className}}"/>, else its wording.
             /// </summary>
             {{accessibility}} static partial class {{textsName}}
             {
-                /// <summary>
-                /// The prefix of every text's resource key: <c>{{EscapeXml(contract.KeyPrefix)}}</c>.
-                /// </summary>
-                public const string {{TranslationSetsAnalysis.ResourceKeyPrefixName}} = {{keyPrefixLiteral}};
             """);
 
-        foreach (var member in texts)
+        // Nothing but the texts, so that a text can take any name but the class's own (LOC014). Each key is written out
+        // in full, as in "Shop.Checkout": a constant for the prefix would take a name from the texts.
+        for (var i = 0; i < texts.Length; i++)
         {
+            var member = texts[i];
             var memberName = EscapeIdentifier(member.Name);
+            var keyLiteral = SymbolDisplay.FormatLiteral(contract.KeyPrefix + member.Name, quote: true);
 
-            sb.AppendLine();
-            AppendMemberDocs(sb, contract, className, member);
-            sb.AppendLine($"    public static {(HidesObjectMember(member.Name) ? "new " : "")}{PackageNamespace}.ResourceText {memberName} {{ get; }} = CreateResourceText<{name}>({TranslationSetsAnalysis.ResourceKeyPrefixName} + nameof({memberName}), static translations => translations.{memberName}, DefaultSet<{className}>.Instance);");
+            if (i > 0)
+                sb.AppendLine();
+
+            AppendMemberDocs(sb, contract, aliases, className, member);
+            sb.AppendLine($"    public static {(HidesObjectMember(member.Name) ? "new " : "")}{PackageNames.ResourceText} {memberName} {{ get; }} = CreateResourceText<{name}>({keyLiteral}, static translations => translations.{memberName}, DefaultSet<{className}>.Instance);");
         }
 
         // The end of the texts, and the set every text takes its default wording from. File-local, so that inside this
@@ -334,53 +361,181 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             {
                 internal static TSet Instance { get; } = new();
             }
-            #nullable restore
             """);
+
+        if (contract.IsObsolete)
+            sb.AppendLine($"#pragma warning restore {TranslationsRegistrationGenerator.ObsoleteWarnings}");
+
+        sb.AppendLine("#nullable restore");
 
         return sb.ToString();
     }
 
     /// <summary>
-    /// A set as the file of a contract names it: by its simple name when it lies in the contract's namespace, as the
-    /// file itself does, else by its full name.
+    /// The alias the file of a contract gives each namespace outside its own that holds a set it links to, or a class a
+    /// set inherits a text from: <c>Namespace_Shop_Dutch</c> for <c>Shop.Dutch</c>. In the order of the namespaces, so
+    /// that the file is written the same way each time.
     /// </summary>
-    private static string GetNameIn(string @namespace, TranslationLink set)
+    // Named after the namespace, with a prefix that keeps it apart from the namespace itself: an alias named like
+    // something the global namespace holds cannot be used.
+    private static SortedDictionary<string, string> GetNamespaceAliases(TranslationContract contract)
     {
-        return String.Equals(set.Namespace, @namespace, StringComparison.Ordinal) ? EscapeIdentifier(set.Name) : set.FullyQualifiedName;
+        var aliases = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var member in contract.Members)
+        {
+            foreach (var translation in contract.Translations)
+            {
+                Add(GetCrefTarget(translation, member.Name).Namespace);
+
+                // The set itself is named next to its wording when it shares its language (GetWordingNote).
+                if (SharesLanguage(contract, translation))
+                    Add(translation.Namespace);
+            }
+        }
+
+        return aliases;
+
+        void Add(string @namespace)
+        {
+            if (!NeedsAlias(contract.Namespace, @namespace) || aliases.ContainsKey(@namespace))
+                return;
+
+            // Shop.Dutch_Sets and Shop_Dutch.Sets would share an alias.
+            var alias = $"Namespace_{@namespace.Replace("@", "").Replace('.', '_')}";
+            while (!names.Add(alias))
+                alias += "_";
+
+            aliases.Add(@namespace, alias);
+        }
     }
 
     /// <summary>
-    /// Where the wording a set gives a text is found, as the file of a contract names it: the set's own property when it
-    /// declares the text, the property of the nearest class declaring it when the set inherits the text
-    /// (<c>ShopTranslationsEN.Checkout</c> for a British set that leaves <c>Checkout</c> as it is), and else the set.
+    /// Whether another set linked from a contract has the language of this one, as a set rewording its own language
+    /// has. The links to both then name the set.
+    /// </summary>
+    private static bool SharesLanguage(TranslationContract contract, TranslationLink set)
+    {
+        var sharesLanguage = contract.Translations.Count(other => String.Equals(other.Language, set.Language, StringComparison.OrdinalIgnoreCase)) > 1;
+        return sharesLanguage;
+    }
+
+    /// <summary>
+    /// Whether the file of a contract reaches a namespace through an alias: every namespace but its own, where a name
+    /// stands as it is, and the global namespace, which has no name to give an alias.
+    /// </summary>
+    private static bool NeedsAlias(string contractNamespace, string @namespace)
+    {
+        var needsAlias = @namespace.Length > 0 && !String.Equals(@namespace, contractNamespace, StringComparison.Ordinal);
+        return needsAlias;
+    }
+
+    /// <summary>
+    /// Where the wording a set gives a text is found: the set's own property when it declares the text, the property of
+    /// the nearest class declaring it when the set inherits the text (<c>ShopTranslationsEN.Checkout</c> for a British
+    /// set that leaves <c>Checkout</c> as it is), and else the set itself.
     /// </summary>
     // A cref does not find a member through a class that only inherits it (CS1574), and a text implemented explicitly
     // has no name to link to at all.
-    private static string GetCref(string @namespace, TranslationLink set, string member)
+    private static (string Namespace, string TypeName, bool HasMember, bool IsInherited) GetCrefTarget(TranslationLink set, string member)
     {
         if (set.StringProperties.AsImmutableArray().Contains(member, StringComparer.Ordinal))
-            return $"{GetNameIn(@namespace, set)}.{EscapeIdentifier(member)}";
+            return (set.Namespace, EscapeIdentifier(set.Name), HasMember: true, IsInherited: false);
 
         foreach (var inherited in set.InheritedTexts)
+            if (String.Equals(inherited.Name, member, StringComparison.Ordinal))
+                return (inherited.Namespace, inherited.TypeName, HasMember: true, IsInherited: true);
+
+        return (set.Namespace, EscapeIdentifier(set.Name), HasMember: false, IsInherited: false);
+    }
+
+    /// <summary>
+    /// The wording a set gives a text (<see cref="GetCrefTarget"/>), as the file of a contract names it: a class of the
+    /// contract's own namespace by its name alone, as the file itself lies there, and a class of another namespace
+    /// through the alias of that namespace.
+    /// </summary>
+    private static string GetCref(string @namespace, SortedDictionary<string, string> aliases, TranslationLink set, string member)
+    {
+        var target = GetCrefTarget(set, member);
+        var type = GetCrefType(@namespace, aliases, target.Namespace, target.TypeName);
+
+        var cref = target.HasMember ? $"{type}.{EscapeIdentifier(member)}" : type;
+        return cref;
+    }
+
+    /// <summary>
+    /// A class as the file of a contract names it (<see cref="GetCref"/>).
+    /// </summary>
+    private static string GetCrefType(string @namespace, SortedDictionary<string, string> aliases, string typeNamespace, string typeName)
+    {
+        var type = NeedsAlias(@namespace, typeNamespace) ? $"{aliases[typeNamespace]}.{typeName}" : typeName;
+        return type;
+    }
+
+    /// <summary>
+    /// What follows the link to the wording a set gives a text: the wording, when it is a constant, as one line of at
+    /// most <see cref="MaxWordingLength"/> characters, then, in parentheses, the set when another set has the same
+    /// language, as a set rewording its own language has, whether it is marked <c>[ExcludeFromTranslationDiscovery]</c>,
+    /// and the class the wording comes from when the set inherits it (<c>: Checkout (inherited from
+    /// ShopTranslationsEN)</c> for a British set that leaves <c>Checkout</c> as it is).
+    /// </summary>
+    private static string GetWordingNote(string @namespace, SortedDictionary<string, string> aliases, TranslationLink set, string member, bool sharesLanguage)
+    {
+        string? wording = null;
+        foreach (var candidate in set.Wordings)
         {
-            if (!String.Equals(inherited.Name, member, StringComparison.Ordinal))
-                continue;
-
-            // The class by its name alone when it lies in the contract's namespace, as a set is named.
-            var declaringClass = String.Equals(inherited.Namespace, @namespace, StringComparison.Ordinal) ? inherited.TypeName : inherited.FullyQualifiedTypeName;
-
-            return $"{declaringClass}.{EscapeIdentifier(member)}";
+            if (String.Equals(candidate.Name, member, StringComparison.Ordinal))
+                wording = candidate.Wording;
         }
 
-        return GetNameIn(@namespace, set);
+        var details = new List<string>();
+
+        if (sharesLanguage)
+            details.Add($"<see cref=\"{GetCrefType(@namespace, aliases, set.Namespace, EscapeIdentifier(set.Name))}\"/>");
+
+        if (set.IsExcluded)
+            details.Add("excluded from discovery");
+
+        var target = GetCrefTarget(set, member);
+        if (target.IsInherited && !String.IsNullOrEmpty(wording))
+            details.Add($"inherited from <see cref=\"{GetCrefType(@namespace, aliases, target.Namespace, target.TypeName)}\"/>");
+
+        var note = String.IsNullOrEmpty(wording) ? "" : $": {EscapeXml(Shorten(wording!))}";
+        if (details.Count > 0)
+            note += $" ({String.Join(", ", details)})";
+
+        return note;
+    }
+
+    /// <summary>
+    /// A wording as it stands next to its link: its first line, cut at <see cref="MaxWordingLength"/> characters, and
+    /// an ellipsis where anything was left out.
+    /// </summary>
+    private static string Shorten(string wording)
+    {
+        var lines = wording.Split(LineBreaks, StringSplitOptions.None);
+        var line = lines[0];
+        var isCut = lines.Length > 1;
+
+        if (line.Length > MaxWordingLength)
+        {
+            // Not between the halves of a surrogate pair, which would leave a character XML cannot hold.
+            var length = Char.IsHighSurrogate(line[MaxWordingLength - 1]) ? MaxWordingLength - 1 : MaxWordingLength;
+            line = line.Substring(0, length);
+            isCut = true;
+        }
+
+        var shortened = isCut ? line + "…" : line;
+        return shortened;
     }
 
     /// <summary>
     /// Writes the doc comment of a generated member: the property's own comment when it has one
     /// (<c>&lt;inheritdoc cref/&gt;</c>), else its default-language wording, else a plain description, followed by a link
-    /// to its wording in every language.
+    /// to its wording in every language, with that wording next to it (<see cref="GetWordingNote"/>).
     /// </summary>
-    private static void AppendMemberDocs(StringBuilder sb, TranslationContract contract, string className, TranslationsMember member)
+    private static void AppendMemberDocs(StringBuilder sb, TranslationContract contract, SortedDictionary<string, string> aliases, string className, TranslationsMember member)
     {
         if (member.HasDocComment)
         {
@@ -410,9 +565,10 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             """);
         foreach (var translation in contract.Translations)
         {
-            var cref = GetCref(contract.Namespace, translation, member.Name);
+            var cref = GetCref(contract.Namespace, aliases, translation, member.Name);
+            var note = GetWordingNote(contract.Namespace, aliases, translation, member.Name, SharesLanguage(contract, translation));
 
-            sb.AppendLine($"    /// <item><description><see cref=\"{cref}\">{translation.Language}</see></description></item>");
+            sb.AppendLine($"    /// <item><description><see cref=\"{cref}\">{translation.Language}</see>{note}</description></item>");
         }
         sb.AppendLine("""
                 /// </list>
@@ -430,9 +586,34 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         return name is "Equals" or "GetHashCode" or "GetType" or "MemberwiseClone" or "ReferenceEquals" or "ToString";
     }
 
+    /// <summary>
+    /// Text as a doc comment can hold it: markup characters as entities, and a character XML does not allow, such as a
+    /// control character or half of a surrogate pair, as the escape C# writes it with (<c>\u0001</c>). Such a character
+    /// would make the comment invalid (<c>CS1570</c>), also when written as an entity.
+    /// </summary>
     private static string EscapeXml(string text)
     {
-        return text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        var escaped = new StringBuilder(text.Length);
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var character = text[i];
+
+            if (character is '&')
+                escaped.Append("&amp;");
+            else if (character is '<')
+                escaped.Append("&lt;");
+            else if (character is '>')
+                escaped.Append("&gt;");
+            else if (Char.IsHighSurrogate(character) && i + 1 < text.Length && Char.IsLowSurrogate(text[i + 1]))
+                escaped.Append(character).Append(text[++i]);
+            else if (character is '\t' or '\n' or '\r' or (>= ' ' and <= '\uD7FF') or (>= '\uE000' and <= '\uFFFD'))
+                escaped.Append(character);
+            else
+                escaped.Append("\\u").Append(((int)character).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        return escaped.ToString();
     }
 
     /// <summary>
@@ -440,7 +621,8 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     /// </summary>
     private static string EscapeIdentifier(string name)
     {
-        return SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
+        var escapeIdentifier = SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
+        return escapeIdentifier;
     }
 
     /// <summary>
@@ -448,6 +630,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     /// </summary>
     private static string EscapeNamespace(string @namespace)
     {
-        return @namespace.Length is 0 ? @namespace : String.Join(".", @namespace.Split('.').Select(EscapeIdentifier));
+        var escapeNamespace = @namespace.Length is 0 ? @namespace : String.Join(".", @namespace.Split('.').Select(EscapeIdentifier));
+        return escapeNamespace;
     }
 }

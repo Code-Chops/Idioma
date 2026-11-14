@@ -32,6 +32,31 @@ public sealed class PackageIndependenceTests
     }
 
     [Test]
+    [Arguments("CodeChops.Idioma.Generators")]
+    [Arguments("CodeChops.Idioma.CodeFixes")]
+    public void Analyzers_ShouldNotNeedANewerCompilerThanTheFirstNet10Sdk(string assemblyName)
+    {
+        // Arrange: a compiler skips an analyzer built against a newer Roslyn than its own (CS9057), so the generator, and
+        // with it LocalizableText.Inline, would vanish from the build of a project on SDK 10.0.100. The CI builds and runs
+        // these tests with a newer compiler, which accepts any, so only the references of the assembly can tell. The
+        // package references of the two projects are pinned for it (VersionOverride), and a bulk package update rewrites
+        // them.
+        var newestCompilerThatMayRun = new Version(major: 5, minor: 0, build: 0, revision: 0);
+        var assembly = Assembly.Load(assemblyName);
+
+        // Act
+        var roslyn = assembly.GetReferencedAssemblies()
+            .Where(static reference => reference.Name!.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal))
+            .ToArray();
+
+        // Assert
+        roslyn.ShouldNotBeEmpty();
+        roslyn.ShouldAllBe(
+            reference => reference.Version! <= newestCompilerThatMayRun,
+            $"{assemblyName} references a Roslyn newer than the compiler of .NET SDK 10.0.100 ({newestCompilerThatMayRun}): put VersionOverride=\"5.0.0\" back on its Microsoft.CodeAnalysis package.");
+    }
+
+    [Test]
     public void Generators_ShouldCarryNoLicenseCheck()
     {
         // Arrange

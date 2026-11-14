@@ -92,7 +92,8 @@ public interface ITranslationSet
     /// <para>
     /// The code is a culture name in any letter case, and the set serves that culture and every culture under it:
     /// <c>en</c> serves <c>en-US</c> and <c>en-GB</c>. A set for <c>en-GB</c> serves only British English, and wins
-    /// over the <c>en</c> set there.
+    /// over the <c>en</c> set there. A constant that is no culture name, such as <c>en_GB</c>, is build error
+    /// <c>LOC018</c>.
     /// </para>
     /// <para>
     /// An assembly that lists <c>en-GB</c> in <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see>

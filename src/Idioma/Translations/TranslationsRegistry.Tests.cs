@@ -33,6 +33,29 @@ public sealed class TranslationsRegistryTests
 
     private sealed class RegistryTierOverrideTranslationsNL : IRegistryTierTranslations;
 
+    private interface IRegistryConcurrentTranslations : ITranslationSet
+    {
+        string Name { get; }
+    }
+
+    private sealed class RegistryConcurrentFirstTranslationsNL : IRegistryConcurrentTranslations
+    {
+        public string Name => "Eerste";
+    }
+
+    private sealed class RegistryConcurrentSecondTranslationsNL : IRegistryConcurrentTranslations
+    {
+        public string Name => "Tweede";
+    }
+
+    /// <summary>
+    /// Registered in the other tier, which the sets above come after.
+    /// </summary>
+    private sealed class RegistryConcurrentDefaultTranslationsNL : IRegistryConcurrentTranslations
+    {
+        public string Name => "Standaard";
+    }
+
     private interface IRegistryOrderTranslations : ITranslationSet;
 
     private sealed class RegistryOrderFirstTranslationsNL : IRegistryOrderTranslations;
@@ -399,6 +422,78 @@ public sealed class TranslationsRegistryTests
 
         // Assert
         registry.AppLanguages.ShouldBe(["en-GB", "zh-Hans"]);
+    }
+
+    [Test]
+    [NotInParallel(nameof(TranslationsRegistry))]
+    public async Task Register_WhileTextsAreRead_ShouldShowOnlyWordingOfRegisteredSets()
+    {
+        // Arrange: a registration builds the lookup tables anew for the next read, which every text of every user reads
+        // without a lock, so reads and registrations run side by side. Two sets of one language and contract, which the
+        // writer registers one after the other, so that either may be the last.
+        var text = ResourceText.Create<IRegistryConcurrentTranslations>("Concurrent.Name", "Default", static set => set.Name);
+        var first = new RegistryConcurrentFirstTranslationsNL();
+        var second = new RegistryConcurrentSecondTranslationsNL();
+        var dutch = Culture("nl");
+        TranslationsRegistry.Register(first);
+        TranslationsRegistry.Register(second);
+
+        using var stop = new CancellationTokenSource();
+
+        var writer = Task.Run(() =>
+        {
+            var registrations = 0;
+
+            while (!stop.IsCancellationRequested)
+            {
+                TranslationsRegistry.Register(first);
+                TranslationsRegistry.Register(second);
+                TranslationsRegistry.RegisterDefaults(new RegistryConcurrentDefaultTranslationsNL());
+                registrations++;
+            }
+
+            return registrations;
+        });
+
+        // Act
+        var wrong = await Task.WhenAll(Enumerable.Range(start: 0, count: 4).Select(_ => Task.Run(() =>
+        {
+            var problems = new List<string>();
+
+            for (var i = 0; i < 50_000; i++)
+            {
+                try
+                {
+                    var wording = text.ToString(dutch);
+                    var set = TranslationsRegistry.Current.Find<IRegistryConcurrentTranslations>(dutch);
+
+                    if (wording is not ("Eerste" or "Tweede"))
+                        problems.Add($"wording '{wording}'");
+
+                    if (set is null)
+                        problems.Add("no set found");
+                }
+                catch (Exception exception)
+                {
+                    problems.Add($"{exception.GetType().Name}: {exception.Message}");
+                }
+            }
+
+            return problems;
+        })));
+
+        await stop.CancelAsync();
+        var registrations = await writer;
+
+        // Assert: nothing but the wording of a registered set, and a registry that follows the last registration once
+        // the writes have ended. The writer must have run during the reads for the test to mean anything.
+        wrong.SelectMany(static problems => problems).Distinct(StringComparer.Ordinal).ShouldBeEmpty();
+        registrations.ShouldBeGreaterThan(0);
+
+        TranslationsRegistry.Register(first);
+        text.ToString(dutch).ShouldBe("Eerste");
+        TranslationsRegistry.Register(second);
+        text.ToString(dutch).ShouldBe("Tweede");
     }
 
     [Test]

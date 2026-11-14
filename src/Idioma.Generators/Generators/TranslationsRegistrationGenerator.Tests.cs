@@ -502,10 +502,10 @@ public sealed class TranslationsRegistrationGeneratorTests
     public void SetThatDoesNotRegisterItself_EmitsNothing(string declaration)
     {
         // Arrange & Act
-        var result = Run($$"""
-            {{ShopContract}}
+        var result = Run($"""
+            {ShopContract}
 
-            {{declaration}}
+            {declaration}
             """);
 
         // Assert: nothing, and no warning either: each of these was left out on purpose, or is no set.
@@ -575,9 +575,23 @@ public sealed class TranslationsRegistrationGeneratorTests
     [Arguments("public ShopTranslationsDE(string wording = \"Zur Kasse\") { }")]
     [Arguments("public ShopTranslationsDE(params string[] wordings) { }")]
     [Arguments("public ShopTranslationsDE(string wording = \"Zur Kasse\") { } public ShopTranslationsDE() { }")]
+    [Arguments("public ShopTranslationsDE(string wording = \"Zur Kasse\") { } public ShopTranslationsDE(params string[] wordings) { }")]
+    [Arguments("private ShopTranslationsDE() { } public ShopTranslationsDE(string wording = \"Zur Kasse\") { }")]
     public void SetWithConstructorCallableWithoutArguments_IsRegistered(string constructor)
     {
-        // Arrange & Act: new T() calls it, so the set registers itself like one with a parameterless constructor.
+        // Arrange & Act: new T() calls it, so the set registers itself like one with a parameterless constructor. Of a
+        // constructor with a default and one taking params it calls the first, and a private one is out of its reach.
+        var source = $$"""
+            {{ShopContract}}
+
+            public sealed class ShopTranslationsDE : IShopTranslations
+            {
+                {{constructor}}
+                public string Checkout => "Zur Kasse";
+            }
+            """;
+        GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
+
         var result = Run($$"""
             {{ShopContract}}
 
@@ -1278,10 +1292,10 @@ public sealed class TranslationsRegistrationGeneratorTests
     public void NestedOrFileLocalSetRewordingAnotherAssembly_ReportsCannotRegister(string declaration, string expectedName, string expectedReason)
     {
         // Arrange & Act: generated code cannot name it, so the app would keep showing the library's wording.
-        var result = Run($$"""
+        var result = Run($"""
             namespace TestApp;
 
-            {{declaration}}
+            {declaration}
             """, Library);
 
         // Assert
@@ -1299,10 +1313,10 @@ public sealed class TranslationsRegistrationGeneratorTests
     public void NestedSetRewordingAnotherAssemblyThatIsExcludedOrNoInstance_ReportsNothing(string declaration)
     {
         // Arrange & Act
-        var result = Run($$"""
+        var result = Run($"""
             namespace TestApp;
 
-            {{declaration}}
+            {declaration}
             """, Library);
 
         // Assert
@@ -1652,6 +1666,486 @@ public sealed class TranslationsRegistrationGeneratorTests
         var total = (LocalizableText)texts.GetProperty("Total")!.GetValue(null)!;
         checkout.ToString(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Betalen");
         total.ToString(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Totaal");
+    }
+
+    [Test]
+    public void SetWithRequiredMember_ReportsLOC003AndIsLeftOut()
+    {
+        // Arrange: new T() sets no member, so the generated registration would not compile (CS9035).
+        const string source = $$"""
+            {{ShopContract}}
+
+            public sealed class ShopTranslationsDE : IShopTranslations
+            {
+                public required string Checkout { get; init; }
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var run = Run(source).Results.ShouldHaveSingleItem();
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC003");
+        diagnostic.GetMessage().ShouldContain("it has a required member ('Checkout'), which generated code cannot set");
+        var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
+        text.ShouldContain("ShopTranslationsNL");
+        text.ShouldNotContain("ShopTranslationsDE");
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetWhoseConstructorSetsItsRequiredMembers_IsRegistered()
+    {
+        // Arrange
+        const string source = $$"""
+            {{ShopContract}}
+
+            public sealed class ShopTranslationsDE : IShopTranslations
+            {
+                [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
+                public ShopTranslationsDE()
+                {
+                    this.Checkout = "Zur Kasse";
+                }
+
+                public required string Checkout { get; init; }
+            }
+            """;
+
+        // Act
+        var run = Run(source).Results.ShouldHaveSingleItem();
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        run.Diagnostics.ShouldBeEmpty();
+        run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString().ShouldContain("new TestApp.ShopTranslationsDE()");
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("public string LanguageCode => \"en_GB\";", "en_GB")]
+    [Arguments("string ITranslationSet.LanguageCode => \"\";", "")]
+    [Arguments("public string LanguageCode => \"english\" + \" \";", "english ")]
+    public void SetWithLanguageCodeThatIsNoCultureName_ReportsLOC018(string languageCode, string expectedCode)
+    {
+        // Arrange & Act: in an assembly without [assembly: SupportedLanguages], where no language check looks at the
+        // set. Registering it throws when the assembly loads, far from the cause.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public sealed class ShopTranslationsBritish : IShopTranslations
+            {
+                {{languageCode}}
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert: at the property that holds the code.
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(TranslationsRegistrationGenerator.InvalidLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe("LOC018");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().ShouldStartWith($"'ShopTranslationsBritish' gives \"{expectedCode}\" as its LanguageCode, which is no culture name");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("LanguageCode");
+    }
+
+    [Test]
+    [Arguments("public string LanguageCode => \"en-GB\";")]
+    [Arguments("public string LanguageCode => \"EN\";")]
+    [Arguments("public string LanguageCode => \"zh-Hans-CN\";")]
+    [Arguments("public string LanguageCode => System.Globalization.CultureInfo.CurrentUICulture.Name;")]
+    public void SetWithLanguageCodeThatIsCultureNameOrNoConstant_ReportsNothing(string languageCode)
+    {
+        // Arrange & Act
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public sealed class ShopTranslationsBritish : IShopTranslations
+            {
+                {{languageCode}}
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LanguageCodeThatIsNoCultureName_IsReportedOnceForTheSetsInheritingIt()
+    {
+        // Arrange & Act: each of the three sets carries the code of the class they derive from.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public abstract class BritishWording : IShopTranslations
+            {
+                public string LanguageCode => "en_GB";
+                public virtual string Checkout => "Checkout";
+            }
+
+            public sealed class ShopWording : BritishWording;
+
+            public sealed class GiftWording : BritishWording;
+
+            [ExcludeFromTranslationDiscovery]
+            public sealed class BookWording : BritishWording;
+            """);
+
+        // Assert
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC018");
+        diagnostic.GetMessage().ShouldStartWith("'BritishWording' gives \"en_GB\" as its LanguageCode");
+    }
+
+    [Test]
+    public void ExcludedSetWithLanguageCodeThatIsNoCultureName_ReportsLOC018()
+    {
+        // Arrange & Act: registered by hand, the set throws just the same, where it is registered.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            [ExcludeFromTranslationDiscovery]
+            public sealed class ShopWording(string checkout) : IShopTranslations
+            {
+                public string LanguageCode => "en_GB";
+                public string Checkout => checkout;
+            }
+            """);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC018");
+    }
+
+    [Test]
+    public void SetWithLanguageCodeThatIsNoCultureNameInAssemblyDeclaringLanguages_ReportsLOC018Alone()
+    {
+        // Arrange & Act: with every generator at work. Taken for a language, the code would be reported as unlisted,
+        // with the advice to list it, which the attribute then refuses (LOC010).
+        var diagnostics = GeneratorTestHelper.GetGeneratorDiagnostics($$"""
+            {{GeneratedShopContract}}
+
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Checkout => "Afrekenen";
+            }
+
+            public class ShopTranslationsBritish : ShopTranslationsEN, ITranslationSet
+            {
+                string ITranslationSet.LanguageCode => "en_GB";
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC018");
+    }
+
+    [Test]
+    public void LanguageCodeImplementingNothing_IsReportedOnceAtTheClassDeclaringIt()
+    {
+        // Arrange & Act: the two sets deriving from the class carry its LanguageCode, and have nothing to fix.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public class ShopTranslationsEN : IShopTranslations
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopTranslationsBritish : ShopTranslationsEN
+            {
+                public string LanguageCode => "en-GB";
+            }
+
+            public class GiftTranslationsBritish : ShopTranslationsBritish;
+
+            public sealed class BookTranslationsBritish : GiftTranslationsBritish;
+            """);
+
+        // Assert
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC015");
+        diagnostic.GetMessage().ShouldContain("The LanguageCode of 'ShopTranslationsBritish' implements nothing");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopTranslationsBritish");
+    }
+
+    [Test]
+    public void LanguageCodeImplementingNothingOnAbstractClass_IsReportedAtThatClass()
+    {
+        // Arrange & Act: the class that declares it is no set itself, and still where the interface belongs.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public class ShopTranslationsEN : IShopTranslations
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public abstract class BritishWording : ShopTranslationsEN
+            {
+                public string LanguageCode => "en-GB";
+            }
+
+            public sealed class ShopTranslationsBritish : BritishWording;
+            """);
+
+        // Assert
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC015");
+        diagnostic.GetMessage().ShouldContain("'class BritishWording : ShopTranslationsEN, ITranslationSet'");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("BritishWording");
+    }
+
+    [Test]
+    [Arguments("[System.Obsolete]")]
+    [Arguments("[System.Obsolete(\"Dutch is no longer sold in.\")]")]
+    public void ObsoleteSet_RegistersWithoutWarningInGeneratedCode(string attribute)
+    {
+        // Arrange: a set on its way out still registers. A warning about naming it in generated code is one its author
+        // cannot act on, and stops a build that treats warnings as errors.
+        var source = $$"""
+            {{GeneratedShopContract}}
+
+            {{attribute}}
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var text = GeneratedText(Run(source));
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert
+        text.ShouldContain("#pragma warning disable CS0612, CS0618");
+        text.ShouldContain("#pragma warning restore CS0612, CS0618");
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void ObsoleteDefaultLanguageSet_LeavesNoWarningInGeneratedCode()
+    {
+        // Arrange: the generated texts name the set to take their default wording from it.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "en-GB")]
+
+            namespace TestApp;
+
+            [System.Obsolete("Use the texts of the new shop.")]
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            [System.Obsolete("Use the texts of the new shop.")]
+            public class ShopTranslationsEnGB : ShopTranslationsEN;
+            """;
+
+        // Act
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetsThatAreNotObsolete_GetNoPragma()
+    {
+        // Arrange & Act
+        var text = GeneratedText(Run($$"""
+            {{GeneratedShopContract}}
+
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Checkout => "Afrekenen";
+            }
+            """));
+
+        // Assert
+        text.ShouldNotContain("#pragma");
+    }
+
+    [Test]
+    [Arguments("\"e\", \"nl\"")]
+    [Arguments("null, \"nl\"")]
+    public void ApplicationWithInvalidDefaultLanguage_RegistersNoLanguages(string languages)
+    {
+        // Arrange & Act: the first valid language must not become the app's default, at run time either.
+        var result = GeneratorTestHelper.RunAsApplication(new TranslationsRegistrationGenerator(), $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages({{languages}})]
+
+            namespace TestApp;
+
+            public interface IShopTranslations : ITranslationSet
+            {
+                string Checkout { get; }
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+            """);
+
+        // Assert
+        var text = GeneratedText(result);
+        text.ShouldContain("new TestApp.ShopTranslationsNL()");
+        text.ShouldNotContain("RegisterLanguages");
+    }
+
+    [Test]
+    public void PartialSetListingItsContractInOnePartOnly_IsDiscoveredOnce()
+    {
+        // Arrange: discovery passes by a declaration whose base list names nothing that leads to a set, and finds the
+        // class through the part that does.
+        const string first = $$"""
+            {{ShopContract}}
+
+            public sealed partial class ShopTranslationsNL : System.IDisposable
+            {
+                public void Dispose() { }
+            }
+            """;
+        const string second = """
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var text = GeneratedText(GeneratorTestHelper.RunOverFiles(new TranslationsRegistrationGenerator(), first, second));
+
+        // Assert
+        text.Split('\n').Count(line => line.Contains("new TestApp.ShopTranslationsNL()", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Test]
+    public void SetListingContractThatSharesItsNameWithAnotherTypeInAnOuterScope_IsDiscovered()
+    {
+        // Arrange & Act: the same words name another type in each scope. What they lead to is kept per scope, so the
+        // class that lists the contract is not passed by for the class above it that lists a plain interface.
+        var text = GeneratedText(Run("""
+            using CodeChops.Idioma;
+
+            namespace TestApp
+            {
+                public interface IWording;
+
+                public sealed class Plain : IWording;
+
+                public sealed class Plainer : IWording;
+
+                namespace Shop
+                {
+                    public interface IWording : ITranslationSet
+                    {
+                        string Checkout { get; }
+                    }
+
+                    public sealed class ShopTranslationsNL : IWording
+                    {
+                        public string Checkout => "Afrekenen";
+                    }
+
+                    public sealed class ShopTranslationsDE : IWording
+                    {
+                        public string Checkout => "Zur Kasse";
+                    }
+                }
+            }
+            """));
+
+        // Assert
+        text.ShouldContain("new TestApp.Shop.ShopTranslationsDE()");
+        text.ShouldContain("new TestApp.Shop.ShopTranslationsNL()");
+        text.ShouldNotContain("Plain");
+    }
+
+    [Test]
+    public void SetNextToGenericClassWhoseTypeParameterIsNamedLikeItsContract_IsDiscovered()
+    {
+        // Arrange & Act: in the base list of the generic class the words name its type parameter (which does not
+        // compile, CS0689), and in that of the set the contract.
+        var text = GeneratedText(Run($$"""
+            {{ShopContract}}
+
+            public class Odd<IShopTranslations> : IShopTranslations;
+
+            public class Holder<IShopTranslations> : System.Collections.Generic.List<IShopTranslations>;
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """));
+
+        // Assert
+        text.ShouldContain("new TestApp.ShopTranslationsNL()");
+        text.ShouldNotContain("Odd");
+        text.ShouldNotContain("Holder");
+    }
+
+    [Test]
+    public void SetListingItsContractThroughAnAlias_IsDiscovered()
+    {
+        // Arrange & Act
+        var text = GeneratedText(Run("""
+            using CodeChops.Idioma;
+            using Contract = TestApp.IShopTranslations;
+            using Sets = CodeChops.Idioma.ITranslationSet;
+
+            namespace TestApp;
+
+            public interface IShopTranslations : Sets
+            {
+                string Checkout { get; }
+            }
+
+            public sealed class ShopTranslationsNL : Contract
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """));
+
+        // Assert
+        text.ShouldContain("new TestApp.ShopTranslationsNL()");
+    }
+
+    [Test]
+    public void RecordStruct_IsNoSet()
+    {
+        // Arrange & Act: a struct cannot be created by the registry's rules, and discovery looks at classes alone.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public record struct ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        ShouldEmitNothing(result);
     }
 
     [Test]

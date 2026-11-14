@@ -18,9 +18,21 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>A text written inline is LocalizableText.Inline(en: "Checkout", nl: "Afrekenen"), where it was LocalizableText.Translated. That is the name the docs and the messages of the build already gave it: an inline text.
+    <PackageReleaseNotes>A string compared as a text is a build error (LOC017): text.Equals("Orders"), list.Contains(name), Array.IndexOf(texts, name), and counts[name] on a dictionary of texts. They compare texts, not the wording a text shows, and a string becomes a text without translations, which equals no translated text, so the comparison was false while the text showed that wording. Compare the wording with ==, as in text == "Orders", or cast the string to LocalizableText to compare texts. A comparer you pass along, as in list.Contains(name, comparer), may compare the wording, so that call passes. The fix in an IDE turns text.Equals(wording) into text == wording.
+
+A LanguageCode that is no culture name, such as "en_GB", is build error LOC018: the set would throw as it registers.
+
+The generated class holds nothing but the texts: the constant ResourceKeyPrefix is gone, so a text can be named ResourceKeyPrefix, and LOC014 is left with a text named like the class itself. Read the prefix from a text's key, as in ShopTranslations.Checkout.Key, which is "Shop.Checkout".
+
+A set whose language the build cannot read, because its LanguageCode is no constant, is no longer reported as a missing language, and the placeholders of a text a set inherits from a base class are held to those of the contract as well (LOC016).
+
+How the package works is in docs/how-it-works.md, which the README links to.
+
+Version 0.6.0 was not published, so its changes come with this version:
+
+A text written inline is LocalizableText.Inline(en: "Checkout", nl: "Afrekenen"), where it was LocalizableText.Translated. That is the name the docs and the messages of the build already gave it: an inline text.
 
 A set implements ITranslationSet, where it was ITranslations: public partial class ShopTranslationsEN : ITranslationSet. The interface names one set, as the docs do. The generated contract keeps its name, such as IShopTranslations, and so do the generated class and TranslationsRegistry.
 
@@ -29,7 +41,7 @@ Three parameters are named after the set: Register and RegisterDefaults take set
 To move a project, replace LocalizableText.Translated with LocalizableText.Inline, and ITranslations with ITranslationSet. The messages of the build and the fixes in an IDE use the new names.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Title>CodeChops.Idioma</Title>
-    <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files, no reflection, trimming-safe.</Description>
+    <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files and trimming-safe.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
     <PackageProjectUrl>https://github.com/code-chops/Idioma</PackageProjectUrl>
     <RepositoryUrl>https://github.com/code-chops/Idioma</RepositoryUrl>
@@ -57,7 +69,7 @@ To move a project, replace LocalizableText.Translated with LocalizableText.Inlin
     <!-- The license file is packed next to the license expression for its closing sentence on generated code. -->
     <None Include="..\..\LICENSE" Pack="true" PackagePath="" Visible="false" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="false" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="false" />
+    <!-- The README is packed by the target WritePackageReadme below, which links it to the tag of this version. -->
     <!-- The generator ships in the package's analyzers folder. A literal path, not a glob: a glob evaluates before
          the generator builds and would silently pack nothing, where a missing file fails the pack. -->
     <None Include="..\Idioma.Generators\bin\$(Configuration)\netstandard2.0\CodeChops.Idioma.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
@@ -80,5 +92,30 @@ To move a project, replace LocalizableText.Translated with LocalizableText.Inlin
     <!-- Only built before this project, for the pack: a build runs no code fix. -->
     <ProjectReference Include="..\Idioma.CodeFixes\Idioma.CodeFixes.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <!--
+    The README of the package links to the details as they were when it was released: docs/how-it-works.md at the tag
+    of its version (v0.7.0), where the README of the repository links to main. A package stays on nuget.org as it was
+    published, while main moves on, so a link to main would show the details of a later version. The tag is there by
+    the time the package is: only a run on that tag publishes (publish.yml). The demos stay linked on main, as they
+    fetch the latest package, which the demos on main are written for.
+  -->
+  <Target Name="WritePackageReadme" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <PackageReadmePath>$(IntermediateOutputPath)README.md</PackageReadmePath>
+      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/'))</PackageReadmeText>
+    </PropertyGroup>
+
+    <!-- A README that links to the details in another way would be packed with its links still on main. -->
+    <Error Condition="!$(PackageReadmeText.Contains('/blob/v$(Version)/docs/')) Or $(PackageReadmeText.Contains('/main/docs/'))"
+           Text="README.md links to docs/ in a way this target does not turn into a link to the tag v$(Version): link to it as https://github.com/Code-Chops/Idioma/blob/main/docs/..., or adjust the target WritePackageReadme." />
+
+    <!-- Escaped, so that the text is written as it stands: a semicolon in it would otherwise start a new line. -->
+    <WriteLinesToFile File="$(PackageReadmePath)" Lines="$([MSBuild]::Escape($(PackageReadmeText)))" Overwrite="true" WriteOnlyWhenDifferent="true" />
+
+    <ItemGroup>
+      <None Include="$(PackageReadmePath)" Pack="true" PackagePath="" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -108,8 +108,11 @@ internal readonly struct CultureFallback
 
                 above = name[..separator];
 
+                // The string that is kept, also when another thread kept one for this name in the meantime: every
+                // walk then hands out that one, where two threads walking a name for the first time would otherwise
+                // each go on with a string of their own.
                 if (NamesAbove.Count < MaxNamesKept)
-                    NamesAbove.TryAdd(name, above);
+                    above = NamesAbove.GetOrAdd(name, above);
 
                 return above;
             }

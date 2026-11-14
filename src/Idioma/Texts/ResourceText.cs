@@ -38,8 +38,7 @@ public sealed record ResourceText : LocalizableText
     /// </summary>
     /// <remarks>
     /// A generated text's key is the name of its set without the language and a trailing <c>Translations</c>, then a
-    /// dot and the text's name: <c>Checkout</c> of <c>ShopTranslationsEN</c> gives <c>Shop.Checkout</c>. The prefix
-    /// <c>Shop.</c> is also the constant <c>ShopTranslations.ResourceKeyPrefix</c>.
+    /// dot and the text's name: <c>Checkout</c> of <c>ShopTranslationsEN</c> gives <c>Shop.Checkout</c>.
     /// </remarks>
     public string Key { get; }
 

@@ -17,8 +17,8 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <remarks>
     /// Translations:
     /// <list type="bullet">
-    /// <item><description><see cref="ShopTranslationsEN.Checkout">en</see></description></item>
-    /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see></description></item>
+    /// <item><description><see cref="ShopTranslationsEN.Checkout">en</see>: Checkout</description></item>
+    /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
     [CodeChops.Idioma.Internals.FormatPlaceholders()]
@@ -29,8 +29,8 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <remarks>
     /// Translations:
     /// <list type="bullet">
-    /// <item><description><see cref="ShopTranslationsEN.Total">en</see></description></item>
-    /// <item><description><see cref="ShopTranslationsNL.Total">nl</see></description></item>
+    /// <item><description><see cref="ShopTranslationsEN.Total">en</see>: Total</description></item>
+    /// <item><description><see cref="ShopTranslationsNL.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
     [CodeChops.Idioma.Internals.FormatPlaceholders()]
@@ -42,26 +42,21 @@ partial class ShopTranslationsEN : IShopTranslations;
 /// <summary>
 /// The texts declared by <see cref="ShopTranslationsEN"/>, one <see cref="CodeChops.Idioma.ResourceText"/> per text,
 /// each following the current UI culture: <c>@ShopTranslations.Checkout</c> in markup shows the <see cref="IShopTranslations"/> set
-/// registered for <see cref="System.Globalization.CultureInfo.CurrentUICulture"/>, else the set registered for
+/// registered for <c>CultureInfo.CurrentUICulture</c>, else the set registered for
 /// the app's <see cref="CodeChops.Idioma.TranslationsRegistry.DefaultLanguage"/>, else the set registered for the
 /// language of <see cref="ShopTranslationsEN"/>, else its wording.
 /// </summary>
 public static partial class ShopTranslations
 {
-    /// <summary>
-    /// The prefix of every text's resource key: <c>Shop.</c>.
-    /// </summary>
-    public const string ResourceKeyPrefix = "Shop.";
-
     /// <inheritdoc cref="ShopTranslationsEN.Checkout"/>
     /// <remarks>
     /// Translations:
     /// <list type="bullet">
-    /// <item><description><see cref="ShopTranslationsEN.Checkout">en</see></description></item>
-    /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see></description></item>
+    /// <item><description><see cref="ShopTranslationsEN.Checkout">en</see>: Checkout</description></item>
+    /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.ResourceText Checkout { get; } = CreateResourceText<IShopTranslations>(ResourceKeyPrefix + nameof(Checkout), static translations => translations.Checkout, DefaultSet<ShopTranslationsEN>.Instance);
+    public static CodeChops.Idioma.ResourceText Checkout { get; } = CreateResourceText<IShopTranslations>("Shop.Checkout", static translations => translations.Checkout, DefaultSet<ShopTranslationsEN>.Instance);
 
     /// <summary>
     /// Total
@@ -69,11 +64,11 @@ public static partial class ShopTranslations
     /// <remarks>
     /// Translations:
     /// <list type="bullet">
-    /// <item><description><see cref="ShopTranslationsEN.Total">en</see></description></item>
-    /// <item><description><see cref="ShopTranslationsNL.Total">nl</see></description></item>
+    /// <item><description><see cref="ShopTranslationsEN.Total">en</see>: Total</description></item>
+    /// <item><description><see cref="ShopTranslationsNL.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.ResourceText Total { get; } = CreateResourceText<IShopTranslations>(ResourceKeyPrefix + nameof(Total), static translations => translations.Total, DefaultSet<ShopTranslationsEN>.Instance);
+    public static CodeChops.Idioma.ResourceText Total { get; } = CreateResourceText<IShopTranslations>("Shop.Total", static translations => translations.Total, DefaultSet<ShopTranslationsEN>.Instance);
 }
 
 file static class DefaultSet<TSet>

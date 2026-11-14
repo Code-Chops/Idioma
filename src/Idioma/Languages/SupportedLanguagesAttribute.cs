@@ -41,9 +41,10 @@ namespace CodeChops.Idioma;
 /// contract another language.
 /// </para>
 /// <para>
-/// The build reports a mistake as <c>LOC001</c> to <c>LOC016</c>, which
-/// <see href="https://github.com/code-chops/Idioma#what-the-build-rejects">the README</see> lists. A test project that
-/// compares texts with plain strings can turn off <c>LOC011</c>, <c>LOC012</c>, and <c>LOC013</c> with <c>NoWarn</c>.
+/// The build reports a mistake as <c>LOC001</c> to <c>LOC018</c>, listed in
+/// <see href="https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#what-the-build-rejects">What the build rejects</see>.
+/// A test project that compares texts with plain strings can turn off <c>LOC011</c>, <c>LOC012</c>, <c>LOC013</c>, and
+/// <c>LOC017</c> with <c>NoWarn</c>.
 /// </para>
 /// </remarks>
 /// <example>

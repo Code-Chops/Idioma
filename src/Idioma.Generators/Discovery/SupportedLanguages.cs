@@ -6,8 +6,6 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 internal static class SupportedLanguages
 {
-    private const string AttributeFullName = "CodeChops.Idioma.SupportedLanguagesAttribute";
-
     /// <summary>
     /// The languages the current compilation declares, or <see langword="null"/> when it declares none.
     /// </summary>
@@ -15,7 +13,7 @@ internal static class SupportedLanguages
     {
         return context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                fullyQualifiedMetadataName: AttributeFullName,
+                fullyQualifiedMetadataName: PackageNames.SupportedLanguagesAttribute,
                 predicate: static (node, _) => node is CompilationUnitSyntax,
                 transform: static (context, _) => FromAttribute(context.Attributes[0]))
             .Collect()
@@ -28,20 +26,46 @@ internal static class SupportedLanguages
     public static ImmutableArray<string> ReadCodes(IAssemblySymbol assembly)
     {
         foreach (var attribute in assembly.GetAttributes())
-            if (String.Equals(attribute.AttributeClass?.ToDisplayString(), AttributeFullName, StringComparison.Ordinal))
-                return ReadArguments(attribute).OfType<string>().ToImmutableArray();
+            if (String.Equals(attribute.AttributeClass?.ToDisplayString(), PackageNames.SupportedLanguagesAttribute, StringComparison.Ordinal))
+                return ReadArguments(attribute).Select(static argument => argument.Code).OfType<string>().ToImmutableArray();
 
         return ImmutableArray<string>.Empty;
     }
 
     /// <summary>
     /// Whether a set for <paramref name="provided"/> serves <paramref name="requested"/>: the same language, or a culture
-    /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>).
+    /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>, and <c>zh-Hant</c> serves <c>zh-TW</c>).
     /// </summary>
     public static bool Serves(string provided, string requested)
     {
-        return String.Equals(provided, requested, StringComparison.OrdinalIgnoreCase)
-               || requested.StartsWith(provided + "-", StringComparison.OrdinalIgnoreCase);
+        var serves = String.Equals(provided, requested, StringComparison.OrdinalIgnoreCase)
+               || requested.StartsWith(provided + "-", StringComparison.OrdinalIgnoreCase)
+               || (FindScriptParentOfChineseRegion(requested) is { } parent && Serves(provided, parent));
+
+        return serves;
+    }
+
+    /// <summary>
+    /// The parent culture of a Chinese region written without its script, which its name does not start with:
+    /// <c>zh-Hans</c> for <c>zh-CN</c> and <c>zh-SG</c>, and <c>zh-Hant</c> for <c>zh-HK</c>, <c>zh-MO</c>, and
+    /// <c>zh-TW</c>; <see langword="null"/> for every other code, whose parents are what its name starts with.
+    /// </summary>
+    // The parents .NET itself gives these five on every platform (CultureInfo.Parent), which a text follows at run time.
+    // Written out, and not asked of the cultures of this machine, because a compiler may run under invariant
+    // globalization, and a build must not report on one machine what it accepts on another. SupportedLanguages.Tests.cs
+    // fails when a runtime gives any culture a parent this table and the prefix rule do not.
+    internal static string? FindScriptParentOfChineseRegion(string code)
+    {
+        if (code.Length is not 5 || !code.StartsWith("zh-", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var parent = code.Substring(3).ToUpperInvariant() switch
+        {
+            "CN" or "SG" => "zh-Hans",
+            "HK" or "MO" or "TW" => "zh-Hant",
+            _ => null,
+        };
+        return parent;
     }
 
     /// <summary>
@@ -119,7 +143,8 @@ internal static class SupportedLanguages
     {
         var suffix = ToTypeSuffix(code);
 
-        if (typeName.Length <= suffix.Length)
+        // No suffix at all for a code without a letter or digit, which no name ends in.
+        if (suffix.Length is 0 || typeName.Length <= suffix.Length)
             return false;
 
         return code.Length is 2
@@ -154,19 +179,33 @@ internal static class SupportedLanguages
     {
         var codes = ImmutableArray.CreateBuilder<string>();
         var problems = ImmutableArray.CreateBuilder<string>();
+        string? defaultLanguage = null;
 
-        foreach (var code in ReadArguments(attribute))
+        foreach (var (code, isDefault) in ReadArguments(attribute))
         {
             if (code is null)
+            {
                 problems.Add("null is no culture name");
+            }
             else if (!IsCultureName(code))
+            {
                 problems.Add($"'{code}' is no culture name");
+            }
             else if (codes.Contains(code, StringComparer.OrdinalIgnoreCase))
+            {
                 problems.Add($"'{code}' is listed twice");
+            }
             else if (codes.FirstOrDefault(listed => DifferInHyphensAlone(listed, code)) is { } other)
+            {
                 problems.Add($"'{code}' and '{other}' differ only in their hyphens");
+            }
             else
+            {
                 codes.Add(code);
+
+                if (isDefault)
+                    defaultLanguage = code;
+            }
         }
 
         var location = attribute.ApplicationSyntaxReference is { } reference
@@ -174,24 +213,25 @@ internal static class SupportedLanguages
             : default;
 
         return new DeclaredLanguages(
+            defaultLanguage,
             new EquatableArray<string>(codes.ToImmutable()),
             new EquatableArray<string>(problems.ToImmutable()),
             location);
     }
 
     /// <summary>
-    /// The languages the attribute lists, in order, with <see langword="null"/> for each one written as <c>null</c>; a
-    /// list of other languages written as <c>null</c> counts as one. A constant the compiler cannot read yet, while the
-    /// user is still typing, is left out.
+    /// The languages the attribute lists, in order, each with whether it is the default language, and with
+    /// <see langword="null"/> for each one written as <c>null</c>; a list of other languages written as <c>null</c>
+    /// counts as one. A constant the compiler cannot read yet, while the user is still typing, is left out.
     /// </summary>
-    private static IEnumerable<string?> ReadArguments(AttributeData attribute)
+    private static IEnumerable<(string? Code, bool IsDefault)> ReadArguments(AttributeData attribute)
     {
         // By position: (string defaultLanguage, params string[] otherLanguages).
         if (attribute.ConstructorArguments.Length is 0)
             yield break;
 
         if (TryReadLanguage(attribute.ConstructorArguments[0], out var defaultLanguage))
-            yield return defaultLanguage;
+            yield return (defaultLanguage, IsDefault: true);
 
         if (attribute.ConstructorArguments.Length < 2 || attribute.ConstructorArguments[1].Kind is not TypedConstantKind.Array)
             yield break;
@@ -199,13 +239,13 @@ internal static class SupportedLanguages
         // SupportedLanguages("en", null) passes no array at all, whose Values would throw.
         if (attribute.ConstructorArguments[1].IsNull)
         {
-            yield return null;
+            yield return (null, IsDefault: false);
             yield break;
         }
 
         foreach (var other in attribute.ConstructorArguments[1].Values)
             if (TryReadLanguage(other, out var language))
-                yield return language;
+                yield return (language, IsDefault: false);
 
         static bool TryReadLanguage(TypedConstant constant, out string? language)
         {
@@ -246,10 +286,16 @@ internal static class SupportedLanguages
 }
 
 /// <summary>
-/// What an assembly's attribute declares: the valid languages in order, the default first, what is wrong with the
+/// What an assembly's attribute declares: the default language, the valid languages in order, what is wrong with the
 /// others, and where the attribute is.
 /// </summary>
+/// <remarks>
+/// The default language is <see langword="null"/> when the attribute's first argument is no language the build can use
+/// (<c>LOC010</c>), or cannot be read yet. The next language does not take its place: nothing is held to a default
+/// language then, and the valid languages are all other languages. With a default language, it is the first of them.
+/// </remarks>
 internal readonly record struct DeclaredLanguages(
+    string? DefaultLanguage,
     EquatableArray<string> Codes,
     EquatableArray<string> Problems,
     DiagnosticLocation Location);

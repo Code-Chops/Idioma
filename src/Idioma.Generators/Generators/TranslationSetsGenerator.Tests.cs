@@ -201,14 +201,16 @@ public sealed class TranslationSetsGeneratorTests
         // Arrange & Act
         var text = ContractText(Run(ShopSets));
 
-        // Assert: on both the contract member and the text, for each language in the order of the attribute.
-        foreach (var (language, set) in new[] { ("en", "ShopTranslationsEN"), ("nl", "ShopTranslationsNL") })
+        // Assert: on both the contract member and the text, for each language in the order of the attribute, with its
+        // wording next to the link.
+        foreach (var (language, set, member, wording) in new[]
+                 {
+                     ("en", "ShopTranslationsEN", "Checkout", "Checkout"), ("en", "ShopTranslationsEN", "Total", "Total"),
+                     ("nl", "ShopTranslationsNL", "Checkout", "Afrekenen"), ("nl", "ShopTranslationsNL", "Total", "Totaal"),
+                 })
         {
-            foreach (var member in new[] { "Checkout", "Total" })
-            {
-                var line = $"/// <item><description><see cref=\"{set}.{member}\">{language}</see></description></item>";
-                text.Split('\n').Count(candidate => candidate.Contains(line, StringComparison.Ordinal)).ShouldBe(2);
-            }
+            var line = $"/// <item><description><see cref=\"{set}.{member}\">{language}</see>: {wording}</description></item>";
+            text.Split('\n').Count(candidate => candidate.Contains(line, StringComparison.Ordinal)).ShouldBe(2);
         }
     }
 
@@ -298,7 +300,7 @@ public sealed class TranslationSetsGeneratorTests
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
 
         // Assert
-        text.ShouldContain("<see cref=\"ShopTranslationsNL\">nl</see>");
+        text.ShouldContain("<see cref=\"ShopTranslationsNL\">nl</see>: Afrekenen</description>");
         unresolved.ShouldBeEmpty();
     }
 
@@ -328,7 +330,7 @@ public sealed class TranslationSetsGeneratorTests
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
 
         // Assert
-        text.ShouldContain("<see cref=\"ShopWordingBase.Checkout\">nl</see>");
+        text.ShouldContain("<see cref=\"ShopWordingBase.Checkout\">nl</see>: Afrekenen (inherited from <see cref=\"ShopWordingBase\"/>)</description>");
         unresolved.ShouldBeEmpty();
     }
 
@@ -366,8 +368,8 @@ public sealed class TranslationSetsGeneratorTests
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
 
         // Assert: its own wording at the set, and the rest where British users get it from.
-        text.ShouldContain("<see cref=\"ShopTranslationsEnGB.Cart\">en-GB</see>");
-        text.ShouldContain("<see cref=\"ShopTranslationsEN.Checkout\">en-GB</see>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEnGB.Cart\">en-GB</see>: Basket</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Checkout\">en-GB</see>: Checkout (inherited from <see cref=\"ShopTranslationsEN\"/>)</description>");
         text.ShouldNotContain("ShopTranslationsEnGB.Checkout");
         unresolved.ShouldBeEmpty();
     }
@@ -375,12 +377,12 @@ public sealed class TranslationSetsGeneratorTests
     [Test]
     [Arguments("namespace TestApp { public abstract class WordingBase<TMarker> { public string Checkout => \"Afrekenen\"; } }", "WordingBase<int>", "WordingBase{TMarker}.Checkout")]
     [Arguments("namespace TestApp { public static class Wordings { public abstract class Dutch { public string Checkout => \"Afrekenen\"; } } }", "Wordings.Dutch", "Wordings.Dutch.Checkout")]
-    [Arguments("namespace Shared.Wording { public abstract class DutchBase { public string Checkout => \"Afrekenen\"; } }", "Shared.Wording.DutchBase", "Shared.Wording.DutchBase.Checkout")]
-    [Arguments("namespace Shared { public abstract class Pair<TFirst, TSecond> { public string Checkout => \"Afrekenen\"; } }", "Shared.Pair<int, string>", "Shared.Pair{TFirst, TSecond}.Checkout")]
+    [Arguments("namespace Shared.Wording { public abstract class DutchBase { public string Checkout => \"Afrekenen\"; } }", "Shared.Wording.DutchBase", "Namespace_Shared_Wording.DutchBase.Checkout")]
+    [Arguments("namespace Shared { public abstract class Pair<TFirst, TSecond> { public string Checkout => \"Afrekenen\"; } }", "Shared.Pair<int, string>", "Namespace_Shared.Pair{TFirst, TSecond}.Checkout")]
     public void SetInheritingTextFromGenericOrNestedClassOrOtherNamespace_ShouldBeLinkedWithResolvedCref(string declaration, string baseType, string expectedCref)
     {
         // Arrange: a cref names a generic class with its type parameters in braces, a nested one through its container,
-        // and a class of another namespace by its full name.
+        // and a class of another namespace through the alias the file gives that namespace.
         var source = $$"""
             using CodeChops.Idioma;
 
@@ -438,9 +440,127 @@ public sealed class TranslationSetsGeneratorTests
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
 
         // Assert
-        text.ShouldContain("<see cref=\"ShopTranslationsNL\">nl</see>");
+        text.ShouldContain("<see cref=\"ShopTranslationsNL\">nl</see>: Afrekenen</description>");
         text.ShouldNotContain("ShopWordingBase.Checkout");
+        text.ShouldNotContain("Kassa");
         unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void WordingNextToLink_ShouldBeOneEscapedLineOfAtMost80Characters()
+    {
+        // Arrange: a wording over two lines, one longer than 80 characters, and one with markup characters.
+        var longWording = new string('a', 79) + "bc";
+        var source = $$"""
+            {{Header}}
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Address => "Street\nCity";
+                public string Terms => "{{longWording}}";
+                public string Total => "<b>Total</b> & more";
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Address => "Straat";
+                public string Terms => "Voorwaarden";
+                public string Total => "Totaal";
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var text = ContractText(Run(source));
+
+        // Assert
+        errors.ShouldBeEmpty();
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Address\">en</see>: Street…</description>");
+        text.ShouldContain($"<see cref=\"ShopTranslationsEN.Terms\">en</see>: {new string('a', 79)}b…</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Total\">en</see>: &lt;b&gt;Total&lt;/b&gt; &amp; more</description>");
+    }
+
+    [Test]
+    public void SetsOfOneLanguage_ShouldEachBeNamedNextToTheirWording()
+    {
+        // Arrange: a set rewording its own language, in another namespace, and a set excluded from discovery.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp
+            {
+                public partial class ShopTranslationsEN : ITranslationSet
+                {
+                    public virtual string Checkout => "Checkout";
+                    public virtual string Total => "Total";
+                }
+
+                public sealed class ShopTranslationsNL : IShopTranslations
+                {
+                    public string Checkout => "Afrekenen";
+                    public string Total => "Totaal";
+                }
+
+                [ExcludeFromTranslationDiscovery]
+                public sealed class UnregisteredShopTranslationsNL : IShopTranslations
+                {
+                    public string Checkout => "Betalen";
+                    public string Total => "Totaal";
+                }
+            }
+
+            namespace Shared.Wording
+            {
+                public sealed class RewordedShopTranslationsEN : TestApp.ShopTranslationsEN
+                {
+                    public override string Checkout => "Pay";
+                }
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Checkout\">en</see>: Checkout (<see cref=\"ShopTranslationsEN\"/>)</description>");
+        text.ShouldContain("<see cref=\"Namespace_Shared_Wording.RewordedShopTranslationsEN.Checkout\">en</see>: Pay (<see cref=\"Namespace_Shared_Wording.RewordedShopTranslationsEN\"/>)</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Total\">en</see>: Total (<see cref=\"Namespace_Shared_Wording.RewordedShopTranslationsEN\"/>, inherited from <see cref=\"ShopTranslationsEN\"/>)</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsNL.Checkout\">nl</see>: Afrekenen (<see cref=\"ShopTranslationsNL\"/>)</description>");
+        text.ShouldContain("<see cref=\"UnregisteredShopTranslationsNL.Checkout\">nl</see>: Betalen (<see cref=\"UnregisteredShopTranslationsNL\"/>, excluded from discovery)</description>");
+        errors.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void WordingThatIsNoConstantOrEmpty_ShouldLeaveLinkAlone()
+    {
+        // Arrange
+        var source = $$"""
+            {{Header}}
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Checkout => "Checkout";
+                public string Total => "Total";
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => System.DateTime.Now.ToString();
+                public string Total => "";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+
+        // Assert
+        text.ShouldContain("<see cref=\"ShopTranslationsNL.Checkout\">nl</see></description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsNL.Total\">nl</see></description>");
     }
 
     [Test]
@@ -590,7 +710,7 @@ public sealed class TranslationSetsGeneratorTests
         // Assert
         text.ShouldContain($"public interface {contract} ");
         text.ShouldContain($"public static partial class {texts}");
-        text.ShouldContain($"public const string ResourceKeyPrefix = \"{keyPrefix}\";");
+        text.ShouldContain($"CreateResourceText<{contract}>(\"{keyPrefix}Checkout\",");
     }
 
     [Test]
@@ -821,6 +941,7 @@ public sealed class TranslationSetsGeneratorTests
     [Arguments("", "DefaultSet")]
     [Arguments("namespace TestApp;", "CodeChops")]
     [Arguments("namespace TestApp;", "CreateResourceText")]
+    [Arguments("namespace TestApp;", "ResourceKeyPrefix")]
     public void TextNamedLikeNameGeneratedClassWrites_ShouldCompileWithResolvedCrefs(string @namespace, string text)
     {
         // Arrange: inside the generated class a text stands before every namespace and type of its name. So the class
@@ -904,9 +1025,8 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("ResourceKeyPrefix")]
     [Arguments("OptionTranslations")]
-    public void TextNamedLikeMemberOfGeneratedClass_ShouldReportLOC014AndCompileOtherwise(string name)
+    public void TextNamedLikeGeneratedClass_ShouldReportLOC014AndCompileOtherwise(string name)
     {
         // Arrange & Act: the contract keeps the text, so the sets still compile; only the generated text is left out.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
@@ -1096,14 +1216,14 @@ public sealed class TranslationSetsGeneratorTests
     public void DefaultSetGeneratorCannotExtend_ShouldReportLOC002AndEmitNothing(string declaration, string expectedReason)
     {
         // Arrange
-        var source = $$"""
+        var source = $"""
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en")]
 
             namespace TestApp;
 
-            {{declaration}}
+            {declaration}
             """;
 
         // Act
@@ -1140,7 +1260,7 @@ public sealed class TranslationSetsGeneratorTests
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe("LOC002");
         error.GetMessage().ShouldContain("it has no parameterless constructor");
-        error.GetMessage().ShouldContain("with a parameterless constructor");
+        error.GetMessage().ShouldContain("with a public parameterless constructor");
     }
 
     [Test]
@@ -1154,14 +1274,14 @@ public sealed class TranslationSetsGeneratorTests
     {
         // Arrange & Act: registered by hand, if at all, so it has no contract to generate. Nothing marks it as one: it
         // is not partial (a test fixture), excluded, or in another language than the default.
-        var result = Run($$"""
+        var result = Run($"""
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en")]
 
             namespace TestApp;
 
-            {{declaration}}
+            {declaration}
             """);
 
         // Assert
@@ -1259,10 +1379,10 @@ public sealed class TranslationSetsGeneratorTests
     {
         // Arrange & Act: a set deriving from a set of another language (LOC006), and one listing ITranslationSet in
         // another language than the default (LOC007), were either not excluded. A language not listed is still LOC005.
-        var result = Run($$"""
-            {{ShopSets}}
+        var result = Run($"""
+            {ShopSets}
 
-            {{declaration}}
+            {declaration}
             """);
 
         // Assert
@@ -2568,6 +2688,516 @@ public sealed class TranslationSetsGeneratorTests
             [assembly: SupportedLanguages("en", "nl", "de")]
 
             namespace TestApp;
+            """, library);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetInOtherNamespaceBehindClassNamedLikeThatNamespace_ShouldBeLinkedWithResolvedCref()
+    {
+        // Arrange: inside namespace Shop the name Shop is the class, so Shop.Dutch.ShopTranslationsNL names nothing
+        // there (CS1574), which stops a build that writes a documentation file and treats warnings as errors.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace Shop
+            {
+                public sealed class Shop;
+
+                public partial class ShopTranslationsEN : ITranslationSet
+                {
+                    public virtual string Checkout => "Checkout";
+                }
+            }
+
+            namespace Shop.Dutch
+            {
+                public class ShopTranslationsNL : IShopTranslations
+                {
+                    public virtual string Checkout => "Afrekenen";
+                }
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert: the namespace is named once, at the top of the file, where nothing of the contract's namespace hides
+        // it, and the set is reached through that alias.
+        text.ShouldContain("using Namespace_Shop_Dutch = Shop.Dutch;");
+        text.ShouldContain("<see cref=\"Namespace_Shop_Dutch.ShopTranslationsNL.Checkout\">nl</see>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Checkout\">en</see>");
+        errors.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetsInOneNamespace_ShouldGetNoAlias()
+    {
+        // Arrange & Act
+        var text = ContractText(Run(ShopSets));
+
+        // Assert
+        text.ShouldNotContain("Namespace_");
+    }
+
+    [Test]
+    public void SetInNamespaceWithPartNamedSystem_ShouldLeaveNoUnresolvedCref()
+    {
+        // Arrange: inside Acme.System.Shop the name System is Acme.System, where no Globalization lies.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace Acme.System.Shop;
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopTranslationsNL : IShopTranslations
+            {
+                public virtual string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void DefaultWordingWithCharacterXmlDoesNotAllow_ShouldStayValidDocComment()
+    {
+        // Arrange: a control character and a form feed, neither of which a doc comment may hold, also as an entity
+        // (CS1570), and half of a surrogate pair.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Checkout => "Check\u0001out";
+                public string Page => "Page\fbreak";
+                public string Half => "Half \uD83D";
+                public string Whole => "Whole 😀";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var invalid = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert: shown as C# writes it, and a pair that is whole stays as it is.
+        text.ShouldContain(@"/// Check\u0001out");
+        text.ShouldContain(@"/// Page\u000Cbreak");
+        text.ShouldContain(@"/// Half \uD83D");
+        text.ShouldContain("/// Whole 😀");
+        errors.ShouldBeEmpty();
+        invalid.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("\"\"")]
+    [Arguments("\"-\"")]
+    [Arguments("\"en\\nx\"")]
+    public void SetWithLanguageCodeThatIsNoCultureName_ShouldNotStopTheGeneratorOrBeHeldToALanguage(string languageCode)
+    {
+        // Arrange: what a LanguageCode holds while it is being typed. The contract must still be written: without it
+        // every IShopTranslations of the project stops compiling.
+        var source = $$"""
+            {{ShopSets}}
+
+            public class ShopTranslationsBritish : ShopTranslationsEN, ITranslationSet
+            {
+                string ITranslationSet.LanguageCode => {{languageCode}};
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+
+        // Assert: nothing about its language from here; LOC018 says what is wrong with the code.
+        DiagnosticIds(result).ShouldBeEmpty();
+        ContractText(result).ShouldContain("interface IShopTranslations");
+        GeneratorTestHelper.GetGeneratorDiagnostics(source).Select(diagnostic => diagnostic.Id).ShouldBe(["LOC018"]);
+    }
+
+    [Test]
+    [Arguments("\"e\", \"nl\"")]
+    [Arguments("\"en_US\", \"nl\"")]
+    [Arguments("null, \"nl\"")]
+    [Arguments("\"e\"")]
+    public void InvalidDefaultLanguage_ShouldNotMakeTheNextLanguageTheDefault(string languages)
+    {
+        // Arrange: the first language is wrong, which LOC010 reports. With the next one as the default, the English set
+        // would be reported as unlisted, no contract would be written, and every use of it would stop compiling.
+        var source = ShopSets.Replace("\"en\", \"nl\"", languages, StringComparison.Ordinal);
+
+        // Act
+        var result = Run(source);
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert: the contract is still written, from the set that starts it, and LOC010 stays the only error.
+        DiagnosticIds(result).ShouldBeEmpty();
+        ContractText(result).ShouldContain("interface IShopTranslations");
+        errors.ShouldHaveSingleItem().Id.ShouldBe(LocalizableTextFactoryGenerator.InvalidLanguagesDiagnosticId);
+    }
+
+    [Test]
+    public void InvalidDefaultLanguage_ShouldWriteContractOfTwoSetsStartingItOnce()
+    {
+        // Arrange: without a default language to tell them apart, the Dutch set starts the contract as the English
+        // one does. Written twice it would not compile.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("e", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed partial class ShopTranslationsNL : ITranslationSet
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var run = Run(source).Results.ShouldHaveSingleItem();
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        run.GeneratedSources.Count(generated => generated.HintName.EndsWith(".Translations.g.cs", StringComparison.Ordinal)).ShouldBe(1);
+        errors.ShouldHaveSingleItem().Id.ShouldBe("LOC010");
+    }
+
+    [Test]
+    [Arguments("public required string Checkout { get; init; }", "it has a required member ('Checkout'), which generated code cannot set")]
+    [Arguments("internal ShopTranslationsEN() { } public string Checkout => \"Checkout\";", "it has no public parameterless constructor")]
+    [Arguments("public ShopTranslationsEN(string shop = \"\") { } public string Checkout => \"Checkout\";", "it has no public parameterless constructor")]
+    public void DefaultSetGeneratedCodeCannotCreate_ShouldReportLOC002AsItsOnlyError(string members, string expectedReason)
+    {
+        // Arrange & Act: the generated texts create the set through DefaultSet<TSet>, which takes a public
+        // parameterless constructor (CS0310) and no member left to set (CS9040). With every generator at work.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                {{members}}
+            }
+            """);
+
+        // Assert: one error, at the set, and none in code the generators wrote.
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC002");
+        error.GetMessage().ShouldContain(expectedReason);
+    }
+
+    [Test]
+    public void DefaultSetWhoseConstructorSetsItsRequiredMembers_ShouldCompile()
+    {
+        // Arrange & Act
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using System.Diagnostics.CodeAnalysis;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                [SetsRequiredMembers]
+                public ShopTranslationsEN()
+                {
+                    this.Checkout = "Checkout";
+                }
+
+                public required string Checkout { get; init; }
+            }
+            """);
+
+        // Assert
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("ShopTranslationsEn", "ShopTranslationsEN")]
+    [Arguments("ShopTranslationsen", "ShopTranslationsEN")]
+    [Arguments("ShopTexts", "ShopTextsEN")]
+    public void DefaultSetNotNamedAfterItsLanguage_ShouldBeToldTheNameThatEndsInIt(string name, string expectedName)
+    {
+        // Arrange & Act: a name that ends in its language in another letter case gets the suffix in place of that
+        // ending, not after it (ShopTranslationsEnEN, whose generated class would be ShopTranslationsEn).
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class {{name}} : ITranslationSet
+            {
+                public string LanguageCode => "en";
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert
+        var diagnostic = SingleDiagnostic(result, TranslationSetsGenerator.CannotExtendDiagnosticId);
+        diagnostic.Properties[TranslationSetsGenerator.SuggestedNameProperty].ShouldBe(expectedName);
+    }
+
+    [Test]
+    [Arguments("private static readonly string Code = \"nl\"; public string LanguageCode => Code;")]
+    [Arguments("public string LanguageCode => System.Globalization.CultureInfo.GetCultureInfo(\"nl\").Name;")]
+    public void SetOfGeneratedContractWithUnreadableLanguage_ShouldNotBeReportedAsMissing(string languageCode)
+    {
+        // Arrange & Act: the build cannot tell which language the set serves, so it may be the Dutch one, and asking
+        // for a Dutch set would ask for the set that exists.
+        var result = Run($$"""
+            {{Header}}
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopWording : IShopTranslations
+            {
+                {{languageCode}}
+                public virtual string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void ExcludedSetOfGeneratedContractWithUnreadableLanguage_ShouldNotBeReportedAsMissing()
+    {
+        // Arrange & Act: one class for every other language, created with its language and registered by hand, which
+        // is what LOC003 advises for a set that takes constructor arguments.
+        var result = Run($$"""
+            {{Header}}
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            [ExcludeFromTranslationDiscovery]
+            public class ShopWording(string language) : IShopTranslations
+            {
+                public string LanguageCode => language;
+                public virtual string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LibrarySetWithUnreadableLanguage_ShouldNotBeReportedAsMissingInApp()
+    {
+        // Arrange: the library's build could not read the language of its second set, and records the set as one of a
+        // language unknown, so that the app's build does not ask for a set the library has.
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators("WordingLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace WordingLibrary;
+
+            public partial class GridTranslationsEN : ITranslationSet
+            {
+                public virtual string First => "First";
+            }
+
+            public class GridWording : IGridTranslations
+            {
+                private static readonly string Code = "nl";
+
+                public string LanguageCode => Code;
+                public virtual string First => "Eerste";
+            }
+            """);
+
+        // Act
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+            """, library);
+
+        // Assert: neither Dutch nor German, as the set may be of either.
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetWithUnreadableLanguage_ShouldBeRecordedForOtherAssembliesAsOfLanguageUnknown()
+    {
+        // Arrange & Act
+        var recorded = RecordedSets(Run($$"""
+            {{Header}}
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopWording : IShopTranslations
+            {
+                private static readonly string Code = "nl";
+
+                public string LanguageCode => Code;
+                public virtual string Checkout => "Afrekenen";
+            }
+            """));
+
+        // Assert: under what is no culture name, so that a build that does not know it takes it for no language.
+        recorded.ShouldContain("""TranslationSetAttribute("TestApp.IShopTranslations", "en")""");
+        recorded.ShouldContain("""TranslationSetAttribute("TestApp.IShopTranslations", "*")""");
+    }
+
+    [Test]
+    public void SetImplementingLanguageCodeOfAnotherInterface_ShouldServeLanguageOfItsName()
+    {
+        // Arrange & Act: the explicit implementation is not that of ITranslationSet.LanguageCode, which the set leaves
+        // to its name. Taken for it, the set would count as German: unlisted, and the Dutch one missing.
+        var result = Run($$"""
+            {{Header}}
+
+            public interface IHasCode
+            {
+                string LanguageCode { get; }
+            }
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopTranslationsNL : IShopTranslations, IHasCode
+            {
+                string IHasCode.LanguageCode => "de";
+
+                public virtual string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("zh-Hant", "zh-TW", true)]
+    [Arguments("zh-Hant", "zh-HK", true)]
+    [Arguments("zh-Hant", "zh-MO", true)]
+    [Arguments("zh-Hans", "zh-CN", true)]
+    [Arguments("zh-Hans", "zh-SG", true)]
+    [Arguments("ZH-hans", "zh-cn", true)]
+    [Arguments("zh", "zh-TW", true)]
+    [Arguments("zh-Hans", "zh-TW", false)]
+    [Arguments("zh-Hant", "zh-CN", false)]
+    [Arguments("zh-TW", "zh-Hant", false)]
+    [Arguments("en", "en-GB", true)]
+    [Arguments("en-GB", "en", false)]
+    [Arguments("en", "zh-TW", false)]
+    public void Language_ShouldServeCulturesThatResolveThroughItAtRunTime(string provided, string requested, bool expected)
+    {
+        // Arrange & Act: a culture resolves through its parents, which for a Chinese region written without its script
+        // is the script (zh-TW under zh-Hant), and no start of its name.
+        var serves = SupportedLanguages.Serves(provided, requested);
+
+        // Assert
+        serves.ShouldBe(expected);
+    }
+
+    [Test]
+    public void ChineseRegionDerivedFromSetOfItsScript_ShouldBeAllowed()
+    {
+        // Arrange & Act: users in Taiwan get the Traditional Chinese wording at run time, so the set derives from a
+        // set of its own language, and nothing is left in another one (LOC006).
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "zh-Hant", "zh-TW")]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopTranslationsZhHant : IShopTranslations
+            {
+                public virtual string Checkout => "結帳";
+            }
+
+            public class ShopTranslationsZhTW : ShopTranslationsZhHant;
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LibraryServingChineseRegionThroughItsScript_ShouldReportNothing()
+    {
+        // Arrange
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators("ChineseLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "zh-Hans")]
+
+            namespace ChineseLibrary;
+
+            public partial class GridTranslationsEN : ITranslationSet
+            {
+                public virtual string First => "First";
+            }
+
+            public class GridTranslationsZhHans : IGridTranslations
+            {
+                public virtual string First => "第一";
+            }
+            """);
+
+        // Act: users in China get the library's Simplified Chinese set at run time.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "zh-CN")]
             """, library);
 
         // Assert

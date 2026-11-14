@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    Stops the repository's Directory.Build.props from applying here: this folder is a consumer of the packed package, as
+    a project of someone else is, so it takes none of the repository's settings, and its package comes from a package
+    reference, which central package management would refuse (NU1008). Its own packages folder keeps a package of the
+    same version, restored earlier from another build, from standing in for the one packed now.
+  -->
+
+  <PropertyGroup>
+    <RestorePackagesPath>$(MSBuildThisFileDirectory)obj/packages</RestorePackagesPath>
+  </PropertyGroup>
+
+</Project>

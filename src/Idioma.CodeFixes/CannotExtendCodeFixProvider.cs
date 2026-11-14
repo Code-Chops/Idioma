@@ -27,11 +27,8 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
         var document = context.Document;
-        var root = await document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
 
-        // The diagnostic sits on the name of the class.
-        var declaration = root?.FindToken(context.Span.Start).Parent?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
-        if (declaration is null)
+        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration)
             return;
 
         foreach (var diagnostic in context.Diagnostics)
@@ -87,9 +84,8 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
     private static async Task<Solution> RenameAsync(Document document, TypeDeclarationSyntax declaration, string newName, CancellationToken cancellationToken)
     {
         var solution = document.Project.Solution;
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
 
-        return semanticModel?.GetDeclaredSymbol(declaration, cancellationToken) is { } type
+        return await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is var (type, _)
             ? await Renamer.RenameSymbolAsync(solution, type, new SymbolRenameOptions(), newName, cancellationToken).ConfigureAwait(false)
             : solution;
     }
@@ -101,31 +97,20 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
     private static async Task<Solution> RemoveModifierAsync(Document document, TypeDeclarationSyntax declaration, SyntaxKind modifier, CancellationToken cancellationToken)
     {
         var solution = document.Project.Solution;
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
 
-        if (semanticModel?.GetDeclaredSymbol(declaration, cancellationToken) is not { } type
+        if (await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is not var (type, _)
             || modifier is SyntaxKind.AbstractKeyword && type.GetMembers().Any(static member => member.IsAbstract))
         {
             return solution;
         }
 
-        var parts = new List<TypeDeclarationSyntax>();
-        foreach (var reference in type.DeclaringSyntaxReferences)
-            if (await reference.GetSyntaxAsync(cancellationToken).ConfigureAwait(false) is TypeDeclarationSyntax part && part.Modifiers.Any(modifier))
-                parts.Add(part);
+        var parts = await CodeFixSupport.GetPartsAsync(type, cancellationToken).ConfigureAwait(false);
 
-        foreach (var tree in parts.GroupBy(static part => part.SyntaxTree))
-        {
-            if (solution.GetDocument(tree.Key) is not { } partDocument)
-                continue;
-
-            var root = await tree.Key.GetRootAsync(cancellationToken).ConfigureAwait(false);
-            var newRoot = root.ReplaceNodes(tree, (original, _) => WithoutModifier(original, modifier));
-
-            solution = solution.WithDocumentSyntaxRoot(partDocument.Id, newRoot);
-        }
-
-        return solution;
+        return await CodeFixSupport.ReplaceNodesAsync(
+            solution,
+            parts.Where(part => part.Modifiers.Any(modifier)),
+            part => WithoutModifier(part, modifier),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Document> ReplaceAsync(Document document, TypeDeclarationSyntax declaration, TypeDeclarationSyntax replacement, CancellationToken cancellationToken)

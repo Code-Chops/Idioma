@@ -22,10 +22,6 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     public const string GeneratedCodeOnlyDiagnosticId = "LOC012";
     public const string UnnamedLanguageDiagnosticId = "LOC013";
 
-    private const string TextFullName = "CodeChops.Idioma.LocalizableText";
-    private const string ResourceTextFullName = "CodeChops.Idioma.ResourceText";
-    private const string GeneratedCodeFullName = "CodeChops.Idioma.Internals.GeneratedCode";
-
     private static readonly DiagnosticDescriptor OneLanguageRule = new(
         id: OneLanguageDiagnosticId,
         title: "Text written in one language",
@@ -68,9 +64,9 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     private static void Start(CompilationStartAnalysisContext context)
     {
         var codes = SupportedLanguages.ReadCodes(context.Compilation.Assembly);
-        var text = context.Compilation.GetTypeByMetadataName(TextFullName);
-        var resourceText = context.Compilation.GetTypeByMetadataName(ResourceTextFullName);
-        var generatedCode = context.Compilation.GetTypeByMetadataName(GeneratedCodeFullName);
+        var text = context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText);
+        var resourceText = context.Compilation.GetTypeByMetadataName(PackageNames.ResourceText);
+        var generatedCode = context.Compilation.GetTypeByMetadataName(PackageNames.GeneratedCode);
 
         if (codes.Length is 0 || text is null)
             return;
@@ -96,7 +92,8 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
             && SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
             && method.Parameters[0].Type.SpecialType is SpecialType.System_String
             && IsHandWritten(context)
-            && HoldsWording(conversion.Operand))
+            && HoldsWording(conversion.Operand)
+            && TextComparisonAnalyzer.FindComparison(conversion, text) is null) // LOC017 reports a string compared as a text, which no wording in any language would fix.
         {
             context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, conversion.Syntax.GetLocation(), languages, sample));
         }
@@ -146,7 +143,8 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
 
     private static bool IsGeneratedCodeOnly(IMethodSymbol method, INamedTypeSymbol? generatedCode)
     {
-        return SymbolEqualityComparer.Default.Equals(method.ContainingType, generatedCode);
+        var isGeneratedCodeOnly = SymbolEqualityComparer.Default.Equals(method.ContainingType, generatedCode);
+        return isGeneratedCodeOnly;
     }
 
     /// <summary>
@@ -166,7 +164,8 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
 
     private static bool IsHandWritten(OperationAnalysisContext context)
     {
-        return IsHandWritten(context.IsGeneratedCode, context.Operation.Syntax.SyntaxTree);
+        var isHandWritten = IsHandWritten(context.IsGeneratedCode, context.Operation.Syntax.SyntaxTree);
+        return isHandWritten;
     }
 
     /// <summary>
@@ -177,9 +176,11 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         // Razor names its output after the markup file: Pages/Index.cshtml becomes Pages/Index_cshtml.g.cs.
         var path = tree.FilePath;
 
-        return !isGeneratedCode
-               || path.EndsWith("_razor.g.cs", StringComparison.Ordinal)
-               || path.EndsWith("_cshtml.g.cs", StringComparison.Ordinal);
+        var isHandWritten = !isGeneratedCode
+                            || path.EndsWith("_razor.g.cs", StringComparison.Ordinal)
+                            || path.EndsWith("_cshtml.g.cs", StringComparison.Ordinal);
+
+        return isHandWritten;
     }
 
     /// <summary>
@@ -187,7 +188,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     /// </summary>
     private static bool HoldsWording(IOperation? operation)
     {
-        return operation switch
+        var holdsWording = operation switch
         {
             null => false,
             { ConstantValue: { HasValue: true, Value: string constant } } => constant.Any(Char.IsLetter),
@@ -204,5 +205,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
             IConversionOperation conversion => HoldsWording(conversion.Operand),
             _ => false,
         };
+
+        return holdsWording;
     }
 }

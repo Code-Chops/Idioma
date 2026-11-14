@@ -151,6 +151,71 @@ public sealed class FormatPlaceholdersAnalyzerTests
     }
 
     [Test]
+    public async Task SetInheritingWordingWithOtherPlaceholders_ShouldReportLOC016AtTheSet()
+    {
+        // Arrange: the Dutch wording lies in a class that is no set, where it is no text yet. It becomes one in the set
+        // that inherits it, and Dutch users would lose the value Format fills in.
+        var source = $$"""
+            {{Header}}
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Greeting => "Hello, {0}!";
+                public virtual string Total => "Total";
+            }
+
+            public abstract class DutchWording
+            {
+                private const string Hello = "Hallo!";
+
+                public string Greeting => Hello;
+                public string Total => "Totaal";
+            }
+
+            public class ShopTranslationsNL : DutchWording, IShopTranslations;
+
+            public class ShopTranslationsEnGB : ShopTranslationsEN;
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: once, at the set, and not again at a class deriving from it.
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC016");
+        diagnostic.GetMessage().ShouldStartWith("'ShopTranslationsNL.Greeting', inherited from 'DutchWording', has no placeholders, while the default wording of 'IShopTranslations.Greeting' has placeholder {0}.");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopTranslationsNL");
+    }
+
+    [Test]
+    public async Task SetInheritingWordingWithSamePlaceholders_ShouldReportNothing()
+    {
+        // Arrange & Act: also a class deriving from the set that brings the contract in, which is held to nothing twice.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Greeting => "Hello, {0}!";
+            }
+
+            public abstract class DutchWording
+            {
+                public virtual string Greeting => "Hallo, {0}!";
+            }
+
+            public class ShopTranslationsNL : DutchWording, IShopTranslations;
+
+            public class GiftTranslationsNL : ShopTranslationsNL;
+
+            public class ShopTranslationsEnGB : ShopTranslationsEN;
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task SetWordingWithOtherPlaceholdersThanDefaultWordingInInitializer_ShouldReportLOC016()
     {
         // Arrange: the default wording as the initializer of a property, which the contract records as it records the

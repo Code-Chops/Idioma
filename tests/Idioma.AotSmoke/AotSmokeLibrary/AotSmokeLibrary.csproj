@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A library with texts of its own, which the app of this folder references: its sets register through the registrar
+    of the app, which finds the library by name when the app starts.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The version run.sh packed; any in the folder, the highest, when it is not told. -->
+    <IdiomaVersion Condition="'$(IdiomaVersion)' == ''">*</IdiomaVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CodeChops.Idioma" Version="$(IdiomaVersion)" />
+  </ItemGroup>
+
+</Project>

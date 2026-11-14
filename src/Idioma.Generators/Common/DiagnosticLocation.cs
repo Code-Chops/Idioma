@@ -20,7 +20,8 @@ internal readonly record struct DiagnosticLocation(SyntaxTree? Tree, TextSpan Sp
 {
     public static DiagnosticLocation From(Location location)
     {
-        return new DiagnosticLocation(location.SourceTree, location.SourceSpan);
+        var from = new DiagnosticLocation(location.SourceTree, location.SourceSpan);
+        return from;
     }
 
     /// <summary>
@@ -28,6 +29,7 @@ internal readonly record struct DiagnosticLocation(SyntaxTree? Tree, TextSpan Sp
     /// </summary>
     public Location ToLocation()
     {
-        return this.Tree is null ? Location.None : Location.Create(this.Tree, this.Span);
+        var location = this.Tree is null ? Location.None : Location.Create(this.Tree, this.Span);
+        return location;
     }
 }

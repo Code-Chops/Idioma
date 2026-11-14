@@ -13,7 +13,7 @@
     <NoWarn>MA0003;$(NoWarn);</NoWarn> <!-- Add parameter name to improve readability - not necessary for tests -->
     <NoWarn>MA0004;$(NoWarn);</NoWarn> <!-- Use Task.ConfigureAwait - not necessary for tests -->
     <NoWarn>MA0048;$(NoWarn);</NoWarn> <!-- File name must match type name - a fixture the generators must discover cannot nest -->
-    <NoWarn>LOC011;LOC012;LOC013;$(NoWarn);</NoWarn> <!-- A test compares texts with plain strings, and reaches what only generated code should call -->
+    <NoWarn>LOC011;LOC012;LOC013;LOC017;$(NoWarn);</NoWarn> <!-- A test compares texts with plain strings, and reaches what only generated code should call -->
   </PropertyGroup>
 
   <ItemGroup>

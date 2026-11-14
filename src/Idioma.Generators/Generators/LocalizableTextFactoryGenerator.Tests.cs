@@ -190,6 +190,37 @@ public sealed class LocalizableTextFactoryGeneratorTests
     }
 
     [Test]
+    public void FactoryCalledByFullNameWithoutUsing_ShouldCompile()
+    {
+        // Arrange & Act: the factory is an extension, found only where its class is in reach. In the namespace of the
+        // text it would take a using for that namespace, which a call by the text's full name does not write.
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            [assembly: CodeChops.Idioma.SupportedLanguages("en", "nl")]
+
+            namespace TestApp.Deep.Down;
+
+            public static class Texts
+            {
+                public static CodeChops.Idioma.LocalizableText Orders { get; } = CodeChops.Idioma.LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+            }
+            """);
+
+        // Assert
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void Factory_ShouldLieInTheGlobalNamespace()
+    {
+        // Arrange & Act
+        var text = Factory(Run(Source("\"en\", \"nl\"")));
+
+        // Assert
+        text.ShouldNotBeNull();
+        text.ShouldNotContain("namespace ");
+    }
+
+    [Test]
     public void NoAttribute_ShouldEmitNoFactory()
     {
         // Arrange & Act
@@ -356,6 +387,58 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // Assert
         marker.ShouldNotBeNull().ShouldContain("[assembly: CodeChops.Idioma.Internals.InlineTextsAttribute]");
+    }
+
+    [Test]
+    [Arguments("using Text = CodeChops.Idioma.LocalizableText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
+    [Arguments("using Text = global::CodeChops.Idioma.LocalizableText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
+    public void FactoryCalledThroughAlias_ShouldMarkAssemblyAsWritingInlineTexts(string alias, string call)
+    {
+        // Arrange: the name at the call says nothing, so the receiver has to be bound to be known for the text type.
+        var source = $$"""
+            {{alias}}
+
+            [assembly: CodeChops.Idioma.SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public static class Texts
+            {
+                public static CodeChops.Idioma.LocalizableText Orders { get; } = {{call}};
+            }
+            """;
+
+        // Act
+        var marker = InlineTextsMarker(Run(source));
+
+        // Assert
+        marker.ShouldNotBeNull().ShouldContain("[assembly: CodeChops.Idioma.Internals.InlineTextsAttribute]");
+    }
+
+    [Test]
+    public void InlineCalledOnAnotherTypeThroughAlias_ShouldLeaveAssemblyUnmarked()
+    {
+        // Arrange & Act: an alias of a type that has a method of that name, which is no inline text.
+        var result = Run("""
+            using Helper = TestApp.Other;
+
+            [assembly: CodeChops.Idioma.SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public static class Other
+            {
+                public static string Inline() => "";
+            }
+
+            public static class Texts
+            {
+                public static string Orders { get; } = Helper.Inline();
+            }
+            """);
+
+        // Assert
+        InlineTextsMarker(result).ShouldBeNull();
     }
 
     [Test]

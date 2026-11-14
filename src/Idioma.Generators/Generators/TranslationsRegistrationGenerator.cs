@@ -37,6 +37,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
 {
     public const string CannotRegisterDiagnosticId = "LOC003";
     public const string UnmappedLanguageCodeDiagnosticId = "LOC015";
+    public const string InvalidLanguageCodeDiagnosticId = "LOC018";
 
     /// <summary>
     /// The MSBuild property with which the Android SDK marks the project of an app (<see langword="true"/>), as the compiler's
@@ -44,14 +45,18 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
     /// </summary>
     internal const string AndroidApplicationProperty = "build_property.AndroidApplication";
 
-    private const string RegistrarNamespace = "CodeChops.Idioma.Generated";
-    private const string RegistryName = "CodeChops.Idioma.TranslationsRegistry";
-    private const string GeneratedCodeName = "CodeChops.Idioma.Internals.GeneratedCode";
+    private const string RegistrarNamespace = PackageNames.Namespace + ".Generated";
 
     /// <summary>
     /// The class next to the registrar, outside its namespace, that registers the sets of the assembly itself.
     /// </summary>
     private const string OwnSetsName = "OwnTranslationSets";
+
+    /// <summary>
+    /// The warnings about naming something marked <c>[Obsolete]</c>, without and with a message, as generated code
+    /// turns them off where it names a set that is.
+    /// </summary>
+    internal const string ObsoleteWarnings = "CS0612, CS0618";
 
     private static readonly DiagnosticDescriptor CannotRegisterRule = new(
         id: CannotRegisterDiagnosticId,
@@ -70,6 +75,15 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "A class implements an interface member only where it lists the interface. A set deriving from another set inherits that set's mapping of ITranslationSet.LanguageCode, so a LanguageCode it declares, unless it overrides the inherited one, is never read, and the set registers under the language its name gives it.");
+
+    private static readonly DiagnosticDescriptor InvalidLanguageCodeRule = new(
+        id: InvalidLanguageCodeDiagnosticId,
+        title: "LanguageCode that is no culture name",
+        messageFormat: "'{0}' gives \"{1}\" as its LanguageCode, which is no culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A set is filed under its language code, which the UI culture of a user is matched against. A code that is no culture name (two to eight letters, then parts of letters or digits after a hyphen each, as in en, en-GB, or zh-Hans) reaches no culture, so the registry refuses the set: the generated registration, which runs when the assembly loads, would throw. Reported in every assembly, with or without [assembly: SupportedLanguages], also for a set marked [ExcludeFromTranslationDiscovery], which throws where it is registered by hand.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -98,7 +112,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         // it must serve the language the build counted it for.
         var languageCodes = candidates.Select(static (sets, _) => new EquatableArray<RecordedLanguageCode>(sets
             .Where(static set => set.RecordedLanguageCode is not null)
-            .Select(static set => new RecordedLanguageCode(set.MetadataName, set.FullyQualifiedName, set.RecordedLanguageCode!))
+            .Select(static set => new RecordedLanguageCode(set.MetadataName, set.FullyQualifiedName, set.RecordedLanguageCode!, set.IsObsolete))
             .Distinct()
             .OrderBy(static set => set.MetadataName, StringComparer.Ordinal)
             .ToImmutableArray()));
@@ -107,7 +121,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         // without rewriting the generated code: the registrations hold no location, and so compare equal.
         var registrations = sets.Select(static (sets, _) => new EquatableArray<RegisteredTranslations>(sets
             .Where(set => set.RegistrationProblem is null)
-            .Select(set => new RegisteredTranslations(set.MetadataName, set.FullyQualifiedName, set.IsOverride, set.Depth))
+            .Select(set => new RegisteredTranslations(set.MetadataName, set.FullyQualifiedName, set.IsOverride, set.Depth, set.IsObsolete))
             .Distinct()
             .OrderBy(set => set.Depth)
             .ThenBy(set => set.MetadataName, StringComparer.Ordinal)
@@ -120,11 +134,10 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
             .Select(static (data, _) =>
             {
                 var (sets, languages) = data;
-                var defaultLanguage = languages is { Codes.Length: > 0 } declared ? declared.Codes[0] : null;
 
                 return new EquatableArray<UnregistrableTranslations>(sets
                     .Where(set => set.RegistrationProblem is not null
-                                  && (defaultLanguage is null || !TranslationsDiscovery.IsDefaultSet(set, defaultLanguage)))
+                                  && (languages is not { } declared || !TranslationsDiscovery.IsDefaultSet(set, declared.DefaultLanguage)))
                     .Select(set => new UnregistrableTranslations(set.MetadataName, set.RegistrationProblem!, set.Location))
                     .Distinct()
                     .OrderBy(set => set.MetadataName, StringComparer.Ordinal)
@@ -154,7 +167,8 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
             {
                 var (((sets, languageCodes), assembly), languages) = data;
                 var forwards = sets.Length > 0 || assembly.IsApplication || languages is { Codes.Length: > 0 };
-                var appLanguages = assembly.IsApplication && languages is { Codes.Length: > 0 } declared ? declared.Codes : default;
+                // Not without a default language (LOC010): the first valid language must not become the app's default.
+                var appLanguages = assembly.IsApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
 
                 return new Registrar(
                     Name: assembly.RegistrarName,
@@ -164,11 +178,21 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
                     LanguageCodes: languageCodes);
             });
 
+        // Once per class that declares the property, where the fix is, however many sets derive from it.
         var unmapped = sets.Select(static (sets, _) => new EquatableArray<UnmappedLanguageCode>(sets
             .Where(set => set.UnmappedLanguageCodeType is not null)
-            .Select(set => new UnmappedLanguageCode(set.Name, set.UnmappedLanguageCodeType!, set.UnmappedLanguageCodeBaseType ?? "object", set.Location))
+            .Select(set => new UnmappedLanguageCode(set.UnmappedLanguageCodeType!, set.UnmappedLanguageCodeBaseType ?? "object", set.UnmappedLanguageCodeLocation))
             .Distinct()
-            .OrderBy(set => set.SetName, StringComparer.Ordinal)
+            .OrderBy(set => set.DeclaringType, StringComparer.Ordinal)
+            .ToImmutableArray()));
+
+        // An excluded set included: registered by hand, it throws just the same. Once per property, as each set that
+        // inherits it carries it.
+        var invalidLanguageCodes = candidates.Select(static (sets, _) => new EquatableArray<InvalidLanguageCode>(sets
+            .Where(static set => set.InvalidLanguageCode is not null)
+            .Select(static set => set.InvalidLanguageCode!.Value)
+            .Distinct()
+            .OrderBy(static code => code.DeclaringType, StringComparer.Ordinal)
             .ToImmutableArray()));
 
         context.RegisterSourceOutput(unregistrable, static (context, sets) =>
@@ -187,6 +211,12 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         {
             foreach (var set in sets.AsImmutableArray())
                 context.ReportDiagnostic(Diagnostic.Create(UnmappedLanguageCodeRule, set.Location.ToLocation(), set.DeclaringType, set.DeclaringTypeBase));
+        });
+
+        context.RegisterSourceOutput(invalidLanguageCodes, static (context, codes) =>
+        {
+            foreach (var code in codes.AsImmutableArray())
+                context.ReportDiagnostic(Diagnostic.Create(InvalidLanguageCodeRule, code.Location.ToLocation(), code.DeclaringType, code.Code));
         });
 
         context.RegisterSourceOutput(registrar, static (context, registrar) =>
@@ -242,10 +272,12 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
             .OrderBy(static registrar => registrar.RegistrarName, StringComparer.Ordinal)
             .ToImmutableArray();
 
-        return new RegistrarAssembly(
+        var assembly = new RegistrarAssembly(
             ownName,
             compilation.Options.OutputKind is OutputKind.ConsoleApplication or OutputKind.WindowsApplication or OutputKind.WindowsRuntimeApplication,
             new EquatableArray<ReferencedRegistrar>(referenced));
+
+        return assembly;
     }
 
     /// <summary>
@@ -259,7 +291,8 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
 
         var aliases = reference.Properties.Aliases;
 
-        return aliases.IsDefaultOrEmpty || aliases.Contains("global", StringComparer.Ordinal);
+        var isInGlobalAlias = aliases.IsDefaultOrEmpty || aliases.Contains("global", StringComparer.Ordinal);
+        return isInGlobalAlias;
     }
 
     private static string GenerateSource(Registrar registrar)
@@ -307,7 +340,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         if (registrar.Languages.Length > 0)
         {
             var languages = String.Join(", ", registrar.Languages.Select(static language => SymbolDisplay.FormatLiteral(language, quote: true)));
-            sb.AppendLine($"            {GeneratedCodeName}.RegisterLanguages({languages});");
+            sb.AppendLine($"            {PackageNames.GeneratedCode}.RegisterLanguages({languages});");
         }
 
         // Each call inside a lambda of its own: the runtime loads the referenced assembly when it compiles the method that
@@ -362,6 +395,10 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         // it stands in nobody's way.
         if (hasOwnSets)
         {
+            // A set marked [Obsolete] registers for as long as it exists, and the warning about naming it is one its
+            // author cannot act on in generated code: a build that treats warnings as errors would stop at it.
+            var namesObsoleteSet = registrar.Sets.Any(static set => set.IsObsolete) || registrar.LanguageCodes.Any(static recorded => recorded.IsObsolete);
+
             sb.AppendLine($$"""
 
                 /// <summary>
@@ -374,12 +411,18 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
                     {
                 """);
 
+            if (namesObsoleteSet)
+                sb.AppendLine($"        #pragma warning disable {ObsoleteWarnings} // A set marked [Obsolete] registers for as long as it exists.");
+
             // Before the sets register: the registry files a set under the language code it reads from it.
             foreach (var recorded in registrar.LanguageCodes)
-                sb.AppendLine($"        {GeneratedCodeName}.RegisterLanguageCode<{recorded.FullyQualifiedName}>({SymbolDisplay.FormatLiteral(recorded.Code, quote: true)});");
+                sb.AppendLine($"        {PackageNames.GeneratedCode}.RegisterLanguageCode<{recorded.FullyQualifiedName}>({SymbolDisplay.FormatLiteral(recorded.Code, quote: true)});");
 
             AppendRegistration(sb, "RegisterDefaults", registrar.Sets.AsImmutableArray().Where(static set => !set.IsOverride));
             AppendRegistration(sb, "Register", registrar.Sets.AsImmutableArray().Where(static set => set.IsOverride));
+
+            if (namesObsoleteSet)
+                sb.AppendLine($"        #pragma warning restore {ObsoleteWarnings}");
 
             sb.AppendLine("""
                     }
@@ -399,7 +442,7 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
         if (creations.Length is 0)
             return;
 
-        sb.AppendLine($"        {RegistryName}.{method}(");
+        sb.AppendLine($"        {PackageNames.TranslationsRegistry}.{method}(");
 
         for (var i = 0; i < creations.Length; i++)
             sb.AppendLine($"            {creations[i]}{(i < creations.Length - 1 ? "," : ");")}");
@@ -424,10 +467,10 @@ internal readonly record struct ReferencedRegistrar(
     string RegistrarName);
 
 /// <summary>
-/// A set whose class declares a <c>LanguageCode</c> that implements nothing: what <c>LOC015</c> reports.
+/// A class declaring a <c>LanguageCode</c> that implements nothing, with the class it derives from and where to report
+/// it: what <c>LOC015</c> reports.
 /// </summary>
 internal readonly record struct UnmappedLanguageCode(
-    string SetName,
     string DeclaringType,
     string DeclaringTypeBase,
     DiagnosticLocation Location);
@@ -445,9 +488,11 @@ internal readonly record struct Registrar(
 
 /// <summary>
 /// A set whose name gives it a code the last two letters cannot hold (<c>ShopTranslationsEnGB</c>: <c>en-GB</c>), which
-/// the registrar records before the set registers. The metadata name orders the records.
+/// the registrar records before the set registers, and whether naming the set is warned about as obsolete. The
+/// metadata name orders the records.
 /// </summary>
 internal readonly record struct RecordedLanguageCode(
     string MetadataName,
     string FullyQualifiedName,
-    string Code);
+    string Code,
+    bool IsObsolete);
