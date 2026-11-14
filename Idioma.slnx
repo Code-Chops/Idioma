@@ -1,4 +1,12 @@
 <Solution>
+  <Folder Name="/Docs/">
+    <File Path="docs\blazor.md" />
+    <File Path="docs\build-errors.md" />
+    <File Path="docs\how-it-works.md" />
+    <File Path="docs\language-codes.md" />
+    <File Path="docs\libraries-and-apps.md" />
+    <File Path="README.md" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".github/workflows/ci.yml" />
@@ -8,8 +16,11 @@
     <File Path="global.json" />
     <File Path="LICENSE" />
     <File Path="nuget.config" />
-    <File Path="README.md" />
+    <File Path="docs/blazor.md" />
+    <File Path="docs/build-errors.md" />
     <File Path="docs/how-it-works.md" />
+    <File Path="docs/language-codes.md" />
+    <File Path="docs/libraries-and-apps.md" />
   </Folder>
   <Project Path="src/Idioma/Idioma.csproj" />
   <Project Path="src/Idioma.CodeFixes/Idioma.CodeFixes.csproj" />

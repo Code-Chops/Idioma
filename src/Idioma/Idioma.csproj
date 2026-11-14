@@ -94,8 +94,8 @@ To move a project, replace LocalizableText.Translated with LocalizableText.Inlin
   </ItemGroup>
 
   <!--
-    The README of the package links to the details as they were when it was released: docs/how-it-works.md at the tag
-    of its version (v0.7.0), where the README of the repository links to main. A package stays on nuget.org as it was
+    The README of the package links to the details as they were when it was released: the pages under docs/ at the
+    tag of its version (v0.7.0), where the README of the repository links to main. A package stays on nuget.org as it was
     published, while main moves on, so a link to main would show the details of a later version. The tag is there by
     the time the package is: only a run on that tag publishes (publish.yml). The demos stay linked on main, as they
     fetch the latest package, which the demos on main are written for.

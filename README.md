@@ -55,10 +55,10 @@ error LOC004: 'ShopTranslations' has no translation into 'de', which [assembly: 
 Besides that:
 
 - No resource files and no string keys. In your IDE, hovering over `ShopTranslations.Checkout` shows its wording in every language, and you can jump to each.
-- Showing a text allocates no memory ([what it costs](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#what-showing-a-text-costs)), and the package is safe to trim.
-- In Blazor WebAssembly, users switch language without reloading the app, where resx files reload it or download every language at startup ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#switching-language-without-a-reload)).
+- Showing a text allocates no memory, and the package is safe to trim.
+- In Blazor WebAssembly, users switch language without reloading the app, where resx files reload it or download every language at startup ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md#switching-language-without-a-reload)).
 
-The rest of this page shows how to write your texts and show them. To see it working first, [run a demo](#run-a-demo). For the details, such as which wording a user sees and what each build error means, see [how Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md).
+The rest of this page shows how to write your texts and show them. To see it working first, [run a demo](#run-a-demo). The details have pages of their own: [how Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md), [language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md), [libraries and apps](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md), [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md), and [what the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md).
 
 ## Getting started
 
@@ -130,7 +130,7 @@ public class ShopTranslationsNL : IShopTranslations
 }
 ```
 
-Each text is `virtual`, so that a set deriving from this one can override it: a [regional variant](#a-regional-variant-such-as-british-english), or an app's rewording of a library's texts ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#libraries-and-apps)).
+Each text is `virtual`, so that a set deriving from this one can override it: a [regional variant](#a-regional-variant-such-as-british-english), or an app's rewording of a library's texts ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md)).
 
 Show a text by its name, wherever you need it:
 
@@ -162,7 +162,7 @@ Once you list `en-GB`, the build asks for British wording everywhere, so that no
 - Every contract gets a British set. One with nothing British about it is a single line: `public class GridTranslationsEnGB : GridTranslationsEN;`.
 - Every inline text takes a British wording: `LocalizableText.Inline(en: "Color", nl: "Kleur", enGB: "Colour")`.
 
-To add British wording in one place only, see [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#language-codes).
+To add British wording in one place only, see [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md#regional-variants).
 
 ### Show a text
 
@@ -174,7 +174,7 @@ For the wording in a language other than the user's, such as the language of an 
 string dutch = ShopTranslations.Checkout.ToString(CultureInfo.GetCultureInfo("nl"));
 ```
 
-To compare a text with a string, use `==`, as in `text == "Afrekenen"`: it compares the wording for the current UI culture, where `Equals` and `Contains` do not ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#comparing-texts)).
+To compare a text with a string, use `==`, as in `text == "Afrekenen"`: it compares the wording for the current UI culture, where `Equals` and `Contains` do not, so the build rejects a string passed to them ([`LOC017`](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md)).
 
 ### Format a text
 
@@ -194,7 +194,7 @@ string greeting = ShopTranslations.Greeting.Format(CultureInfo.GetCultureInfo("n
 
 ### Blazor
 
-Every language is compiled into your app, so in Blazor WebAssembly a user switches language without a download or a reload. [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#blazor) in the details shows a language picker that does it, and covers Blazor on a server, dates and numbers, and texts passed between render modes.
+Every language is compiled into your app, so in Blazor WebAssembly a user switches language without a download or a reload. The page on [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md) shows a language picker that does it, and covers Blazor on a server, dates and numbers, and texts passed between render modes.
 
 ## Translating your texts
 
