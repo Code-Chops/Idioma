@@ -502,12 +502,12 @@ public sealed class TranslationsRegistry
     /// </summary>
     /// <param name="contract">The contract the text belongs to.</param>
     /// <param name="names">The names to try, most specific first.</param>
-    /// <param name="select">Picks the text from a set of the contract.</param>
+    /// <param name="text">The text, which a set of the contract words (<see cref="ResourceText.Select"/>).</param>
     // Compared by wording rather than by the class that declares the member, which would take reflection the trimmer
     // cannot see: a set that repeats the wording of the set it derives from gives way like one that inherits it. A set
     // deriving from no other set of its name, or a regional set deriving from no set of its language, gives way to
     // nothing, as it inherits none of its texts.
-    internal string? FindWording(Type contract, CultureFallback names, Func<ITranslationSet, string> select)
+    internal string? FindWording(Type contract, CultureFallback names, ResourceText text)
     {
         ITranslationSet? found = null;
         string? wording = null;
@@ -524,12 +524,12 @@ public sealed class TranslationsRegistry
                 if (FindBase(candidates, found) is not { } basis)
                     continue;
 
-                if (!String.Equals(select(basis), wording, StringComparison.Ordinal))
+                if (!String.Equals(text.Select(basis), wording, StringComparison.Ordinal))
                     return wording;
             }
 
             // Null only before the first name with a set of the contract: a basis is one of the candidates.
-            if (FindLevelWording(candidates, select) is { } level)
+            if (FindLevelWording(candidates, text) is { } level)
                 (found, wording) = level;
         }
 
@@ -541,16 +541,15 @@ public sealed class TranslationsRegistry
     /// registered last that words it differently than the candidate it derives from, or that derives from none;
     /// <see langword="null"/> when the name has no set of the contract.
     /// </summary>
-    private static (ITranslationSet Set, string Wording)? FindLevelWording(ImmutableArray<ContractSet> candidates,
-        Func<ITranslationSet, string> select)
+    private static (ITranslationSet Set, string Wording)? FindLevelWording(ImmutableArray<ContractSet> candidates, ResourceText text)
     {
         // Ends at the latest at the candidate deriving from no other, as no class derives from itself.
         for (var i = candidates.Length - 1; i >= 0; i--)
         {
             var (set, basis) = candidates[i];
-            var wording = select(set);
+            var wording = text.Select(set);
 
-            if (basis is not null && String.Equals(select(basis), wording, StringComparison.Ordinal))
+            if (basis is not null && String.Equals(text.Select(basis), wording, StringComparison.Ordinal))
                 continue;
 
             return (set, wording);

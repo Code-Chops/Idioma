@@ -59,8 +59,9 @@ namespace CodeChops.Idioma;
 /// generated class gets one of the same name and parameters, so you show the text as
 /// <c>ShopTranslations.Greeting(customer.Name)</c>. Its values have a name and a type, and its wording can depend on
 /// them, as for a plural: <c>count is 1 ? "1 item" : $"{count} items"</c>. Every language implements the method with
-/// the parameters of the default-language set, named alike (<c>LOC020</c>). A method without parameters is no text,
-/// and neither is one the generated class cannot repeat, such as a generic one (<c>LOC019</c>).
+/// the parameters of the default-language set, named alike (<c>LOC020</c>), and uses every value the default wording
+/// shows (<c>LOC021</c>). A method without parameters is no text, and neither is one the generated class cannot
+/// repeat, such as a generic one (<c>LOC019</c>).
 /// </para>
 /// </remarks>
 /// <example>

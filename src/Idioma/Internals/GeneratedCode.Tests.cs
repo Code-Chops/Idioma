@@ -41,14 +41,14 @@ public sealed class GeneratedCodeTests
         var name = "Anna";
 
         // Act: as a method of the class the source generator writes calls it.
-        var text = GeneratedCode.CreateResourceText<IGeneratedCodeTranslations>("Shop.Greeting", translations => translations.Greeting(name), new GeneratedCodeTranslationsEN(), [name]);
+        var text = GeneratedCode.CreateResourceText<IGeneratedCodeTranslations>("Shop.Greeting", static (set, values) => ((IGeneratedCodeTranslations)set).Greeting((string)values[0]!), new GeneratedCodeTranslationsEN(), [name]);
 
         // Assert
         text.Key.ShouldBe("Shop.Greeting");
         text.Contract.ShouldBe(typeof(IGeneratedCodeTranslations));
         text.DefaultText.ShouldBe("Hello, Anna!");
         text.Arguments.ShouldBe(["Anna"]);
-        Should.Throw<ArgumentException>(() => GeneratedCode.CreateResourceText<IGeneratedCodeTranslations>(" ", translations => translations.Greeting(name), new GeneratedCodeTranslationsEN(), [name]));
+        Should.Throw<ArgumentException>(() => GeneratedCode.CreateResourceText<IGeneratedCodeTranslations>(" ", static (set, values) => ((IGeneratedCodeTranslations)set).Greeting((string)values[0]!), new GeneratedCodeTranslationsEN(), [name]));
     }
 
     [Test]

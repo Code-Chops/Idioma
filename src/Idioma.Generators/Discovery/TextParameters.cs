@@ -77,16 +77,91 @@ internal static class TextParameters
     }
 
     /// <summary>
-    /// The parameters of a method, in their order.
+    /// The parameters of a method, in their order, each with whether the wording the method writes shows it
+    /// (<see cref="FindShownParameters"/>).
     /// </summary>
-    public static EquatableArray<TextParameter> Read(IMethodSymbol method)
+    /// <param name="method">The method.</param>
+    /// <param name="declaration">The declaration of the method, or <see langword="null"/> when it has none to read.</param>
+    /// <param name="semanticModel">The semantic model of the tree the declaration lies in.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    public static EquatableArray<TextParameter> Read(IMethodSymbol method, MethodDeclarationSyntax? declaration, SemanticModel? semanticModel, CancellationToken cancellationToken)
     {
+        var shown = declaration is not null && semanticModel is not null
+            ? FindShownParameters(method, declaration, semanticModel, cancellationToken)
+            : new bool[method.Parameters.Length];
+
         var parameters = ImmutableArray.CreateBuilder<TextParameter>(method.Parameters.Length);
 
         foreach (var parameter in method.Parameters)
-            parameters.Add(new TextParameter(parameter.Name, ReadType(parameter.Type)));
+            parameters.Add(new TextParameter(parameter.Name, ReadType(parameter.Type), shown[parameter.Ordinal]));
 
         return new EquatableArray<TextParameter>(parameters.MoveToImmutable());
+    }
+
+    /// <summary>
+    /// Which parameters the wording of a method shows, by their position: those the method uses for more than choosing
+    /// between wordings. <c>count is 1 ? "1 item" : $"{count} items"</c> shows <c>count</c>, and
+    /// <c>salutation switch { Salutation.Madam => "Dear madam", _ => "Dear customer" }</c> only chooses by
+    /// <c>salutation</c>.
+    /// </summary>
+    // What every other language is held to (LOC021): a value the default wording shows must be in theirs, and a value
+    // it only chooses by may mean nothing in a language that makes no such distinction. Told from where the value
+    // stands, which errs to the side of showing: a value handed on to a helper counts as shown.
+    private static bool[] FindShownParameters(IMethodSymbol method, MethodDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        var shown = new bool[method.Parameters.Length];
+
+        if ((declaration.ExpressionBody?.Expression ?? (SyntaxNode?)declaration.Body) is not { } body)
+            return shown;
+
+        foreach (var node in body.DescendantNodesAndSelf())
+        {
+            // By its name first, which costs nothing: only a name a parameter carries is bound.
+            if (node is not IdentifierNameSyntax identifier
+                || !method.Parameters.Any(parameter => String.Equals(parameter.Name, identifier.Identifier.ValueText, StringComparison.Ordinal))
+                || semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is not IParameterSymbol parameter
+                || !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, method)
+                || shown[parameter.Ordinal])
+            {
+                continue;
+            }
+
+            shown[parameter.Ordinal] = !OnlyChooses(identifier, body);
+        }
+
+        return shown;
+    }
+
+    /// <summary>
+    /// Whether a value stands where it only chooses what is worded: in the condition of a conditional expression or of
+    /// a statement, in what a switch switches on, in a pattern or a <see langword="when"/> clause, or in a comparison.
+    /// </summary>
+    private static bool OnlyChooses(SyntaxNode value, SyntaxNode body)
+    {
+        for (var current = value; current != body && current.Parent is { } parent; current = parent)
+        {
+            var chooses = parent switch
+            {
+                ConditionalExpressionSyntax conditional => conditional.Condition == current,
+                SwitchExpressionSyntax @switch => @switch.GoverningExpression == current,
+                SwitchExpressionArmSyntax arm => arm.Expression != current,
+                SwitchStatementSyntax @switch => @switch.Expression == current,
+                IfStatementSyntax @if => @if.Condition == current,
+                WhileStatementSyntax @while => @while.Condition == current,
+                DoStatementSyntax @do => @do.Condition == current,
+                ForStatementSyntax @for => @for.Condition == current,
+                SwitchLabelSyntax or WhenClauseSyntax or IsPatternExpressionSyntax => true,
+                BinaryExpressionSyntax comparison => comparison.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
+                    or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
+                    or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression,
+                _ => false,
+            };
+
+            if (chooses)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -257,11 +332,13 @@ internal static class TextParameters
 }
 
 /// <summary>
-/// A parameter of a text that takes values: its name, and its type as generated code can write it.
+/// A parameter of a text that takes values: its name, its type as generated code can write it, and whether the
+/// default-language wording shows the value, which every other language is then held to (<c>LOC021</c>).
 /// </summary>
 internal readonly record struct TextParameter(
     string Name,
-    EquatableArray<TypeNamePart> Type);
+    EquatableArray<TypeNamePart> Type,
+    bool IsShown);
 
 /// <summary>
 /// A part of a type's name as generated code writes it: the namespace the type at its start lies in (<c>""</c> for the

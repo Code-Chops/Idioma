@@ -69,7 +69,14 @@ public sealed record ResourceText : LocalizableText
     /// <remarks>
     /// The language a text falls back to last, after your app's default language: see <see cref="LocalizableText"/>.
     /// </remarks>
-    public string? DefaultLanguage { get; private init; }
+    public string? DefaultLanguage
+    {
+        // Asked of the set only when it is read, for a text that takes values: such a text is created on every call,
+        // and one that finds its wording in the user's language never reads this.
+        get => this._defaultLanguage ??= this.Defaults?.LanguageCode;
+        private init => this._defaultLanguage = value;
+    }
+    private string? _defaultLanguage;
 
     /// <summary>
     /// The values this text was created with, in the order of its parameters: <c>customer.Name</c> for
@@ -83,11 +90,27 @@ public sealed record ResourceText : LocalizableText
     public ImmutableArray<object?> Arguments { get; private init; } = [];
 
     /// <summary>
-    /// Selects this text from a set implementing <see cref="Contract"/>.
+    /// Selects this text from a set implementing <see cref="Contract"/>. <see langword="null"/> for a text that takes
+    /// values, which <see cref="ValuesSelector"/> selects.
     /// </summary>
     private Func<ITranslationSet, string>? Selector { get; init; }
 
-    private protected override bool TakesValues => !this.Arguments.IsEmpty;
+    /// <summary>
+    /// Selects a text that takes values from a set implementing <see cref="Contract"/>, with its
+    /// <see cref="Arguments"/>.
+    /// </summary>
+    // Handed the values, and not holding them itself: the method that creates such a text on every call then passes
+    // the same delegate each time, where one that held the values would be a new object per call. As a span, a type
+    // of the runtime itself: generated code names the type of what it is handed, and an app on a newer runtime than
+    // this package is built for would otherwise name a type of an assembly the package knows in an older version.
+    private Func<ITranslationSet, ReadOnlySpan<object?>, string>? ValuesSelector { get; init; }
+
+    /// <summary>
+    /// The set a text that takes values has its default wording and its default language from.
+    /// </summary>
+    private ITranslationSet? Defaults { get; init; }
+
+    private protected override bool TakesValues => this.ValuesSelector is not null;
 
     /// <summary>
     /// A text that a resource file can provide under <paramref name="key"/>, for an app or library that looks texts up
@@ -146,26 +169,52 @@ public sealed record ResourceText : LocalizableText
     }
 
     /// <summary>
+    /// A text that takes values, which words its default wording when that is asked for.
+    /// </summary>
+    private ResourceText(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        this.Key = key;
+    }
+
+    /// <summary>
     /// Declares a text of a translations contract that takes values, with its default wording taken from a set: what
-    /// <see cref="Internals.GeneratedCode.CreateResourceText{TContract}(string, Func{TContract, string}, TContract, ReadOnlySpan{object})"/>
+    /// <see cref="Internals.GeneratedCode.CreateResourceText{TContract}(string, Func{ITranslationSet, ReadOnlySpan{object}, string}, TContract, ReadOnlySpan{object})"/>
     /// gives a method of the class the source generator writes.
     /// </summary>
-    // Created on every call, where a text without arguments is created once, so in one step: the text is not copied
-    // to give it its default language, as the Create above copies it.
-    internal static ResourceText Create<TContract>(string key, Func<TContract, string> selector, TContract defaults, ReadOnlySpan<object?> arguments)
+    // Created on every call, where a text without values is created once, so it does no more here than keep what it
+    // is given: the text itself and its values are all a call allocates. Its default wording and its default language
+    // are asked of the set when they are read, which a text that finds its wording in the user's language never does.
+    internal static ResourceText Create<TContract>(string key, Func<ITranslationSet, ReadOnlySpan<object?>, string> selector, TContract defaults, ReadOnlySpan<object?> arguments)
         where TContract : class, ITranslationSet
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(defaults);
 
-        var text = new ResourceText(key, selector(defaults))
+        var text = new ResourceText(key)
         {
             Contract = typeof(TContract),
-            Selector = set => selector((TContract)set),
-            DefaultLanguage = defaults.LanguageCode,
+            ValuesSelector = selector,
+            Defaults = defaults,
             Arguments = [.. arguments],
         };
         return text;
+    }
+
+    /// <summary>
+    /// This text as a set implementing <see cref="Contract"/> words it, with its <see cref="Arguments"/> when it
+    /// takes values.
+    /// </summary>
+    internal string Select(ITranslationSet set)
+    {
+        var wording = this.ValuesSelector is { } select ? select(set, this.Arguments.AsSpan()) : this.Selector!(set);
+        return wording;
+    }
+
+    private protected override string WordDefaultText()
+    {
+        return this.ValuesSelector!(this.Defaults!, this.Arguments.AsSpan());
     }
 
     /// <summary>
@@ -182,7 +231,7 @@ public sealed record ResourceText : LocalizableText
         ArgumentNullException.ThrowIfNull(set);
 
         var text = this.Contract is not null && this.Contract.IsInstanceOfType(set)
-            ? this.Selector!(set)
+            ? this.Select(set)
             : null;
 
         return text;
@@ -216,13 +265,14 @@ public sealed record ResourceText : LocalizableText
     {
         // The selector is not compared: the key names the member it selects, and the arguments are what it passes.
         // The arguments are compared themselves, and not left to the default wording they give: two values can read
-        // the same in the default language and differ in another.
+        // the same in the default language and differ in another. What tells most texts apart comes first: the
+        // default wording of a text that takes values is worded for the comparison.
         var isEqual = other is not null
-               && base.Equals(other)
                && String.Equals(this.Key, other.Key, StringComparison.Ordinal)
                && this.Contract == other.Contract
-               && String.Equals(this.DefaultLanguage, other.DefaultLanguage, StringComparison.Ordinal)
-               && this.Arguments.AsSpan().SequenceEqual(other.Arguments.AsSpan());
+               && this.Arguments.AsSpan().SequenceEqual(other.Arguments.AsSpan())
+               && base.Equals(other)
+               && String.Equals(this.DefaultLanguage, other.DefaultLanguage, StringComparison.Ordinal);
 
         return isEqual;
     }
@@ -230,9 +280,19 @@ public sealed record ResourceText : LocalizableText
     /// <inheritdoc />
     public override int GetHashCode()
     {
-        // Without the arguments: equal texts still hash alike, and the default wording, which is in the hash of the
-        // base, differs with nearly every argument already.
-        return HashCode.Combine(base.GetHashCode(), this.Key, this.Contract, this.DefaultLanguage);
+        // A text that takes values hashes by its values, and not by the default wording they give: a set would have
+        // to word it for every hash. Equal texts hash alike either way.
+        if (this.ValuesSelector is null)
+            return HashCode.Combine(base.GetHashCode(), this.Key, this.Contract, this.DefaultLanguage);
+
+        var hash = new HashCode();
+        hash.Add(this.Key, StringComparer.Ordinal);
+        hash.Add(this.Contract);
+
+        foreach (var argument in this.Arguments)
+            hash.Add(argument);
+
+        return hash.ToHashCode();
     }
 
     /// <summary>
@@ -242,7 +302,7 @@ public sealed record ResourceText : LocalizableText
     private protected override string? FindTranslation(TranslationsRegistry registry, CultureFallback names)
     {
         var text = this.Contract is not null
-            ? registry.FindWording(this.Contract, names, this.Selector!)
+            ? registry.FindWording(this.Contract, names, this)
             : null;
 
         return text;
@@ -259,7 +319,7 @@ public sealed record ResourceText : LocalizableText
         // NativeAOT console, a trimmed WebAssembly app) constructing any culture but the invariant one throws by
         // default, and this fallback runs for exactly that culture.
         var text = this.Contract is not null && this.DefaultLanguage is not null
-            ? registry.FindWording(this.Contract, CultureFallback.OfLanguage(this.DefaultLanguage), this.Selector!)
+            ? registry.FindWording(this.Contract, CultureFallback.OfLanguage(this.DefaultLanguage), this)
             : null;
 
         return text;

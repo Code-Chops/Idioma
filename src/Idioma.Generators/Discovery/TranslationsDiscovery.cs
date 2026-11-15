@@ -1273,7 +1273,12 @@ internal static class TranslationsDiscovery
                     Name: method.Name,
                     HasDocComment: declaration is not null && HasDocComment(declaration),
                     DefaultText: declaration is MethodDeclarationSyntax methodDeclaration ? GetMethodWording(methodDeclaration, compilation, cancellationToken) : null,
-                    Parameters: TextParameters.Read(method)));
+                    Parameters: TextParameters.Read(
+                        method,
+                        declaration as MethodDeclarationSyntax,
+                        // Only in a tree of this compilation, as for the wording (GetConstantText).
+                        declaration is not null && compilation.ContainsSyntaxTree(declaration.SyntaxTree) ? compilation.GetSemanticModel(declaration.SyntaxTree) : null,
+                        cancellationToken)));
             }
         }
 

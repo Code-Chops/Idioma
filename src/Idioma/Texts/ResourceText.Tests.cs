@@ -322,7 +322,7 @@ public sealed class ResourceTextTests
         var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsNL()]);
 
         // Act: as a method of the generated class creates a text that takes a value.
-        var text = ResourceText.Create<IResourceCountedTranslations>("Resource.Items", t => t.Items(count), new ResourceCountedTranslationsEN(), [count]);
+        var text = ResourceText.Create<IResourceCountedTranslations>("Resource.Items", static (set, values) => ((IResourceCountedTranslations)set).Items((int)values[0]!), new ResourceCountedTranslationsEN(), [count]);
 
         // Assert: the default wording is that of the set it is created with, and every other set words it when asked.
         text.Key.ShouldBe("Resource.Items");
@@ -346,8 +346,8 @@ public sealed class ResourceTextTests
         var amount = 1234.5m;
         var cart = LocalizableText.FromGeneratedCode("Cart", ("en", "Cart"), ("nl", "Winkelwagen"));
 
-        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", t => t.Total(amount), new ResourceCountedTranslationsEN(), [amount]);
-        var removed = ResourceText.Create<IResourceCountedTranslations>("Resource.Removed", t => t.Removed(cart), new ResourceCountedTranslationsEN(), [cart]);
+        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", static (set, values) => ((IResourceCountedTranslations)set).Total((decimal)values[0]!), new ResourceCountedTranslationsEN(), [amount]);
+        var removed = ResourceText.Create<IResourceCountedTranslations>("Resource.Removed", static (set, values) => ((IResourceCountedTranslations)set).Removed((LocalizableText)values[0]!), new ResourceCountedTranslationsEN(), [cart]);
 
         // Act & Assert: the Dutch wording, with the number as a Dutch reader writes it and the text among the values
         // in Dutch, and the cultures of this thread as they were.
@@ -365,7 +365,7 @@ public sealed class ResourceTextTests
         using var _ = new CulturesScope(uiCulture: "nl-NL", culture: "en-US");
         var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsEN(), new ResourceCountedTranslationsNL()]);
         var amount = 1234.5m;
-        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", t => t.Total(amount), new ResourceCountedTranslationsEN(), [amount]);
+        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", static (set, values) => ((IResourceCountedTranslations)set).Total((decimal)values[0]!), new ResourceCountedTranslationsEN(), [amount]);
 
         // Act & Assert: passing the culture the text would follow anyway changes nothing.
         total.ToString(CultureInfo.CurrentUICulture, registry).ShouldBe("Totaal: 1,234.50");
@@ -378,7 +378,7 @@ public sealed class ResourceTextTests
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-GB");
         var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsFR()]);
         var amount = 1234.5m;
-        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", t => t.Total(amount), new ResourceCountedTranslationsEN(), [amount]);
+        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", static (set, values) => ((IResourceCountedTranslations)set).Total((decimal)values[0]!), new ResourceCountedTranslationsEN(), [amount]);
 
         // Act & Assert
         Should.Throw<InvalidOperationException>(() => total.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry));
@@ -390,9 +390,9 @@ public sealed class ResourceTextTests
     public void Create_WithArguments_ShouldThrowForInvalidArguments()
     {
         // Arrange & Act & Assert
-        Should.Throw<ArgumentException>(() => ResourceText.Create<IResourceCountedTranslations>(" ", t => t.Items(1), new ResourceCountedTranslationsEN(), [1]));
+        Should.Throw<ArgumentException>(() => ResourceText.Create<IResourceCountedTranslations>(" ", static (set, values) => ((IResourceCountedTranslations)set).Items((int)values[0]!), new ResourceCountedTranslationsEN(), [1]));
         Should.Throw<ArgumentNullException>(() => ResourceText.Create<IResourceCountedTranslations>("K", null!, new ResourceCountedTranslationsEN(), [1]));
-        Should.Throw<ArgumentNullException>(() => ResourceText.Create("K", t => t.Items(1), (IResourceCountedTranslations)null!, [1]));
+        Should.Throw<ArgumentNullException>(() => ResourceText.Create("K", static (set, values) => ((IResourceCountedTranslations)set).Items((int)values[0]!), (IResourceCountedTranslations)null!, [1]));
     }
 
     [Test]
@@ -411,7 +411,7 @@ public sealed class ResourceTextTests
         // the arguments can tell them apart.
         static ResourceText Create(params object?[] arguments)
         {
-            return ResourceText.Create<IResourceCountedTranslations>("Resource.Items", t => t.Items(1), new ResourceCountedTranslationsEN(), arguments);
+            return ResourceText.Create<IResourceCountedTranslations>("Resource.Items", static (set, _) => ((IResourceCountedTranslations)set).Items(1), new ResourceCountedTranslationsEN(), arguments);
         }
 
         string[] names = ["Anna"];

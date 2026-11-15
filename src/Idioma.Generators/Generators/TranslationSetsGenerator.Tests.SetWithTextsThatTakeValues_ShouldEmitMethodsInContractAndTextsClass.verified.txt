@@ -32,7 +32,7 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <item><description><see cref="ShopTranslationsNL.Greeting">nl</see>: Hallo, {name}!</description></item>
     /// </list>
     /// </remarks>
-    string Greeting(string name);
+    string Greeting([CodeChops.Idioma.Internals.ShownValue] string name);
     /// <summary>
     /// The <c>ItemsInCart</c> text of <see cref="ShopTranslationsEN"/>.
     /// </summary>
@@ -43,7 +43,7 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <item><description><see cref="ShopTranslationsNL.ItemsInCart">nl</see></description></item>
     /// </list>
     /// </remarks>
-    string ItemsInCart(int count, string shop);
+    string ItemsInCart([CodeChops.Idioma.Internals.ShownValue] int count, [CodeChops.Idioma.Internals.ShownValue] string shop);
 }
 
 partial class ShopTranslationsEN : IShopTranslations;
@@ -77,7 +77,7 @@ public static partial class ShopTranslations
     /// <item><description><see cref="ShopTranslationsNL.Greeting">nl</see>: Hallo, {name}!</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.ResourceText Greeting(string name) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Greeting", translations => translations.Greeting(name), DefaultSet<ShopTranslationsEN>.Instance, [name]);
+    public static CodeChops.Idioma.ResourceText Greeting(string name) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Greeting", static (translations, values) => ((IShopTranslations)translations).Greeting((string)values[0]!), DefaultSet<ShopTranslationsEN>.Instance, [name]);
 
     /// <summary>
     /// The <c>ItemsInCart</c> text of <see cref="ShopTranslationsEN"/>.
@@ -89,7 +89,7 @@ public static partial class ShopTranslations
     /// <item><description><see cref="ShopTranslationsNL.ItemsInCart">nl</see></description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.ResourceText ItemsInCart(int count, string shop) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.ItemsInCart", translations => translations.ItemsInCart(count, shop), DefaultSet<ShopTranslationsEN>.Instance, [count, shop]);
+    public static CodeChops.Idioma.ResourceText ItemsInCart(int count, string shop) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.ItemsInCart", static (translations, values) => ((IShopTranslations)translations).ItemsInCart((int)values[0]!, (string)values[1]!), DefaultSet<ShopTranslationsEN>.Instance, [count, shop]);
 }
 
 file static class DefaultSet<TSet>

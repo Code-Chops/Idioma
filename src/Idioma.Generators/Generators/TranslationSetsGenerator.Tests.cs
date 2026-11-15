@@ -3347,12 +3347,13 @@ public sealed class TranslationSetsGeneratorTests
         // Arrange & Act
         var text = ContractText(Run(GreetingSets));
 
-        // Assert: the contract repeats the method, which is what holds every language to its parameters. The class
-        // creates the text on every call, with the values it is called with.
-        text.ShouldContain("    string Greeting(string name);");
-        text.ShouldContain("    string ItemsInCart(int count, string shop);");
-        text.ShouldContain("""public static CodeChops.Idioma.ResourceText Greeting(string name) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Greeting", translations => translations.Greeting(name), DefaultSet<ShopTranslationsEN>.Instance, [name]);""");
-        text.ShouldContain("""public static CodeChops.Idioma.ResourceText ItemsInCart(int count, string shop) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.ItemsInCart", translations => translations.ItemsInCart(count, shop), DefaultSet<ShopTranslationsEN>.Instance, [count, shop]);""");
+        // Assert: the contract repeats the method, which is what holds every language to its parameters, and marks
+        // the values its wording shows. The class creates the text on every call, with the values it is called with.
+        text.ShouldContain("    string Greeting([CodeChops.Idioma.Internals.ShownValue] string name);");
+        text.ShouldContain("    string ItemsInCart([CodeChops.Idioma.Internals.ShownValue] int count, [CodeChops.Idioma.Internals.ShownValue] string shop);");
+        text.ShouldContain("ResourceText Greeting(string name) =>");
+        text.ShouldContain("""public static CodeChops.Idioma.ResourceText Greeting(string name) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Greeting", static (translations, values) => ((IShopTranslations)translations).Greeting((string)values[0]!), DefaultSet<ShopTranslationsEN>.Instance, [name]);""");
+        text.ShouldContain("""public static CodeChops.Idioma.ResourceText ItemsInCart(int count, string shop) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.ItemsInCart", static (translations, values) => ((IShopTranslations)translations).ItemsInCart((int)values[0]!, (string)values[1]!), DefaultSet<ShopTranslationsEN>.Instance, [count, shop]);""");
     }
 
     [Test]
@@ -3409,8 +3410,8 @@ public sealed class TranslationSetsGeneratorTests
 
         // Assert
         DiagnosticIds(result).ShouldBeEmpty();
-        text.ShouldContain("    string Greeting(string name);");
-        text.ShouldContain("    string Farewell(string name);");
+        text.ShouldContain("    string Greeting([CodeChops.Idioma.Internals.ShownValue] string name);");
+        text.ShouldContain("    string Farewell([CodeChops.Idioma.Internals.ShownValue] string name);");
         foreach (var name in new[] { "Inherited", "Parameterless", "LanguageCode", "Hidden", "Secret", "Shared", "Count", "Nothing", "Reference" })
             text.ShouldNotContain($" {name}(", customMessage: name);
     }
@@ -3598,7 +3599,7 @@ public sealed class TranslationSetsGeneratorTests
         text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
         text.ShouldContain("    string Delegates(Namespace_System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
-        text.ShouldContain("ResourceText @event(string @class, int @int) => CreateResourceText<IShopTranslations>(\"TestApp.ShopTranslations.event\", translations => translations.@event(@class, @int), DefaultSet<ShopTranslationsEN>.Instance, [@class, @int]);");
+        text.ShouldContain("ResourceText @event(string @class, int @int) => CreateResourceText<IShopTranslations>(\"TestApp.ShopTranslations.event\", static (translations, values) => ((IShopTranslations)translations).@event((string)values[0]!, (int)values[1]!), DefaultSet<ShopTranslationsEN>.Instance, [@class, @int]);");
     }
 
     [Test]
@@ -3637,10 +3638,12 @@ public sealed class TranslationSetsGeneratorTests
     [Test]
     public void NamesStandingBeforeWhatGeneratedMethodWrites_ShouldCompile()
     {
-        // Arrange: parameters named like the set the generated method hands the values to, like the helpers it calls,
-        // and like another text; and texts named like those helpers and like the namespace of a parameter's type.
+        // Arrange: parameters named like the set and the values the generated method names itself, like the helpers
+        // it calls, and like another text; and texts named like those helpers and like the namespace of a parameter's
+        // type.
         const string methods = """
             public string Translated(string translations, string translations_) => translations + translations_;
+            public string Valued(string values, int values_) => values + values_;
             public string CreateResourceText(string DefaultSet, string Instance) => DefaultSet + Instance;
             public string DefaultSet(string CreateResourceText) => CreateResourceText;
             public string Name => "Name";
@@ -3676,7 +3679,8 @@ public sealed class TranslationSetsGeneratorTests
         // Assert
         errors.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
-        text.ShouldContain("translations__ => translations__.Translated(translations, translations_)");
+        text.ShouldContain("static (translations__, values) => ((IOptionTranslations)translations__).Translated((string)values[0]!, (string)values[1]!)");
+        text.ShouldContain("static (translations, values__) => ((IOptionTranslations)translations).Valued((string)values__[0]!, (int)values__[1]!)");
     }
 
     [Test]
@@ -3899,6 +3903,61 @@ public sealed class TranslationSetsGeneratorTests
         text.ShouldContain("<see cref=\"ShopTranslationsEN.Constant\">en</see>: Hello</description>");
         text.ShouldContain("<see cref=\"ShopTranslationsEN.Chosen\">en</see></description>");
         text.ShouldContain("<see cref=\"ShopTranslationsEN.Statements\">en</see></description>");
+    }
+
+    [Test]
+    public void ValuesTheDefaultWordingShows_ShouldBeMarkedInContract()
+    {
+        // Arrange: a value in the wording, a value handed on, and a value in a body with statements are shown. A value
+        // that stands only where a wording is chosen is not: in a condition, in what a switch switches on, in a
+        // pattern, in a when clause, or in a comparison. Nor is a value the method never uses, or a name that stands
+        // for something else than the parameter.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public enum Salutation { Unknown, Madam, Sir }
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Shown(string name) => $"Hello, {name}!";
+                public string ShownInOneWording(int count) => count is 1 ? "1 item" : $"{count} items";
+                public string HandedOn(string name) => Twice(name);
+                public string InStatements(string name) { var greeting = "Hello, " + name; return greeting; }
+                public string InCondition(int count) => count > 1 ? "Several" : "One";
+                public string InSwitch(Salutation salutation) => salutation switch { Salutation.Madam => "Madam", _ => "Customer" };
+                public string InPattern(object value, int limit) => value switch { int number when number > limit => "More", _ => "Less" };
+                public string InIf(bool formal) { if (formal) return "Good day"; return "Hi"; }
+                public string InComparison(int count) { var several = count != 1; return several ? "Several" : "One"; }
+                public string Unused(string name) => "Hello!";
+                public string Shadowed(string name) => string.Join(", ", new[] { "a" }.Select(name => name));
+                public string Mixed(Salutation salutation, string name) => salutation is Salutation.Madam ? $"Dear Mrs {name}" : $"Dear {name}";
+
+                private static string Twice(string value) => value + value;
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+
+        // Assert: in the contract, which is what another language implements, and not on the method of the class.
+        const string shown = "[CodeChops.Idioma.Internals.ShownValue] ";
+        text.ShouldContain($"    string Shown({shown}string name);");
+        text.ShouldContain($"    string ShownInOneWording({shown}int count);");
+        text.ShouldContain($"    string HandedOn({shown}string name);");
+        text.ShouldContain($"    string InStatements({shown}string name);");
+        text.ShouldContain("    string InCondition(int count);");
+        text.ShouldContain("    string InSwitch(Salutation salutation);");
+        text.ShouldContain("    string InPattern(object value, int limit);");
+        text.ShouldContain("    string InIf(bool formal);");
+        text.ShouldContain("    string InComparison(int count);");
+        text.ShouldContain("    string Unused(string name);");
+        text.ShouldContain("    string Shadowed(string name);");
+        text.ShouldContain($"    string Mixed(Salutation salutation, {shown}string name);");
+        text.ShouldContain("ResourceText Shown(string name) =>");
     }
 
     [Test]

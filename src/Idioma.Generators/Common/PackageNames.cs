@@ -23,6 +23,7 @@ internal static class PackageNames
     public const string InlineText = InternalsNamespace + ".IInlineText";
     public const string TranslationSetAttribute = InternalsNamespace + ".TranslationSetAttribute";
     public const string InlineTextsAttribute = InternalsNamespace + ".InlineTextsAttribute";
+    public const string ShownValueAttribute = InternalsNamespace + ".ShownValueAttribute";
 
     /// <summary>
     /// Whether a type is <c>ITranslationSet</c> itself. Told by its name and namespaces, part by part, which builds no

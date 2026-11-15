@@ -72,7 +72,8 @@ public static class GeneratedCode
     /// <summary>
     /// Declares a text of a translations contract that takes values, with its default wording taken from a set:
     /// <c>GeneratedCode.CreateResourceText&lt;IShopTranslations&gt;("MyApp.Translations.ShopTranslations.Greeting",
-    /// t => t.Greeting(name), new ShopTranslationsEN(), [name])</c>.
+    /// static (set, values) => ((IShopTranslations)set).Greeting((string)values[0]!), new ShopTranslationsEN(),
+    /// [name])</c>.
     /// A method of the class the source generator writes creates its text this way, on every call.
     /// </summary>
     /// <typeparam name="TContract">
@@ -80,7 +81,10 @@ public static class GeneratedCode
     /// <paramref name="defaults"/> it would be that set's own type, and no other language's set would match.
     /// </typeparam>
     /// <param name="key">The name of this text in a resource file.</param>
-    /// <param name="selector">Picks the text from a set, with the values the method was called with.</param>
+    /// <param name="selector">
+    /// Picks the text from a set of the contract, with the values the text keeps. It is handed those values, so that
+    /// it holds none itself and one delegate serves every call.
+    /// </param>
     /// <param name="defaults">The set that supplies the default wording, typically the contract's English set.</param>
     /// <param name="arguments">
     /// The values the method was called with, in the order of its parameters: the text's
@@ -95,7 +99,7 @@ public static class GeneratedCode
     /// implement that property.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static ResourceText CreateResourceText<TContract>(string key, Func<TContract, string> selector, TContract defaults, ReadOnlySpan<object?> arguments)
+    public static ResourceText CreateResourceText<TContract>(string key, Func<ITranslationSet, ReadOnlySpan<object?>, string> selector, TContract defaults, ReadOnlySpan<object?> arguments)
         where TContract : class, ITranslationSet
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);

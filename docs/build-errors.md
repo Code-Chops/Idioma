@@ -40,6 +40,7 @@ error LOC011: This text is written in one language, and this assembly supports e
 | `LOC018`           | A `LanguageCode` that is not a culture name, such as `"en_GB"`, which makes the set throw as it registers                                                                           | Yes               |
 | `LOC019`           | A public method of a default-language set that returns a string and takes parameters, but cannot be a text: generic, sharing its name, or with a parameter the text cannot keep     |                   |
 | `LOC020`           | A parameter of a text that takes values named differently than in its contract, as in `Invited(string guest, string host)` for `Invited(string host, string guest)`                 | Yes               |
+| `LOC021`           | A text that leaves out a value the default wording shows, as in a Dutch `Greeting(string name) => "Hallo!"` for an English `$"Hello, {name}!"`                                      | Yes               |
 
 ## What still converts
 

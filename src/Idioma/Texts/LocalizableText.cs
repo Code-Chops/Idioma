@@ -96,7 +96,14 @@ public partial record LocalizableText
     /// The wording shown when the text has none for the user's language: that of the default language, or the only
     /// wording of a text without translations.
     /// </summary>
-    public string DefaultText { get; }
+    /// <remarks>
+    /// A text of a set that takes values, such as <c>ShopTranslations.Greeting(customer.Name)</c>, words it with those
+    /// values each time it is read.
+    /// </remarks>
+    public string DefaultText => this._defaultText ?? this.WordDefaultText();
+
+    // Null only for a text that words its default wording itself (WordDefaultText).
+    private readonly string? _defaultText;
 
     // A text made from a plain string, or declared by key alone: without translations of its own and without a
     // contract no step of the order above can find it other wording, in any culture, so it need not walk them.
@@ -125,7 +132,26 @@ public partial record LocalizableText
 
         this.ThrowIfDerived();
 
-        this.DefaultText = defaultText;
+        this._defaultText = defaultText;
+    }
+
+    /// <summary>
+    /// A text that words its default wording when that is asked for (<see cref="WordDefaultText"/>), and not as it is
+    /// created: a <see cref="ResourceText"/> that takes values.
+    /// </summary>
+    private protected LocalizableText()
+    {
+        this.ThrowIfDerived();
+    }
+
+    /// <summary>
+    /// The default wording of a text created without one.
+    /// </summary>
+    // Not kept once worded: the values in it are formatted for the culture of the moment, which the next reader may
+    // not share.
+    private protected virtual string WordDefaultText()
+    {
+        throw new InvalidOperationException($"{this.GetType()} was created without a default wording, and words none.");
     }
 
     /// <summary>
@@ -144,7 +170,7 @@ public partial record LocalizableText
 
         this.ThrowIfDerived();
 
-        this.DefaultText = original.DefaultText;
+        this._defaultText = original._defaultText;
         this._translationPairs = original._translationPairs;
         this._translations = original._translations;
     }

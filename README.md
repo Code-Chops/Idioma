@@ -2,7 +2,7 @@
 
 Translations for any .NET app, written in C# and checked at compile time:
 
-- The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation that takes other values than the original.
+- The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation that leaves out a value the original shows.
 - There are no resource files, so you get full IDE support: autocomplete, go to definition, and find all references.
 - An AI coding assistant can translate your texts, and the build tells it which are missing ([details](#translating-your-texts)).
 - The package has no dependencies, is light and fast, and is safe to trim and to publish with Native AOT.
@@ -171,6 +171,12 @@ A text that takes a value, such as `Greeting` above, is a method. Call it with t
 
 Every language implements the method, so each puts the value where it reads best, and a set that leaves the method out, or gives it other parameters, does not compile. A value can carry a format, as in `$"Total: {amount:N2}"`.
 
+Use the value in every language. A Dutch greeting that lost its `{name}` is a build error:
+
+```text
+error LOC021: 'ShopTranslationsNL.Greeting' does not use its parameter 'name', which the default wording of 'IShopTranslations.Greeting' shows. Use the value in the wording of every language: otherwise it is left out for the users of one language.
+```
+
 For a language other than the user's, pass its culture to `ToString`, which then also formats the values for it:
 
 ```csharp
@@ -295,7 +301,7 @@ An AI coding assistant can translate your texts, as they are C# in your reposito
 
 So a text does not wait for its translation: it gets a wording in every language in the change that adds it. That leaves a translator to review the wording, in a file with a line per text.
 
-The build checks every edit, an assistant's or a person's: a text left out, or one given other values, does not compile, so neither reaches a user.
+The build checks every edit, an assistant's or a person's: a text left out or a value dropped does not compile, so neither reaches a user.
 
 ## Where Idioma does not fit
 

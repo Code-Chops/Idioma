@@ -441,6 +441,25 @@ namespace CodeChops.Idioma.Tests
             Allocated(() => orders == "Bestellingen").ShouldBe(0, "inline text, == a string");
         }
 
+        [Test]
+        [NotInParallel(nameof(TranslationsRegistry))]
+        public void CreatingATextThatTakesValues_ShouldAllocateOnlyTheTextAndItsValues()
+        {
+            // Arrange: what the docs promise a text that takes values costs. A Dutch reader, whose language has one
+            // set, so that showing the text words it once.
+            using var _ = new UICultureScope("nl-NL");
+            var name = "Max";
+
+            // Act: per call, the least of a few rounds of ten thousand.
+            var created = Allocated(() => GeneratedTranslations.Welcome(name)) / 10_000;
+            var shown = Allocated(() => GeneratedTranslations.Welcome(name).ToString()) / 10_000;
+
+            // Assert: the text itself (96 bytes) and the array of its one value (32), and no function that holds the
+            // value, no default wording, and no default language. Shown, the wording besides ("Welkom, Max!", 48).
+            created.ShouldBeLessThanOrEqualTo(128, "text that takes a value, created");
+            shown.ShouldBeLessThanOrEqualTo(176, "text that takes a value, created and shown");
+        }
+
         /// <summary>
         /// The bytes this thread allocates in an action, the least of a few rounds after a warm-up: a round that meets the
         /// JIT or a lazily built table is not what a page that shows texts pays for each time.

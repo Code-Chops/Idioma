@@ -320,7 +320,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
 
             // A text that takes values is a method: its parameters are what the compiler holds every language to.
             sb.AppendLine(member.IsMethod
-                ? $"    string {EscapeIdentifier(member.Name)}({RenderParameters(member, contract.Namespace, aliases)});"
+                ? $"    string {EscapeIdentifier(member.Name)}({RenderParameters(member, contract.Namespace, aliases, marksShownValues: true)});"
                 : $"    string {EscapeIdentifier(member.Name)} {{ get; }}");
         }
 
@@ -363,14 +363,16 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             }
 
             // A text that takes values is created on every call, with the values it is called with: the text keeps
-            // them, and hands them to the set of the user's language when it is shown. The set is named apart from
-            // the parameters, which stand before it inside the method.
+            // them, and hands them to the set of the user's language when it is shown. So the set is picked by a
+            // function that is handed the values back, each as the type it was passed as, and holds none itself: one
+            // function then serves every call, where one holding the values would be a new object per call. The set
+            // and the values are named apart from the parameters.
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => EscapeIdentifier(parameter.Name)));
-            var set = "translations";
-            while (member.Parameters.Any(parameter => String.Equals(parameter.Name, set, StringComparison.Ordinal)))
-                set += "_";
+            var set = GetNameApartFrom(member, "translations");
+            var values = GetNameApartFrom(member, "values");
+            var passed = String.Join(", ", member.Parameters.Select((parameter, index) => $"({RenderType(parameter.Type, contract.Namespace, aliases)}){values}[{index}]!"));
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.ResourceText} {memberName}({RenderParameters(member, contract.Namespace, aliases)}) => CreateResourceText<{name}>({keyLiteral}, {set} => {set}.{memberName}({arguments}), DefaultSet<{className}>.Instance, [{arguments}]);");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.ResourceText} {memberName}({RenderParameters(member, contract.Namespace, aliases, marksShownValues: false)}) => CreateResourceText<{name}>({keyLiteral}, static ({set}, {values}) => (({name}){set}).{memberName}({passed}), DefaultSet<{className}>.Instance, [{arguments}]);");
         }
 
         // The end of the texts, and the set every text takes its default wording from. File-local, so that inside this
@@ -637,11 +639,27 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// The parameters of a text that takes values, as the contract and the generated class declare them.
+    /// A name for something the generated method of a text declares itself, which none of the text's parameters
+    /// carries: the name asked for, with an underscore for each parameter that took it.
     /// </summary>
-    private static string RenderParameters(TranslationsMember member, string @namespace, SortedDictionary<string, string> aliases)
+    private static string GetNameApartFrom(TranslationsMember member, string name)
     {
-        var parameters = String.Join(", ", member.Parameters.Select(parameter => $"{RenderType(parameter.Type, @namespace, aliases)} {EscapeIdentifier(parameter.Name)}"));
+        while (member.Parameters.Any(parameter => String.Equals(parameter.Name, name, StringComparison.Ordinal)))
+            name += "_";
+
+        return name;
+    }
+
+    /// <summary>
+    /// The parameters of a text that takes values, as the contract and the generated class declare them. The contract
+    /// marks each value the default wording shows (<c>[ShownValue]</c>), which <see cref="TextParametersAnalyzer"/>
+    /// holds every other set to, in this assembly and in those referencing it.
+    /// </summary>
+    private static string RenderParameters(TranslationsMember member, string @namespace, SortedDictionary<string, string> aliases, bool marksShownValues)
+    {
+        var parameters = String.Join(", ", member.Parameters.Select(parameter
+            => $"{(marksShownValues && parameter.IsShown ? $"[{PackageNames.InternalsNamespace}.ShownValue] " : "")}{RenderType(parameter.Type, @namespace, aliases)} {EscapeIdentifier(parameter.Name)}"));
+
         return parameters;
     }
 

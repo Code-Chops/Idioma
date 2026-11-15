@@ -69,7 +69,7 @@ public static partial class ShopTranslations
 }
 ```
 
-Each call creates a text that keeps the values, as its `Arguments`, and words itself with them when it is shown. So it follows the user's language like any other text: one created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its full name, without its parameters. Two such texts are equal when their values are.
+Each call creates a text that keeps the values, as its `Arguments`, and words itself with them when it is shown. A call allocates the text and its values, and nothing more until the text is shown. So it follows the user's language like any other text: one created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its full name, without its parameters. Two such texts are equal when their values are.
 
 A method without parameters is not a text: write a text without values as a property. A public method of the default-language set that is not meant as a text, such as a helper, becomes one all the same, and every language then has to implement it: make a helper `private` or `internal`.
 
@@ -81,6 +81,8 @@ The generated class repeats the parameters as the set declares them, which rules
 - a parameter that is `dynamic`, a pointer, or a ref struct such as a span.
 
 Every language names the parameters as the default-language set does (`LOC020`). The compiler checks their types and their order, but not their names, so without that check a set could declare two parameters of one type the other way round and word each value as the other.
+
+Every language also uses the values the default wording shows (`LOC021`). A Dutch `Greeting(string name) => "Hallo!"` next to an English `$"Hello, {name}!"` is a build error, as it would leave the name out for Dutch users. A value the default wording only chooses by, as `salutation` in a `switch`, may go unused in a language that makes no such distinction. The contract records which values the default wording shows, so the check also holds a set that an app adds to a library's contract.
 
 What else to know:
 
