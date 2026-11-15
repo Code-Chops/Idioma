@@ -1,0 +1,16 @@
+// The codespace that the badge in the README opens: the demos, ready to run, without installing anything.
+// It takes the .NET 11 SDK because the global.json at the root of the repository asks for it.
+{
+  "name": "Idioma demos",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:11.0",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-dotnettools.csharp"]
+    },
+    "codespaces": {
+      "openFiles": ["demos/README.md", "demos/SetDemo.cs", "demos/InlineTextDemo.cs"]
+    }
+  },
+  // Each demo runs once the codespace opens, so its output is the first thing a visitor sees.
+  "postAttachCommand": "cd demos && dotnet run SetDemo.cs && dotnet run InlineTextDemo.cs"
+}

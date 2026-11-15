@@ -9,7 +9,7 @@ internal static class FormatPlaceholders
     /// <summary>
     /// What a message says about a wording that is no valid format string.
     /// </summary>
-    public const string InvalidDescription = "a brace that is no placeholder (write a literal brace as {{ or }})";
+    public const string InvalidDescription = "a brace that is not a placeholder (write a literal brace as {{ or }})";
 
     /// <summary>
     /// The index from which a placeholder is read as invalid. Not a limit of <c>String.Format</c>, which parses any

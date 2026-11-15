@@ -1,66 +1,48 @@
 # Idioma
 
-## Introduction
+Translations for any .NET app, written in C# and checked at compile time:
 
-Translations for any .NET app, written in C#. The build makes sure every text exists in every language you support.
+- The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation whose placeholders differ from the original.
+- There are no resource files, so you get full IDE support: autocomplete, go to definition, and find all references.
+- An AI coding assistant can translate your texts, and the build tells it which are missing ([details](#translating-your-texts)).
+- The package has no dependencies, is light and fast, and is safe to trim and to publish with Native AOT.
 
-With resx files and `IStringLocalizer`, a text is a string key, and a mistake stays hidden until a user sees it: a mistyped key shows as the key itself, and a wording nobody translated shows in the default language. Here texts are C#, so both are build errors.
-
-Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and write each text in one of two ways.
-
-### Inline texts
-
-An inline text is written in one line, where you use it:
-
-```razor
-<button>
-  @LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")
-</button>
-```
-
-Check the demo [`InlineTextsDemo.cs`](https://github.com/Code-Chops/Idioma/blob/main/demos/InlineTextsDemo.cs) to see it in action on your machine.
-
-### Sets
-
-A set holds the texts that belong together, in one language: a class with a property per text. From the set of your default language, the build writes the contract `IShopTranslations`, which the other sets implement, and the class `ShopTranslations`, which shows the texts.
+Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and write each text in one of two ways:
+in a set per language, for texts you reuse, or inline, where you use it once.
 
 ```csharp
 public partial class ShopTranslationsEN : ITranslationSet
 {
-    public virtual string Cart => "Cart";
-    public virtual string Checkout => "Checkout";
+    public string Cart => "Cart";
+    public string Checkout => "Checkout";
 }
 
 public class ShopTranslationsNL : IShopTranslations
 {
-    public virtual string Cart => "Winkelwagen";
-    public virtual string Checkout => "Afrekenen";
+    public string Cart => "Winkelwagen";
+    public string Checkout => "Afrekenen";
 }
 ```
 
+From the English set, the source generator writes the contract `IShopTranslations`, which the Dutch set implements, and the class `ShopTranslations`, which shows each text in the user's language:
+
 ```razor
+@* A text of a set *@
 <button>
   @ShopTranslations.Checkout
 </button>
+
+@* An inline text *@
+<button>
+  @LocalizableText.Inline(en: "Cancel", nl: "Annuleren")
+</button>
 ```
-
-Check the demo [`SetsDemo.cs`](https://github.com/Code-Chops/Idioma/blob/main/demos/SetsDemo.cs) to see it in action on your machine.
-
-Add German to your languages, and the build asks for it in every inline text, and names the set to write:
-
-```text
-error LOC004: 'ShopTranslations' has no translation into 'de', which [assembly: SupportedLanguages] requires. Add 'class ShopTranslationsDE : IShopTranslations'. A nested, generic, or file-local class does not count as a set.
-```
-
-Besides that:
-
-- No resource files and no string keys. In your IDE, hovering over `ShopTranslations.Checkout` shows its wording in every language, and you can jump to each.
-- Showing a text allocates no memory, and the package is safe to trim.
-- In Blazor WebAssembly, users switch language without reloading the app, where resx files reload it or download every language at startup ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md#switching-language-without-a-reload)).
-
-The rest of this page shows how to write your texts and show them. To see it working first, [run a demo](#run-a-demo). The details have pages of their own: [how Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md), [language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md), [libraries and apps](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md), [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md), and [what the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md).
 
 ## Getting started
+
+> For complete apps to run, see the [demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md), or run them in your browser:
+>
+> [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Code-Chops/Idioma?quickstart=1)
 
 ### Install
 
@@ -68,7 +50,7 @@ The rest of this page shows how to write your texts and show them. To see it wor
 dotnet add package CodeChops.Idioma
 ```
 
-The source generator comes with the package, so there is nothing else to set up. It needs .NET 10 or later and C# 14, the language version .NET 10 uses unless your project sets an older `LangVersion`.
+The package needs .NET 10 or later and C# 14, the language version .NET 10 uses unless your project sets an older `LangVersion`.
 
 ### Declare your languages
 
@@ -77,10 +59,12 @@ Add this to any C# file of your project, after its `using` lines:
 ```csharp
 using CodeChops.Idioma;
 
-[assembly: SupportedLanguages("en", "nl")] // the first is the default
+[assembly: SupportedLanguages("en", "nl")] // The first is the default
 ```
 
 From then on, the build makes sure that every text of the project has each of these languages.
+
+When your texts are in a library, declare your languages in the app's own project as well, the project that starts: your users get the languages of the app ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#the-apps-languages)).
 
 In a Blazor or Razor project, add the namespace to `_Imports.razor` as well, together with the namespace of your sets:
 
@@ -91,46 +75,61 @@ In a Blazor or Razor project, add the namespace to `_Imports.razor` as well, tog
 
 ### Write your texts
 
-Write a text in one of two ways, and mix them as you like:
+Write a text in one of two ways, and mix them as you like.
 
-- **Inline text**, written in one line where you use it, for single use in a component or page.
-- **A set per language**, each a class, for many reusable texts that belong together.
+#### Write a set
+
+A set (like a resx file) holds the texts that belong together, in one language: a class with a property per text.
+It suits texts you reuse. Write the set of your default language as a partial class whose name ends in the code of that language in capitals, as in `ShopTranslationsEN`:
+
+```csharp
+public partial class ShopTranslationsEN : ITranslationSet
+{
+    public string Cart => "Cart";
+    public string Checkout => "Checkout";
+    public string Greeting => "Hello, {0}!";
+}
+```
+
+That makes three names to tell apart:
+
+- `ShopTranslationsEN` is the set you wrote, in your default language.
+- `IShopTranslations` is the contract, which lists every text. The source generator writes it from your set.
+- `ShopTranslations` is the class you show the texts with. The source generator writes it as well.
+
+Both generated names are the set's name without its language code, and both land in the set's namespace.
+
+Write a set for every other language, a class that implements the contract:
+
+```csharp
+public class ShopTranslationsNL : IShopTranslations
+{
+    public string Cart => "Winkelwagen";
+    public string Checkout => "Afrekenen";
+    public string Greeting => "Hallo, {0}!";
+}
+```
+
+A missing text or a missing language is a build error. There is nothing to register: every set registers itself.
+
+Add German to your languages, and the build names the set to write:
+
+```text
+error LOC004: 'ShopTranslations' has no translation into 'de', which [assembly: SupportedLanguages] requires.
+Add 'class ShopTranslationsDE : IShopTranslations'. A nested, generic, or file-local class does not count as a set.
+```
 
 #### Write an inline text
 
-Write the text where you use it: in markup, as in the [introduction](#inline-texts), or in C#:
+An inline text is written in one line where you use it, for single use in markup or in C#:
 
 ```csharp
 public LocalizableText Title { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
 ```
 
-`Inline` takes one argument per language you declared, so leaving a language out does not compile.
+`Inline` takes one argument per language you declared, so leaving out a translation does not compile.
 
-#### Write a set
-
-A set is a class that holds your texts in one language. Write the set of your default language as a partial class named after that language, with one property per text:
-
-```csharp
-public partial class ShopTranslationsEN : ITranslationSet
-{
-    public virtual string Cart => "Cart";
-    public virtual string Checkout => "Checkout";
-    public virtual string Greeting => "Hello, {0}!";
-}
-```
-
-The source generator then writes the contract `IShopTranslations`, which lists every text, and the class `ShopTranslations` to show them with. Both take their name from the set's name without its language code, and land in the set's namespace. Write a set for every other language, a class that implements the contract:
-
-```csharp
-public class ShopTranslationsNL : IShopTranslations
-{
-    public virtual string Cart => "Winkelwagen";
-    public virtual string Checkout => "Afrekenen";
-    public virtual string Greeting => "Hallo, {0}!";
-}
-```
-
-Each text is `virtual`, so that a set deriving from this one can override it: a [regional variant](#a-regional-variant-such-as-british-english), or an app's rewording of a library's texts ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md)).
+### Show a text
 
 Show a text by its name, wherever you need it:
 
@@ -140,14 +139,61 @@ Show a text by its name, wherever you need it:
 </button>
 ```
 
-A missing text or a missing language is a build error. There is nothing to register: every set registers itself.
+In your IDE, hovering over `ShopTranslations.Cart` shows its wording in every language, and you can jump to each.
 
-### A regional variant, such as British English
+A text shows the wording for the user's language in markup, in string interpolation, or as a `string`, as in `string label = ShopTranslations.Checkout;`. A user whose language you do not support sees your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#which-wording-a-user-sees)).
 
-`ShopTranslationsEN` serves every English culture, `en-US` and `en-GB` alike. For the texts that differ in Britain, list `en-GB`, and write a set with just those texts, named after the code in PascalCase and deriving from your English set:
+Every text is a `LocalizableText`, so that is the type for a text your own code holds or takes, as the `Title` above does. A text of a set is a `ResourceText`: a `LocalizableText` that also carries a key ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#what-the-source-generator-writes)).
+
+The user's language is `CultureInfo.CurrentUICulture`.
+A desktop or console app starts with the language of the user's system, and a Blazor WebAssembly app with that of the browser.
+
+> An ASP.NET Core app needs request localization, as in `app.UseRequestLocalization("en", "nl")`,
+> which sets the language for each request. Without it, every user gets the language of the server.
+
+For the wording in a language other than the user's, such as the language of an email's recipient, pass its culture to `ToString`:
+
+```csharp
+string dutch = ShopTranslations.Checkout.ToString(CultureInfo.GetCultureInfo("nl"));
+```
+
+### Format a text
+
+`Format` fills in a text's placeholders, which are those of `String.Format`, so one can carry a format, as in `{0:N2}`:
+
+```razor
+<p>
+  @ShopTranslations.Greeting.Format(customer.Name)
+</p>
+```
+
+Give every language the same placeholders. A Dutch greeting that lost its `{0}` is a build error:
+
+```text
+error LOC016: 'ShopTranslationsNL.Greeting' has no placeholders, while the default wording of 'IShopTranslations.Greeting' has placeholder {0}. Give every language the same placeholders: otherwise Format throws, or leaves out a value, for the users of one language.
+```
+
+For a language other than the user's, pass its culture to `Format`, which then also formats the values for it:
+
+```csharp
+string greeting = ShopTranslations.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name);
+```
+
+## Going further
+
+### Add a regional variant, such as British English
+
+`ShopTranslationsEN` serves every English culture, `en-US` and `en-GB` alike.
+For the texts that differ in Britain, list `en-GB`, make them `virtual` in your English set, and write a set with just those texts, named after the code in PascalCase and deriving from the English one:
 
 ```csharp
 [assembly: SupportedLanguages("en", "nl", "en-GB")]
+
+public partial class ShopTranslationsEN : ITranslationSet
+{
+    public virtual string Cart => "Cart"; // Virtual, so the British set can override it
+    // Your other texts, as they were
+}
 
 public class ShopTranslationsEnGB : ShopTranslationsEN
 {
@@ -164,66 +210,60 @@ Once you list `en-GB`, the build asks for British wording everywhere, so that no
 
 To add British wording in one place only, see [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md#regional-variants).
 
-### Show a text
+### Compare a text with a string
 
-A text shows the wording for the user's language wherever you put it: in markup as above, in string interpolation, or as a `string`, as in `string label = ShopTranslations.Checkout;`. A user whose language you do not support sees your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#which-wording-a-user-sees)).
-
-For the wording in a language other than the user's, such as the language of an email's recipient, pass its culture to `ToString`:
+To compare a text with a string, use `==`, which compares the wording for the current UI culture:
 
 ```csharp
-string dutch = ShopTranslations.Checkout.ToString(CultureInfo.GetCultureInfo("nl"));
+bool isCheckout = text == "Afrekenen";
 ```
 
-To compare a text with a string, use `==`, as in `text == "Afrekenen"`: it compares the wording for the current UI culture, where `Equals` and `Contains` do not, so the build rejects a string passed to them ([`LOC017`](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md)).
+`Equals` and `Contains` compare texts instead, so they are false for a string even while the text shows that wording. The build rejects a string passed to them ([`LOC017`](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md)).
 
-### Format a text
+### Change a text of a library
 
-```razor
-<p>
-  @ShopTranslations.Greeting.Format(customer.Name)
-</p>
-```
-
-`Format` fills in a text's placeholders. Give every language the same placeholders: the build checks it.
-
-For a language other than the user's, pass its culture to `Format`, which then also formats the values for it:
+A library can use Idioma for its own texts, as your app does. To change one of them, write a set in your app that derives from the library's set of that language, name it after that language too, and override the text:
 
 ```csharp
-string greeting = ShopTranslations.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name);
+// DataTableTranslationsEN is the English set of a library your app uses
+public sealed class MyDataTableTranslationsEN : DataTableTranslationsEN
+{
+    public override string Empty => "No orders yet"; // Empty is virtual in DataTableTranslationsEN
+}
 ```
 
-### Blazor
+Your wording wins over the library's, and every other text keeps the library's wording.
 
-Every language is compiled into your app, so in Blazor WebAssembly a user switches language without a download or a reload. The page on [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md) shows a language picker that does it, and covers Blazor on a server, dates and numbers, and texts passed between render modes.
+For a text that is not virtual, or a library that lacks one of your languages, see [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#changing-a-text-of-a-library).
 
 ## Translating your texts
 
-Your texts are C# in your repository, where an AI coding assistant works, and translating is something it does well. The build tells it what to write: add a language to the list, and the build names each set that is missing; add a text, and it names that text for each language that lacks it. So a text does not wait for its translation: it gets a wording in every language in the change that adds it.
+An AI coding assistant can translate your texts, as they are C# in your repository, and the build tells it what to write:
 
-That leaves a translator to review the wording, in a file with a line per text:
+- Add a language to the list, and the build names each set that is missing.
+- Add a text, and the build names it for each language that lacks it.
 
-```csharp
-public virtual string Checkout => "Afrekenen";
-```
+So a text does not wait for its translation: it gets a wording in every language in the change that adds it. That leaves a translator to review the wording, in a file with a line per text.
 
 The build checks every edit, an assistant's or a person's: a text left out or a placeholder dropped does not compile, so neither reaches a user.
 
-## Run a demo
+## Where Idioma does not fit
 
-The repository has two demos in its [`demos`](https://github.com/Code-Chops/Idioma/tree/main/demos) folder. Each is a complete app in one file, which `dotnet run` runs without a project:
+- When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can let a resource file override it ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
+- When your translators work in a translation tool, which reads files such as XLIFF.
+- When you use an older version of .NET than 10 or C# 14.
 
-- [`SetsDemo.cs`](https://github.com/Code-Chops/Idioma/blob/main/demos/SetsDemo.cs) writes its texts in a set per language.
-- [`InlineTextsDemo.cs`](https://github.com/Code-Chops/Idioma/blob/main/demos/InlineTextsDemo.cs) writes its text inline.
+## Details
 
-Both support English, Dutch, and British English (`en-GB`), a [regional variant](#a-regional-variant-such-as-british-english) of English, and print their texts in each. Run one from the `demos` folder of a clone:
+Each subject has a page of its own:
 
-```shell
-dotnet run SetsDemo.cs
-```
-
-A demo runs with .NET 10 or later. Its first line fetches the latest version of the package.
-
-Remove a Dutch wording from either file, and it no longer builds.
+- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): which wording a user sees, what the source generator writes, how sets register, how to read a set yourself, and how a text travels through JSON.
+- [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md): how a set's name gives its language, and the two ways to add a regional variant.
+- [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): which project's languages your users get, what the build asks when such a library lacks one of them, and how your app changes one of its texts.
+- [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): switching language without a reload, Blazor on a server, dates and numbers, and a text as a component parameter.
+- [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning by its code, what still converts to a text, and what the build misses.
+- [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, moving a resource file, and keeping a resource file as an override.
+- [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): two complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
 
 ## License
 

@@ -3,28 +3,29 @@
 using System.Globalization;
 using CodeChops.Idioma;
 
-[assembly: SupportedLanguages("en", "nl", "en-GB")] // the first is the default
+[assembly: SupportedLanguages("en", "en-GB", "nl")] // The first is the default
 
-foreach (var language in new[] { "en", "nl", "en-GB" })
+foreach (var language in TranslationsRegistry.SupportedLanguages)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
-    Console.WriteLine($"{ShopTranslations.Greeting.Format("Ada")} {ShopTranslations.Cart}");
+    Console.WriteLine($"{ShopTranslations.Greeting.Format("Max")} {ShopTranslations.Cart}");
 }
 
 public partial class ShopTranslationsEN : ITranslationSet
 {
     public virtual string Cart => "Cart";
-    public virtual string Greeting => "Hello, {0}!";
-}
-
-public class ShopTranslationsNL : IShopTranslations
-{
-    public virtual string Cart => "Winkelwagen";
-    public virtual string Greeting => "Hallo, {0}!";
+    public string Greeting => "Hello, {0}!";
 }
 
 // British English: only the texts that differ from the English above.
 public class ShopTranslationsEnGB : ShopTranslationsEN
 {
     public override string Cart => "Basket";
+}
+
+// Dutch
+public class ShopTranslationsNL : IShopTranslations
+{
+    public string Cart => "Winkelwagen";
+    public string Greeting => "Hallo, {0}!";
 }

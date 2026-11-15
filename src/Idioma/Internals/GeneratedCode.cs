@@ -40,7 +40,8 @@ public static class GeneratedCode
 
     /// <summary>
     /// Declares a text of a translations contract, with its default wording taken from a set:
-    /// <c>GeneratedCode.CreateResourceText&lt;IShopTranslations&gt;("Shop.Checkout", t => t.Checkout, new ShopTranslationsEN())</c>.
+    /// <c>GeneratedCode.CreateResourceText&lt;IShopTranslations&gt;("MyApp.Translations.ShopTranslations.Checkout",
+    /// t => t.Checkout, new ShopTranslationsEN())</c>.
     /// The class the source generator writes declares its texts this way.
     /// </summary>
     /// <typeparam name="TContract">

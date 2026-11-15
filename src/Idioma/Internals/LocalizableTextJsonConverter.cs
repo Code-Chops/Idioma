@@ -11,7 +11,8 @@ namespace CodeChops.Idioma.Internals;
 /// <see cref="ITranslationSet"/> contract the wording of every language your app declares that a set is registered for,
 /// their regions included, as a user of that language sees it when the text is written. A resource text keeps its
 /// <see cref="ResourceText.Key"/>:
-/// <c>{"key":"Shop.Checkout","defaultText":"Checkout","translations":{"en":"Checkout","nl":"Afrekenen"}}</c>.
+/// <c>{"key":"MyApp.Translations.ShopTranslations.Checkout","defaultText":"Checkout",
+/// "translations":{"en":"Checkout","nl":"Afrekenen"}}</c>.
 /// A text with one wording for every culture and no key, such as a customer's name, is written as that wording:
 /// <c>"Anna"</c>. A text without translations leaves <c>translations</c> out.
 /// </para>

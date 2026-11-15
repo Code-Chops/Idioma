@@ -8,14 +8,20 @@ In a Blazor or Razor project, add the namespace to `_Imports.razor`, together wi
 @using MyApp.Translations
 ```
 
+Other subjects have a page of their own: [how Idioma works](how-it-works.md), [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [what the build rejects](build-errors.md), and [coming from resx](coming-from-resx.md).
+
 ## Switching language without a reload
 
-In this library, every language is compiled into your assemblies, so switching needs no download and no reload. Switch by setting the culture, as this language picker does:
+With Idioma, every language is compiled into your assemblies, so switching needs no download and no reload. Switch by setting the culture, as this language picker does. It shows a button for each language your app declares in its own project ([details](libraries-and-apps.md#the-apps-languages)):
 
 ```razor
 @* LanguagePicker.razor *@
-<button @onclick='() => SelectLanguage("en")'>English</button>
-<button @onclick='() => SelectLanguage("nl")'>Nederlands</button>
+@foreach (var language in TranslationsRegistry.SupportedLanguages)
+{
+    <button @onclick="() => SelectLanguage(language)">
+      @language.ToUpperInvariant()
+    </button>
+}
 
 @code {
     [Parameter] public EventCallback LanguageChanged { get; set; }
@@ -39,15 +45,39 @@ After the click, Blazor re-renders only the picker, and other components show th
 @* MainLayout.razor *@
 @inherits LayoutComponentBase
 
-<LanguagePicker LanguageChanged="StateHasChanged" />
+<LanguagePicker LanguageChanged="@StateHasChanged" />
 
 <div @key="CultureInfo.CurrentUICulture.Name">
     <NavMenu />
+
     @Body
 </div>
 ```
 
 When the key changes, Blazor builds everything inside it anew, so every text reads the new culture. What is built anew loses its state, such as what a user typed in a form. The layout handles the event, so it must be interactive, as it is when the whole app is: `<Routes @rendermode="InteractiveWebAssembly" />`.
+
+### Remembering the choice
+
+The choice lasts until the page reloads: the app then starts in the browser's language again. To keep it, store the language when the user picks one, in the browser's local storage for example. Give the picker `@inject IJSRuntime JS`, and add this line to `SelectLanguage`:
+
+```csharp
+await JS.InvokeVoidAsync("localStorage.setItem", "language", name);
+```
+
+Then start the app in the stored language. In `Program.cs` of the WebAssembly project, add usings for `System.Globalization` and `Microsoft.JSInterop`, and replace `await builder.Build().RunAsync();` with:
+
+```csharp
+var host = builder.Build();
+
+var js = host.Services.GetRequiredService<IJSRuntime>();
+
+if (await js.InvokeAsync<string?>("localStorage.getItem", "language") is { } name)
+    CultureInfo.DefaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo(name);
+
+await host.RunAsync();
+```
+
+This needs all globalization data (see [Dates and numbers](#dates-and-numbers)): without it, Blazor refuses to start in another language than the browser's.
 
 ## On a server
 

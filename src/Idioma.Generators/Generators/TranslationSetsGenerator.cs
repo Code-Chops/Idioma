@@ -6,8 +6,9 @@ namespace CodeChops.Idioma.Generators;
 /// default language (<c>ShopTranslationsEN</c>) it emits the contract interface (<c>IShopTranslations</c>, one
 /// <see cref="string"/> member per public string property, deriving from <c>ITranslationSet</c>), a partial declaration
 /// that makes the class implement it, and the static partial class named after the set without its language suffix
-/// (<c>ShopTranslations</c>, one <c>ResourceText</c> per member keyed <c>Shop.&lt;Name&gt;</c> and worded by the set,
-/// and no other member); the interface and the class take the set's accessibility. Each
+/// (<c>ShopTranslations</c>, one <c>ResourceText</c> per member, keyed by its full name, as in
+/// <c>MyApp.Translations.ShopTranslations.Checkout</c>, and worded by the set, and no other member); the interface and
+/// the class take the set's accessibility. Each
 /// generated member inherits the property's doc comment through <c>&lt;inheritdoc cref/&gt;</c>, or else is documented
 /// with its default-language wording, and links to its wording in every language, which it shows next to the link. Each member of the contract whose
 /// default wording is a constant records its placeholders (<c>[FormatPlaceholders]</c>), which
@@ -335,7 +336,8 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
             """);
 
         // Nothing but the texts, so that a text can take any name but the class's own (LOC014). Each key is written out
-        // in full, as in "Shop.Checkout": a constant for the prefix would take a name from the texts.
+        // in full, as in "MyApp.Translations.ShopTranslations.Checkout": a constant for the prefix would take a name
+        // from the texts.
         for (var i = 0; i < texts.Length; i++)
         {
             var member = texts[i];

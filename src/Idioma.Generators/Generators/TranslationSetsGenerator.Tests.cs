@@ -687,13 +687,15 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("ShopTextsEN", "IShopTexts", "ShopTexts", "ShopTexts.")]
-    [Arguments("TranslationsEN", "ITranslations", "Translations", "Translations.")]
-    [Arguments("TranslationSetEN", "ITranslationSet", "TranslationSet", "TranslationSet.")]
+    [Arguments("ShopTranslationsEN", "IShopTranslations", "ShopTranslations", "TestApp.ShopTranslations.")]
+    [Arguments("ShopTextsEN", "IShopTexts", "ShopTexts", "TestApp.ShopTexts.")]
+    [Arguments("TranslationsEN", "ITranslations", "Translations", "TestApp.Translations.")]
+    [Arguments("TranslationSetEN", "ITranslationSet", "TranslationSet", "TestApp.TranslationSet.")]
     public void Names_ShouldDeriveFromClassName(string className, string contract, string texts, string keyPrefix)
     {
-        // Arrange & Act: the key stem drops a trailing "Translations", keeping it when nothing else is left. The last
-        // set gets a contract named as the library's own interface is, which it therefore lists by its full name.
+        // Arrange & Act: a key starts with the full name of the generated class, as that class is named, a trailing
+        // "Translations" included. The last set gets a contract named as the library's own interface is, which it
+        // therefore lists by its full name.
         var text = ContractText(Run($$"""
             using CodeChops.Idioma;
 
@@ -711,6 +713,73 @@ public sealed class TranslationSetsGeneratorTests
         text.ShouldContain($"public interface {contract} ");
         text.ShouldContain($"public static partial class {texts}");
         text.ShouldContain($"CreateResourceText<{contract}>(\"{keyPrefix}Checkout\",");
+    }
+
+    [Test]
+    [Arguments("namespace TestApp;", "TestApp.ShopTranslations.Checkout")]
+    [Arguments("namespace TestApp.Orders;", "TestApp.Orders.ShopTranslations.Checkout")]
+    [Arguments("namespace TestApp.@event;", "TestApp.event.ShopTranslations.Checkout")]
+    [Arguments("", "ShopTranslations.Checkout")]
+    public void Key_ShouldBeFullNameOfGeneratedText(string @namespace, string key)
+    {
+        // Arrange & Act: a key is a name and not code, so a namespace part named like a keyword comes without its @,
+        // and a set in the global namespace has a key without a namespace.
+        var text = ContractText(Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            {{@namespace}}
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Checkout => "Checkout";
+            }
+            """));
+
+        // Assert
+        text.ShouldContain($"CreateResourceText<IShopTranslations>(\"{key}\",");
+    }
+
+    [Test]
+    public void TextsOfOneNameInSetsOfOneName_ShouldGetKeysOfTheirOwn()
+    {
+        // Arrange & Act: two sets of one name in two namespaces, and a third whose name differs from theirs only in a
+        // trailing "Translations", each with a text named Checkout.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp.Orders
+            {
+                public sealed partial class ShopTranslationsEN : ITranslationSet
+                {
+                    public string Checkout => "Place order";
+                }
+
+                public sealed partial class ShopEN : ITranslationSet
+                {
+                    public string Checkout => "To the shop";
+                }
+            }
+
+            namespace TestApp.Billing
+            {
+                public sealed partial class ShopTranslationsEN : ITranslationSet
+                {
+                    public string Checkout => "Pay invoice";
+                }
+            }
+            """);
+
+        // Assert: a resource file can then provide the wording of one of them, and not of all three at once.
+        var generated = result.Results.ShouldHaveSingleItem().GeneratedSources;
+        string Contract(string set) => generated.Single(source => String.Equals(source.HintName, $"{set}.Translations.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+
+        Contract("TestApp.Orders.ShopTranslationsEN").ShouldContain("(\"TestApp.Orders.ShopTranslations.Checkout\",");
+        Contract("TestApp.Orders.ShopEN").ShouldContain("(\"TestApp.Orders.Shop.Checkout\",");
+        Contract("TestApp.Billing.ShopTranslationsEN").ShouldContain("(\"TestApp.Billing.ShopTranslations.Checkout\",");
     }
 
     [Test]

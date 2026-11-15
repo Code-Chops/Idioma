@@ -78,12 +78,12 @@ public sealed class TranslationsRegistrationGenerator : IIncrementalGenerator
 
     private static readonly DiagnosticDescriptor InvalidLanguageCodeRule = new(
         id: InvalidLanguageCodeDiagnosticId,
-        title: "LanguageCode that is no culture name",
-        messageFormat: "'{0}' gives \"{1}\" as its LanguageCode, which is no culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
+        title: "LanguageCode that is not a culture name",
+        messageFormat: "'{0}' gives \"{1}\" as its LanguageCode, which is not a culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A set is filed under its language code, which the UI culture of a user is matched against. A code that is no culture name (two to eight letters, then parts of letters or digits after a hyphen each, as in en, en-GB, or zh-Hans) reaches no culture, so the registry refuses the set: the generated registration, which runs when the assembly loads, would throw. Reported in every assembly, with or without [assembly: SupportedLanguages], also for a set marked [ExcludeFromTranslationDiscovery], which throws where it is registered by hand.");
+        description: "A set is filed under its language code, which the UI culture of a user is matched against. A code that is not a culture name (two to eight letters, then parts of letters or digits after a hyphen each, as in en, en-GB, or zh-Hans) reaches no culture, so the registry refuses the set: the generated registration, which runs when the assembly loads, would throw. Reported in every assembly, with or without [assembly: SupportedLanguages], also for a set marked [ExcludeFromTranslationDiscovery], which throws where it is registered by hand.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {

@@ -185,11 +185,11 @@ internal static class SupportedLanguages
         {
             if (code is null)
             {
-                problems.Add("null is no culture name");
+                problems.Add("null is not a culture name");
             }
             else if (!IsCultureName(code))
             {
-                problems.Add($"'{code}' is no culture name");
+                problems.Add($"'{code}' is not a culture name");
             }
             else if (codes.Contains(code, StringComparer.OrdinalIgnoreCase))
             {

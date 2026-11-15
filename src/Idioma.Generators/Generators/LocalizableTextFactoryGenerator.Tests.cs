@@ -323,15 +323,15 @@ public sealed class LocalizableTextFactoryGeneratorTests
     }
 
     [Test]
-    [Arguments("\"en\", \"nl\", \"\"", "'' is no culture name")]
-    [Arguments("\"en\", \"n\"", "'n' is no culture name")]
-    [Arguments("\"en\", \"nl_BE\"", "'nl_BE' is no culture name")]
-    [Arguments("\"en\", \"nl-\"", "'nl-' is no culture name")]
+    [Arguments("\"en\", \"nl\", \"\"", "'' is not a culture name")]
+    [Arguments("\"en\", \"n\"", "'n' is not a culture name")]
+    [Arguments("\"en\", \"nl_BE\"", "'nl_BE' is not a culture name")]
+    [Arguments("\"en\", \"nl-\"", "'nl-' is not a culture name")]
     [Arguments("\"en\", \"nl\", \"NL\"", "'NL' is listed twice")]
     [Arguments("\"en\", \"sr-Latn-RS\", \"sr-LatnRS\"", "'sr-LatnRS' and 'sr-Latn-RS' differ only in their hyphens")]
     [Arguments("\"en\", \"zh-Hans\", \"zhhans\"", "'zhhans' and 'zh-Hans' differ only in their hyphens")]
-    [Arguments("\"en\", \"nl\", null", "null is no culture name")]
-    [Arguments("\"en\", null", "null is no culture name")]
+    [Arguments("\"en\", \"nl\", null", "null is not a culture name")]
+    [Arguments("\"en\", null", "null is not a culture name")]
     public void InvalidLanguage_ShouldReportLOC010AndKeepValidOnes(string languages, string expected)
     {
         // Arrange & Act

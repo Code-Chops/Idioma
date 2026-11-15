@@ -1,9 +1,9 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// A <see cref="LocalizableText"/> with a name, its <see cref="Key"/>, such as <c>Shop.Checkout</c>. The texts of the
-/// class the source generator writes are resource texts: <c>ShopTranslations.Checkout</c> is the <c>Checkout</c> text
-/// of <c>IShopTranslations</c>, under the key <c>Shop.Checkout</c>.
+/// A <see cref="LocalizableText"/> with a name, its <see cref="Key"/>. The texts of the class the source generator
+/// writes are resource texts: <c>ShopTranslations.Checkout</c> is the <c>Checkout</c> text of
+/// <c>IShopTranslations</c>, under the key <c>MyApp.Translations.ShopTranslations.Checkout</c>, its full name.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,7 +24,7 @@ namespace CodeChops.Idioma;
 /// <code>
 /// ResourceText checkout = ShopTranslations.Checkout;
 ///
-/// string key = checkout.Key;            // "Shop.Checkout"
+/// string key = checkout.Key;            // "MyApp.Translations.ShopTranslations.Checkout"
 /// Type? contract = checkout.Contract;   // typeof(IShopTranslations)
 /// string wording = checkout;            // "Afrekenen" for a user whose UI culture is nl-NL
 /// </code>
@@ -34,11 +34,13 @@ namespace CodeChops.Idioma;
 public sealed record ResourceText : LocalizableText
 {
     /// <summary>
-    /// The name of this text in a resource file, such as <c>Shop.Checkout</c>.
+    /// The name of this text in a resource file, such as <c>MyApp.Translations.ShopTranslations.Checkout</c>.
     /// </summary>
     /// <remarks>
-    /// A generated text's key is the name of its set without the language and a trailing <c>Translations</c>, then a
-    /// dot and the text's name: <c>Checkout</c> of <c>ShopTranslationsEN</c> gives <c>Shop.Checkout</c>.
+    /// A generated text's key is its full name: the namespace of its set, the generated class, and the text's name.
+    /// <c>Checkout</c> of <c>ShopTranslationsEN</c> in the namespace <c>MyApp.Translations</c> gives
+    /// <c>MyApp.Translations.ShopTranslations.Checkout</c>, so sets of one name in two namespaces have keys of their
+    /// own. A set in the global namespace gives <c>ShopTranslations.Checkout</c>.
     /// </remarks>
     public string Key { get; }
 

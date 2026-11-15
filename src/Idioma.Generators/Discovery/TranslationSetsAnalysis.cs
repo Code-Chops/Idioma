@@ -319,7 +319,7 @@ internal sealed record TranslationSetsAnalysis(
                 IsObsolete: set.IsObsolete,
                 ContractName: contractName,
                 TextsName: baseName,
-                KeyPrefix: $"{DeriveStem(baseName)}.",
+                KeyPrefix: GetKeyPrefix(set.Namespace, baseName),
                 Members: set.Texts,
                 Translations: new EquatableArray<TranslationLink>(translations)));
         }
@@ -581,19 +581,18 @@ internal sealed record TranslationSetsAnalysis(
     }
 
     /// <summary>
-    /// The base name without a trailing <c>Translations</c>: <c>ShopTranslations</c> gives <c>Shop</c>, the stem of the
-    /// resource keys (<c>Shop.Checkout</c>). A base name that is nothing but <c>Translations</c> keeps it, so the key
-    /// prefix is never empty.
+    /// What the resource key of every text of a contract starts with: the full name of the generated class that holds
+    /// the texts, and a dot. <c>MyApp.Translations.ShopTranslations.</c> for <c>ShopTranslationsEN</c> in the namespace
+    /// <c>MyApp.Translations</c>, so that a key is the full name of its text
+    /// (<c>MyApp.Translations.ShopTranslations.Checkout</c>).
     /// </summary>
-    private static string DeriveStem(string baseName)
+    // The full name, and not the class alone or a part of it: two sets of one name in different namespaces, or in two
+    // assemblies, then have keys of their own, as their generated classes have names of their own. Without the @ of an
+    // escaped keyword (namespace Shop.@event): a key is a name, not code.
+    private static string GetKeyPrefix(string @namespace, string baseName)
     {
-        const string suffix = "Translations";
-
-        var stem = baseName.Length > suffix.Length && baseName.EndsWith(suffix, StringComparison.Ordinal)
-            ? baseName.Substring(startIndex: 0, baseName.Length - suffix.Length)
-            : baseName;
-
-        return stem;
+        var prefix = @namespace.Length > 0 ? $"{@namespace.Replace("@", "")}.{baseName}." : $"{baseName}.";
+        return prefix;
     }
 }
 

@@ -634,8 +634,7 @@ public sealed class TranslationsRegistry
         {
             var given = languageCode is null ? "null" : $"\"{languageCode}\"";
 
-            throw new InvalidOperationException(
-                $"{set.GetType()} gives {given} as its {nameof(ITranslationSet)}.{nameof(ITranslationSet.LanguageCode)}: return a culture name, such as en or en-GB.");
+            throw new InvalidOperationException($"{set.GetType()} gives {given} as its {nameof(ITranslationSet)}.{nameof(ITranslationSet.LanguageCode)}: return a culture name, such as en or en-GB.");
         }
 
         return languageCode;

@@ -4,8 +4,8 @@ name: Publish
 # tag. It signs in through trusted publishing, so the repository holds no API key: nuget.org needs a trusted publishing
 # policy for this repository and this workflow file (publish.yml).
 #
-# This job can get an API key for nuget.org, so each action it uses is pinned to a commit, with its version in the
-# comment behind it: a tag such as v4 is one its owner can move to other code.
+# The publish job can get an API key for nuget.org, so each action this workflow uses is pinned to a commit, with its
+# version in the comment behind it: a tag such as v4 is one its owner can move to other code.
 on:
   push:
     tags: ['v*']
@@ -16,8 +16,34 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # Nothing is published that no app has consumed: an app is built against the packed package with the compiler of
+  # .NET SDK 10, published with NativeAOT, and run, as in CI (ci.yml). CI runs on main and on pull requests only, so
+  # without this job a tag on a commit that CI never built would publish without it. A job of its own, which cannot
+  # sign in to nuget.org: it installs a toolchain and restores more packages than the publish job does.
+  aot-smoke:
+    name: NativeAOT smoke test of the package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      # NativeAOT links with the toolchain of the platform.
+      - name: Native toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Pack, publish a consumer with NativeAOT, and run it
+        run: ./tests/Idioma.AotSmoke/run.sh
+
   publish:
     name: Test, pack, and publish
+    needs: aot-smoke
     runs-on: ubuntu-latest
     permissions:
       contents: read

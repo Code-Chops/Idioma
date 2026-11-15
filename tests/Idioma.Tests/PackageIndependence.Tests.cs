@@ -32,6 +32,26 @@ public sealed class PackageIndependenceTests
     }
 
     [Test]
+    public void Package_ShouldReferenceTheFrameworkAlone()
+    {
+        // Arrange: the assemblies every app has, as the runtime of this test run carries them. Code that uses a package
+        // references an assembly that is not among them, also a package referenced with PrivateAssets, which the
+        // package would not name as a dependency. The pack checks what it does name (CheckPackageDependencies in
+        // Idioma.csproj).
+        var frameworkDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var assembly = Assembly.Load("CodeChops.Idioma");
+
+        // Act
+        var references = assembly.GetReferencedAssemblies().Select(reference => reference.Name!).ToArray();
+
+        // Assert
+        references.ShouldNotBeEmpty();
+        references.ShouldAllBe(
+            name => File.Exists(Path.Combine(frameworkDirectory, $"{name}.dll")),
+            "CodeChops.Idioma references an assembly that is not part of .NET itself, and the package must have no dependencies: take the package it comes from out of Idioma.csproj.");
+    }
+
+    [Test]
     [Arguments("CodeChops.Idioma.Generators")]
     [Arguments("CodeChops.Idioma.CodeFixes")]
     public void Analyzers_ShouldNotNeedANewerCompilerThanTheFirstNet10Sdk(string assemblyName)

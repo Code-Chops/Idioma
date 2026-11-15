@@ -1752,7 +1752,7 @@ public sealed class TranslationsRegistrationGeneratorTests
         diagnostic.Id.ShouldBe(TranslationsRegistrationGenerator.InvalidLanguageCodeDiagnosticId);
         diagnostic.Id.ShouldBe("LOC018");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldStartWith($"'ShopTranslationsBritish' gives \"{expectedCode}\" as its LanguageCode, which is no culture name");
+        diagnostic.GetMessage().ShouldStartWith($"'ShopTranslationsBritish' gives \"{expectedCode}\" as its LanguageCode, which is not a culture name");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("LanguageCode");
     }
 

@@ -31,7 +31,7 @@ namespace CodeChops.Idioma;
 /// <para>
 /// There is nothing to register: every set registers itself. That takes a top-level class that is not generic, with a
 /// parameterless constructor. A set without such a constructor gets build warning <c>LOC003</c>. A nested, generic, or
-/// file-local class is no set to the build, which reports its language as missing (<c>LOC004</c>). To register a set
+/// file-local class is not recognized, and the build reports its language as missing (<c>LOC004</c>). To register a set
 /// yourself, mark it
 /// <see cref="ExcludeFromTranslationDiscoveryAttribute">[ExcludeFromTranslationDiscovery]</see> and call
 /// <see cref="TranslationsRegistry.Register{TSet}">TranslationsRegistry.Register</see>.
@@ -65,16 +65,16 @@ namespace CodeChops.Idioma;
 ///
 /// public partial class ShopTranslationsEN : ITranslationSet
 /// {
-///     public virtual string Cart => "Cart";
-///     public virtual string Checkout => "Checkout";
-///     public virtual string Greeting => "Hello, {0}!";
+///     public string Cart => "Cart";
+///     public string Checkout => "Checkout";
+///     public string Greeting => "Hello, {0}!";
 /// }
 ///
 /// public class ShopTranslationsNL : IShopTranslations
 /// {
-///     public virtual string Cart => "Winkelwagen";
-///     public virtual string Checkout => "Afrekenen";
-///     public virtual string Greeting => "Hallo, {0}!";
+///     public string Cart => "Winkelwagen";
+///     public string Checkout => "Afrekenen";
+///     public string Greeting => "Hallo, {0}!";
 /// }
 ///
 /// // For a user whose UI culture is nl-NL: "Afrekenen" and "Hallo, Anna!".
@@ -92,8 +92,8 @@ public interface ITranslationSet
     /// <para>
     /// The code is a culture name in any letter case, and the set serves that culture and every culture under it:
     /// <c>en</c> serves <c>en-US</c> and <c>en-GB</c>. A set for <c>en-GB</c> serves only British English, and wins
-    /// over the <c>en</c> set there. A constant that is no culture name, such as <c>en_GB</c>, is build error
-    /// <c>LOC018</c>.
+    /// over the <c>en</c> set there. A constant that is not a culture name, such as <c>en_GB</c>, is build
+    /// error <c>LOC018</c>.
     /// </para>
     /// <para>
     /// An assembly that lists <c>en-GB</c> in <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see>
@@ -113,7 +113,7 @@ public interface ITranslationSet
     /// <para>
     /// A longer code counts only when listed, as a name alone cannot tell <c>ShopTranslationsEnGB</c> (British English)
     /// from <c>AdminUiNL</c> (Dutch). When it is not listed, the last two letters count: <c>ShopTranslationsEnGB</c>
-    /// serves <c>gb</c>, which is no language, and the build reports <c>LOC005</c>.
+    /// serves <c>gb</c>, which is not a language, and the build reports <c>LOC005</c>.
     /// </para>
     /// <para>
     /// Implement this property for such a code in an assembly that does not list it, or for a set whose name does
@@ -125,6 +125,7 @@ public interface ITranslationSet
     /// <example>
     /// <code>
     /// // In an assembly declaring ("en", "nl"): en-GB is left out, so inline texts need no British wording.
+    /// // Cart is virtual in ShopTranslationsEN, so that this set can override it.
     /// public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslationSet
     /// {
     ///     string ITranslationSet.LanguageCode => "en-GB";

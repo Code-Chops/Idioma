@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Texts for any .NET app, Blazor or not. The package has no dependencies, and must keep none: tests/Idioma.Tests
-    fails when one creeps in (PackageIndependenceTests).
+    Texts for any .NET app, Blazor or not. The package has no dependencies, and must keep none. Two checks hold it to
+    that: the pack fails when the package would name one (the target CheckPackageDependencies below), and
+    tests/Idioma.Tests fails when the assembly references anything but the framework (PackageIndependenceTests).
   -->
 
   <PropertyGroup Label="Main">
@@ -18,34 +19,23 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>A string compared as a text is a build error (LOC017): text.Equals("Orders"), list.Contains(name), Array.IndexOf(texts, name), and counts[name] on a dictionary of texts. They compare texts, not the wording a text shows, and a string becomes a text without translations, which equals no translated text, so the comparison was false while the text showed that wording. Compare the wording with ==, as in text == "Orders", or cast the string to LocalizableText to compare texts. A comparer you pass along, as in list.Contains(name, comparer), may compare the wording, so that call passes. The fix in an IDE turns text.Equals(wording) into text == wording.
+    <PackageReleaseNotes>The key of a text of a set is its full name: MyApp.Translations.ShopTranslations.Checkout for ShopTranslations.Checkout in the namespace MyApp.Translations, where it was Shop.Checkout. The old key left out the namespace and a trailing Translations, so the texts of two sets of one name shared a key: sets in two namespaces, in a library and in the app that uses it, or ShopTranslationsEN next to ShopEN. Now each text has a key of its own. A set in the global namespace gives ShopTranslations.Checkout, and a namespace part named like a keyword comes without its @.
 
-A LanguageCode that is no culture name, such as "en_GB", is build error LOC018: the set would throw as it registers.
+The package itself never reads the key, so every text shows the wording it showed. Only an app or library that looks wording up by the key, as in a resource file through IStringLocalizer, has something to do: rename each entry to the full name of its text, which is the name your code calls the text by, with its namespace in front.
 
-The generated class holds nothing but the texts: the constant ResourceKeyPrefix is gone, so a text can be named ResourceKeyPrefix, and LOC014 is left with a text named like the class itself. Read the prefix from a text's key, as in ShopTranslations.Checkout.Key, which is "Shop.Checkout".
+A language code that is wrong is not a culture name in the messages of the build and of the registry, where it was no culture name (LOC010, LOC018), and LOC016 names a brace that is not a placeholder. Only a test that holds such a message to its wording needs the new one.
 
-A set whose language the build cannot read, because its LanguageCode is no constant, is no longer reported as a missing language, and the placeholders of a text a set inherits from a base class are held to those of the contract as well (LOC016).
+The details have a page per subject under docs/, which the README links to: how Idioma works, language codes, libraries that use Idioma, Blazor, what the build rejects, and coming from resx. New in them: your users get the languages of the app's own project, so an app that keeps its texts in a library declares its languages in both; what the build misses in a call of Format, where a value too few throws when the call runs; and the class the source generator writes to register your sets, which is public in an assembly that has sets.
 
-How the package works is in docs/how-it-works.md, which the README links to.
-
-Version 0.6.0 was not published, so its changes come with this version:
-
-A text written inline is LocalizableText.Inline(en: "Checkout", nl: "Afrekenen"), where it was LocalizableText.Translated. That is the name the docs and the messages of the build already gave it: an inline text.
-
-A set implements ITranslationSet, where it was ITranslations: public partial class ShopTranslationsEN : ITranslationSet. The interface names one set, as the docs do. The generated contract keeps its name, such as IShopTranslations, and so do the generated class and TranslationsRegistry.
-
-Three parameters are named after the set: Register and RegisterDefaults take sets, ResourceText.GetTranslation takes set, and ITranslationSet.GetLanguageCode takes setType. Only a call that names such an argument needs the new name.
-
-To move a project, replace LocalizableText.Translated with LocalizableText.Inline, and ITranslations with ITranslationSet. The messages of the build and the fixes in an IDE use the new names.</PackageReleaseNotes>
+The demos are SetDemo.cs and InlineTextDemo.cs, and run in a codespace from the README.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
-    <Title>CodeChops.Idioma</Title>
-    <Description>Translations for any .NET app, written in C#: a class per language, or inline texts, where a missing translation is a compile error. No resource files and trimming-safe.</Description>
+    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, or inline texts. A missing translation or a mismatched placeholder is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
-    <PackageProjectUrl>https://github.com/code-chops/Idioma</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/code-chops/Idioma</RepositoryUrl>
-    <RepositoryType>Git</RepositoryType>
+    <PackageProjectUrl>https://github.com/Code-Chops/Idioma</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Code-Chops/Idioma</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <Authors>CodeChops (@Code-Chops), Max Bergman</Authors>
     <Company>CodeChops</Company>
@@ -95,20 +85,27 @@ To move a project, replace LocalizableText.Translated with LocalizableText.Inlin
 
   <!--
     The README of the package links to the details as they were when it was released: the pages under docs/ at the
-    tag of its version (v0.7.0), where the README of the repository links to main. A package stays on nuget.org as it was
-    published, while main moves on, so a link to main would show the details of a later version. The tag is there by
-    the time the package is: only a run on that tag publishes (publish.yml). The demos stay linked on main, as they
-    fetch the latest package, which the demos on main are written for.
+    tag of its version (v and the version), where the README of the repository links to main. A package stays on
+    nuget.org as it was published, while main moves on, so a link to main would show the details of a later version.
+    The tag is there by the time the package is: only a run on that tag publishes (publish.yml). The demos stay linked
+    on main, as they fetch the latest package, which the demos on main are written for.
+
+    The badge that opens a codespace is packed as a plain link: nuget.org shows images of a few hosts only, and
+    github.com/codespaces is not among them.
   -->
   <Target Name="WritePackageReadme" BeforeTargets="_GetPackageFiles">
     <PropertyGroup>
       <PackageReadmePath>$(IntermediateOutputPath)README.md</PackageReadmePath>
-      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/'))</PackageReadmeText>
+      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/').Replace('[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)]', '[Open in GitHub Codespaces]'))</PackageReadmeText>
     </PropertyGroup>
 
     <!-- A README that links to the details in another way would be packed with its links still on main. -->
     <Error Condition="!$(PackageReadmeText.Contains('/blob/v$(Version)/docs/')) Or $(PackageReadmeText.Contains('/main/docs/'))"
            Text="README.md links to docs/ in a way this target does not turn into a link to the tag v$(Version): link to it as https://github.com/Code-Chops/Idioma/blob/main/docs/..., or adjust the target WritePackageReadme." />
+
+    <!-- An image this target does not know would show on nuget.org as a broken one, or not at all. -->
+    <Error Condition="$(PackageReadmeText.Contains('!['))"
+           Text="README.md shows an image, and nuget.org shows images of a few hosts only (https://learn.microsoft.com/nuget/nuget-org/package-readme-on-nuget-org#allowed-domains-for-images-and-badges): have the target WritePackageReadme pack it as text, as it does the Codespaces badge, or let it pass an image of an allowed host." />
 
     <!-- Escaped, so that the text is written as it stands: a semicolon in it would otherwise start a new line. -->
     <WriteLinesToFile File="$(PackageReadmePath)" Lines="$([MSBuild]::Escape($(PackageReadmeText)))" Overwrite="true" WriteOnlyWhenDifferent="true" />
@@ -116,6 +113,45 @@ To move a project, replace LocalizableText.Translated with LocalizableText.Inlin
     <ItemGroup>
       <None Include="$(PackageReadmePath)" Pack="true" PackagePath="" Visible="false" />
     </ItemGroup>
+  </Target>
+
+  <!--
+    The doc comments link to the details at the tag as well (SupportedLanguagesAttribute links to docs/build-errors.md):
+    they ship in the XML file of the package, which an IDE shows from for as long as that version is installed. The
+    compiler writes the file with the links as the sources have them, on main, and this target turns them before the
+    file is copied to the output folder, where the pack takes it from. Only a file that still links to main is written,
+    so a build that compiles nothing leaves it alone.
+  -->
+  <Target Name="LinkDocCommentsToTag" AfterTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true' And '$(DocumentationFile)' != '' And Exists('$(DocumentationFile)')">
+    <PropertyGroup>
+      <DocCommentsText>$([System.IO.File]::ReadAllText('$(DocumentationFile)'))</DocCommentsText>
+      <DocCommentsTextAtTag>$(DocCommentsText.Replace('/blob/main/docs/', '/blob/v$(Version)/docs/'))</DocCommentsTextAtTag>
+    </PropertyGroup>
+
+    <!-- A doc comment that links to the details in another way would ship with its link still on main. -->
+    <Error Condition="$(DocCommentsTextAtTag.Contains('/main/docs/'))"
+           Text="A doc comment links to docs/ in a way this target does not turn into a link to the tag v$(Version): link to it as https://github.com/Code-Chops/Idioma/blob/main/docs/..., or adjust the target LinkDocCommentsToTag." />
+
+    <WriteLinesToFile Condition="$(DocCommentsText.Contains('/blob/main/docs/'))" File="$(DocumentationFile)" Lines="$([MSBuild]::Escape($(DocCommentsTextAtTag)))" Overwrite="true" />
+  </Target>
+
+  <!--
+    Fails the pack when the package would name a dependency: a package, a project that is packed along, or a shared
+    framework other than the one every app has. Read from the nuspec the pack has just written, so that it holds
+    whatever way a dependency came in. CI and the publish workflow both pack.
+  -->
+  <Target Name="CheckPackageDependencies" AfterTargets="GenerateNuspec">
+    <PropertyGroup>
+      <PackageNuspecText>$([System.IO.File]::ReadAllText('$(NuspecOutputPath)$(PackageId).$(PackageVersion).nuspec'))</PackageNuspecText>
+      <PackageHasDependency Condition="$(PackageNuspecText.Contains('&lt;dependency ')) Or $(PackageNuspecText.Contains('&lt;frameworkReference '))">true</PackageHasDependency>
+      <PackedPackagePath>$([MSBuild]::EnsureTrailingSlash('$(PackageOutputAbsolutePath)'))$(PackageId).$(PackageVersion)</PackedPackagePath>
+    </PropertyGroup>
+
+    <!-- The pack has written the package by now. It is taken away, so that a pack that failed leaves none to push. -->
+    <Delete Condition="'$(PackageHasDependency)' == 'true'" Files="$(PackedPackagePath).nupkg;$(PackedPackagePath).snupkg" />
+
+    <Error Condition="'$(PackageHasDependency)' == 'true'"
+           Text="The package $(PackageId) would depend on another package or framework, and it must depend on none: see the dependencies in $(NuspecOutputPath)$(PackageId).$(PackageVersion).nuspec. Take the reference out of Idioma.csproj, or give a reference that only the build needs PrivateAssets=&quot;all&quot;." />
   </Target>
 
 </Project>

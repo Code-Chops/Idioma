@@ -56,7 +56,7 @@ public static partial class ShopTranslations
     /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.ResourceText Checkout { get; } = CreateResourceText<IShopTranslations>("Shop.Checkout", static translations => translations.Checkout, DefaultSet<ShopTranslationsEN>.Instance);
+    public static CodeChops.Idioma.ResourceText Checkout { get; } = CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Checkout", static translations => translations.Checkout, DefaultSet<ShopTranslationsEN>.Instance);
 
     /// <summary>
     /// Total
@@ -68,7 +68,7 @@ public static partial class ShopTranslations
     /// <item><description><see cref="ShopTranslationsNL.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.ResourceText Total { get; } = CreateResourceText<IShopTranslations>("Shop.Total", static translations => translations.Total, DefaultSet<ShopTranslationsEN>.Instance);
+    public static CodeChops.Idioma.ResourceText Total { get; } = CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Total", static translations => translations.Total, DefaultSet<ShopTranslationsEN>.Instance);
 }
 
 file static class DefaultSet<TSet>

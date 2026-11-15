@@ -92,7 +92,7 @@ public sealed class FormatPlaceholdersAnalyzerTests
     [Arguments("""en: "Hello, {0}!", nl: "Hallo!", enGB: "Hello, {0}!" """, "nl", "The 'nl' wording has no placeholders, while the 'en' wording has placeholder {0}.")]
     [Arguments("""en: "Hello, {0}!", nl: "Hallo, {1}!", enGB: "Hello, {0}!" """, "nl", "The 'nl' wording has placeholder {1}, while the 'en' wording has placeholder {0}.")]
     [Arguments("""en: "Hello", nl: "Hallo", enGB: "Hello, {0}" """, "enGB", "The 'en-GB' wording has placeholder {0}, while the 'en' wording has no placeholders.")]
-    [Arguments("""nl: "Totaal: {0} {", en: "Total: {0}", enGB: "Total: {0}" """, "nl", "The 'nl' wording has a brace that is no placeholder (write a literal brace as {{ or }}), while the 'en' wording has placeholder {0}.")]
+    [Arguments("""nl: "Totaal: {0} {", en: "Total: {0}", enGB: "Total: {0}" """, "nl", "The 'nl' wording has a brace that is not a placeholder (write a literal brace as {{ or }}), while the 'en' wording has placeholder {0}.")]
     public async Task InlineWordingWithOtherPlaceholders_ShouldReportLOC016(string arguments, string parameter, string message)
     {
         // Arrange & Act
