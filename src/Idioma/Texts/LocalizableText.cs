@@ -40,7 +40,8 @@ namespace CodeChops.Idioma;
 /// <para>
 /// For a value inside the wording, write a placeholder in every language (<c>"Hello, {0}!"</c>) and fill it in with
 /// <see cref="Format(ReadOnlySpan{object})"/>. The build makes sure every language has the same placeholders
-/// (<c>LOC016</c>).
+/// (<c>LOC016</c>). In a class per language a text can take its values as a method instead, with a name and a type
+/// for each: see <see cref="ITranslationSet"/>.
 /// </para>
 /// <para>
 /// A member that takes a text also takes a <see cref="string"/>, for a value that has no translations, such as a

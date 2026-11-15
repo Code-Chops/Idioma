@@ -3317,4 +3317,649 @@ public sealed class TranslationSetsGeneratorTests
         reasons.Length.ShouldBe(2);
         reasons.ShouldAllBe(reason => reason == IncrementalStepRunReason.Cached);
     }
+
+    #region Texts that take values
+    /// <summary>
+    /// A set with a text that takes one value, documented, and one that takes two and chooses between two wordings.
+    /// </summary>
+    private const string GreetingSets = $$"""
+        {{Header}}
+
+        public sealed partial class ShopTranslationsEN : ITranslationSet
+        {
+            public string Checkout => "Checkout";
+
+            /// <summary>
+            /// Greets a customer.
+            /// </summary>
+            /// <param name="name">The name of the customer.</param>
+            public string Greeting(string name) => $"Hello, {name}!";
+
+            public string ItemsInCart(int count, string shop) => count is 1
+                ? $"1 item in your cart at {shop}"
+                : $"{count} items in your cart at {shop}";
+        }
+
+        public sealed class ShopTranslationsNL : IShopTranslations
+        {
+            public string Checkout => "Afrekenen";
+            public string Greeting(string name) => $"Hallo, {name}!";
+
+            public string ItemsInCart(int count, string shop) => count is 1
+                ? $"1 artikel in je winkelwagen bij {shop}"
+                : $"{count} artikelen in je winkelwagen bij {shop}";
+        }
+        """;
+
+    [Test]
+    public Task SetWithTextsThatTakeValues_ShouldEmitMethodsInContractAndTextsClass()
+    {
+        // Arrange & Act
+        var result = Run(GreetingSets);
+
+        // Assert
+        var run = result.Results.ShouldHaveSingleItem();
+        run.Diagnostics.ShouldBeEmpty();
+
+        return Verify(ContractText(result));
+    }
+
+    [Test]
+    public void TextsThatTakeValues_ShouldCompileWithoutWarningsAndWithResolvedCrefs()
+    {
+        // Arrange & Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(GreetingSets);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(GreetingSets);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(GreetingSets);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void TextThatTakesValues_ShouldBeAMethodOfContractAndTextsClassKeyedByItsName()
+    {
+        // Arrange & Act
+        var text = ContractText(Run(GreetingSets));
+
+        // Assert: the contract repeats the method, which is what holds every language to its parameters, and records
+        // no placeholders for it. The class creates the text on every call, with the values it is called with.
+        text.ShouldContain("    string Greeting(string name);");
+        text.ShouldContain("    string ItemsInCart(int count, string shop);");
+        text.ShouldContain("""public static CodeChops.Idioma.ResourceText Greeting(string name) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Greeting", translations => translations.Greeting(name), DefaultSet<ShopTranslationsEN>.Instance, [name]);""");
+        text.ShouldContain("""public static CodeChops.Idioma.ResourceText ItemsInCart(int count, string shop) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.ItemsInCart", translations => translations.ItemsInCart(count, shop), DefaultSet<ShopTranslationsEN>.Instance, [count, shop]);""");
+        text.Split('\n').Count(line => line.Contains("FormatPlaceholders", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Test]
+    public void TextThatTakesValues_ShouldBeDocumentedLikeAnyText()
+    {
+        // Arrange & Act
+        var text = ContractText(Run(GreetingSets));
+
+        // Assert: the doc comment of the method is inherited, parameters included, and the wording of each language
+        // stands next to its link with each value in braces. A method that chooses between wordings shows none.
+        text.Split('\n').Count(line => line.Contains("/// <inheritdoc cref=\"ShopTranslationsEN.Greeting\"/>", StringComparison.Ordinal)).ShouldBe(2);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopTranslationsEN.Greeting\">en</see>: Hello, {name}!</description>", StringComparison.Ordinal)).ShouldBe(2);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopTranslationsNL.Greeting\">nl</see>: Hallo, {name}!</description>", StringComparison.Ordinal)).ShouldBe(2);
+        text.Split('\n').Count(line => line.Contains("/// The <c>ItemsInCart</c> text of <see cref=\"ShopTranslationsEN\"/>.", StringComparison.Ordinal)).ShouldBe(2);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopTranslationsNL.ItemsInCart\">nl</see></description>", StringComparison.Ordinal)).ShouldBe(2);
+    }
+
+    [Test]
+    public void OnlyPublicInstanceMethodsReturningStringWithParametersAreTexts()
+    {
+        // Arrange: a virtual method is a text (so a set can derive and override), an inherited method belongs to the
+        // base (it is not redeclared), a method without parameters stays what it was before texts took values, a
+        // helper, and the rest are not texts by shape.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public class ShopWordingBase
+            {
+                public string Inherited(string name) => name;
+            }
+
+            public partial class ShopTranslationsEN : ShopWordingBase, ITranslationSet
+            {
+                public string Greeting(string name) => $"Hello, {name}!";
+                public virtual string Farewell(string name) => $"Goodbye, {name}!";
+                public string Parameterless() => "Method";
+                public string LanguageCode(int unused) => "en";
+                internal string Hidden(string name) => name;
+                private string Secret(string name) => name;
+                public static string Shared(string name) => name;
+                public int Count(string name) => name.Length;
+                public void Nothing(string name) { }
+                public ref readonly string Reference(string[] names) => ref names[0];
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+        var text = ContractText(result);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+        text.ShouldContain("    string Greeting(string name);");
+        text.ShouldContain("    string Farewell(string name);");
+        foreach (var name in new[] { "Inherited", "Parameterless", "LanguageCode", "Hidden", "Secret", "Shared", "Count", "Nothing", "Reference" })
+            text.ShouldNotContain($" {name}(", customMessage: name);
+    }
+
+    [Test]
+    [Arguments("public string Greeting<T>(T name) => $\"Hello, {name}!\";", "it is generic")]
+    [Arguments("public string Greeting(string name) => name; private string Greeting(string name, bool formal) => name;", "its set has another method of that name")]
+    [Arguments("public string Greeting(ref string name) => name;", "its parameter 'name' is passed by reference")]
+    [Arguments("public string Greeting(in int count) => \"\";", "its parameter 'count' is passed by reference")]
+    [Arguments("public string Greeting(out string name) => name = \"\";", "its parameter 'name' is passed by reference")]
+    [Arguments("public string Greeting(params string[] names) => \"\";", "its parameter 'names' is a params parameter")]
+    [Arguments("public string Greeting(string name = \"you\") => name;", "its parameter 'name' has a default value")]
+    [Arguments("public string Greeting(System.ReadOnlySpan<char> name) => name.ToString();", "its parameter 'name' is of a type a text cannot keep")]
+    [Arguments("public unsafe string Greeting(int* count) => \"\";", "its parameter 'count' is of a type a text cannot keep")]
+    [Arguments("public string Greeting(dynamic name) => \"\";", "its parameter 'name' is dynamic")]
+    public void MethodThatCannotBeAText_ShouldReportLOC019AtItAndEmitNoTextForIt(string method, string expectedReason)
+    {
+        // Arrange
+        var source = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Checkout => "Checkout";
+                {{method}}
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+
+        // Assert: at the method, which is what to change. The other texts are generated all the same.
+        var diagnostic = SingleDiagnostic(result, TranslationSetsGenerator.UnsupportedTextDiagnosticId);
+        diagnostic.Id.ShouldBe("LOC019");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().ShouldContain("'ShopTranslationsEN.Greeting' is a public method that returns a string");
+        diagnostic.GetMessage().ShouldContain(expectedReason);
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Greeting");
+
+        var text = ContractText(result);
+        text.ShouldContain("    string Checkout { get; }");
+        text.ShouldNotContain("Greeting");
+    }
+
+    [Test]
+    public void TwoPublicMethodsOfOneName_ShouldEachReportLOC019()
+    {
+        // Arrange & Act: a text is told from the others by its name, which is its key, so neither can be one.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Greeting(string name) => $"Hello, {name}!";
+                public string Greeting(string name, string title) => $"Hello, {title} {name}!";
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations;
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBe(["LOC019", "LOC019"]);
+        ContractText(result).ShouldNotContain("Greeting");
+    }
+
+    [Test]
+    public void MethodThatCannotBeAText_ShouldBeNoPartOfTheContract()
+    {
+        // Arrange & Act: LOC019 is the only error, so the Dutch set, which has no such method, implements the contract.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            {{Header}}
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Checkout => "Checkout";
+                public string Greeting(string name = "you") => $"Hello, {name}!";
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        errors.ShouldHaveSingleItem().Id.ShouldBe("LOC019");
+    }
+
+    [Test]
+    public void SetWithoutTextThatTakesValues_ShouldNotCompile()
+    {
+        // Arrange & Act: the contract demands the method of every language, as it demands every property.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            {{Header}}
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations;
+            """);
+
+        // Assert
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("CS0535");
+        error.GetMessage().ShouldContain("IShopTranslations.Greeting(string)");
+    }
+
+    [Test]
+    public void ParametersOfEveryKindOfType_ShouldBeDeclaredAsTheSetDeclaresThem()
+    {
+        // Arrange: keywords, types of the set's own namespace, of another, of the global one, and of the framework,
+        // with what may be null marked as the set marks it, arrays, tuples with and without names, a delegate, and
+        // names that are keywords. The Dutch set declares each as the English one does, so a parameter the contract
+        // declared in another way would not compile, or warn about what may be null.
+        const string methods = """
+            public string Keywords(string? name, int count, decimal price, object? value, nint handle) => "";
+            public string OwnNamespace(Size size, Size? optional) => "";
+            public string OtherNamespace(Salutation salutation, Order.Line line, Box<Order?>.Lid? lid) => "";
+            public string GlobalNamespace(GlobalKind kind) => "";
+            public string Framework(DateOnly date, DateTime? time, IReadOnlyList<string?> names, Dictionary<string, List<int>>? counts) => "";
+            public string Arrays(string[] names, int[,] grid, string?[]? optional, int[][] jagged, int[]?[] rows) => "";
+            public string Tuples((string Name, int Count) pair, (int, string?) unnamed) => "";
+            public string Delegates(Func<int, string> format) => "";
+            public string @event(string @class, int @int) => "";
+            """;
+
+        var source = $$"""
+            #nullable enable
+            using System;
+            using System.Collections.Generic;
+            using CodeChops.Idioma;
+            using TestApp.Models;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            public enum GlobalKind { One }
+
+            namespace TestApp.Models
+            {
+                public enum Salutation { Unknown, Madam, Sir }
+                public sealed class Order { public sealed class Line; }
+                public sealed class Box<T> { public sealed class Lid; }
+            }
+
+            namespace TestApp
+            {
+                public enum Size { Small }
+
+                public sealed partial class ShopTranslationsEN : ITranslationSet
+                {
+                    {{methods}}
+                }
+
+                public sealed class ShopTranslationsNL : IShopTranslations
+                {
+                    {{methods}}
+                }
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert: a type of another namespace is reached through the alias of that namespace, as a set of another
+        // namespace is.
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+        text.ShouldContain("using Namespace_System = System;");
+        text.ShouldContain("using Namespace_System_Collections_Generic = System.Collections.Generic;");
+        text.ShouldContain("using Namespace_TestApp_Models = TestApp.Models;");
+        text.ShouldContain("    string Keywords(string? name, int count, decimal price, object? value, nint handle);");
+        text.ShouldContain("    string OwnNamespace(Size size, Size? optional);");
+        text.ShouldContain("    string OtherNamespace(Namespace_TestApp_Models.Salutation salutation, Namespace_TestApp_Models.Order.Line line, Namespace_TestApp_Models.Box<Namespace_TestApp_Models.Order?>.Lid? lid);");
+        text.ShouldContain("    string GlobalNamespace(GlobalKind kind);");
+        text.ShouldContain("    string Framework(Namespace_System.DateOnly date, Namespace_System.DateTime? time, Namespace_System_Collections_Generic.IReadOnlyList<string?> names, Namespace_System_Collections_Generic.Dictionary<string, Namespace_System_Collections_Generic.List<int>>? counts);");
+        text.ShouldContain("    string Arrays(string[] names, int[,] grid, string?[]? optional, int[][] jagged, int[]?[] rows);");
+        text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
+        text.ShouldContain("    string Delegates(Namespace_System.Func<int, string> format);");
+        text.ShouldContain("    string @event(string @class, int @int);");
+        text.ShouldContain("ResourceText @event(string @class, int @int) => CreateResourceText<IShopTranslations>(\"TestApp.ShopTranslations.event\", translations => translations.@event(@class, @int), DefaultSet<ShopTranslationsEN>.Instance, [@class, @int]);");
+    }
+
+    [Test]
+    public void ParameterTypesOfSetWithoutNullableAnnotations_ShouldCompileWithoutWarnings()
+    {
+        // Arrange: a set in a file that does not say what may be null. The generated file does, and must not take the
+        // set's parameters for ones that are never null.
+        const string source = """
+            #nullable disable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Greeting(string name, string[] titles) => $"Hello, {name}!";
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Greeting(string name, string[] titles) => $"Hallo, {name}!";
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void NamesStandingBeforeWhatGeneratedMethodWrites_ShouldCompile()
+    {
+        // Arrange: parameters named like the set the generated method hands the values to, like the helpers it calls,
+        // and like another text; and texts named like those helpers and like the namespace of a parameter's type.
+        const string methods = """
+            public string Translated(string translations, string translations_) => translations + translations_;
+            public string CreateResourceText(string DefaultSet, string Instance) => DefaultSet + Instance;
+            public string DefaultSet(string CreateResourceText) => CreateResourceText;
+            public string Name => "Name";
+            public string Named(string Name) => Name;
+            public string System(DateOnly date) => $"{date}";
+            public string CodeChops(string value) => value;
+            """;
+
+        var source = $$"""
+            using System;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class OptionTranslationsEN : ITranslationSet
+            {
+                {{methods}}
+            }
+
+            public sealed class OptionTranslationsNL : IOptionTranslations
+            {
+                {{methods}}
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+        text.ShouldContain("translations__ => translations__.Translated(translations, translations_)");
+    }
+
+    [Test]
+    [Arguments("public static class System;", "DateOnly", "using System;")]
+    [Arguments("public static class TestApp;", "Salutation", "using TestApp.Models;")]
+    public void ClassStandingBeforeNamespaceOfParameterType_ShouldCompile(string other, string parameterType, string import)
+    {
+        // Arrange: inside the set's namespace a class carries the name the namespace of the parameter's type starts
+        // with, so that the type's full name would name nothing there.
+        var source = $$"""
+            {{import}}
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp.Models
+            {
+                public enum Salutation { Unknown, Madam, Sir }
+            }
+
+            namespace TestApp
+            {
+                {{other}}
+
+                public sealed partial class ShopTranslationsEN : ITranslationSet
+                {
+                    public string Dear({{parameterType}} value) => $"Dear {value}";
+                }
+
+                public sealed class ShopTranslationsNL : IShopTranslations
+                {
+                    public string Dear({{parameterType}} value) => $"Beste {value}";
+                }
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void TextThatTakesWhatMemberOfObjectTakes_ShouldCompileWithoutWarnings()
+    {
+        // Arrange: only a method that takes what a member of every class takes hides that member in the generated
+        // class, and says so with the new modifier. A method of that name with other parameters stands next to it,
+        // where the modifier would be a warning itself (CS0109).
+        const string methods = """
+            public new string Equals(object? other) => $"Equals {other}";
+            public new string ReferenceEquals(object? left, object? right) => $"{left} is {right}";
+            public string ToString(string format) => format;
+            public string GetHashCode(int seed) => $"{seed}";
+            """;
+
+        var source = $$"""
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class FilterTranslationsEN : ITranslationSet
+            {
+                {{methods}}
+            }
+
+            public sealed class FilterTranslationsNL : IFilterTranslations
+            {
+                {{methods}}
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        text.ShouldContain("public static new CodeChops.Idioma.ResourceText Equals(object? other)");
+        text.ShouldContain("public static new CodeChops.Idioma.ResourceText ReferenceEquals(object? left, object? right)");
+        text.ShouldContain("public static CodeChops.Idioma.ResourceText ToString(string format)");
+        text.ShouldContain("public static CodeChops.Idioma.ResourceText GetHashCode(int seed)");
+        warnings.ShouldBeEmpty();
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void TextThatTakesValuesNamedLikeGeneratedClass_ShouldReportLOC014AndCompileOtherwise()
+    {
+        // Arrange & Act: the contract keeps the text, so the sets still compile; only the generated method is left out.
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class OptionTranslationsEN : ITranslationSet
+            {
+                public string OptionTranslations(string name) => $"Options of {name}";
+            }
+
+            public sealed class OptionTranslationsNL : IOptionTranslations
+            {
+                public string OptionTranslations(string name) => $"Opties van {name}";
+            }
+            """);
+
+        // Assert
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC014");
+        error.GetMessage().ShouldContain("'OptionTranslationsEN' has a text named 'OptionTranslations'");
+    }
+
+    [Test]
+    public void SetOfOnlyTextsThatTakeValues_ShouldShowOneWithItsValuesLeftOutAsItsExample()
+    {
+        // Arrange & Act
+        var text = ContractText(Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Greeting(string name) => $"Hello, {name}!";
+            }
+            """));
+
+        // Assert: in markup a text that takes values does not stand by its name alone.
+        text.ShouldContain("<c>@ShopTranslations.Greeting(...)</c>");
+    }
+
+    [Test]
+    public void TextThatTakesValuesInheritedOrImplementedExplicitly_ShouldBeLinkedWithResolvedCref()
+    {
+        // Arrange: a British set that leaves the text as the English set words it, which a cref names on the English
+        // set, a Dutch set that implements it explicitly, which has no name to link to, and a German set with a helper
+        // of the text's name, which a cref cannot tell from the text.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de", "en-GB")]
+
+            namespace TestApp;
+
+            public partial class ShopTranslationsEN : ITranslationSet
+            {
+                public virtual string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public sealed class ShopTranslationsEnGB : ShopTranslationsEN;
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                string IShopTranslations.Greeting(string name) => $"Hallo, {name}!";
+            }
+
+            public sealed class ShopTranslationsDE : IShopTranslations
+            {
+                public string Greeting(string name) => Greeting(name, formal: false);
+                private static string Greeting(string name, bool formal) => formal ? $"Guten Tag, {name}!" : $"Hallo, {name}!";
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+        var text = ContractText(result);
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+        errors.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Greeting\">en-GB</see>: Hello, {name}! (inherited from <see cref=\"ShopTranslationsEN\"/>)</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsNL\">nl</see>: Hallo, {name}!</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsDE\">de</see></description>");
+    }
+
+    [Test]
+    public void WordingOfTextThatTakesValues_ShouldShowEachValueInBracesAsItIsWritten()
+    {
+        // Arrange: a value with a format, a method with a body, a raw string that writes a value between two braces,
+        // a brace that is text, a constant, and a method that chooses between wordings, which has no one wording.
+        const string source = """"
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Total(decimal amount) => $"Total: {amount:N2}";
+                public string Greeting(string name) { return $"Hello, {name}!"; }
+                public string Raw(string name) => $$"""Hello, {{name}}, and {braces}!""";
+                public string Braces(string name) => $"{{{name}}} & <b>";
+                public string Constant(string name) => "Hello";
+                public string Chosen(int count) => count is 1 ? "One" : "Many";
+                public string Statements(int count) { var text = $"{count}"; return text; }
+            }
+            """";
+
+        // Act
+        var text = ContractText(Run(source));
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        unresolved.ShouldBeEmpty();
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Total\">en</see>: Total: {amount:N2}</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Greeting\">en</see>: Hello, {name}!</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Raw\">en</see>: Hello, {name}, and {braces}!</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Braces\">en</see>: {{name}} &amp; &lt;b&gt;</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Constant\">en</see>: Hello</description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Chosen\">en</see></description>");
+        text.ShouldContain("<see cref=\"ShopTranslationsEN.Statements\">en</see></description>");
+    }
+
+    [Test]
+    public void RecordSetWithTextThatTakesValues_ShouldCompile()
+    {
+        // Arrange & Act: a record writes methods of its own, among which a ToString without parameters and an Equals
+        // that returns no string. Neither is a text, and neither stands in the way of one.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            {{Header}}
+
+            public sealed partial record ShopTranslationsEN : ITranslationSet
+            {
+                public string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public sealed record ShopTranslationsNL : IShopTranslations
+            {
+                public string Greeting(string name) => $"Hallo, {name}!";
+            }
+            """);
+
+        // Assert
+        errors.ShouldBeEmpty();
+    }
+    #endregion
 }

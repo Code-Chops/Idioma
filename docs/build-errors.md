@@ -39,6 +39,8 @@ error LOC011: This text is written in one language, and this assembly supports e
 | `LOC016`           | Placeholders differing between languages, as in `Inline(en: "Hello, {0}!", nl: "Hallo!")`, also in a set                                                                            | Yes               |
 | `LOC017`           | A string compared as a text, as in `text.Equals("Orders")`, `list.Contains(name)`, or `counts[name]`, which no translated text equals                                               | Yes               |
 | `LOC018`           | A `LanguageCode` that is not a culture name, such as `"en_GB"`, which makes the set throw as it registers                                                                           | Yes               |
+| `LOC019`           | A public method of a default-language set that returns a string and takes parameters, but cannot be a text: generic, sharing its name, or with a parameter the text cannot keep     |                   |
+| `LOC020`           | A parameter of a text that takes values named differently than in its contract, as in `Invited(string guest, string host)` for `Invited(string host, string guest)`                 | Yes               |
 
 ## What still converts
 
@@ -72,3 +74,5 @@ ShopTranslations.Greeting.Format(culture); // No value either: the culture is wh
 ```
 
 To fill a placeholder with a culture, pass it as an object: `Greeting.Format((object)culture)`.
+
+A text written as a method has neither gap: its values are parameters, which the compiler checks ([details](how-it-works.md#texts-that-take-values)).

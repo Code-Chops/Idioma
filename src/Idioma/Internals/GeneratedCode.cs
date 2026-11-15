@@ -70,6 +70,41 @@ public static class GeneratedCode
     }
 
     /// <summary>
+    /// Declares a text of a translations contract that takes values, with its default wording taken from a set:
+    /// <c>GeneratedCode.CreateResourceText&lt;IShopTranslations&gt;("MyApp.Translations.ShopTranslations.Greeting",
+    /// t => t.Greeting(name), new ShopTranslationsEN(), [name])</c>.
+    /// A method of the class the source generator writes creates its text this way, on every call.
+    /// </summary>
+    /// <typeparam name="TContract">
+    /// The contract the text belongs to; every registered set implementing it provides the text. Name it: inferred from
+    /// <paramref name="defaults"/> it would be that set's own type, and no other language's set would match.
+    /// </typeparam>
+    /// <param name="key">The name of this text in a resource file.</param>
+    /// <param name="selector">Picks the text from a set, with the values the method was called with.</param>
+    /// <param name="defaults">The set that supplies the default wording, typically the contract's English set.</param>
+    /// <param name="arguments">
+    /// The values the method was called with, in the order of its parameters: the text's
+    /// <see cref="ResourceText.Arguments"/>.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// When <paramref name="key"/> is empty or white-space; pass the name the text has in the resource file.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// When <paramref name="defaults"/> has no language code: its name does not end in one and it does not implement
+    /// <see cref="ITranslationSet.LanguageCode"/>. Name the set after its language (<c>ShopTranslationsEN</c>), or
+    /// implement that property.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static ResourceText CreateResourceText<TContract>(string key, Func<TContract, string> selector, TContract defaults, ReadOnlySpan<object?> arguments)
+        where TContract : class, ITranslationSet
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var text = ResourceText.Create(key, selector, defaults, arguments);
+        return text;
+    }
+
+    /// <summary>
     /// Sets the app's <see cref="TranslationsRegistry.SupportedLanguages"/>, when an application that declares
     /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> starts. Only the first call counts,
     /// so an application the app loads later, such as the app a test project tests, cannot change them.

@@ -1,6 +1,6 @@
 # How Idioma works
 
-What happens behind the [getting started guide](../README.md#getting-started): which wording a user sees, what the source generator writes, how sets register, how to read a set yourself, and how a text travels through JSON.
+What happens behind the [getting started guide](../README.md#getting-started): which wording a user sees, what the source generator writes, texts that take values, how sets register, how to read a set yourself, and how a text travels through JSON.
 
 Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), and [coming from resx](coming-from-resx.md).
 
@@ -52,6 +52,42 @@ Each generated text shows its wording in every language and links to it, so hove
 Each generated text is a `ResourceText`: a `LocalizableText` with a key, which is its full name, `MyApp.Translations.ShopTranslations.Checkout` here, so each text has a key of its own. The package never reads the key: it is for an app or library that also looks texts up in resource files, such as through `IStringLocalizer`, so a resource file can override a wording without a rebuild ([an example](coming-from-resx.md#keeping-a-resource-file-as-an-override)).
 
 The source generator also writes the code that registers your sets (see [Registration](#registration)): a class named after your assembly, `TranslationsRegistrar_MyApp` for `MyApp`, in the namespace `CodeChops.Idioma.Generated`. In an assembly that has sets, or an app that declares languages, that class is public, so that an app referencing the assembly can register them as it starts. It is hidden from autocomplete, but a library that keeps a list of its public API finds it there, next to the contract and the class of every public set.
+
+## Texts that take values
+
+A public method of the default-language set that returns a `string` and takes parameters is a text that takes values ([an example](../README.md#write-a-text-that-takes-values)). The contract repeats the method, so every language implements it, and the generated class gets a method of the same name and parameters:
+
+```csharp
+public interface IShopTranslations : ITranslationSet
+{
+    string ItemsInCart(int count, string shop);
+}
+
+public static partial class ShopTranslations
+{
+    public static ResourceText ItemsInCart(int count, string shop) => ...; // Its key is "MyApp.Translations.ShopTranslations.ItemsInCart"
+}
+```
+
+Each call creates a text that keeps the values, as its `Arguments`, and words itself with them when it is shown. So it follows the user's language like any other text: one created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its full name, without its parameters. Two such texts are equal when their values are.
+
+A method without parameters is not a text: write a text without values as a property. A public method of the default-language set that is not meant as a text, such as a helper, becomes one all the same, and every language then has to implement it: make a helper `private` or `internal`.
+
+The generated class repeats the parameters as the set declares them, which rules out what it could not repeat or keep (`LOC019`):
+
+- a generic method;
+- two methods of one name, as a text is told from the others by its name;
+- a parameter passed by reference (`ref`, `in`, `out`), a `params` parameter, or a parameter with a default value;
+- a parameter that is `dynamic`, a pointer, or a ref struct such as a span.
+
+Every language names the parameters as the default-language set does (`LOC020`). The compiler checks their types and their order, but not their names, so without that check a set could declare two parameters of one type the other way round and word each value as the other.
+
+What else to know:
+
+- **Plurals.** Idioma has no plural rules: each language chooses its wording for a number in its own set, in C#. `count is 1 ? ... : ...` is right for English and Dutch, and a language with more forms, such as Polish, writes a condition for each.
+- **How values are formatted.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. That also holds for the wording of a culture you pass to `ToString`: it comes from the set of that culture, with the values formatted for the current culture.
+- **A text as a value.** A value that is a text itself shows the wording for the current UI culture, also inside the wording of another culture you pass to `ToString`.
+- **Placeholders.** A text with placeholders, `"Hello, {0}!"` filled in with `Format`, works as before, next to texts that take values.
 
 ## Registration
 
@@ -106,5 +142,7 @@ A text survives JSON, such as a Blazor component parameter that crosses a render
 ```
 
 An inline text travels without a `key`, and a text without translations, such as a customer's name, as its wording alone: `"Ada"`.
+
+A text that takes values is written with its values filled in, in every language: `"nl":"3 artikelen in je winkelwagen bij Idioma"`. Read back, it shows that wording, and no longer has its `Arguments`.
 
 A JSON string reads as a text too, with that one wording for every culture, so JSON you write by hand, such as a settings file, can hold `"title": "Orders"`.

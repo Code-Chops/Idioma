@@ -8,7 +8,9 @@ namespace CodeChops.Idioma.Generators;
 /// that makes the class implement it, and the static partial class named after the set without its language suffix
 /// (<c>ShopTranslations</c>, one <c>ResourceText</c> per member, keyed by its full name, as in
 /// <c>MyApp.Translations.ShopTranslations.Checkout</c>, and worded by the set, and no other member); the interface and
-/// the class take the set's accessibility. Each
+/// the class take the set's accessibility. A public method of the set that returns a <see cref="string"/> and takes
+/// parameters is a text that takes values: the contract repeats it, and the class holds a method of its name and
+/// parameters that creates the <c>ResourceText</c> with the values it is called with. Each
 /// generated member inherits the property's doc comment through <c>&lt;inheritdoc cref/&gt;</c>, or else is documented
 /// with its default-language wording, and links to its wording in every language, which it shows next to the link. Each member of the contract whose
 /// default wording is a constant records its placeholders (<c>[FormatPlaceholders]</c>), which
@@ -32,6 +34,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     public const string LibraryMissingLanguageDiagnosticId = "LOC008";
     public const string LibraryCannotBeTranslatedDiagnosticId = "LOC009";
     public const string ReservedTextNameDiagnosticId = "LOC014";
+    public const string UnsupportedTextDiagnosticId = "LOC019";
 
     /// <summary>
     /// The property of a diagnostic that holds the name that resolves it, for its code fix to apply: the name the class
@@ -108,6 +111,12 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         "'{0}' has a text named '{1}', which the generated class '{2}' cannot hold, so '{2}.{1}' is not generated. Rename the text.",
         "A member cannot carry the name of its own class, so no text can be named like the class that holds the texts.");
 
+    private static readonly DiagnosticDescriptor UnsupportedTextRule = Error(
+        UnsupportedTextDiagnosticId,
+        "Method that cannot be a text",
+        "'{0}.{1}' is a public method that returns a string, as a text that takes values is, but {2}, so no text is generated for it. Change that, or make the method internal or private if it is no text.",
+        "A public method of a default-language set that returns a string and takes parameters is a text that takes values: the generated class gets a method of its name and parameters, which keeps the values and hands them to the set of the user's language when the text is shown. That takes a method that is not generic, has a name of its own in its set, and takes each parameter by value, without a default.");
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var languages = SupportedLanguages.Read(context);
@@ -168,6 +177,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
                 TranslationSetsRule.MissingContract => MissingContractRule,
                 TranslationSetsRule.LibraryMissingLanguage => LibraryMissingLanguageRule,
                 TranslationSetsRule.LibraryCannotBeTranslated => LibraryCannotBeTranslatedRule,
+                TranslationSetsRule.UnsupportedText => UnsupportedTextRule,
                 _ => ReservedTextNameRule,
             };
 
@@ -253,7 +263,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         var texts = contract.Members.Where(member => !TranslationSetsAnalysis.IsReservedTextName(member.Name, contract.TextsName)).ToArray();
         var typeKeyword = contract.IsRecord ? "record" : "class";
         var accessibility = contract.IsPublic ? "public" : "internal";
-        var sampleMember = texts.Length > 0 ? texts[0].Name : "Name";
+        var sampleMember = GetSampleText(texts);
 
         var aliases = GetNamespaceAliases(contract);
 
@@ -310,6 +320,13 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         {
             AppendMemberDocs(sb, contract, aliases, className, member);
 
+            // A text that takes values: its parameters are what every language is held to, by the compiler.
+            if (member.IsMethod)
+            {
+                sb.AppendLine($"    string {EscapeIdentifier(member.Name)}({RenderParameters(member, contract.Namespace, aliases)});");
+                continue;
+            }
+
             // Not for wording that is no constant, or no valid format string: nothing then to hold the others to.
             if (member.DefaultText is { } defaultText && FormatPlaceholders.TryRead(defaultText, out var placeholders))
                 sb.AppendLine($"    [{PackageNames.InternalsNamespace}.FormatPlaceholders({String.Join(", ", placeholders)})]");
@@ -348,7 +365,22 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
                 sb.AppendLine();
 
             AppendMemberDocs(sb, contract, aliases, className, member);
-            sb.AppendLine($"    public static {(HidesObjectMember(member.Name) ? "new " : "")}{PackageNames.ResourceText} {memberName} {{ get; }} = CreateResourceText<{name}>({keyLiteral}, static translations => translations.{memberName}, DefaultSet<{className}>.Instance);");
+
+            if (!member.IsMethod)
+            {
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.ResourceText} {memberName} {{ get; }} = CreateResourceText<{name}>({keyLiteral}, static translations => translations.{memberName}, DefaultSet<{className}>.Instance);");
+                continue;
+            }
+
+            // A text that takes values is created on every call, with the values it is called with: the text keeps
+            // them, and hands them to the set of the user's language when it is shown. The set is named apart from
+            // the parameters, which stand before it inside the method.
+            var arguments = String.Join(", ", member.Parameters.Select(static parameter => EscapeIdentifier(parameter.Name)));
+            var set = "translations";
+            while (member.Parameters.Any(parameter => String.Equals(parameter.Name, set, StringComparison.Ordinal)))
+                set += "_";
+
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.ResourceText} {memberName}({RenderParameters(member, contract.Namespace, aliases)}) => CreateResourceText<{name}>({keyLiteral}, {set} => {set}.{memberName}({arguments}), DefaultSet<{className}>.Instance, [{arguments}]);");
         }
 
         // The end of the texts, and the set every text takes its default wording from. File-local, so that inside this
@@ -374,9 +406,9 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// The alias the file of a contract gives each namespace outside its own that holds a set it links to, or a class a
-    /// set inherits a text from: <c>Namespace_Shop_Dutch</c> for <c>Shop.Dutch</c>. In the order of the namespaces, so
-    /// that the file is written the same way each time.
+    /// The alias the file of a contract gives each namespace outside its own that holds a set it links to, a class a
+    /// set inherits a text from, or the type of a parameter of a text that takes values: <c>Namespace_Shop_Dutch</c>
+    /// for <c>Shop.Dutch</c>. In the order of the namespaces, so that the file is written the same way each time.
     /// </summary>
     // Named after the namespace, with a prefix that keeps it apart from the namespace itself: an alias named like
     // something the global namespace holds cannot be used.
@@ -395,6 +427,11 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
                 if (SharesLanguage(contract, translation))
                     Add(translation.Namespace);
             }
+
+            foreach (var parameter in member.Parameters)
+                foreach (var part in parameter.Type)
+                    if (part.Namespace is { } typeNamespace)
+                        Add(typeNamespace);
         }
 
         return aliases;
@@ -434,15 +471,15 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Where the wording a set gives a text is found: the set's own property when it declares the text, the property of
-    /// the nearest class declaring it when the set inherits the text (<c>ShopTranslationsEN.Checkout</c> for a British
-    /// set that leaves <c>Checkout</c> as it is), and else the set itself.
+    /// Where the wording a set gives a text is found: the set's own property or method when it declares the text, that
+    /// of the nearest class declaring it when the set inherits the text (<c>ShopTranslationsEN.Checkout</c> for a
+    /// British set that leaves <c>Checkout</c> as it is), and else the set itself.
     /// </summary>
-    // A cref does not find a member through a class that only inherits it (CS1574), and a text implemented explicitly
-    // has no name to link to at all.
+    // A cref does not find a member through a class that only inherits it (CS1574), a text implemented explicitly has
+    // no name to link to at all, and a method that shares its name with another has none of its own (CS0419).
     private static (string Namespace, string TypeName, bool HasMember, bool IsInherited) GetCrefTarget(TranslationLink set, string member)
     {
-        if (set.StringProperties.AsImmutableArray().Contains(member, StringComparer.Ordinal))
+        if (set.DeclaredTexts.AsImmutableArray().Contains(member, StringComparer.Ordinal))
             return (set.Namespace, EscapeIdentifier(set.Name), HasMember: true, IsInherited: false);
 
         foreach (var inherited in set.InheritedTexts)
@@ -580,12 +617,62 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Whether a text carries the name of a member every class has, such as <c>Equals</c>, which the generated class
-    /// then hides. Its property says so with <see langword="new"/>: without it the build warns (<c>CS0108</c>) about
-    /// code its author cannot change.
+    /// then hides. Its member says so with <see langword="new"/>: without it the build warns (<c>CS0108</c>) about
+    /// code its author cannot change. A text that takes values hides such a member only when it takes what that member
+    /// takes: <c>Equals(object)</c>, <c>Equals(object, object)</c>, or <c>ReferenceEquals(object, object)</c>.
     /// </summary>
-    private static bool HidesObjectMember(string name)
+    private static bool HidesObjectMember(TranslationsMember member)
     {
-        return name is "Equals" or "GetHashCode" or "GetType" or "MemberwiseClone" or "ReferenceEquals" or "ToString";
+        if (!member.IsMethod)
+            return member.Name is "Equals" or "GetHashCode" or "GetType" or "MemberwiseClone" or "ReferenceEquals" or "ToString";
+
+        var hidesObjectMember = member.Parameters.All(static parameter => parameter.Type is [{ Namespace: null, Text: "object" or "object?" }])
+               && member is { Name: "Equals", Parameters.Length: 1 or 2 } or { Name: "ReferenceEquals", Parameters.Length: 2 };
+
+        return hidesObjectMember;
+    }
+
+    /// <summary>
+    /// The text the doc comment of the generated class shows as its example: the first text that takes no values, as
+    /// it stands in markup by its name alone, and else the first text, with an ellipsis for its values.
+    /// </summary>
+    private static string GetSampleText(TranslationsMember[] texts)
+    {
+        foreach (var text in texts)
+            if (!text.IsMethod)
+                return text.Name;
+
+        var sample = texts.Length > 0 ? $"{texts[0].Name}(...)" : "Name";
+        return sample;
+    }
+
+    /// <summary>
+    /// The parameters of a text that takes values, as the contract and the generated class declare them.
+    /// </summary>
+    private static string RenderParameters(TranslationsMember member, string @namespace, SortedDictionary<string, string> aliases)
+    {
+        var parameters = String.Join(", ", member.Parameters.Select(parameter => $"{RenderType(parameter.Type, @namespace, aliases)} {EscapeIdentifier(parameter.Name)}"));
+        return parameters;
+    }
+
+    /// <summary>
+    /// The type of a parameter as the file of a contract names it: like a class a cref names (<see cref="GetCrefType"/>),
+    /// a type of the contract's own namespace by its name alone, and a type of another namespace through the alias of
+    /// that namespace.
+    /// </summary>
+    private static string RenderType(EquatableArray<TypeNamePart> type, string @namespace, SortedDictionary<string, string> aliases)
+    {
+        var name = new StringBuilder();
+
+        foreach (var part in type)
+        {
+            if (part.Namespace is { } typeNamespace && NeedsAlias(@namespace, typeNamespace))
+                name.Append(aliases[typeNamespace]).Append('.');
+
+            name.Append(part.Text);
+        }
+
+        return name.ToString();
     }
 
     /// <summary>
@@ -621,7 +708,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     /// <summary>
     /// A name as code can write it: a keyword gets an <c>@</c>, as for a text declared as <c>@event</c>.
     /// </summary>
-    private static string EscapeIdentifier(string name)
+    internal static string EscapeIdentifier(string name)
     {
         var escapeIdentifier = SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
         return escapeIdentifier;

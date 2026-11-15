@@ -19,6 +19,11 @@ namespace CodeChops.Idioma;
 /// To leave a text's wording to such a resource file, declare it by key, with a default for when nothing resolves the
 /// key: <c>new ResourceText("Customer.Name", customer.Name)</c>. Outside such a host, it shows that default.
 /// </para>
+/// <para>
+/// A text that takes values is a method of the generated class: <c>ShopTranslations.Greeting(customer.Name)</c> is
+/// the <c>Greeting</c> text with that name as its <see cref="Arguments"/>. It follows the user's language as any other
+/// text does: each set words it with those values when the text is shown.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -27,6 +32,11 @@ namespace CodeChops.Idioma;
 /// string key = checkout.Key;            // "MyApp.Translations.ShopTranslations.Checkout"
 /// Type? contract = checkout.Contract;   // typeof(IShopTranslations)
 /// string wording = checkout;            // "Afrekenen" for a user whose UI culture is nl-NL
+///
+/// ResourceText greeting = ShopTranslations.Greeting("Anna");
+///
+/// string name = (string)greeting.Arguments[0]!; // "Anna"
+/// string hello = greeting;                      // "Hallo, Anna!" for that user
 /// </code>
 /// </example>
 // Named here as well: the serializer reads the converter from the type it writes, and does not look at the base type.
@@ -62,6 +72,17 @@ public sealed record ResourceText : LocalizableText
     public string? DefaultLanguage { get; private init; }
 
     /// <summary>
+    /// The values this text was created with, in the order of its parameters: <c>customer.Name</c> for
+    /// <c>ShopTranslations.Greeting(customer.Name)</c>. Empty for a text that takes none, such as
+    /// <c>ShopTranslations.Checkout</c>.
+    /// </summary>
+    /// <remarks>
+    /// Every set words the text with these values. An app or library that looks the text up in a resource file by its
+    /// <see cref="Key"/> can fill the wording it finds there with them.
+    /// </remarks>
+    public ImmutableArray<object?> Arguments { get; private init; } = [];
+
+    /// <summary>
     /// Selects this text from a set implementing <see cref="Contract"/>.
     /// </summary>
     private Func<ITranslationSet, string>? Selector { get; init; }
@@ -94,7 +115,8 @@ public sealed record ResourceText : LocalizableText
 
     /// <summary>
     /// Declares a text of a translations contract, with its default wording taken from a set: what
-    /// <see cref="Internals.GeneratedCode.CreateResourceText"/> gives the class the source generator writes.
+    /// <see cref="Internals.GeneratedCode.CreateResourceText{TContract}(string, Func{TContract, string}, TContract)"/>
+    /// gives the class the source generator writes.
     /// </summary>
     internal static ResourceText Create<TContract>(string key, Func<TContract, string> selector, TContract defaults)
         where TContract : class, ITranslationSet
@@ -117,6 +139,29 @@ public sealed record ResourceText : LocalizableText
         {
             Contract = typeof(TContract),
             Selector = set => selector((TContract)set),
+        };
+        return text;
+    }
+
+    /// <summary>
+    /// Declares a text of a translations contract that takes values, with its default wording taken from a set: what
+    /// <see cref="Internals.GeneratedCode.CreateResourceText{TContract}(string, Func{TContract, string}, TContract, ReadOnlySpan{object})"/>
+    /// gives a method of the class the source generator writes.
+    /// </summary>
+    // Created on every call, where a text without arguments is created once, so in one step: the text is not copied
+    // to give it its default language, as the Create above copies it.
+    internal static ResourceText Create<TContract>(string key, Func<TContract, string> selector, TContract defaults, ReadOnlySpan<object?> arguments)
+        where TContract : class, ITranslationSet
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(defaults);
+
+        var text = new ResourceText(key, selector(defaults))
+        {
+            Contract = typeof(TContract),
+            Selector = set => selector((TContract)set),
+            DefaultLanguage = defaults.LanguageCode,
+            Arguments = [.. arguments],
         };
         return text;
     }
@@ -158,17 +203,24 @@ public sealed record ResourceText : LocalizableText
     }
 
     /// <summary>
-    /// Whether two texts are the same text: the same key, contract, default language, default wording, and
-    /// translations, whatever wording they show right now.
+    /// Whether two texts are the same text: the same key, contract, default language, default wording, translations,
+    /// and <see cref="Arguments"/>, whatever wording they show right now.
     /// </summary>
+    /// <remarks>
+    /// Two arguments are the same when <see cref="object.Equals(object)"/> says so: <c>Greeting("Anna")</c> equals
+    /// <c>Greeting("Anna")</c>, and a text created with an array equals only a text created with that same array.
+    /// </remarks>
     public bool Equals(ResourceText? other)
     {
-        // The selector is not compared: the key names the member it selects.
+        // The selector is not compared: the key names the member it selects, and the arguments are what it passes.
+        // The arguments are compared themselves, and not left to the default wording they give: two values can read
+        // the same in the default language and differ in another.
         var isEqual = other is not null
                && base.Equals(other)
                && String.Equals(this.Key, other.Key, StringComparison.Ordinal)
                && this.Contract == other.Contract
-               && String.Equals(this.DefaultLanguage, other.DefaultLanguage, StringComparison.Ordinal);
+               && String.Equals(this.DefaultLanguage, other.DefaultLanguage, StringComparison.Ordinal)
+               && this.Arguments.AsSpan().SequenceEqual(other.Arguments.AsSpan());
 
         return isEqual;
     }
@@ -176,6 +228,8 @@ public sealed record ResourceText : LocalizableText
     /// <inheritdoc />
     public override int GetHashCode()
     {
+        // Without the arguments: equal texts still hash alike, and the default wording, which is in the hash of the
+        // base, differs with nearly every argument already.
         return HashCode.Combine(base.GetHashCode(), this.Key, this.Contract, this.DefaultLanguage);
     }
 

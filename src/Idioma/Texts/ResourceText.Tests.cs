@@ -124,6 +124,24 @@ public sealed class ResourceTextTests
         public override string Greeting => "Nin hao";
     }
 
+    /// <summary>
+    /// A contract with a text that takes a value.
+    /// </summary>
+    private interface IResourceCountedTranslations : ITranslationSet
+    {
+        string Items(int count);
+    }
+
+    private sealed class ResourceCountedTranslationsEN : IResourceCountedTranslations
+    {
+        public string Items(int count) => count is 1 ? "1 item" : $"{count} items";
+    }
+
+    private sealed class ResourceCountedTranslationsNL : IResourceCountedTranslations
+    {
+        public string Items(int count) => count is 1 ? "1 artikel" : $"{count} artikelen";
+    }
+
     private static ResourceText Greeting { get; } = ResourceText.Create<IResourceTranslations>("Resource.Greeting", t => t.Greeting, new ResourceTranslationsEN());
 
     private static ResourceText Farewell { get; } = ResourceText.Create<IResourceTranslations>("Resource.Farewell", t => t.Farewell, new ResourceTranslationsEN());
@@ -255,6 +273,70 @@ public sealed class ResourceTextTests
         Greeting.ShouldNotBe(new ResourceText(Greeting.Key, Greeting.DefaultText));
         Greeting.ShouldBe(ResourceText.Create<IResourceTranslations>("Resource.Greeting", t => t.Greeting, new ResourceTranslationsEN()));
         Greeting.ShouldNotBe(ResourceText.Create<IResourceTranslations>("Resource.Greeting", "Hello", t => t.Greeting));
+    }
+
+    [Test]
+    public void Create_WithArguments_ShouldKeepThemAndWordTextWithThemInEverySet()
+    {
+        // Arrange
+        var count = 3;
+        var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsNL()]);
+
+        // Act: as a method of the generated class creates a text that takes a value.
+        var text = ResourceText.Create<IResourceCountedTranslations>("Resource.Items", t => t.Items(count), new ResourceCountedTranslationsEN(), [count]);
+
+        // Assert: the default wording is that of the set it is created with, and every other set words it when asked.
+        text.Key.ShouldBe("Resource.Items");
+        text.Contract.ShouldBe(typeof(IResourceCountedTranslations));
+        text.DefaultLanguage.ShouldBe("en");
+        text.DefaultText.ShouldBe("3 items");
+        text.Arguments.ShouldBe([3]);
+        text.GetTranslation(new ResourceCountedTranslationsNL()).ShouldBe("3 artikelen");
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry).ShouldBe("3 artikelen");
+        text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry).ShouldBe("3 items");
+        text.WithTranslation("fr", "3 articles").Arguments.ShouldBe([3]);
+    }
+
+    [Test]
+    public void Create_WithArguments_ShouldThrowForInvalidArguments()
+    {
+        // Arrange & Act & Assert
+        Should.Throw<ArgumentException>(() => ResourceText.Create<IResourceCountedTranslations>(" ", t => t.Items(1), new ResourceCountedTranslationsEN(), [1]));
+        Should.Throw<ArgumentNullException>(() => ResourceText.Create<IResourceCountedTranslations>("K", null!, new ResourceCountedTranslationsEN(), [1]));
+        Should.Throw<ArgumentNullException>(() => ResourceText.Create("K", t => t.Items(1), (IResourceCountedTranslations)null!, [1]));
+    }
+
+    [Test]
+    public void Arguments_ShouldBeEmptyForTextThatTakesNone()
+    {
+        // Arrange & Act & Assert: empty, and not without a value, so that it can be read without a check.
+        Greeting.Arguments.ShouldBeEmpty();
+        new ResourceText("MyApp.Greeting", "Hello").Arguments.ShouldBeEmpty();
+        Greeting.WithTranslation("fr", "Bonjour").Arguments.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void Equality_ShouldIncludeArguments()
+    {
+        // Arrange: texts of one key whose default wording is the same whatever they are created with, so that only
+        // the arguments can tell them apart.
+        static ResourceText Create(params object?[] arguments)
+        {
+            return ResourceText.Create<IResourceCountedTranslations>("Resource.Items", t => t.Items(1), new ResourceCountedTranslationsEN(), arguments);
+        }
+
+        string[] names = ["Anna"];
+
+        // Act & Assert: a value equals an equal value, and an array only itself.
+        Create(3, "Anna").ShouldBe(Create(3, "Anna"));
+        Create(3, "Anna").GetHashCode().ShouldBe(Create(3, "Anna").GetHashCode());
+        Create(3, "Anna").ShouldNotBe(Create(4, "Anna"));
+        Create(3, "Anna").ShouldNotBe(Create(3));
+        Create(3).ShouldNotBe(Create());
+        Create(3, null).ShouldBe(Create(3, null));
+        Create(3, null).ShouldNotBe(Create(3, "Anna"));
+        Create([names]).ShouldBe(Create([names]));
+        Create([names]).ShouldNotBe(Create([new[] { "Anna" }]));
     }
 
     [Test]

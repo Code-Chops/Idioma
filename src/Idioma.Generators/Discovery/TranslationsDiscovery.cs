@@ -453,6 +453,10 @@ internal static class TranslationsDiscovery
         var constructor = FindConstructorCalledWithoutArguments(type, semanticModel, cancellationToken);
         var language = GetLanguage(type, ancestors, compilation, cancellationToken, out var invalidLanguageCode);
         var location = DiagnosticLocation.From(type.Locations[0]);
+        var unsupportedTexts = ImmutableArray<UnsupportedText>.Empty;
+        var texts = listsTranslations
+            ? GetTextMembers(type, compilation, cancellationToken, out unsupportedTexts)
+            : ImmutableArray<TranslationsMember>.Empty;
 
         var translations = new DiscoveredTranslations(
             MetadataName: type.ToDisplayString(),
@@ -491,10 +495,11 @@ internal static class TranslationsDiscovery
             IsRecord: type.IsRecord,
             IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
-            StringProperties: new EquatableArray<string>(GetStringProperties(type)),
+            DeclaredTexts: new EquatableArray<string>(GetDeclaredTexts(type)),
             InheritedTexts: new EquatableArray<InheritedText>(GetInheritedTexts(type)),
             Wordings: new EquatableArray<TextWording>(GetWordings(type, compilation, cancellationToken)),
-            Texts: new EquatableArray<TranslationsMember>(listsTranslations ? GetTextMembers(type, compilation, cancellationToken) : ImmutableArray<TranslationsMember>.Empty));
+            Texts: new EquatableArray<TranslationsMember>(texts),
+            UnsupportedTexts: new EquatableArray<UnsupportedText>(unsupportedTexts));
 
         return translations;
     }
@@ -1038,35 +1043,50 @@ internal static class TranslationsDiscovery
         static int CountNameParts(NameSyntax name) => name is QualifiedNameSyntax qualified ? CountNameParts(qualified.Left) + 1 : 1;
     }
 
-    private static string GetNamespaceName(INamespaceSymbol @namespace)
+    internal static string GetNamespaceName(INamespaceSymbol @namespace)
     {
         var namespaceName = @namespace.IsGlobalNamespace ? "" : @namespace.ToDisplayString();
         return namespaceName;
     }
 
     /// <summary>
-    /// The public string properties a cref can name on this set: those the class declares itself. A cref does not find
-    /// a member through a class that only inherits it (<c>ShopTranslationsEnGB.Checkout</c>, declared by
+    /// The texts a cref can name on this set: the public string properties the class declares itself, and its methods
+    /// of the shape of a text that takes values (<see cref="TextParameters.IsTextMethod"/>). A cref does not find a
+    /// member through a class that only inherits it (<c>ShopTranslationsEnGB.Checkout</c>, declared by
     /// <c>ShopTranslationsEN</c>, is <c>CS1574</c>), so those are named where they are declared
-    /// (<see cref="GetInheritedTexts"/>). An explicit interface implementation has no such name.
+    /// (<see cref="GetInheritedTexts"/>). An explicit interface implementation has no such name, and a method that
+    /// shares its name with another has none of its own (<c>CS0419</c>).
     /// </summary>
-    private static ImmutableArray<string> GetStringProperties(INamedTypeSymbol type)
+    private static ImmutableArray<string> GetDeclaredTexts(INamedTypeSymbol type)
     {
         var names = ImmutableArray.CreateBuilder<string>();
 
         foreach (var member in type.GetMembers())
-            if (IsPublicStringProperty(member, out var property) && !String.Equals(property.Name, LanguageCodeMemberName, StringComparison.Ordinal))
-                names.Add(property.Name);
+            if (IsNameableText(member) && !String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal))
+                names.Add(member.Name);
 
-        var stringProperties = names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
-        return stringProperties;
+        var declaredTexts = names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
+        return declaredTexts;
     }
 
     /// <summary>
-    /// The public string properties this set inherits, each with the nearest class declaring it: where a cref names a
-    /// text the set does not declare itself, such as <c>ShopTranslationsEN.Checkout</c> for a British set that leaves
-    /// <c>Checkout</c> as it is. A text that the set, or a class between it and the one declaring the text, implements
-    /// explicitly is left out: that implementation is its wording, and has no name.
+    /// Whether a member is a text a cref can name by its name alone: a public string property, or a method of the
+    /// shape of a text that takes values whose class declares no other member of that name.
+    /// </summary>
+    private static bool IsNameableText(ISymbol member)
+    {
+        var isNameableText = IsPublicStringProperty(member, out _)
+                             || (TextParameters.IsTextMethod(member, out var method) && TextParameters.HasNameOfItsOwn(method));
+        return isNameableText;
+    }
+
+    /// <summary>
+    /// The texts this set inherits (public string properties, and methods of the shape of a text that takes values),
+    /// each with the nearest class declaring it: where a cref names a text the set does not declare itself, such as
+    /// <c>ShopTranslationsEN.Checkout</c> for a British set that leaves <c>Checkout</c> as it is. A text that the set,
+    /// or a class between it and the one declaring the text, implements explicitly is left out: that implementation
+    /// is its wording, and has no name. So is a method that shares its name with another of its class, which a cref
+    /// cannot name by its name alone.
     /// </summary>
     private static ImmutableArray<InheritedText> GetInheritedTexts(INamedTypeSymbol type)
     {
@@ -1081,19 +1101,29 @@ internal static class TranslationsDiscovery
 
             foreach (var member in members)
             {
-                if (!IsPublicStringProperty(member, out var property) || !settled.Add(property.Name) || SymbolEqualityComparer.Default.Equals(current, type))
+                if (!IsNameableText(member) || !settled.Add(member.Name) || SymbolEqualityComparer.Default.Equals(current, type))
                     continue;
 
                 texts.Add(new InheritedText(
-                    Name: property.Name,
+                    Name: member.Name,
                     Namespace: GetNamespaceName(current.ContainingNamespace),
                     TypeName: GetCrefName(current)));
             }
 
-            // After the properties a cref can name, so that a class holding both is linked at the one with a name.
+            // After the texts a cref can name, so that a class holding both is linked at the one with a name. A method
+            // that shares its name with another settles it too: the nearest class has the wording, name or no name.
             foreach (var member in members)
-                if (member is IPropertySymbol { IsStatic: false } property && GetExplicitlyImplementedName(property) is { } name)
+            {
+                if (member is IPropertySymbol { IsStatic: false } or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation }
+                    && GetExplicitlyImplementedName(member) is { } name)
+                {
                     settled.Add(name);
+                }
+                else if (TextParameters.IsTextMethod(member, out _))
+                {
+                    settled.Add(member.Name);
+                }
+            }
         }
 
         var orderedTexts = texts.OrderBy(static text => text.Name, StringComparer.Ordinal).ToImmutableArray();
@@ -1105,7 +1135,8 @@ internal static class TranslationsDiscovery
     /// text, in the order of the names: its own property, the property it inherits (<see cref="GetInheritedTexts"/>), or
     /// an explicit implementation, which wins over a property of the same name in its class. A text a class implements
     /// explicitly for two interfaces has no one wording, and a text whose wording is no constant, or is declared where
-    /// this compilation has no syntax for it, has none either.
+    /// this compilation has no syntax for it, has none either. A text that takes values has the wording its method
+    /// writes, with each value in braces (<see cref="MethodWording"/>), unless its class has two methods of its name.
     /// </summary>
     private static ImmutableArray<TextWording> GetWordings(INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
     {
@@ -1119,11 +1150,15 @@ internal static class TranslationsDiscovery
             var members = current.GetMembers();
 
             // Null for a name the class implements explicitly more than once.
-            var explicitImplementations = new Dictionary<string, IPropertySymbol?>(StringComparer.Ordinal);
+            var explicitImplementations = new Dictionary<string, ISymbol?>(StringComparer.Ordinal);
             foreach (var member in members)
             {
-                if (member is IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String } property && GetExplicitlyImplementedName(property) is { } name)
-                    explicitImplementations[name] = explicitImplementations.ContainsKey(name) ? null : property;
+                if (member is IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String }
+                        or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation, ReturnType.SpecialType: SpecialType.System_String }
+                    && GetExplicitlyImplementedName(member) is { } name)
+                {
+                    explicitImplementations[name] = explicitImplementations.ContainsKey(name) ? null : member;
+                }
             }
 
             foreach (var pair in explicitImplementations)
@@ -1134,8 +1169,20 @@ internal static class TranslationsDiscovery
 
             foreach (var member in members)
             {
-                if (IsPublicStringProperty(member, out var property) && settled.Add(property.Name) && ReadWording(property, compilation, cancellationToken) is { } wording)
-                    wordings.Add(new TextWording(property.Name, wording));
+                if (IsPublicStringProperty(member, out _) && settled.Add(member.Name) && ReadWording(member, compilation, cancellationToken) is { } wording)
+                    wordings.Add(new TextWording(member.Name, wording));
+            }
+
+            // Two methods of one name have no one wording, and settle the name all the same.
+            foreach (var member in members)
+            {
+                if (TextParameters.IsTextMethod(member, out var method)
+                    && settled.Add(method.Name)
+                    && TextParameters.HasNameOfItsOwn(method)
+                    && ReadWording(method, compilation, cancellationToken) is { } wording)
+                {
+                    wordings.Add(new TextWording(method.Name, wording));
+                }
             }
         }
 
@@ -1144,13 +1191,18 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The constant a property returns, when this compilation holds its declaration, else <see langword="null"/>.
+    /// The constant a property returns, or the wording a method writes (<see cref="MethodWording"/>), when this
+    /// compilation holds its declaration, else <see langword="null"/>.
     /// </summary>
-    private static string? ReadWording(IPropertySymbol property, Compilation compilation, CancellationToken cancellationToken)
+    private static string? ReadWording(ISymbol member, Compilation compilation, CancellationToken cancellationToken)
     {
-        var wording = property.DeclaringSyntaxReferences.Length > 0
-                      && property.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) is PropertyDeclarationSyntax declaration
-            ? GetConstantText(declaration, compilation, cancellationToken)
+        var wording = member.DeclaringSyntaxReferences.Length > 0
+            ? member.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) switch
+            {
+                PropertyDeclarationSyntax property => GetConstantText(property, compilation, cancellationToken),
+                MethodDeclarationSyntax method => GetMethodWording(method, compilation, cancellationToken),
+                _ => null,
+            }
             : null;
         return wording;
     }
@@ -1165,45 +1217,67 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// The name of the member a property implements explicitly (<c>Checkout</c> for
-    /// <c>string IShopTranslations.Checkout</c>), or <see langword="null"/> for any other property.
+    /// The name of the member a property or method implements explicitly (<c>Checkout</c> for
+    /// <c>string IShopTranslations.Checkout</c>), or <see langword="null"/> for any other member.
     /// </summary>
-    // Read from the property's own name, which holds the interface as it is written: the symbol names no implemented
+    // Read from the member's own name, which holds the interface as it is written: the symbol names no implemented
     // member for a contract generated here, which binds to nothing yet.
-    private static string? GetExplicitlyImplementedName(IPropertySymbol property)
+    private static string? GetExplicitlyImplementedName(ISymbol member)
     {
-        var separator = property.Name.LastIndexOf('.');
+        var separator = member.Name.LastIndexOf('.');
 
-        var explicitlyImplementedName = separator < 0 ? null : property.Name.Substring(separator + 1);
+        var explicitlyImplementedName = separator < 0 ? null : member.Name.Substring(separator + 1);
         return explicitlyImplementedName;
     }
 
     /// <summary>
     /// The texts: the public, instance, non-indexer <see cref="string"/> properties with a public getter declared by
-    /// the class itself, in declaration order (an inherited property belongs to the base's own contract).
-    /// <c>LanguageCode</c> (the <c>ITranslationSet</c> member, which a set may override) and explicit interface
-    /// implementations are not texts.
+    /// the class itself, and its methods of the shape of a text that takes values
+    /// (<see cref="TextParameters.IsTextMethod"/>), in declaration order (an inherited member belongs to the base's
+    /// own contract). <c>LanguageCode</c> (the <c>ITranslationSet</c> member, which a set may override) and explicit
+    /// interface implementations are not texts. A method of that shape that cannot be a text
+    /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC019</c>).
     /// </summary>
     private static ImmutableArray<TranslationsMember> GetTextMembers(INamedTypeSymbol type, Compilation compilation,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, out ImmutableArray<UnsupportedText> unsupported)
     {
         var members = ImmutableArray.CreateBuilder<TranslationsMember>();
+        var unsupportedTexts = ImmutableArray.CreateBuilder<UnsupportedText>();
 
         foreach (var member in type.GetMembers())
         {
-            if (!IsPublicStringProperty(member, out var property) || String.Equals(property.Name, LanguageCodeMemberName, StringComparison.Ordinal))
+            if (String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal))
                 continue;
 
-            var declaration = property.DeclaringSyntaxReferences.Length > 0
-                ? property.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) as PropertyDeclarationSyntax
+            var declaration = member.DeclaringSyntaxReferences.Length > 0
+                ? member.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) as MemberDeclarationSyntax
                 : null;
 
-            members.Add(new TranslationsMember(
-                Name: property.Name,
-                HasDocComment: declaration is not null && HasDocComment(declaration),
-                DefaultText: declaration is not null ? GetConstantText(declaration, compilation, cancellationToken) : null));
+            if (IsPublicStringProperty(member, out var property))
+            {
+                members.Add(new TranslationsMember(
+                    Name: property.Name,
+                    HasDocComment: declaration is not null && HasDocComment(declaration),
+                    DefaultText: declaration is PropertyDeclarationSyntax propertyDeclaration ? GetConstantText(propertyDeclaration, compilation, cancellationToken) : null,
+                    Parameters: default));
+            }
+            else if (TextParameters.IsTextMethod(member, out var method))
+            {
+                if (TextParameters.FindProblem(method) is { } problem)
+                {
+                    unsupportedTexts.Add(new UnsupportedText(method.Name, problem, DiagnosticLocation.From(method.Locations[0])));
+                    continue;
+                }
+
+                members.Add(new TranslationsMember(
+                    Name: method.Name,
+                    HasDocComment: declaration is not null && HasDocComment(declaration),
+                    DefaultText: declaration is MethodDeclarationSyntax methodDeclaration ? GetMethodWording(methodDeclaration, compilation, cancellationToken) : null,
+                    Parameters: TextParameters.Read(method)));
+            }
         }
 
+        unsupported = unsupportedTexts.ToImmutable();
         return members.ToImmutable();
     }
 
@@ -1225,10 +1299,10 @@ internal static class TranslationsDiscovery
     }
 
     /// <summary>
-    /// Whether the property carries a doc comment. Checked on the trivia rather than through the symbol: a project that
-    /// emits no documentation file parses <c>///</c> as a plain comment, and the symbol reports none.
+    /// Whether the property or method carries a doc comment. Checked on the trivia rather than through the symbol: a
+    /// project that emits no documentation file parses <c>///</c> as a plain comment, and the symbol reports none.
     /// </summary>
-    private static bool HasDocComment(PropertyDeclarationSyntax declaration)
+    private static bool HasDocComment(MemberDeclarationSyntax declaration)
     {
         foreach (var trivia in declaration.GetLeadingTrivia())
         {
@@ -1259,6 +1333,19 @@ internal static class TranslationsDiscovery
             : null;
         return constantText;
     }
+
+    /// <summary>
+    /// The wording a method writes (<see cref="MethodWording"/>), else <see langword="null"/>.
+    /// </summary>
+    private static string? GetMethodWording(MethodDeclarationSyntax declaration, Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        // Only in a tree of this compilation, as for a property (GetConstantText).
+        var wording = compilation.ContainsSyntaxTree(declaration.SyntaxTree)
+            ? MethodWording.Read(declaration, compilation.GetSemanticModel(declaration.SyntaxTree), cancellationToken)
+            : null;
+        return wording;
+    }
 }
 
 /// <summary>
@@ -1274,7 +1361,8 @@ internal static class TranslationsDiscovery
 /// need to know about it, among which the public contracts it implements, those written by hand in its assembly, the
 /// classes of its assembly it derives from, the set it derives from directly (with the unresolved base types through
 /// which that one would implement a contract generated here, empty when it implements <c>ITranslationSet</c>
-/// already), and the class whose <c>LanguageCode</c> implements nothing, if any, with where to report it.
+/// already), the class whose <c>LanguageCode</c> implements nothing, if any, with where to report it, and the
+/// methods of a set listing <c>ITranslationSet</c> that have the shape of a text but cannot be one.
 /// </summary>
 internal readonly record struct DiscoveredTranslations(
     string MetadataName,
@@ -1307,13 +1395,15 @@ internal readonly record struct DiscoveredTranslations(
     bool IsRecord,
     bool IsSealed,
     bool IsPublic,
-    EquatableArray<string> StringProperties,
+    EquatableArray<string> DeclaredTexts,
     EquatableArray<InheritedText> InheritedTexts,
     EquatableArray<TextWording> Wordings,
-    EquatableArray<TranslationsMember> Texts);
+    EquatableArray<TranslationsMember> Texts,
+    EquatableArray<UnsupportedText> UnsupportedTexts);
 
 /// <summary>
-/// The wording a set gives one of its texts, when that is a constant.
+/// The wording a set gives one of its texts, when that is a constant, or what the method of a text that takes values
+/// writes (<see cref="MethodWording"/>).
 /// </summary>
 internal readonly record struct TextWording(
     string Name,
@@ -1363,14 +1453,31 @@ internal readonly record struct LanguageCodeMapping(
     IPropertySymbol? Unmapped);
 
 /// <summary>
-/// One text of a default-language set: its property name, whether the property carries a doc comment (then the
-/// generated members inherit it) and, when the property returns a constant, its wording (then a property without a doc
-/// comment is documented with that wording).
+/// One text of a default-language set: the name of its property or method, whether that carries a doc comment (then
+/// the generated members inherit it), its wording when the property returns a constant or the method writes one
+/// (<see cref="MethodWording"/>; then a text without a doc comment is documented with that wording), and the
+/// parameters of a text that takes values, which is a method. A property has none.
 /// </summary>
 internal readonly record struct TranslationsMember(
     string Name,
     bool HasDocComment,
-    string? DefaultText);
+    string? DefaultText,
+    EquatableArray<TextParameter> Parameters)
+{
+    /// <summary>
+    /// Whether the text takes values, and so is a method of the set, of the contract, and of the generated class.
+    /// </summary>
+    public bool IsMethod => this.Parameters.Length > 0;
+}
+
+/// <summary>
+/// A method of a default-language set that has the shape of a text that takes values but cannot be one: its name, why
+/// not, as the clause of the message, and where it is. What <c>LOC019</c> reports.
+/// </summary>
+internal readonly record struct UnsupportedText(
+    string Name,
+    string Problem,
+    DiagnosticLocation Location);
 
 /// <summary>
 /// A set the generated code registers, in which tier, how many sets it derives from, and whether creating it is

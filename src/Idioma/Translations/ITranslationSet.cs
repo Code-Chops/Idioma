@@ -1,9 +1,9 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// The texts of an app or library in one language, called a set: a class with one string property per text, such as
-/// <c>ShopTranslationsNL</c> with the Dutch wording of every shop text. The build makes sure that every language you
-/// support has a set, and that every set has every text.
+/// The texts of an app or library in one language, called a set: a class with one string property per text, or a
+/// method for a text that takes values, such as <c>ShopTranslationsNL</c> with the Dutch wording of every shop text.
+/// The build makes sure that every language you support has a set, and that every set has every text.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -58,6 +58,15 @@ namespace CodeChops.Idioma;
 /// <see cref="LocalizableText.Format(ReadOnlySpan{object})">Format</see>. Give each text the placeholders of its
 /// default-language wording: the build checks it (<c>LOC016</c>).
 /// </para>
+/// <para>
+/// Or write the text as a public method that takes the value and returns the wording:
+/// <c>public string Greeting(string name) => $"Hello, {name}!";</c>. The contract repeats the method, and the
+/// generated class gets one of the same name and parameters, so you show the text as
+/// <c>ShopTranslations.Greeting(customer.Name)</c>. Its values have a name and a type, and its wording can depend on
+/// them, as for a plural: <c>count is 1 ? "1 item" : $"{count} items"</c>. Every language implements the method with
+/// the parameters of the default-language set, named alike (<c>LOC020</c>). A method without parameters is no text,
+/// and neither is one the generated class cannot repeat, such as a generic one (<c>LOC019</c>).
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -68,6 +77,7 @@ namespace CodeChops.Idioma;
 ///     public string Cart => "Cart";
 ///     public string Checkout => "Checkout";
 ///     public string Greeting => "Hello, {0}!";
+///     public string ItemsInCart(int count) => count is 1 ? "1 item in your cart" : $"{count} items in your cart";
 /// }
 ///
 /// public class ShopTranslationsNL : IShopTranslations
@@ -75,11 +85,13 @@ namespace CodeChops.Idioma;
 ///     public string Cart => "Winkelwagen";
 ///     public string Checkout => "Afrekenen";
 ///     public string Greeting => "Hallo, {0}!";
+///     public string ItemsInCart(int count) => count is 1 ? "1 artikel in je winkelwagen" : $"{count} artikelen in je winkelwagen";
 /// }
 ///
-/// // For a user whose UI culture is nl-NL: "Afrekenen" and "Hallo, Anna!".
+/// // For a user whose UI culture is nl-NL: "Afrekenen", "Hallo, Anna!", and "3 artikelen in je winkelwagen".
 /// string checkout = ShopTranslations.Checkout;
 /// string greeting = ShopTranslations.Greeting.Format(customer.Name);
+/// string items = ShopTranslations.ItemsInCart(3);
 /// </code>
 /// </example>
 public interface ITranslationSet

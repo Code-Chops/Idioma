@@ -179,7 +179,65 @@ For a language other than the user's, pass its culture to `Format`, which then a
 string greeting = ShopTranslations.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name);
 ```
 
+For values with a name and a type, or wording that depends on a value, write the text as a method ([Write a text that takes values](#write-a-text-that-takes-values)).
+
 ## Going further
+
+### Write a text that takes values
+
+A text that takes values, such as a name or a count, is a method of the set. Its values have a name and a type, and its wording can depend on them, as for a plural or a form of address:
+
+```csharp
+public partial class ShopTranslationsEN : ITranslationSet
+{
+    public string Greeting(string name) => $"Hello, {name}!";
+
+    public string ItemsInCart(int count, string shop) => count is 1
+        ? $"1 item in your cart at {shop}"
+        : $"{count} items in your cart at {shop}";
+
+    public string Welcome(Salutation salutation) => salutation switch
+    {
+        Salutation.Madam => "Welcome back, madam",
+        Salutation.Sir => "Welcome back, sir",
+        _ => "Welcome back",
+    };
+}
+
+public class ShopTranslationsNL : IShopTranslations
+{
+    public string Greeting(string name) => $"Hallo, {name}!";
+
+    public string ItemsInCart(int count, string shop) => count is 1
+        ? $"1 artikel in je winkelwagen bij {shop}"
+        : $"{count} artikelen in je winkelwagen bij {shop}";
+
+    public string Welcome(Salutation salutation) => salutation switch
+    {
+        Salutation.Madam => "Welkom terug, mevrouw",
+        Salutation.Sir => "Welkom terug, meneer",
+        _ => "Welkom terug",
+    };
+}
+```
+
+`Salutation` is an enum of your own. Show such a text by calling it with its values:
+
+```razor
+<p>
+  @ShopTranslations.ItemsInCart(cart.Count, shop.Name)
+</p>
+```
+
+It is a text like any other: it follows the user's language, and the set of that language words it with the values you passed.
+
+The build holds every language to the method. A set without it does not compile, as with any text. And a set that gives a parameter another name is a build error, so that two values of one type cannot swap unnoticed:
+
+```text
+error LOC020: 'ShopTranslationsNL.ItemsInCart' names this parameter 'aantal', and 'IShopTranslations.ItemsInCart' names it 'count'. Give the parameters of a text the same names in every language: otherwise two values of one type can swap unnoticed for the users of one language.
+```
+
+Each language chooses its wording for a number itself, in C#: English and Dutch have two forms, and a Polish set writes the conditions for its own. Idioma has no plural rules ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#texts-that-take-values)).
 
 ### Add a regional variant, such as British English
 
@@ -257,7 +315,7 @@ The build checks every edit, an assistant's or a person's: a text left out or a 
 
 Each subject has a page of its own:
 
-- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): which wording a user sees, what the source generator writes, how sets register, how to read a set yourself, and how a text travels through JSON.
+- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): which wording a user sees, what the source generator writes, texts that take values, how sets register, how to read a set yourself, and how a text travels through JSON.
 - [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md): how a set's name gives its language, and the two ways to add a regional variant.
 - [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): which project's languages your users get, what the build asks when such a library lacks one of them, and how your app changes one of its texts.
 - [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): switching language without a reload, Blazor on a server, dates and numbers, and a text as a component parameter.

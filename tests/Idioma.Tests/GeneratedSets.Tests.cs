@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CodeChops.Idioma.Internals;
 
 #region Fixture
@@ -6,24 +7,67 @@ using CodeChops.Idioma.Internals;
 
 namespace CodeChops.Idioma.Tests.GeneratedSets
 {
+    /// <summary>
+    /// How a customer is addressed: a value a text chooses its wording by.
+    /// </summary>
+    public enum Salutation
+    {
+        Unknown,
+        Madam,
+        Sir,
+    }
+
     public partial class GeneratedTranslationsEN : ITranslationSet
     {
         public virtual string Checkout => "Checkout";
         public virtual string Greeting => "Hello, {0}!";
+
+        // Texts that take values: one value, a wording chosen by a number next to a value, a wording chosen by an
+        // enum of this namespace, and a value of a type of another namespace.
+        public virtual string Welcome(string name) => $"Welcome, {name}!";
+
+        public virtual string ItemsInCart(int count, string shop) => count is 1
+            ? $"1 item in your cart at {shop}"
+            : $"{count} items in your cart at {shop}";
+
+        public virtual string Dear(Salutation salutation) => salutation switch
+        {
+            Salutation.Madam => "Dear madam",
+            Salutation.Sir => "Dear sir",
+            _ => "Dear customer",
+        };
+
+        public virtual string DeliveredOn(DateOnly date) => $"Delivered on {date:yyyy-MM-dd}";
     }
 
     public sealed class GeneratedTranslationsNL : IGeneratedTranslations
     {
         public string Checkout => "Afrekenen";
         public string Greeting => "Hallo, {0}!";
+        public string Welcome(string name) => $"Welkom, {name}!";
+
+        public string ItemsInCart(int count, string shop) => count is 1
+            ? $"1 artikel in je winkelwagen bij {shop}"
+            : $"{count} artikelen in je winkelwagen bij {shop}";
+
+        public string Dear(Salutation salutation) => salutation switch
+        {
+            Salutation.Madam => "Geachte mevrouw",
+            Salutation.Sir => "Geachte heer",
+            _ => "Geachte klant",
+        };
+
+        public string DeliveredOn(DateOnly date) => $"Bezorgd op {date:yyyy-MM-dd}";
     }
 
     /// <summary>
     /// Rewords one text of a set of this assembly, so it registers after that set: in English it must win over it.
+    /// So with one text that takes a value.
     /// </summary>
     public sealed class RewordedGeneratedTranslationsEN : GeneratedTranslationsEN
     {
         public override string Checkout => "Pay";
+        public override string Welcome(string name) => $"Good to see you, {name}!";
     }
 
     /// <summary>
@@ -35,6 +79,10 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     {
         public string Checkout => "Betalen";
         public string Greeting => "Goedendag, {0}!";
+        public string Welcome(string name) => $"Goedendag, {name}!";
+        public string ItemsInCart(int count, string shop) => $"{count} in de winkelwagen bij {shop}";
+        public string Dear(Salutation salutation) => "Beste klant";
+        public string DeliveredOn(DateOnly date) => $"Geleverd op {date:yyyy-MM-dd}";
     }
 
     /// <summary>
@@ -110,6 +158,108 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert: the reworded text, and the inherited one.
             GeneratedTranslations.Checkout.ToString().ShouldBe("Pay");
             GeneratedTranslations.Greeting.Format("Max").ShouldBe("Hello, Max!");
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesValues_ShouldBeWordedBySetOfCultureWithThoseValues()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: one value, a wording chosen by a number, a wording chosen by an enum, and a value of a
+            // type of another namespace than the set's.
+            GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Welkom, Max!");
+            GeneratedTranslations.ItemsInCart(1, "Idioma").ToString().ShouldBe("1 artikel in je winkelwagen bij Idioma");
+            GeneratedTranslations.ItemsInCart(count: 3, shop: "Idioma").ToString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+            GeneratedTranslations.Dear(Salutation.Madam).ToString().ShouldBe("Geachte mevrouw");
+            GeneratedTranslations.Dear(Salutation.Unknown).ToString().ShouldBe("Geachte klant");
+            GeneratedTranslations.DeliveredOn(new DateOnly(2026, 11, 15)).ToString().ShouldBe("Bezorgd op 2026-11-15");
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesValues_ShouldFollowLanguageAfterItIsCreated()
+        {
+            // Arrange: created for an English user, as a text held in a field is.
+            ResourceText text;
+            using (new UICultureScope("en-US"))
+                text = GeneratedTranslations.ItemsInCart(3, "Idioma");
+
+            // Act & Assert: shown to a Dutch user, in markup, as a string, compared, and for a culture that is passed.
+            using var _ = new UICultureScope("nl-NL");
+            string assigned = text;
+
+            text.ToString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+            assigned.ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+            (text == "3 artikelen in je winkelwagen bij Idioma").ShouldBeTrue();
+            text.ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("3 items in your cart at Idioma");
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesValues_ShouldTakeRewordingAndFallBackLikeAnyText()
+        {
+            // Arrange & Act & Assert: the set rewording Welcome wins in English, the text it leaves alone keeps the
+            // wording of the set it derives from, and a culture without a set gets the default language.
+            using (new UICultureScope("en-US"))
+            {
+                GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
+                GeneratedTranslations.Dear(Salutation.Sir).ToString().ShouldBe("Dear sir");
+            }
+
+            using (new UICultureScope("fr-FR"))
+                GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesValues_ShouldCarryKeyContractAndArguments()
+        {
+            // Arrange & Act
+            var text = GeneratedTranslations.ItemsInCart(3, "Idioma");
+
+            // Assert: the key is the full name of the method, without its parameters.
+            text.Key.ShouldBe("CodeChops.Idioma.Tests.GeneratedSets.GeneratedTranslations.ItemsInCart");
+            text.Contract.ShouldBe(typeof(IGeneratedTranslations));
+            text.DefaultLanguage.ShouldBe("en");
+            text.DefaultText.ShouldBe("3 items in your cart at Idioma");
+            text.Arguments.ShouldBe([3, "Idioma"]);
+            GeneratedTranslations.Checkout.Arguments.ShouldBeEmpty();
+
+            // As an app fills in wording it looked up by the key (docs/coming-from-resx.md).
+            String.Format(CultureInfo.InvariantCulture, "{0} at {1}", text.Arguments.AsSpan()).ShouldBe("3 at Idioma");
+        }
+
+        [Test]
+        public void GeneratedTextsThatTakeValues_ShouldBeEqualWhenTheirValuesAre()
+        {
+            // Arrange & Act & Assert: also where two values read the same in the default language. The English set
+            // words both an unknown salutation and one it has no case for as "Dear customer".
+            GeneratedTranslations.ItemsInCart(3, "Idioma").ShouldBe(GeneratedTranslations.ItemsInCart(3, "Idioma"));
+            GeneratedTranslations.ItemsInCart(3, "Idioma").GetHashCode().ShouldBe(GeneratedTranslations.ItemsInCart(3, "Idioma").GetHashCode());
+            GeneratedTranslations.ItemsInCart(3, "Idioma").ShouldNotBe(GeneratedTranslations.ItemsInCart(4, "Idioma"));
+            GeneratedTranslations.Dear(Salutation.Unknown).ShouldNotBe(GeneratedTranslations.Dear((Salutation)99));
+            GeneratedTranslations.Dear(Salutation.Unknown).DefaultText.ShouldBe(GeneratedTranslations.Dear((Salutation)99).DefaultText);
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesValues_ShouldTravelThroughJsonWithItsWordingInEveryLanguage()
+        {
+            // Arrange
+            var text = GeneratedTranslations.ItemsInCart(3, "Idioma");
+
+            // Act
+            var json = JsonSerializer.Serialize(text);
+            var read = JsonSerializer.Deserialize<ResourceText>(json)!;
+
+            // Assert: worded with its values when it is written, so that it needs neither the sets nor the values to
+            // show each language once it is read back.
+            using var document = JsonDocument.Parse(json);
+            var translations = document.RootElement.GetProperty("translations");
+            translations.GetProperty("en").GetString().ShouldBe("3 items in your cart at Idioma");
+            translations.GetProperty("nl").GetString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+
+            read.Key.ShouldBe(text.Key);
+            read.Arguments.ShouldBeEmpty();
+            read.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+            read.ToString(CultureInfo.GetCultureInfo("en-US")).ShouldBe("3 items in your cart at Idioma");
         }
 
         [Test]

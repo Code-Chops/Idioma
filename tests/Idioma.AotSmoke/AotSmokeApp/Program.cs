@@ -26,18 +26,22 @@ Expect("language code of the set for nl", TranslationsRegistry.Current.Find<ISho
 
 var orders = LocalizableText.Inline(en: "Orders", nl: "Bestellingen", enGB: "Orders");
 
+// A text that takes values, created once, before any of the cultures below is the current one: it words itself with
+// its values for whichever culture it is shown in.
+var items = ShopTranslations.ItemsInCart(3, "Idioma");
+
 // The wording for each culture, a culture of a language the app declares or not (de-DE gets the default language).
-(string Culture, string Cart, string Greeting, string Orders, string Grid)[] cases =
+(string Culture, string Cart, string Greeting, string Orders, string Grid, string Items, string Rows)[] cases =
 [
-    ("en", "Cart", "Hello, Ada!", "Orders", "Grid"),
-    ("en-US", "Cart", "Hello, Ada!", "Orders", "Grid"),
-    ("en-GB", "Basket", "Hello, Ada!", "Orders", "Grid"),
-    ("nl", "Winkelwagen", "Hallo, Ada!", "Bestellingen", "Raster"),
-    ("nl-BE", "Winkelwagen", "Hallo, Ada!", "Bestellingen", "Raster"),
-    ("de-DE", "Cart", "Hello, Ada!", "Orders", "Grid"),
+    ("en", "Cart", "Hello, Ada!", "Orders", "Grid", "3 items in your cart at Idioma", "1 row"),
+    ("en-US", "Cart", "Hello, Ada!", "Orders", "Grid", "3 items in your cart at Idioma", "1 row"),
+    ("en-GB", "Basket", "Hello, Ada!", "Orders", "Grid", "3 items in your basket at Idioma", "1 row"),
+    ("nl", "Winkelwagen", "Hallo, Ada!", "Bestellingen", "Raster", "3 artikelen in je winkelwagen bij Idioma", "1 rij"),
+    ("nl-BE", "Winkelwagen", "Hallo, Ada!", "Bestellingen", "Raster", "3 artikelen in je winkelwagen bij Idioma", "1 rij"),
+    ("de-DE", "Cart", "Hello, Ada!", "Orders", "Grid", "3 items in your cart at Idioma", "1 row"),
 ];
 
-foreach (var (culture, cart, greeting, order, grid) in cases)
+foreach (var (culture, cart, greeting, order, grid, itemsInCart, rows) in cases)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
@@ -46,22 +50,30 @@ foreach (var (culture, cart, greeting, order, grid) in cases)
     Expect($"{culture}: inline text", orders.ToString(), order);
     Expect($"{culture}: title of the library's set", GridTranslations.Title.ToString(), grid);
     Expect($"{culture}: cart compared with its wording", ShopTranslations.Cart == cart ? cart : "not equal", cart);
+    Expect($"{culture}: text of the app's set that takes values", items.ToString(), itemsInCart);
+    Expect($"{culture}: text of the library's set that takes a value", GridTranslations.Rows(1).ToString(), rows);
 }
+
+Expect("values of a text that takes them", string.Join(",", items.Arguments), "3,Idioma");
 
 // A text through JSON, written by the System.Text.Json source generator, and read back in each language.
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
-var json = JsonSerializer.Serialize(new Panel(orders, ShopTranslations.Cart), SmokeJson.Default.Panel);
+var json = JsonSerializer.Serialize(new Panel(orders, ShopTranslations.Cart, items), SmokeJson.Default.Panel);
 
 if (!json.Contains("\"nl\":\"Winkelwagen\"", StringComparison.Ordinal) || !json.Contains("\"en-GB\":\"Basket\"", StringComparison.Ordinal))
     failures.Add($"json: expected every wording of the cart, got {json}");
 
-foreach (var (culture, cart, _, order, _) in cases.Where(static c => c.Culture is "en" or "en-GB" or "nl"))
+if (!json.Contains("\"nl\":\"3 artikelen in je winkelwagen bij Idioma\"", StringComparison.Ordinal))
+    failures.Add($"json: expected every wording of the text that takes values, with its values, got {json}");
+
+foreach (var (culture, cart, _, order, _, itemsInCart, _) in cases.Where(static c => c.Culture is "en" or "en-GB" or "nl"))
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
     var panel = JsonSerializer.Deserialize(json, SmokeJson.Default.Panel);
 
     Expect($"{culture}: cart read back from json", panel?.Cart.ToString(), cart);
     Expect($"{culture}: inline text read back from json", panel?.Title.ToString(), order);
+    Expect($"{culture}: text that takes values read back from json", panel?.Items.ToString(), itemsInCart);
 }
 
 if (failures.Count > 0)
@@ -79,20 +91,32 @@ public partial class ShopTranslationsEN : ITranslationSet
 {
     public virtual string Cart => "Cart";
     public virtual string Greeting => "Hello, {0}!";
+
+    public virtual string ItemsInCart(int count, string shop) => count is 1
+        ? $"1 item in your cart at {shop}"
+        : $"{count} items in your cart at {shop}";
 }
 
 public class ShopTranslationsNL : IShopTranslations
 {
     public virtual string Cart => "Winkelwagen";
     public virtual string Greeting => "Hallo, {0}!";
+
+    public virtual string ItemsInCart(int count, string shop) => count is 1
+        ? $"1 artikel in je winkelwagen bij {shop}"
+        : $"{count} artikelen in je winkelwagen bij {shop}";
 }
 
 public class ShopTranslationsEnGB : ShopTranslationsEN
 {
     public override string Cart => "Basket";
+
+    public override string ItemsInCart(int count, string shop) => count is 1
+        ? $"1 item in your basket at {shop}"
+        : $"{count} items in your basket at {shop}";
 }
 
-public sealed record Panel(LocalizableText Title, ResourceText Cart);
+public sealed record Panel(LocalizableText Title, ResourceText Cart, ResourceText Items);
 
 [JsonSerializable(typeof(Panel))]
 public sealed partial class SmokeJson : JsonSerializerContext;

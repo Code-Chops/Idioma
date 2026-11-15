@@ -254,6 +254,10 @@ internal sealed record TranslationSetsAnalysis(
                 if (IsReservedTextName(member.Name, baseName))
                     findings?.Add(new TranslationSetsFinding(TranslationSetsRule.ReservedTextName, set.Location, new EquatableArray<string>([set.Name, member.Name, baseName])));
 
+            // At the method, which is what to change, and not at the set.
+            foreach (var method in set.UnsupportedTexts)
+                findings?.Add(new TranslationSetsFinding(TranslationSetsRule.UnsupportedText, method.Location, new EquatableArray<string>([set.Name, method.Name, method.Problem])));
+
             var implementers = sets.Where(other => other.Language is not null && ImplementsGeneratedContract(other, set, contractFullName, generatedContracts)).ToArray();
             var excludedImplementers = excluded.Where(other => ImplementsGeneratedContract(other, set, contractFullName, generatedContracts)).ToArray();
             var hasUnreadableImplementer = unreadable.Any(other => ImplementsGeneratedContract(other, set, contractFullName, generatedContracts));
@@ -308,7 +312,7 @@ internal sealed record TranslationSetsAnalysis(
 
             var translations = translators
                 .Prepend(set)
-                .Select(static other => new TranslationLink(other.Language!, other.Namespace, other.Name, other.StringProperties, other.InheritedTexts, other.Wordings, other.IsExcluded))
+                .Select(static other => new TranslationLink(other.Language!, other.Namespace, other.Name, other.DeclaredTexts, other.InheritedTexts, other.Wordings, other.IsExcluded))
                 .ToImmutableArray();
 
             contracts.Add(new TranslationContract(
@@ -615,15 +619,16 @@ internal sealed record TranslationContract(
 
 /// <summary>
 /// A set translating a generated contract, for the crefs on its texts: its language, a culture name, its namespace and
-/// name, by which the contract's file names it, the properties a cref can name on it, the texts it inherits, which
-/// a cref names on the class declaring them, the wording it gives each text that returns a constant, which the
-/// contract's file shows next to the link, and whether it is marked <c>[ExcludeFromTranslationDiscovery]</c>.
+/// name, by which the contract's file names it, the texts a cref can name on it, the texts it inherits, which
+/// a cref names on the class declaring them, the wording it gives each text that returns a constant or takes values,
+/// which the contract's file shows next to the link, and whether it is marked
+/// <c>[ExcludeFromTranslationDiscovery]</c>.
 /// </summary>
 internal readonly record struct TranslationLink(
     string Language,
     string Namespace,
     string Name,
-    EquatableArray<string> StringProperties,
+    EquatableArray<string> DeclaredTexts,
     EquatableArray<InheritedText> InheritedTexts,
     EquatableArray<TextWording> Wordings,
     bool IsExcluded);
@@ -714,4 +719,9 @@ internal enum TranslationSetsRule
     /// <c>LOC014</c>: a text of a default-language set is named like a member of the generated texts class.
     /// </summary>
     ReservedTextName,
+
+    /// <summary>
+    /// <c>LOC019</c>: a method of a default-language set has the shape of a text that takes values, but cannot be one.
+    /// </summary>
+    UnsupportedText,
 }
