@@ -29,10 +29,6 @@ internal static class MethodWording
         if (expression is not InterpolatedStringExpressionSyntax interpolated)
             return null;
 
-        // A raw string writes a brace that is text once, and any other string twice: the token of the text holds it as
-        // it is written, where it holds every other escape as the character it stands for.
-        var writesBraceTwice = !interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedSingleLineRawStringStartToken)
-                               && !interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedMultiLineRawStringStartToken);
         var wording = new StringBuilder();
 
         foreach (var content in interpolated.Contents)
@@ -40,11 +36,26 @@ internal static class MethodWording
             // The text as it reads, and a value between single braces, however many the string is written with
             // ($$"""...{{name}}...""").
             if (content is InterpolatedStringTextSyntax text)
-                wording.Append(writesBraceTwice ? text.TextToken.ValueText.Replace("{{", "{").Replace("}}", "}") : text.TextToken.ValueText);
+                wording.Append(ReadText(text));
             else if (content is InterpolationSyntax value)
                 wording.Append('{').Append(value.Expression).Append(value.AlignmentClause).Append(value.FormatClause).Append('}');
         }
 
         return wording.ToString();
+    }
+
+    /// <summary>
+    /// A part of an interpolated string that is text, as it reads: without the escapes of the source.
+    /// </summary>
+    public static string ReadText(InterpolatedStringTextSyntax text)
+    {
+        // A raw string writes a brace that is text once, and any other string twice: the token of the text holds it as
+        // it is written, where it holds every other escape as the character it stands for.
+        var writesBraceTwice = text.Parent is not InterpolatedStringExpressionSyntax interpolated
+                               || (!interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedSingleLineRawStringStartToken)
+                                   && !interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedMultiLineRawStringStartToken));
+
+        var read = writesBraceTwice ? text.TextToken.ValueText.Replace("{{", "{").Replace("}}", "}") : text.TextToken.ValueText;
+        return read;
     }
 }

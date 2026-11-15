@@ -1,12 +1,21 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Keeps a <see cref="ITranslationSet">set</see> from registering itself, so that it applies only once you register it
-/// with <see cref="TranslationsRegistry.Register(ReadOnlySpan{ITranslationSet})">TranslationsRegistry.Register</see>.
+/// Keeps the build from picking something up. On a <see cref="ITranslationSet">set</see>, it keeps the set from
+/// registering itself, so that it applies only once you register it with
+/// <see cref="TranslationsRegistry.Register(ReadOnlySpan{ITranslationSet})">TranslationsRegistry.Register</see>. On a
+/// public property or method of the set of your default language, it keeps that member from being a text.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Use it for a set that cannot register itself, such as one that needs constructor arguments, which build warning
+/// On a member: every public string property of the set of your default language is a text, and so is every public
+/// method that returns a string and takes parameters. Mark one that is no text, such as a helper another class calls
+/// or a member another interface asks for. It then stays out of the contract and out of the generated class, so no
+/// other language has to implement it. A helper that only the set itself calls needs no attribute: make it
+/// <see langword="private"/>.
+/// </para>
+/// <para>
+/// On a set: use it for a set that cannot register itself, such as one that needs constructor arguments, which build warning
 /// <c>LOC003</c> points out. Or use it for a set meant only for a registry of its own, such as one a test creates
 /// with <see cref="TranslationsRegistry.Create(IEnumerable{ITranslationSet})">TranslationsRegistry.Create</see>.
 /// </para>
@@ -32,9 +41,18 @@ namespace CodeChops.Idioma;
 ///
 /// // At startup:
 /// TranslationsRegistry.Register(new BrandedShopTranslationsEN(configuration["ShopName"]!));
+///
+/// // A helper that other classes call too, and that is no text of the shop.
+/// public partial class ShopTranslationsEN : ITranslationSet
+/// {
+///     public string Total(decimal amount) => $"Total: {Money(amount)}";
+///
+///     [ExcludeFromTranslationDiscovery]
+///     public string Money(decimal amount) => amount.ToString("C");
+/// }
 /// </code>
 /// </example>
 // The source generator locates this type by its metadata-name string, so renaming or moving it silently disables the
 // exclusion.
-[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method, Inherited = false)]
 public sealed class ExcludeFromTranslationDiscoveryAttribute : Attribute;

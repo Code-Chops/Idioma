@@ -9,13 +9,14 @@ namespace CodeChops.Idioma.Tests;
 public sealed class ExcludeFromTranslationDiscoveryAttributeTests
 {
     [Test]
-    public void ShouldTargetClassesOnlyAndNotBeInherited()
+    public void ShouldTargetSetsAndTheirMembersAndNotBeInherited()
     {
         // Arrange & Act
         var usage = typeof(ExcludeFromTranslationDiscoveryAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
 
-        // Assert: a set deriving from an excluded set registers itself like any other.
-        usage.ValidOn.ShouldBe(AttributeTargets.Class);
+        // Assert: a set, and a property or method of a set that is no text. A set deriving from an excluded set
+        // registers itself like any other.
+        usage.ValidOn.ShouldBe(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method);
         usage.Inherited.ShouldBeFalse();
     }
 

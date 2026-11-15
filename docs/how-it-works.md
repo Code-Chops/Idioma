@@ -71,7 +71,7 @@ public static partial class ShopTranslations
 
 Each call creates a text that keeps the values, as its `Arguments`, and words itself with them when it is shown. A call allocates the text and its values, and nothing more until the text is shown. So it follows the user's language like any other text: one created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its full name, without its parameters. Two such texts are equal when their values are.
 
-A method without parameters is not a text: write a text without values as a property. A public method of the default-language set that is not meant as a text, such as a helper, becomes one all the same, and every language then has to implement it: make a helper `private` or `internal`.
+A method without parameters is not a text: write a text without values as a property. A public method of the default-language set that is not meant as a text, such as a helper, becomes one all the same, and every language then has to implement it: make a helper `private` or `internal`. Mark one that has to be public `[ExcludeFromTranslationDiscovery]`, which keeps a public string property from being a text as well.
 
 The generated class repeats the parameters as the set declares them, which rules out what it could not repeat or keep (`LOC019`):
 
@@ -90,6 +90,7 @@ What else to know:
 - **How values are formatted.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. For a culture you pass to `ToString`, other than the current UI culture, the text is worded as for a user of that culture: its values are formatted for that culture too, so a date or a number reads as the recipient of an email writes it.
 - **A text as a value.** A value that is a text itself shows its wording for the same culture as the text it is a value of.
 - **Inline texts.** An inline text takes a value as you write it, `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`, which fills it in at once, in every language.
+- **Placeholders.** A text shows its wording as it is written, so nothing fills in a placeholder of a format string, such as `{0}` or `{0:N2}`. A wording that holds one is a build error (`LOC016`), in a set and in an inline text. Braces around anything but a number are text.
 
 ## Registration
 

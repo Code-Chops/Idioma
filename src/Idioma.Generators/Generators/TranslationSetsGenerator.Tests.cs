@@ -3961,6 +3961,55 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
+    public void MemberMarkedAsExcluded_ShouldBeNoText()
+    {
+        // Arrange: a property and a method that have to be public and are no texts, a method that could not be a text
+        // anyway, and one named like the generated class. The Dutch set has none of them.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed partial class ShopTranslationsEN : ITranslationSet
+            {
+                public string Total(decimal amount) => $"Total: {Money(amount)}";
+
+                [ExcludeFromTranslationDiscovery]
+                public string Pattern => "C";
+
+                [ExcludeFromTranslationDiscovery]
+                public string Money(decimal amount) => amount.ToString(Pattern);
+
+                [ExcludeFromTranslationDiscovery]
+                public string Generic<T>(T value) => $"{value}";
+
+                [ExcludeFromTranslationDiscovery]
+                public string ShopTranslations(string value) => value;
+            }
+
+            public sealed class ShopTranslationsNL : IShopTranslations
+            {
+                public string Total(decimal amount) => $"Totaal: {amount:C}";
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+        var text = ContractText(result);
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert: nothing is reported about them, the contract and the class hold the one text, and the Dutch set,
+        // which has only that one, compiles.
+        DiagnosticIds(result).ShouldBeEmpty();
+        errors.ShouldBeEmpty();
+        text.ShouldContain("    string Total([CodeChops.Idioma.Internals.ShownValue] decimal amount);");
+        foreach (var member in new[] { " Pattern {", " Money(", " Generic", " ShopTranslations(" })
+            text.ShouldNotContain(member, customMessage: member);
+    }
+
+    [Test]
     public void RecordSetWithTextThatTakesValues_ShouldCompile()
     {
         // Arrange & Act: a record writes methods of its own, among which a ToString without parameters and an Equals

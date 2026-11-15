@@ -112,7 +112,7 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor UnsupportedTextRule = Error(
         UnsupportedTextDiagnosticId,
         "Method that cannot be a text",
-        "'{0}.{1}' is a public method that returns a string, as a text that takes values is, but {2}, so no text is generated for it. Change that, or make the method internal or private if it is no text.",
+        "'{0}.{1}' is a public method that returns a string, as a text that takes values is, but {2}, so no text is generated for it. Change that. If the method is no text, make it internal or private, or mark it [ExcludeFromTranslationDiscovery].",
         "A public method of a default-language set that returns a string and takes parameters is a text that takes values: the generated class gets a method of its name and parameters, which keeps the values and hands them to the set of the user's language when the text is shown. That takes a method that is not generic, has a name of its own in its set, and takes each parameter by value, without a default.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)

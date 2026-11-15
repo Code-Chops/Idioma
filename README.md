@@ -171,6 +171,8 @@ A text that takes a value, such as `Greeting` above, is a method. Call it with t
 
 Every language implements the method, so each puts the value where it reads best, and a set that leaves the method out, or gives it other parameters, does not compile. A value can carry a format, as in `$"Total: {amount:N2}"`.
 
+A placeholder such as `{0}` is not a value: nothing fills it in, so a wording that holds one is a build error (`LOC016`).
+
 Use the value in every language. A Dutch greeting that lost its `{name}` is a build error:
 
 ```text

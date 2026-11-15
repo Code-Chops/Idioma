@@ -61,7 +61,9 @@ namespace CodeChops.Idioma;
 /// them, as for a plural: <c>count is 1 ? "1 item" : $"{count} items"</c>. Every language implements the method with
 /// the parameters of the default-language set, named alike (<c>LOC020</c>), and uses every value the default wording
 /// shows (<c>LOC021</c>). A method without parameters is no text, and neither is one the generated class cannot
-/// repeat, such as a generic one (<c>LOC019</c>).
+/// repeat, such as a generic one (<c>LOC019</c>). A placeholder such as <c>{0}</c> in a wording is a build error
+/// (<c>LOC016</c>), as nothing fills it in. A public member that is no text, such as a helper another class calls, is
+/// marked <see cref="ExcludeFromTranslationDiscoveryAttribute">[ExcludeFromTranslationDiscovery]</see>.
 /// </para>
 /// </remarks>
 /// <example>

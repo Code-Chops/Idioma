@@ -36,7 +36,7 @@ public class ShopTranslationsDE : Shop.IShopTranslations
 {
     public string Cart => "Warenkorb";
     public string Checkout => "Zur Kasse";
-    public string Greeting => "Hallo, {0}!";
+    public string Greeting(string name) => $"Hallo, {name}!";
 }
 ```
 

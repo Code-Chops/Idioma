@@ -529,9 +529,12 @@ internal static class TranslationsDiscovery
         return isSet;
     }
 
-    private static bool IsExcluded(INamedTypeSymbol type)
+    /// <summary>
+    /// Whether a set, or a member of one, is marked <c>[ExcludeFromTranslationDiscovery]</c>.
+    /// </summary>
+    private static bool IsExcluded(ISymbol symbol)
     {
-        var isExcluded = Enumerable.Any(type.GetAttributes(), attribute
+        var isExcluded = Enumerable.Any(symbol.GetAttributes(), attribute
             => String.Equals(attribute.AttributeClass?.ToDisplayString(), PackageNames.ExcludeFromTranslationDiscoveryAttribute, StringComparison.Ordinal));
 
         return isExcluded;
@@ -1235,7 +1238,8 @@ internal static class TranslationsDiscovery
     /// the class itself, and its methods of the shape of a text that takes values
     /// (<see cref="TextParameters.IsTextMethod"/>), in declaration order (an inherited member belongs to the base's
     /// own contract). <c>LanguageCode</c> (the <c>ITranslationSet</c> member, which a set may override) and explicit
-    /// interface implementations are not texts. A method of that shape that cannot be a text
+    /// interface implementations are not texts, and neither is a member marked
+    /// <c>[ExcludeFromTranslationDiscovery]</c>. A method of that shape that cannot be a text
     /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC019</c>).
     /// </summary>
     private static ImmutableArray<TranslationsMember> GetTextMembers(INamedTypeSymbol type, Compilation compilation,
@@ -1246,7 +1250,9 @@ internal static class TranslationsDiscovery
 
         foreach (var member in type.GetMembers())
         {
-            if (String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal))
+            // A member marked [ExcludeFromTranslationDiscovery] is no text, whatever its shape: a helper that has to
+            // be public.
+            if (String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal) || IsExcluded(member))
                 continue;
 
             var declaration = member.DeclaringSyntaxReferences.Length > 0
