@@ -87,6 +87,8 @@ public sealed record ResourceText : LocalizableText
     /// </summary>
     private Func<ITranslationSet, string>? Selector { get; init; }
 
+    private protected override bool TakesValues => !this.Arguments.IsEmpty;
+
     /// <summary>
     /// A text that a resource file can provide under <paramref name="key"/>, for an app or library that looks texts up
     /// in resource files itself. Until something resolves the key, it shows <paramref name="defaultText"/>.

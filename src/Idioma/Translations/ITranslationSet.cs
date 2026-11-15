@@ -53,13 +53,8 @@ namespace CodeChops.Idioma;
 /// the library's contract in your app, <c>public class ShopTranslationsDE : IShopTranslations</c>.
 /// </para>
 /// <para>
-/// One instance of each set serves every user, so give each text fixed wording. Put a value that changes, such as a
-/// customer's name, in a placeholder (<c>"Hello, {0}!"</c>) and fill it in with
-/// <see cref="LocalizableText.Format(ReadOnlySpan{object})">Format</see>. Give each text the placeholders of its
-/// default-language wording: the build checks it (<c>LOC016</c>).
-/// </para>
-/// <para>
-/// Or write the text as a public method that takes the value and returns the wording:
+/// One instance of each set serves every user, so give each text fixed wording. A text with a value that changes,
+/// such as a customer's name, is a public method that takes the value and returns the wording:
 /// <c>public string Greeting(string name) => $"Hello, {name}!";</c>. The contract repeats the method, and the
 /// generated class gets one of the same name and parameters, so you show the text as
 /// <c>ShopTranslations.Greeting(customer.Name)</c>. Its values have a name and a type, and its wording can depend on
@@ -76,7 +71,7 @@ namespace CodeChops.Idioma;
 /// {
 ///     public string Cart => "Cart";
 ///     public string Checkout => "Checkout";
-///     public string Greeting => "Hello, {0}!";
+///     public string Greeting(string name) => $"Hello, {name}!";
 ///     public string ItemsInCart(int count) => count is 1 ? "1 item in your cart" : $"{count} items in your cart";
 /// }
 ///
@@ -84,13 +79,13 @@ namespace CodeChops.Idioma;
 /// {
 ///     public string Cart => "Winkelwagen";
 ///     public string Checkout => "Afrekenen";
-///     public string Greeting => "Hallo, {0}!";
+///     public string Greeting(string name) => $"Hallo, {name}!";
 ///     public string ItemsInCart(int count) => count is 1 ? "1 artikel in je winkelwagen" : $"{count} artikelen in je winkelwagen";
 /// }
 ///
 /// // For a user whose UI culture is nl-NL: "Afrekenen", "Hallo, Anna!", and "3 artikelen in je winkelwagen".
 /// string checkout = ShopTranslations.Checkout;
-/// string greeting = ShopTranslations.Greeting.Format(customer.Name);
+/// string greeting = ShopTranslations.Greeting(customer.Name);
 /// string items = ShopTranslations.ItemsInCart(3);
 /// </code>
 /// </example>

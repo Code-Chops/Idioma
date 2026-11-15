@@ -20,10 +20,11 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     public partial class GeneratedTranslationsEN : ITranslationSet
     {
         public virtual string Checkout => "Checkout";
-        public virtual string Greeting => "Hello, {0}!";
+        public virtual string Greeting => "Hello!";
 
         // Texts that take values: one value, a wording chosen by a number next to a value, a wording chosen by an
-        // enum of this namespace, and a value of a type of another namespace.
+        // enum of this namespace, a value of a type of another namespace, a value with a format, and a value that is
+        // a text itself.
         public virtual string Welcome(string name) => $"Welcome, {name}!";
 
         public virtual string ItemsInCart(int count, string shop) => count is 1
@@ -38,12 +39,14 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         };
 
         public virtual string DeliveredOn(DateOnly date) => $"Delivered on {date:yyyy-MM-dd}";
+        public virtual string Total(decimal amount) => $"Total: {amount:N2}";
+        public virtual string Removed(LocalizableText what) => $"{what} removed";
     }
 
     public sealed class GeneratedTranslationsNL : IGeneratedTranslations
     {
         public string Checkout => "Afrekenen";
-        public string Greeting => "Hallo, {0}!";
+        public string Greeting => "Hallo!";
         public string Welcome(string name) => $"Welkom, {name}!";
 
         public string ItemsInCart(int count, string shop) => count is 1
@@ -58,6 +61,8 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         };
 
         public string DeliveredOn(DateOnly date) => $"Bezorgd op {date:yyyy-MM-dd}";
+        public string Total(decimal amount) => $"Totaal: {amount:N2}";
+        public string Removed(LocalizableText what) => $"{what} verwijderd";
     }
 
     /// <summary>
@@ -78,11 +83,13 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     public sealed class UnregisteredGeneratedTranslationsNL : IGeneratedTranslations
     {
         public string Checkout => "Betalen";
-        public string Greeting => "Goedendag, {0}!";
+        public string Greeting => "Goedendag!";
         public string Welcome(string name) => $"Goedendag, {name}!";
         public string ItemsInCart(int count, string shop) => $"{count} in de winkelwagen bij {shop}";
         public string Dear(Salutation salutation) => "Beste klant";
         public string DeliveredOn(DateOnly date) => $"Geleverd op {date:yyyy-MM-dd}";
+        public string Total(decimal amount) => $"Totaal {amount:N2}";
+        public string Removed(LocalizableText what) => $"{what} weg";
     }
 
     /// <summary>
@@ -135,7 +142,7 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        public void GeneratedText_ShouldConvertToStringAndCompareAndFormat()
+        public void GeneratedText_ShouldConvertToStringAndCompare()
         {
             // Arrange
             using var _ = new UICultureScope("nl-NL");
@@ -146,7 +153,6 @@ namespace CodeChops.Idioma.Tests
             // Assert
             assigned.ShouldBe("Afrekenen");
             (GeneratedTranslations.Checkout == "Afrekenen").ShouldBeTrue();
-            GeneratedTranslations.Greeting.Format("Max").ShouldBe("Hallo, Max!");
         }
 
         [Test]
@@ -157,7 +163,7 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: the reworded text, and the inherited one.
             GeneratedTranslations.Checkout.ToString().ShouldBe("Pay");
-            GeneratedTranslations.Greeting.Format("Max").ShouldBe("Hello, Max!");
+            GeneratedTranslations.Greeting.ToString().ShouldBe("Hello!");
         }
 
         [Test]
@@ -207,6 +213,51 @@ namespace CodeChops.Idioma.Tests
 
             using (new UICultureScope("fr-FR"))
                 GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesValues_ShouldFormatValuesForCultureItIsShownFor()
+        {
+            // Arrange: both current cultures are American, as on a server that writes to a Dutch customer.
+            var (culture, uiCulture) = (CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture);
+            CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+
+            try
+            {
+                var total = GeneratedTranslations.Total(1234.5m);
+
+                // Act & Assert: for the reader of this thread, and for the customer, in wording and in number.
+                total.ToString().ShouldBe("Total: 1,234.50");
+                total.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Totaal: 1.234,50");
+                CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
+                CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
+            }
+            finally
+            {
+                (CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture) = (culture, uiCulture);
+            }
+        }
+
+        [Test]
+        public void TextAmongValuesOfGeneratedText_ShouldShowInLanguageTheTextIsWordedIn()
+        {
+            // Arrange: an English reader, and a text whose value is a text itself.
+            using var _ = new UICultureScope("en-US");
+            var removed = GeneratedTranslations.Removed(InlineTexts.Orders);
+
+            // Act
+            var json = JsonSerializer.Serialize(removed);
+
+            // Assert: for the reader, for a culture that is passed, and in the copy of every language that travels
+            // through JSON, the value is in the language of the wording around it.
+            removed.ToString().ShouldBe("Orders removed");
+            removed.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Bestellingen verwijderd");
+
+            using var document = JsonDocument.Parse(json);
+            document.RootElement.GetProperty("defaultText").GetString().ShouldBe("Orders removed");
+            document.RootElement.GetProperty("translations").GetProperty("en").GetString().ShouldBe("Orders removed");
+            document.RootElement.GetProperty("translations").GetProperty("nl").GetString().ShouldBe("Bestellingen verwijderd");
+            CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
         }
 
         [Test]
@@ -327,13 +378,13 @@ namespace CodeChops.Idioma.Tests
         {
             // Arrange: as on a server, where the work of each user carries its own UI culture, and goes on wherever a
             // thread is free.
-            (string Culture, string Checkout, string Greeting, string Orders)[] users =
+            (string Culture, string Checkout, string Welcome, string Orders)[] users =
             [
-                ("nl-NL", "Afrekenen", "Hallo, Max!", "Bestellingen"),
-                ("en-US", "Pay", "Hello, Max!", "Orders"),
-                ("nl-BE", "Afrekenen", "Hallo, Max!", "Bestellingen"),
-                ("en-GB", "Pay", "Hello, Max!", "Orders"),
-                ("fr-FR", "Pay", "Hello, Max!", "Orders"),
+                ("nl-NL", "Afrekenen", "Welkom, Max!", "Bestellingen"),
+                ("en-US", "Pay", "Good to see you, Max!", "Orders"),
+                ("nl-BE", "Afrekenen", "Welkom, Max!", "Bestellingen"),
+                ("en-GB", "Pay", "Good to see you, Max!", "Orders"),
+                ("fr-FR", "Pay", "Good to see you, Max!", "Orders"),
             ];
 
             // Act
@@ -346,7 +397,7 @@ namespace CodeChops.Idioma.Tests
                 for (var i = 0; i < 2_000; i++)
                 {
                     if (!String.Equals(GeneratedTranslations.Checkout.ToString(), user.Checkout, StringComparison.Ordinal)
-                        || !String.Equals(GeneratedTranslations.Greeting.Format("Max"), user.Greeting, StringComparison.Ordinal)
+                        || !String.Equals(GeneratedTranslations.Welcome("Max").ToString(), user.Welcome, StringComparison.Ordinal)
                         || !String.Equals(InlineTexts.Orders.ToString(), user.Orders, StringComparison.Ordinal))
                     {
                         wrong++;

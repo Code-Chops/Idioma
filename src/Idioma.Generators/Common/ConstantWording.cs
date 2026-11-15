@@ -4,9 +4,7 @@ namespace CodeChops.Idioma.Generators;
 /// Reads the wording of a text that is written as a constant: <c>=> "Submit"</c>, a getter returning a literal or a
 /// <see langword="const"/>, or an initializer such as <c>{ get; } = "Submit";</c>.
 /// </summary>
-// One reader for the generator, which records the placeholders of a default wording, and for the analyzer, which holds
-// the wording of every other language to them: wording one of them read and the other did not would be held to no
-// placeholders at all.
+// For the doc comments of the generated members, which show the wording of every language next to its link.
 internal static class ConstantWording
 {
     /// <summary>

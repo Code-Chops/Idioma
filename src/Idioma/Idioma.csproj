@@ -31,7 +31,7 @@ The details have a page per subject under docs/, which the README links to: how 
 
 The demos are SetDemo.cs and InlineTextDemo.cs, and run in a codespace from the README.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
-    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, or inline texts. A missing translation or a mismatched placeholder is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
+    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, or inline texts. A missing translation, or one that takes other values than the original, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
     <PackageProjectUrl>https://github.com/Code-Chops/Idioma</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Code-Chops/Idioma</RepositoryUrl>

@@ -2,7 +2,7 @@
 
 Translations for any .NET app, written in C# and checked at compile time:
 
-- The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation whose placeholders differ from the original.
+- The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation that takes other values than the original.
 - There are no resource files, so you get full IDE support: autocomplete, go to definition, and find all references.
 - An AI coding assistant can translate your texts, and the build tells it which are missing ([details](#translating-your-texts)).
 - The package has no dependencies, is light and fast, and is safe to trim and to publish with Native AOT.
@@ -79,7 +79,7 @@ Write a text in one of two ways, and mix them as you like.
 
 #### Write a set
 
-A set (like a resx file) holds the texts that belong together, in one language: a class with a property per text.
+A set (like a resx file) holds the texts that belong together, in one language: a class with a property per text, or a method for a text that takes a value.
 It suits texts you reuse. Write the set of your default language as a partial class whose name ends in the code of that language in capitals, as in `ShopTranslationsEN`:
 
 ```csharp
@@ -87,7 +87,7 @@ public partial class ShopTranslationsEN : ITranslationSet
 {
     public string Cart => "Cart";
     public string Checkout => "Checkout";
-    public string Greeting => "Hello, {0}!";
+    public string Greeting(string name) => $"Hello, {name}!";
 }
 ```
 
@@ -106,7 +106,7 @@ public class ShopTranslationsNL : IShopTranslations
 {
     public string Cart => "Winkelwagen";
     public string Checkout => "Afrekenen";
-    public string Greeting => "Hallo, {0}!";
+    public string Greeting(string name) => $"Hallo, {name}!";
 }
 ```
 
@@ -128,6 +128,8 @@ public LocalizableText Title { get; } = LocalizableText.Inline(en: "Orders", nl:
 ```
 
 `Inline` takes one argument per language you declared, so leaving out a translation does not compile.
+
+A value goes into every language as you write the text: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`.
 
 ### Show a text
 
@@ -157,41 +159,35 @@ For the wording in a language other than the user's, such as the language of an 
 string dutch = ShopTranslations.Checkout.ToString(CultureInfo.GetCultureInfo("nl"));
 ```
 
-### Format a text
+### Pass values to a text
 
-`Format` fills in a text's placeholders, which are those of `String.Format`, so one can carry a format, as in `{0:N2}`:
+A text that takes a value, such as `Greeting` above, is a method. Call it with the value:
 
 ```razor
 <p>
-  @ShopTranslations.Greeting.Format(customer.Name)
+  @ShopTranslations.Greeting(customer.Name)
 </p>
 ```
 
-Give every language the same placeholders. A Dutch greeting that lost its `{0}` is a build error:
+Every language implements the method, so each puts the value where it reads best, and a set that leaves the method out, or gives it other parameters, does not compile. A value can carry a format, as in `$"Total: {amount:N2}"`.
 
-```text
-error LOC016: 'ShopTranslationsNL.Greeting' has no placeholders, while the default wording of 'IShopTranslations.Greeting' has placeholder {0}. Give every language the same placeholders: otherwise Format throws, or leaves out a value, for the users of one language.
-```
-
-For a language other than the user's, pass its culture to `Format`, which then also formats the values for it:
+For a language other than the user's, pass its culture to `ToString`, which then also formats the values for it:
 
 ```csharp
-string greeting = ShopTranslations.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name);
+string greeting = ShopTranslations.Greeting(customer.Name).ToString(CultureInfo.GetCultureInfo("nl-NL"));
 ```
 
-For values with a name and a type, or wording that depends on a value, write the text as a method ([Write a text that takes values](#write-a-text-that-takes-values)).
+A wording can also depend on a value, as for a plural ([Choose a wording by a value](#choose-a-wording-by-a-value-as-for-a-plural)).
 
 ## Going further
 
-### Write a text that takes values
+### Choose a wording by a value, as for a plural
 
-A text that takes values, such as a name or a count, is a method of the set. Its values have a name and a type, and its wording can depend on them, as for a plural or a form of address:
+The wording of a text that takes values can depend on them, as for a plural or a form of address:
 
 ```csharp
 public partial class ShopTranslationsEN : ITranslationSet
 {
-    public string Greeting(string name) => $"Hello, {name}!";
-
     public string ItemsInCart(int count, string shop) => count is 1
         ? $"1 item in your cart at {shop}"
         : $"{count} items in your cart at {shop}";
@@ -206,8 +202,6 @@ public partial class ShopTranslationsEN : ITranslationSet
 
 public class ShopTranslationsNL : IShopTranslations
 {
-    public string Greeting(string name) => $"Hallo, {name}!";
-
     public string ItemsInCart(int count, string shop) => count is 1
         ? $"1 artikel in je winkelwagen bij {shop}"
         : $"{count} artikelen in je winkelwagen bij {shop}";
@@ -229,9 +223,7 @@ public class ShopTranslationsNL : IShopTranslations
 </p>
 ```
 
-It is a text like any other: it follows the user's language, and the set of that language words it with the values you passed.
-
-The build holds every language to the method. A set without it does not compile, as with any text. And a set that gives a parameter another name is a build error, so that two values of one type cannot swap unnoticed:
+The build holds every language to the parameters of the method, also to their names, so that two values of one type cannot swap unnoticed:
 
 ```text
 error LOC020: 'ShopTranslationsNL.ItemsInCart' names this parameter 'aantal', and 'IShopTranslations.ItemsInCart' names it 'count'. Give the parameters of a text the same names in every language: otherwise two values of one type can swap unnoticed for the users of one language.
@@ -303,7 +295,7 @@ An AI coding assistant can translate your texts, as they are C# in your reposito
 
 So a text does not wait for its translation: it gets a wording in every language in the change that adds it. That leaves a translator to review the wording, in a file with a line per text.
 
-The build checks every edit, an assistant's or a person's: a text left out or a placeholder dropped does not compile, so neither reaches a user.
+The build checks every edit, an assistant's or a person's: a text left out, or one given other values, does not compile, so neither reaches a user.
 
 ## Where Idioma does not fit
 

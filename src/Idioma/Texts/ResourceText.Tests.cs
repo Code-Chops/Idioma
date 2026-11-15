@@ -125,21 +125,60 @@ public sealed class ResourceTextTests
     }
 
     /// <summary>
-    /// A contract with a text that takes a value.
+    /// A contract with texts that take a value: one that chooses its wording by it, one that formats it, and one
+    /// whose value is a text itself.
     /// </summary>
     private interface IResourceCountedTranslations : ITranslationSet
     {
         string Items(int count);
+        string Total(decimal amount);
+        string Removed(LocalizableText what);
     }
 
     private sealed class ResourceCountedTranslationsEN : IResourceCountedTranslations
     {
         public string Items(int count) => count is 1 ? "1 item" : $"{count} items";
+        public string Total(decimal amount) => $"Total: {amount:N2}";
+        public string Removed(LocalizableText what) => $"{what} removed";
     }
 
     private sealed class ResourceCountedTranslationsNL : IResourceCountedTranslations
     {
         public string Items(int count) => count is 1 ? "1 artikel" : $"{count} artikelen";
+        public string Total(decimal amount) => $"Totaal: {amount:N2}";
+        public string Removed(LocalizableText what) => $"{what} verwijderd";
+    }
+
+    /// <summary>
+    /// A French set whose texts cannot be worded.
+    /// </summary>
+    private sealed class ResourceCountedTranslationsFR : IResourceCountedTranslations
+    {
+        public string Items(int count) => throw new InvalidOperationException("No wording.");
+        public string Total(decimal amount) => throw new InvalidOperationException("No wording.");
+        public string Removed(LocalizableText what) => throw new InvalidOperationException("No wording.");
+    }
+
+    /// <summary>
+    /// Sets both current cultures for the duration of the scope (they are thread-bound, so tests on other threads are
+    /// unaffected): the one a text takes its wording for, and the one values are formatted for.
+    /// </summary>
+    private sealed class CulturesScope : IDisposable
+    {
+        private CultureInfo PreviousCulture { get; } = CultureInfo.CurrentCulture;
+        private CultureInfo PreviousUICulture { get; } = CultureInfo.CurrentUICulture;
+
+        public CulturesScope(string uiCulture, string culture)
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(uiCulture);
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+        }
+
+        public void Dispose()
+        {
+            CultureInfo.CurrentUICulture = this.PreviousUICulture;
+            CultureInfo.CurrentCulture = this.PreviousCulture;
+        }
     }
 
     private static ResourceText Greeting { get; } = ResourceText.Create<IResourceTranslations>("Resource.Greeting", t => t.Greeting, new ResourceTranslationsEN());
@@ -295,6 +334,56 @@ public sealed class ResourceTextTests
         text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry).ShouldBe("3 artikelen");
         text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry).ShouldBe("3 items");
         text.WithTranslation("fr", "3 articles").Arguments.ShouldBe([3]);
+    }
+
+    [Test]
+    public void ToString_ForOtherCulture_ShouldWordTextThatTakesValuesAsForUserOfThatCulture()
+    {
+        // Arrange: both current cultures are American, and the recipient is Dutch.
+        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
+        var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsEN(), new ResourceCountedTranslationsNL()]);
+        var dutch = CultureInfo.GetCultureInfo("nl-NL");
+        var amount = 1234.5m;
+        var cart = LocalizableText.FromGeneratedCode("Cart", ("en", "Cart"), ("nl", "Winkelwagen"));
+
+        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", t => t.Total(amount), new ResourceCountedTranslationsEN(), [amount]);
+        var removed = ResourceText.Create<IResourceCountedTranslations>("Resource.Removed", t => t.Removed(cart), new ResourceCountedTranslationsEN(), [cart]);
+
+        // Act & Assert: the Dutch wording, with the number as a Dutch reader writes it and the text among the values
+        // in Dutch, and the cultures of this thread as they were.
+        total.ToString(dutch, registry).ShouldBe("Totaal: 1.234,50");
+        removed.ToString(dutch, registry).ShouldBe("Winkelwagen verwijderd");
+        total.ToString(CultureInfo.GetCultureInfo("en-GB"), registry).ShouldBe("Total: 1,234.50");
+        CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
+        CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
+    }
+
+    [Test]
+    public void ToString_ForCurrentUICulture_ShouldFormatValuesForCurrentCultureAsToStringDoes()
+    {
+        // Arrange: a user who reads Dutch and writes numbers as an American does.
+        using var _ = new CulturesScope(uiCulture: "nl-NL", culture: "en-US");
+        var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsEN(), new ResourceCountedTranslationsNL()]);
+        var amount = 1234.5m;
+        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", t => t.Total(amount), new ResourceCountedTranslationsEN(), [amount]);
+
+        // Act & Assert: passing the culture the text would follow anyway changes nothing.
+        total.ToString(CultureInfo.CurrentUICulture, registry).ShouldBe("Totaal: 1,234.50");
+    }
+
+    [Test]
+    public void ToString_ForOtherCulture_ShouldPutCulturesBackWhenSetThrows()
+    {
+        // Arrange
+        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-GB");
+        var registry = TranslationsRegistry.Create([new ResourceCountedTranslationsFR()]);
+        var amount = 1234.5m;
+        var total = ResourceText.Create<IResourceCountedTranslations>("Resource.Total", t => t.Total(amount), new ResourceCountedTranslationsEN(), [amount]);
+
+        // Act & Assert
+        Should.Throw<InvalidOperationException>(() => total.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry));
+        CultureInfo.CurrentCulture.Name.ShouldBe("en-GB");
+        CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
     }
 
     [Test]

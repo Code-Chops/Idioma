@@ -23,7 +23,6 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    [CodeChops.Idioma.Internals.FormatPlaceholders()]
     string Checkout { get; }
     /// <inheritdoc cref="ShopTranslationsEN.Greeting"/>
     /// <remarks>

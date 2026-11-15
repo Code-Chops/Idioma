@@ -1,9 +1,8 @@
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="LocalizableText"/>: the text's own translations, the order a wording is looked up in, the two
-/// conversions to and from a string, and <see cref="LocalizableText.Format(ReadOnlySpan{object})"/>. The contract half lives in the
-/// <see cref="ResourceText"/> tests.
+/// Tests for <see cref="LocalizableText"/>: the text's own translations, the order a wording is looked up in, and the
+/// two conversions to and from a string. The contract half lives in the <see cref="ResourceText"/> tests.
 /// </summary>
 public sealed class LocalizableTextTests
 {
@@ -19,18 +18,6 @@ public sealed class LocalizableTextTests
         public UICultureScope(string name) => CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(name);
 
         public void Dispose() => CultureInfo.CurrentUICulture = this.Previous;
-    }
-
-    /// <summary>
-    /// Sets <see cref="CultureInfo.CurrentCulture"/> for the duration of the scope.
-    /// </summary>
-    private sealed class CultureScope : IDisposable
-    {
-        private CultureInfo Previous { get; } = CultureInfo.CurrentCulture;
-
-        public CultureScope(string name) => CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(name);
-
-        public void Dispose() => CultureInfo.CurrentCulture = this.Previous;
     }
 
     private interface ITextTranslations : ITranslationSet
@@ -184,73 +171,6 @@ public sealed class LocalizableTextTests
         text.DefaultText.ShouldBe("Name");
         text.Translations.ShouldBeEmpty();
         nothing.ShouldBeNull();
-    }
-
-    [Test]
-    public void Format_WithoutArguments_ShouldStillTreatWordingAsFormatString()
-    {
-        // Arrange
-        var escaped = new LocalizableText("Price ({{net}})");
-        var unescaped = new LocalizableText("Price {EUR}");
-
-        // Act & Assert: the same wording gives the same braces with and without arguments.
-        escaped.Format().ShouldBe("Price ({net})");
-        escaped.Format("unused").ShouldBe("Price ({net})");
-        Should.Throw<FormatException>(() => unescaped.Format());
-    }
-
-    [Test]
-    public void Format_WithCulture_ShouldTakeWordingAndFormatValuesFromThatCulture()
-    {
-        // Arrange: the current cultures are both English, the recipient is Dutch.
-        var text = LocalizableText.FromGeneratedCode("Total: {0}", ("en", "Total: {0}"), ("nl", "Totaal: {0}"));
-        var dutch = CultureInfo.GetCultureInfo("nl-NL");
-
-        // Act & Assert
-        using (new UICultureScope("en-US"))
-        using (new CultureScope("en-US"))
-        {
-            text.Format(dutch, 1.5).ShouldBe("Totaal: 1,5");
-            Should.Throw<FormatException>(() => text.Format(dutch));
-        }
-
-        Should.Throw<ArgumentNullException>(() => text.Format(culture: null!, 1.5));
-    }
-
-    [Test]
-    public void Format_WithArguments_ShouldFillInPlaceholders()
-    {
-        // Arrange
-        var text = new LocalizableText("{0} ({{net}}) {1}");
-
-        // Act & Assert: a composite format string, with an escaped brace.
-        text.Format("Total", 3).ShouldBe("Total ({net}) 3");
-    }
-
-    [Test]
-    public void Format_ShouldTakeWordingFromUICultureAndFormatValuesInCulture()
-    {
-        // Arrange: the two cultures on purpose differ, as they do for an English user in the Netherlands.
-        var text = LocalizableText.FromGeneratedCode("Total: {0}", ("nl", "Totaal: {0}"));
-
-        // Act & Assert
-        using (new UICultureScope("nl-NL"))
-        using (new CultureScope("en-US"))
-            text.Format(1.5).ShouldBe("Totaal: 1.5");
-
-        using (new UICultureScope("en-US"))
-        using (new CultureScope("nl-NL"))
-            text.Format(1.5).ShouldBe("Total: 1,5");
-    }
-
-    [Test]
-    public void Format_WithPlaceholderBeyondArguments_ShouldThrow()
-    {
-        // Arrange
-        var text = new LocalizableText("{0} and {1}");
-
-        // Act & Assert
-        Should.Throw<FormatException>(() => text.Format("one"));
     }
 
     [Test]

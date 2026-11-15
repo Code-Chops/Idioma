@@ -38,10 +38,10 @@ namespace CodeChops.Idioma;
 /// <see cref="ToString(CultureInfo)"/>.
 /// </para>
 /// <para>
-/// For a value inside the wording, write a placeholder in every language (<c>"Hello, {0}!"</c>) and fill it in with
-/// <see cref="Format(ReadOnlySpan{object})"/>. The build makes sure every language has the same placeholders
-/// (<c>LOC016</c>). In a class per language a text can take its values as a method instead, with a name and a type
-/// for each: see <see cref="ITranslationSet"/>.
+/// For a value inside the wording, write it into every language as you create the text:
+/// <c>LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a class per language such a text
+/// is a method that takes the value, <c>ShopTranslations.Greeting(customer.Name)</c>, which every language implements
+/// with the same parameters: see <see cref="ITranslationSet"/>.
 /// </para>
 /// <para>
 /// A member that takes a text also takes a <see cref="string"/>, for a value that has no translations, such as a
@@ -64,13 +64,13 @@ namespace CodeChops.Idioma;
 /// public static class ShopTexts
 /// {
 ///     public static LocalizableText Checkout { get; } = LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
-///     public static LocalizableText Greeting { get; } =
-///         LocalizableText.Inline(en: "Hello, {0}!", nl: "Hallo, {0}!");
+///     public static LocalizableText Greeting(string name) =>
+///         LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!");
 /// }
 ///
 /// // For a user whose UI culture is nl-NL: "Afrekenen" and "Hallo, Anna!".
 /// string checkout = ShopTexts.Checkout;
-/// string greeting = ShopTexts.Greeting.Format(customer.Name);
+/// string greeting = ShopTexts.Greeting(customer.Name);
 /// </code>
 /// </example>
 // The converter also keeps a text from JSON's default shape, which drops the translations on reading (their setter is
@@ -200,59 +200,19 @@ public partial record LocalizableText
     #endregion
 
     /// <summary>
-    /// The wording for the current UI culture with its placeholders filled in:
-    /// <c>ShopTexts.Greeting.Format(customer.Name)</c> turns <c>"Hello, {0}!"</c> into <c>"Hello, Anna!"</c>.
-    /// </summary>
-    /// <remarks>
-    /// Values are formatted for <see cref="CultureInfo.CurrentCulture"/>, and a placeholder can carry a format, as in
-    /// <c>{0:N2}</c> or <c>{0:d}</c>. The wording is always read as a format string, so <c>{{</c> and <c>}}</c> show
-    /// as single braces, even when you pass no arguments. To show the wording as written, use the text itself.
-    /// </remarks>
-    /// <param name="arguments">
-    /// The values for the placeholders: the first fills <c>{0}</c>, the second <c>{1}</c>, and so on.
-    /// </param>
-    /// <exception cref="FormatException">
-    /// When the wording for the current UI culture is not a valid format string, or has a placeholder without an
-    /// argument. Pass a value for each placeholder, and write a literal brace as <c>{{</c> or <c>}}</c>.
-    /// </exception>
-    public string Format(params ReadOnlySpan<object?> arguments)
-    {
-        var formatted = String.Format(CultureInfo.CurrentCulture, this.ToString(), arguments);
-        return formatted;
-    }
-
-    /// <summary>
-    /// The wording for a given culture with its placeholders filled in, such as a greeting in the language of an
-    /// email's recipient: <c>ShopTexts.Greeting.Format(CultureInfo.GetCultureInfo("nl-NL"), customer.Name)</c>.
-    /// </summary>
-    /// <remarks>
-    /// The culture gives both the wording, as <see cref="ToString(CultureInfo)"/> does, and the format of the values:
-    /// a date or a number reads as the recipient writes it. Otherwise this works as
-    /// <see cref="Format(ReadOnlySpan{object})"/> does.
-    /// </remarks>
-    /// <param name="culture">The culture to get the wording for, and to format the values for.</param>
-    /// <param name="arguments">
-    /// The values for the placeholders: the first fills <c>{0}</c>, the second <c>{1}</c>, and so on.
-    /// </param>
-    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    /// <exception cref="FormatException">
-    /// When the wording for the culture is not a valid format string, or has a placeholder without an argument. Pass a
-    /// value for each placeholder, and write a literal brace as <c>{{</c> or <c>}}</c>.
-    /// </exception>
-    public string Format(CultureInfo culture, params ReadOnlySpan<object?> arguments)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        var formatted = String.Format(culture, this.ToString(culture), arguments);
-        return formatted;
-    }
-
-    /// <summary>
     /// The wording for a given culture instead of the current UI culture, such as the language of an email's recipient:
     /// <c>ShopTexts.Checkout.ToString(CultureInfo.GetCultureInfo("nl"))</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A culture without a wording falls back as the current UI culture does: see <see cref="LocalizableText"/>.
+    /// </para>
+    /// <para>
+    /// A text of a set that takes values, such as <c>ShopTranslations.Total(amount)</c>, is worded as for a user of the
+    /// culture: its values are formatted for that culture too, so that a date or a number reads as the recipient writes
+    /// it, and a text among its values shows its wording for that culture. For the current UI culture this is
+    /// <see cref="ToString()"/>, which formats values for <see cref="CultureInfo.CurrentCulture"/>.
+    /// </para>
     /// </remarks>
     /// <param name="culture">The culture to get the wording for.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
@@ -297,9 +257,37 @@ public partial record LocalizableText
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        var text = this.HasOnlyDefaultText ? this.DefaultText : this.FindText(culture, registry, appLanguages);
-        return text;
+        if (this.HasOnlyDefaultText)
+            return this.DefaultText;
+
+        if (!this.TakesValues || culture.Equals(CultureInfo.CurrentUICulture))
+            return this.FindText(culture, registry, appLanguages);
+
+        // A text that takes values is worded by a method of a set, which formats them as it runs: for the current
+        // culture, as an interpolated string does. So it runs as for a user of the culture asked for, which then gives
+        // the wording, the format of the values, and the wording of a text among them. Not for the current UI
+        // culture: there the text shows what ToString() shows, also to a user who reads one language and writes
+        // numbers as another does. Put back in any case: the method is the consumer's, and may throw.
+        var (currentCulture, currentUICulture) = (CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture);
+
+        try
+        {
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+
+            return this.FindText(culture, registry, appLanguages);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = currentCulture;
+            CultureInfo.CurrentUICulture = currentUICulture;
+        }
     }
+
+    /// <summary>
+    /// Whether a set words this text with values the text keeps: a <see cref="ResourceText"/> created with arguments.
+    /// </summary>
+    private protected virtual bool TakesValues => false;
 
     private string FindText(CultureInfo culture, TranslationsRegistry? registry, ImmutableArray<string> appLanguages)
     {
@@ -418,7 +406,12 @@ public partial record LocalizableText
 
         void Add(string language)
         {
-            if (!builder.ContainsKey(language) && this.GetTranslation(language, registry) is { } wording)
+            if (builder.ContainsKey(language))
+                return;
+
+            using var reader = new ReaderScope(this, language);
+
+            if (this.GetTranslation(language, registry) is { } wording)
                 builder[language] = wording;
         }
 
@@ -443,6 +436,37 @@ public partial record LocalizableText
     /// </summary>
     internal string GetDefaultWording(TranslationsRegistry registry)
     {
+        using var reader = new ReaderScope(this, (this as ResourceText)?.DefaultLanguage);
+
         return this.FindDefaultTranslation(registry) ?? this.DefaultText;
+    }
+
+    /// <summary>
+    /// Makes a language the current UI culture for as long as a text that takes values is worded in that language,
+    /// and puts the UI culture back after.
+    /// </summary>
+    // A text among the values shows its wording for the current UI culture, as the method of the set writes it into
+    // the wording. Without this the copy of a text for every language would hold that text in the one language of
+    // whoever writes the copy. The other values stay formatted for the culture of the writer: a language is no
+    // region, and the region of the reader is what a date or a number is written for. Nothing changes for a text
+    // without values, or where this machine has no culture for the language, as under invariant globalization.
+    private readonly ref struct ReaderScope
+    {
+        private CultureInfo? Previous { get; }
+
+        public ReaderScope(LocalizableText text, string? language)
+        {
+            if (!text.TakesValues || language is null || CultureName.FindCulture(language) is not { } culture || culture.Equals(CultureInfo.CurrentUICulture))
+                return;
+
+            this.Previous = CultureInfo.CurrentUICulture;
+            CultureInfo.CurrentUICulture = culture;
+        }
+
+        public void Dispose()
+        {
+            if (this.Previous is not null)
+                CultureInfo.CurrentUICulture = this.Previous;
+        }
     }
 }

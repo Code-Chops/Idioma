@@ -21,7 +21,6 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <item><description><see cref="ShopTranslationsNL.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    [CodeChops.Idioma.Internals.FormatPlaceholders()]
     string Checkout { get; }
     /// <summary>
     /// Total
@@ -33,7 +32,6 @@ public interface IShopTranslations : CodeChops.Idioma.ITranslationSet
     /// <item><description><see cref="ShopTranslationsNL.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
-    [CodeChops.Idioma.Internals.FormatPlaceholders()]
     string Total { get; }
 }
 

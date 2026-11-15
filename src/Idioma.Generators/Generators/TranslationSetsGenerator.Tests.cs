@@ -601,43 +601,6 @@ public sealed class TranslationSetsGeneratorTests
     }
 
     [Test]
-    public void Contract_ShouldRecordPlaceholdersOfEveryConstantDefaultWordingInValidFormat()
-    {
-        // Arrange: placeholders out of order and repeated, none, in an initializer, escaped braces, a lone brace, and
-        // wording that is no constant.
-        var source = """
-            using CodeChops.Idioma;
-
-            [assembly: SupportedLanguages("en")]
-
-            namespace TestApp;
-
-            public sealed partial class ShopTranslationsEN : ITranslationSet
-            {
-                public string Summary => "{1} of {0} ({1,5:N0})";
-                public string Checkout => "Checkout";
-                public string Greeting { get; } = "Hello, {0}!";
-                public string Braces => "{{0}} stays";
-                public string Lone => "Use { here";
-                public string Dynamic => System.DateTime.Now.ToString();
-            }
-            """;
-
-        // Act
-        var text = ContractText(Run(source));
-
-        // Assert: the contract records each valid constant wording's placeholders right above its member, and nothing
-        // for the last two, which nothing can be held to.
-        text.ShouldContain("    [CodeChops.Idioma.Internals.FormatPlaceholders(0, 1)]\r\n    string Summary { get; }".ReplaceLineEndings());
-        text.ShouldContain("    [CodeChops.Idioma.Internals.FormatPlaceholders()]\r\n    string Checkout { get; }".ReplaceLineEndings());
-        text.ShouldContain("    [CodeChops.Idioma.Internals.FormatPlaceholders(0)]\r\n    string Greeting { get; }".ReplaceLineEndings());
-        text.ShouldContain("    [CodeChops.Idioma.Internals.FormatPlaceholders()]\r\n    string Braces { get; }".ReplaceLineEndings());
-        text.ShouldNotContain("]\r\n    string Lone { get; }".ReplaceLineEndings());
-        text.ShouldNotContain("]\r\n    string Dynamic { get; }".ReplaceLineEndings());
-        GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
-    }
-
-    [Test]
     [Arguments("\\r\\n")]
     [Arguments("\\r")]
     [Arguments("\\n")]
@@ -3384,13 +3347,12 @@ public sealed class TranslationSetsGeneratorTests
         // Arrange & Act
         var text = ContractText(Run(GreetingSets));
 
-        // Assert: the contract repeats the method, which is what holds every language to its parameters, and records
-        // no placeholders for it. The class creates the text on every call, with the values it is called with.
+        // Assert: the contract repeats the method, which is what holds every language to its parameters. The class
+        // creates the text on every call, with the values it is called with.
         text.ShouldContain("    string Greeting(string name);");
         text.ShouldContain("    string ItemsInCart(int count, string shop);");
         text.ShouldContain("""public static CodeChops.Idioma.ResourceText Greeting(string name) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.Greeting", translations => translations.Greeting(name), DefaultSet<ShopTranslationsEN>.Instance, [name]);""");
         text.ShouldContain("""public static CodeChops.Idioma.ResourceText ItemsInCart(int count, string shop) => CreateResourceText<IShopTranslations>("TestApp.ShopTranslations.ItemsInCart", translations => translations.ItemsInCart(count, shop), DefaultSet<ShopTranslationsEN>.Instance, [count, shop]);""");
-        text.Split('\n').Count(line => line.Contains("FormatPlaceholders", StringComparison.Ordinal)).ShouldBe(1);
     }
 
     [Test]

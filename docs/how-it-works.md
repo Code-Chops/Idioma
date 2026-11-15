@@ -21,7 +21,7 @@ In an app declaring `("en", "nl", "en-GB")`, whose British set words the cart as
 | `nl-NL`            | Winkelwagen                   | Its parent culture, `nl`, has wording                                  |
 | `de-DE`            | Cart                          | None of the app's languages serves it, so it gets the default language |
 
-`ToString` follows the same order for the culture you pass. `Format` formats its values for `CultureInfo.CurrentCulture`, or for the culture you pass, so a placeholder can carry a format, as in `{0:N2}` or `{0:d}`. It always reads the wording as a format string, even without values, so write a literal brace as `{{` or `}}`.
+`ToString` follows the same order for the culture you pass.
 
 ## What the source generator writes
 
@@ -55,7 +55,7 @@ The source generator also writes the code that registers your sets (see [Registr
 
 ## Texts that take values
 
-A public method of the default-language set that returns a `string` and takes parameters is a text that takes values ([an example](../README.md#write-a-text-that-takes-values)). The contract repeats the method, so every language implements it, and the generated class gets a method of the same name and parameters:
+A public method of the default-language set that returns a `string` and takes parameters is a text that takes values ([an example](../README.md#pass-values-to-a-text)). The contract repeats the method, so every language implements it, and the generated class gets a method of the same name and parameters:
 
 ```csharp
 public interface IShopTranslations : ITranslationSet
@@ -85,9 +85,9 @@ Every language names the parameters as the default-language set does (`LOC020`).
 What else to know:
 
 - **Plurals.** Idioma has no plural rules: each language chooses its wording for a number in its own set, in C#. `count is 1 ? ... : ...` is right for English and Dutch, and a language with more forms, such as Polish, writes a condition for each.
-- **How values are formatted.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. That also holds for the wording of a culture you pass to `ToString`: it comes from the set of that culture, with the values formatted for the current culture.
-- **A text as a value.** A value that is a text itself shows the wording for the current UI culture, also inside the wording of another culture you pass to `ToString`.
-- **Placeholders.** A text with placeholders, `"Hello, {0}!"` filled in with `Format`, works as before, next to texts that take values.
+- **How values are formatted.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. For a culture you pass to `ToString`, other than the current UI culture, the text is worded as for a user of that culture: its values are formatted for that culture too, so a date or a number reads as the recipient of an email writes it.
+- **A text as a value.** A value that is a text itself shows its wording for the same culture as the text it is a value of.
+- **Inline texts.** An inline text takes a value as you write it, `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`, which fills it in at once, in every language.
 
 ## Registration
 
@@ -143,6 +143,6 @@ A text survives JSON, such as a Blazor component parameter that crosses a render
 
 An inline text travels without a `key`, and a text without translations, such as a customer's name, as its wording alone: `"Ada"`.
 
-A text that takes values is written with its values filled in, in every language: `"nl":"3 artikelen in je winkelwagen bij Idioma"`. Read back, it shows that wording, and no longer has its `Arguments`.
+A text that takes values is written with its values filled in, in every language: `"nl":"3 artikelen in je winkelwagen bij Idioma"`. A text among its values is worded in each language as well, and a date or a number is formatted for the culture the text is written in. Read back, it shows that wording, and no longer has its `Arguments`.
 
 A JSON string reads as a text too, with that one wording for every culture, so JSON you write by hand, such as a settings file, can hold `"title": "Orders"`.

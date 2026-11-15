@@ -12,9 +12,7 @@ namespace CodeChops.Idioma.Generators;
 /// parameters is a text that takes values: the contract repeats it, and the class holds a method of its name and
 /// parameters that creates the <c>ResourceText</c> with the values it is called with. Each
 /// generated member inherits the property's doc comment through <c>&lt;inheritdoc cref/&gt;</c>, or else is documented
-/// with its default-language wording, and links to its wording in every language, which it shows next to the link. Each member of the contract whose
-/// default wording is a constant records its placeholders (<c>[FormatPlaceholders]</c>), which
-/// <see cref="FormatPlaceholdersAnalyzer"/> holds every other set to, in this assembly and in those referencing it.
+/// with its default-language wording, and links to its wording in every language, which it shows next to the link.
 /// </summary>
 /// <remarks>
 /// It also records every set of a public contract in an assembly attribute, so that the build of an assembly referencing
@@ -320,18 +318,10 @@ public sealed class TranslationSetsGenerator : IIncrementalGenerator
         {
             AppendMemberDocs(sb, contract, aliases, className, member);
 
-            // A text that takes values: its parameters are what every language is held to, by the compiler.
-            if (member.IsMethod)
-            {
-                sb.AppendLine($"    string {EscapeIdentifier(member.Name)}({RenderParameters(member, contract.Namespace, aliases)});");
-                continue;
-            }
-
-            // Not for wording that is no constant, or no valid format string: nothing then to hold the others to.
-            if (member.DefaultText is { } defaultText && FormatPlaceholders.TryRead(defaultText, out var placeholders))
-                sb.AppendLine($"    [{PackageNames.InternalsNamespace}.FormatPlaceholders({String.Join(", ", placeholders)})]");
-
-            sb.AppendLine($"    string {EscapeIdentifier(member.Name)} {{ get; }}");
+            // A text that takes values is a method: its parameters are what the compiler holds every language to.
+            sb.AppendLine(member.IsMethod
+                ? $"    string {EscapeIdentifier(member.Name)}({RenderParameters(member, contract.Namespace, aliases)});"
+                : $"    string {EscapeIdentifier(member.Name)} {{ get; }}");
         }
 
         // The end of the contract, and the default-language set implementing it (the other languages implement it by

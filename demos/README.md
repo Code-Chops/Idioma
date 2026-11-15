@@ -30,4 +30,4 @@ dotnet run SetDemo.cs
 
 A demo runs with .NET 10 or later. Its first line fetches the latest version of the package.
 
-Remove a Dutch wording from either file, or the `{0}` from one, and it no longer builds.
+Remove a Dutch wording from either file, or the parameter of the Dutch `Greeting` in `SetDemo.cs`, and it no longer builds.

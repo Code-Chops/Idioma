@@ -36,7 +36,6 @@ error LOC011: This text is written in one language, and this assembly supports e
 | `LOC013`           | A language argument without its name, which could swap two languages unnoticed                                                                                                      |                   |
 | `LOC014`           | A text named like the generated class itself, as in `ShopTranslations.ShopTranslations`                                                                                             |                   |
 | `LOC015`           | A `LanguageCode` that implements nothing, on a set deriving from another set without listing `ITranslationSet`                                                                      | Yes               |
-| `LOC016`           | Placeholders differing between languages, as in `Inline(en: "Hello, {0}!", nl: "Hallo!")`, also in a set                                                                            | Yes               |
 | `LOC017`           | A string compared as a text, as in `text.Equals("Orders")`, `list.Contains(name)`, or `counts[name]`, which no translated text equals                                               | Yes               |
 | `LOC018`           | A `LanguageCode` that is not a culture name, such as `"en_GB"`, which makes the set throw as it registers                                                                           | Yes               |
 | `LOC019`           | A public method of a default-language set that returns a string and takes parameters, but cannot be a text: generic, sharing its name, or with a parameter the text cannot keep     |                   |
@@ -55,7 +54,7 @@ Title = "1234";
 
 ## What the build misses
 
-The build misses four things. It cannot tell such a value from wording kept in a local variable or returned by a helper method, so those compile too:
+The build misses two things. It cannot tell such a value from wording kept in a local variable or returned by a helper method, so those compile too:
 
 ```csharp
 var title = "Orders";
@@ -64,15 +63,3 @@ Title = GetTitle(); // Wording, but the build sees a method call
 ```
 
 And plain text in Razor markup, such as `<h1>Orders</h1>`, is not a text at all, so the build does not see it either: write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
-
-The other two are in a call of `Format`. The build holds the wording of every language to the same placeholders (`LOC016`), but not the values you pass to fill them. And a culture you pass first is the culture to format for, never a value:
-
-```csharp
-// The wording of Greeting is "Hello, {0}!"
-ShopTranslations.Greeting.Format();        // A value too few: it compiles, and throws a FormatException when it runs
-ShopTranslations.Greeting.Format(culture); // No value either: the culture is what to format for, so this throws as well
-```
-
-To fill a placeholder with a culture, pass it as an object: `Greeting.Format((object)culture)`.
-
-A text written as a method has neither gap: its values are parameters, which the compiler checks ([details](how-it-works.md#texts-that-take-values)).

@@ -46,7 +46,7 @@ foreach (var (culture, cart, greeting, order, grid, itemsInCart, rows) in cases)
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
     Expect($"{culture}: cart of the app's set", ShopTranslations.Cart.ToString(), cart);
-    Expect($"{culture}: greeting of the app's set", ShopTranslations.Greeting.Format("Ada"), greeting);
+    Expect($"{culture}: greeting of the app's set", ShopTranslations.Greeting("Ada").ToString(), greeting);
     Expect($"{culture}: inline text", orders.ToString(), order);
     Expect($"{culture}: title of the library's set", GridTranslations.Title.ToString(), grid);
     Expect($"{culture}: cart compared with its wording", ShopTranslations.Cart == cart ? cart : "not equal", cart);
@@ -55,6 +55,11 @@ foreach (var (culture, cart, greeting, order, grid, itemsInCart, rows) in cases)
 }
 
 Expect("values of a text that takes them", string.Join(",", items.Arguments), "3,Idioma");
+
+// For a culture that is passed, while another is the current one: the set words the text as for a user of that culture.
+CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
+Expect("text that takes values, for a culture that is passed", items.ToString(CultureInfo.GetCultureInfo("nl-NL")), "3 artikelen in je winkelwagen bij Idioma");
+Expect("the current UI culture after it", CultureInfo.CurrentUICulture.Name, "en");
 
 // A text through JSON, written by the System.Text.Json source generator, and read back in each language.
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
@@ -90,7 +95,7 @@ return 0;
 public partial class ShopTranslationsEN : ITranslationSet
 {
     public virtual string Cart => "Cart";
-    public virtual string Greeting => "Hello, {0}!";
+    public virtual string Greeting(string name) => $"Hello, {name}!";
 
     public virtual string ItemsInCart(int count, string shop) => count is 1
         ? $"1 item in your cart at {shop}"
@@ -100,7 +105,7 @@ public partial class ShopTranslationsEN : ITranslationSet
 public class ShopTranslationsNL : IShopTranslations
 {
     public virtual string Cart => "Winkelwagen";
-    public virtual string Greeting => "Hallo, {0}!";
+    public virtual string Greeting(string name) => $"Hallo, {name}!";
 
     public virtual string ItemsInCart(int count, string shop) => count is 1
         ? $"1 artikel in je winkelwagen bij {shop}"

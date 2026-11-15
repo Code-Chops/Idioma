@@ -184,8 +184,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
                     /// </summary>
                     /// <remarks>
                     /// Name each argument after its language: an unnamed one is a build error (<c>LOC013</c>), as two swapped languages
-                    /// would go unnoticed. For a value inside the wording, write a placeholder such as <c>{0}</c> in every language and
-                    /// fill it in with <see cref="{{TextName}}.Format(System.ReadOnlySpan{object})"/>.
+                    /// would go unnoticed. For a value inside the wording, write it into every language, as in <c>$"Hello, {name}!"</c>.
                     /// </remarks>
             """);
 
