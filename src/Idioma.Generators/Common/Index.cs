@@ -6,13 +6,15 @@ namespace System;
 // ReSharper disable UnusedMember.Global
 internal readonly struct Index : IEquatable<Index>
 {
+    public override string ToString() => this.IsFromEnd ? "^" + this.Value : this.Value.ToString(Globalization.CultureInfo.InvariantCulture);
+
     // The position, with a position counted from the end stored as its bitwise complement, as the runtime's own does.
     private readonly int _value;
 
     public Index(int value, bool fromEnd = false)
     {
         if (value < 0)
-            throw new ArgumentOutOfRangeException(nameof(value), "An index cannot be negative.");
+            throw new ArgumentOutOfRangeException(nameof(value), "An index can't be negative.");
 
         this._value = fromEnd ? ~value : value;
     }
@@ -38,6 +40,4 @@ internal readonly struct Index : IEquatable<Index>
     public override bool Equals(object? obj) => obj is Index other && this.Equals(other);
 
     public override int GetHashCode() => this._value;
-
-    public override string ToString() => this.IsFromEnd ? "^" + this.Value : this.Value.ToString(Globalization.CultureInfo.InvariantCulture);
 }

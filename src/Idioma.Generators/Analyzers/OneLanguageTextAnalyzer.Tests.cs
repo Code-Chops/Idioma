@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="OneLanguageTextAnalyzer"/>: in an assembly that declares languages, wording written in the source
-/// cannot become a text in one language, what only generated code should call cannot be called by hand, and a language
+/// can't become a text in one language, what only generated code should call can't be called by hand, and a language
 /// argument must be named. A runtime value converts as it always did.
 /// </summary>
 public sealed class OneLanguageTextAnalyzerTests
@@ -49,9 +49,11 @@ public sealed class OneLanguageTextAnalyzerTests
     [Arguments("""public static LocalizableText Bad(int number) => number switch { 1 => "One", _ => "Other" };""")]
     [Arguments("""public static void Bad() => Take("Orders");""")]
     [Arguments("""public static LocalizableText Bad { get; } = new LocalizableText("Orders");""")]
-    [Arguments("""public static LocalizableText Bad { get; } = new ResourceText("Shop.Orders", "Orders");""")]
+    [Arguments("""public static LocalizableText Bad { get; } = LocalizableText.Keyed("Shop.Orders", "Orders");""")]
     [Arguments("""public static LocalizableText Bad { get; } = (LocalizableText)"Orders";""")]
-    public async Task WordingInOneLanguage_ShouldReportLOC011(string member)
+    [Arguments("""public static LocalizableText Bad { get; } = "Idioma";""")]                     // A name
+    [Arguments("""public static LocalizableText Bad(double distance) => $"{distance} km";""")]    // A unit
+    public async Task WordingInOneLanguage_ShouldReportLOC500(string member)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeMemberAsync(member);
@@ -59,7 +61,7 @@ public sealed class OneLanguageTextAnalyzerTests
         // Assert: the message names the languages and writes out the fix.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(OneLanguageTextAnalyzer.OneLanguageDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC011");
+        diagnostic.Id.ShouldBe("LOC500");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("en, nl");
         diagnostic.GetMessage().ShouldContain("LocalizableText.Inline(en: \"...\", nl: \"...\")");
@@ -72,7 +74,7 @@ public sealed class OneLanguageTextAnalyzerTests
     [Arguments("""public static LocalizableText Good(Customer customer) => $"{customer.Name} - {customer.City}";""")]
     [Arguments("public static LocalizableText Good(Customer customer, bool flag) => flag ? customer.Name : customer.City;")]
     [Arguments("public static LocalizableText Good(Customer customer) => new LocalizableText(customer.Name);")]
-    [Arguments("""public static LocalizableText Good(Customer customer) => new ResourceText("Customer.Name", customer.Name);""")]
+    [Arguments("""public static LocalizableText Good(Customer customer) => LocalizableText.Keyed("Customer.Name", customer.Name);""")]
     [Arguments("""public static LocalizableText Dash { get; } = "-";""")]
     [Arguments("""public static LocalizableText Number { get; } = "1234";""")]
     [Arguments("""public static LocalizableText Empty { get; } = "";""")]
@@ -90,13 +92,45 @@ public sealed class OneLanguageTextAnalyzerTests
     [Test]
     [Arguments("""public static string Wording() => "Orders"; public static LocalizableText Hidden() => Wording();""")]
     [Arguments("""public static LocalizableText Hidden() { var wording = "Orders"; return wording; }""")]
-    public async Task WordingBehindVariableOrMethod_ShouldPass(string member)
+    [Arguments("""private static readonly string Wording = "Orders"; public static LocalizableText Hidden { get; } = Wording;""")]
+    [Arguments("""private static string Wording => "Orders"; public static LocalizableText Hidden { get; } = Wording;""")]
+    public async Task WordingKeptElsewhere_ShouldPass(string member)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeMemberAsync(member);
 
         // Assert: pins the known limit. To the build this is a value, like a customer's name.
         diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = "Idioma";""")]
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Distance { get; } = $"{1.5} km";""")]
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = new LocalizableText("Idioma");""")]
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = LocalizableText.Keyed("Shop.Brand", "Idioma");""")]
+    public async Task WordingInInitializerOfExcludedProperty_ShouldReportNothing(string member)
+    {
+        // Arrange & Act: wording its author marked as the same in every language, such as a name or a unit.
+        var diagnostics = await AnalyzeMemberAsync(member);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task WordingAssignedToExcludedProperty_ShouldReportLOC500()
+    {
+        // Arrange & Act: the attribute covers the property's own initializer alone. So a marked component parameter
+        // still holds the wording of each caller to every language.
+        var diagnostics = await AnalyzeMemberAsync("""
+            [ExcludeFromLocalizationDiscovery] public static LocalizableText Title { get; set; } = "Idioma";
+            public static void Rename() => Title = "Orders";
+            """);
+
+        // Assert: on the assignment, not on the initializer.
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(OneLanguageTextAnalyzer.OneLanguageDiagnosticId);
+        diagnostic.Location.SourceTree!.ToString()[diagnostic.Location.SourceSpan.Start..].ShouldStartWith("\"Orders\"");
     }
 
     [Test]
@@ -110,37 +144,29 @@ public sealed class OneLanguageTextAnalyzerTests
     }
 
     [Test]
-    [Arguments("""public static bool Compared(LocalizableText text) => text.Equals("Orders");""")]
-    [Arguments("""public static bool Compared(System.Collections.Generic.List<LocalizableText> texts) => texts.Contains("Orders");""")]
-    public async Task WordingComparedAsText_ShouldLeaveItToLOC017(string member)
+    public async Task EqualsWithWording_ShouldNotBeReported()
     {
-        // Arrange & Act: translating the wording would not make the comparison hold, so LOC017 reports it instead.
-        var diagnostics = await AnalyzeMemberAsync(member);
+        // Arrange & Act: Equals compares the wording, as == does, and converts nothing to a text.
+        var diagnostics = await AnalyzeMemberAsync("""public static bool Same(LocalizableText text) => text.Equals("Orders");""");
 
         // Assert
         diagnostics.ShouldBeEmpty();
     }
 
     [Test]
-    [Arguments("""public static LocalizableText Bad { get; } = CodeChops.Idioma.Internals.GeneratedCode.CreateText("Orders");""", "GeneratedCode.CreateText")]
-    [Arguments("""public static LocalizableText Bad(string value) => CodeChops.Idioma.Internals.GeneratedCode.CreateResourceText<ITranslationSet>("Shop.Orders", static translations => translations.LanguageCode, null!);""", "GeneratedCode.CreateResourceText")]
-    public async Task CalledByHand_ShouldReportLOC012(string member, string expected)
+    public async Task WordingLookedUpInCollection_ShouldReportLOC500()
     {
-        // Arrange & Act
-        var diagnostics = await AnalyzeMemberAsync(member);
+        // Arrange & Act: the lookup takes a text, so the wording becomes a text in one language.
+        var diagnostics = await AnalyzeMemberAsync("""public static bool Found(System.Collections.Generic.List<LocalizableText> texts) => texts.Contains("Orders");""");
 
         // Assert
-        var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(OneLanguageTextAnalyzer.GeneratedCodeOnlyDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC012");
-        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldContain($"'{expected}'");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe(OneLanguageTextAnalyzer.OneLanguageDiagnosticId);
     }
 
     [Test]
     [Arguments("""LocalizableText.Inline("Orders", "Bestellingen")""")]
     [Arguments("""LocalizableText.Inline("Orders", nl: "Bestellingen")""")]
-    public async Task UnnamedLanguage_ShouldReportLOC013(string text)
+    public async Task UnnamedLanguage_ShouldReportLOC501(string text)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeMemberAsync($"public static LocalizableText Bad {{ get; }} = {text};");
@@ -148,7 +174,7 @@ public sealed class OneLanguageTextAnalyzerTests
         // Assert: once per call, however many arguments miss their name.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(OneLanguageTextAnalyzer.UnnamedLanguageDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC013");
+        diagnostic.Id.ShouldBe("LOC501");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
     }
 
@@ -165,16 +191,16 @@ public sealed class OneLanguageTextAnalyzerTests
     [Test]
     public async Task SetsAndGeneratedContract_ShouldReportNothing()
     {
-        // Arrange & Act: the generated class calls GeneratedCode.CreateResourceText, which is what that is for.
+        // Arrange & Act: the generated class calls GeneratedCode.CreateSetText, which is what that is for.
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync($$"""
             {{Header}}
 
-            public partial class ShopTranslationsEN : ITranslationSet
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
             {
                 public string Checkout => "Checkout";
             }
 
-            public sealed class ShopTranslationsNL : IShopTranslations
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
             {
                 public string Checkout => "Afrekenen";
             }
@@ -206,7 +232,7 @@ public sealed class OneLanguageTextAnalyzerTests
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync(Member(""), (outputPath, razorOutput));
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC011");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC500");
     }
 
     [Test]
@@ -266,6 +292,50 @@ public sealed class OneLanguageTextAnalyzerTests
             public static class Texts
             {
                 public static LocalizableText Title { get; } = "Orders";
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task InlineText_InAssemblyWithoutLanguages_ShouldReportLOC100()
+    {
+        // Arrange & Act: without [assembly: SupportedLanguages] the generator writes no LocalizableText.Inline, and the
+        // compiler only says that the method doesn't exist (CS0117).
+        var diagnostics = await GeneratorTestHelper.AnalyzeAsync("""
+            using CodeChops.Idioma;
+
+            namespace TestApp;
+
+            public static class Texts
+            {
+                public static LocalizableText Title => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+            }
+            """);
+
+        // Assert
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC100");
+        diagnostic.GetMessage().ShouldBe("LocalizableText.Inline takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.");
+    }
+
+    [Test]
+    public async Task InlineOfAnotherType_InAssemblyWithoutLanguages_ShouldNotBeReported()
+    {
+        // Arrange & Act
+        var diagnostics = await GeneratorTestHelper.AnalyzeAsync("""
+            namespace TestApp;
+
+            public static class Markup
+            {
+                public static string Inline(string text) => text;
+            }
+
+            public static class Texts
+            {
+                public static string Title => Markup.Inline("Orders");
             }
             """);
 

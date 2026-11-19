@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using CodeChops.Idioma.Internals;
 
 namespace CodeChops.Idioma.Tests;
@@ -13,17 +12,17 @@ namespace CodeChops.Idioma.Tests;
 public sealed class LocalizableTextJsonConverterTests
 {
     #region Fixture
-    private interface IJsonTranslations : ITranslationSet
+    private interface IJsonLocalization : ILocalizationSet
     {
         string Greeting { get; }
     }
 
-    private class JsonTranslationsEN : IJsonTranslations
+    private class JsonLocalizationEn : IJsonLocalization
     {
         public virtual string Greeting => "Hello";
     }
 
-    private sealed class JsonTranslationsNL : IJsonTranslations
+    private sealed class JsonLocalizationNl : IJsonLocalization
     {
         public string Greeting => "Hallo";
     }
@@ -31,7 +30,7 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// An app's rewording of the English set.
     /// </summary>
-    private sealed class JsonRewordedTranslationsEN : JsonTranslationsEN
+    private sealed class JsonRewordedLocalizationEn : JsonLocalizationEn
     {
         public override string Greeting => "Hi";
     }
@@ -39,37 +38,55 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// A British set that keeps the English wording.
     /// </summary>
-    private sealed class JsonBritishTranslations : JsonTranslationsEN, ITranslationSet
+    private sealed class JsonBritishLocalization : JsonLocalizationEn, ILocalizationSet
     {
-        string ITranslationSet.LanguageCode => "en-GB";
+        string ILocalizationSet.LanguageCode => "en-GB";
     }
 
     /// <summary>
     /// A Belgian set that spells its language in another letter case than culture names have.
     /// </summary>
-    private sealed class JsonBelgianTranslations : IJsonTranslations
+    private sealed class JsonBelgianLocalization : IJsonLocalization
     {
-        string ITranslationSet.LanguageCode => "NL-be";
+        string ILocalizationSet.LanguageCode => "NL-be";
 
         public string Greeting => "Dag";
     }
 
-    private sealed class JsonTranslationsDE : IJsonTranslations
+    private sealed class JsonLocalizationDe : IJsonLocalization
     {
         public string Greeting => "Hallo zusammen";
+    }
+
+    private interface IJsonCountedLocalization : ILocalizationSet
+    {
+        string Items(int count);
+    }
+
+    private class JsonCountedLocalizationEn : IJsonCountedLocalization
+    {
+        public virtual string Items(int count) => $"{count} items";
+    }
+
+    /// <summary>
+    /// An app's rewording of the English set of a text that takes values.
+    /// </summary>
+    private sealed class JsonRewordedCountedLocalizationEn : JsonCountedLocalizationEn
+    {
+        public override string Items(int count) => $"{count} things";
     }
 
     /// <summary>
     /// A set of another contract, whose language the texts of this contract have no wording for.
     /// </summary>
-    private sealed class JsonOtherTranslationsDE : ITranslationSet;
+    private sealed class JsonOtherLocalizationDe : ILocalizationSet;
 
     /// <summary>
     /// A set for Traditional Chinese, the parent culture of <c>zh-TW</c>, which is no prefix of that name.
     /// </summary>
-    private class JsonTraditionalChineseTranslations : IJsonTranslations, ITranslationSet
+    private class JsonTraditionalChineseLocalization : IJsonLocalization, ILocalizationSet
     {
-        string ITranslationSet.LanguageCode => "zh-Hant";
+        string ILocalizationSet.LanguageCode => "zh-Hant";
 
         public virtual string Greeting => "你好";
     }
@@ -77,20 +94,20 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// A Taiwanese set that keeps the Traditional Chinese wording.
     /// </summary>
-    private sealed class JsonTaiwaneseTranslations : JsonTraditionalChineseTranslations, ITranslationSet
+    private sealed class JsonTaiwaneseLocalization : JsonTraditionalChineseLocalization, ILocalizationSet
     {
-        string ITranslationSet.LanguageCode => "zh-TW";
+        string ILocalizationSet.LanguageCode => "zh-TW";
     }
 
     /// <summary>
     /// An app's rewording of the Traditional Chinese set.
     /// </summary>
-    private sealed class JsonRewordedTraditionalChineseTranslations : JsonTraditionalChineseTranslations
+    private sealed class JsonRewordedTraditionalChineseLocalization : JsonTraditionalChineseLocalization
     {
         public override string Greeting => "哈囉";
     }
 
-    private static ResourceText Greeting { get; } = ResourceText.Create<IJsonTranslations>("Json.Greeting", t => t.Greeting, new JsonTranslationsEN());
+    private static LocalizableText Greeting { get; } = LocalizableText.Create<IJsonLocalization>("Json.Greeting", t => t.Greeting, new JsonLocalizationEn());
 
     private static LocalizableText Inline { get; } = LocalizableText.FromGeneratedCode("Checkout", ("en", "Checkout"), ("nl", "Afrekenen"));
 
@@ -99,13 +116,25 @@ public sealed class LocalizableTextJsonConverterTests
     /// <summary>
     /// What the converter writes for a text, given the sets of a registry instead of those of the whole app.
     /// </summary>
-    private static string Write(LocalizableText text, TranslationsRegistry registry)
+    private static string Write(LocalizableText text, LocalizationRegistry registry)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
             LocalizableTextJsonConverter.Write(writer, text, registry);
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// Asserts what a text holds, which equality no longer tells: a text compares by the wording it shows.
+    /// </summary>
+    private static void ShouldHold(LocalizableText? text, string? key, string defaultText, params (string Language, string Wording)[] translations)
+    {
+        text.ShouldNotBeNull();
+        text.Key.ShouldBe(key);
+        text.Contract.ShouldBeNull();
+        text.DefaultText.ShouldBe(defaultText);
+        text.TranslationsByLanguage.Select(static pair => (pair.Key, pair.Value)).ShouldBe(translations, ignoreOrder: true);
     }
     #endregion
 
@@ -130,22 +159,22 @@ public sealed class LocalizableTextJsonConverterTests
 
         // Assert
         text.ShouldBe(Inline);
-        text.ShouldNotBeOfType<ResourceText>();
+        ShouldHold(text, key: null, Inline.DefaultText, [.. Inline.TranslationsByLanguage.Select(static pair => (pair.Key, pair.Value))]);
         text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Afrekenen");
         text.ToString(CultureInfo.GetCultureInfo("en-US"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Checkout");
     }
 
     [Test]
-    public Task Write_ResourceText_ShouldWriteKeyAndWordingOfEveryLanguageWithASet()
+    public Task Write_TextOfASet_ShouldWriteKeyAndWordingOfEveryLanguageWithASet()
     {
         // Arrange: the English set reworded, a British set keeping the English wording, a Dutch set, and a German set of
         // another contract.
-        var registry = TranslationsRegistry.Create([
-            new JsonTranslationsEN(),
-            new JsonBritishTranslations(),
-            new JsonTranslationsNL(),
-            new JsonRewordedTranslationsEN(),
-            new JsonOtherTranslationsDE(),
+        var registry = LocalizationRegistry.Create([
+            new JsonLocalizationEn(),
+            new JsonBritishLocalization(),
+            new JsonLocalizationNl(),
+            new JsonRewordedLocalizationEn(),
+            new JsonOtherLocalizationDe(),
         ]);
 
         // Act
@@ -160,17 +189,17 @@ public sealed class LocalizableTextJsonConverterTests
     public void Write_ForRegistryWithLanguages_ShouldLeaveOutLanguagesTheyCannotShow()
     {
         // Arrange: an app declaring British English and Dutch, with sets for English, Belgian Dutch, and German.
-        var registry = TranslationsRegistry.Create(
-            [new JsonTranslationsEN(), new JsonBelgianTranslations(), new JsonTranslationsDE()],
+        var registry = LocalizationRegistry.Create(
+            [new JsonLocalizationEn(), new JsonBelgianLocalization(), new JsonLocalizationDe()],
             "en-GB", "nl");
 
         // Act
         var json = Write(Greeting, registry);
-        var text = JsonSerializer.Deserialize<ResourceText>(json, Options)!;
+        var text = JsonSerializer.Deserialize<LocalizableText>(json, Options)!;
 
         // Assert: the default language through the English set, English itself, and the region of Dutch; no German,
         // which a German user of this app never sees, and no Dutch, which no set words.
-        text.Translations.Keys.Order(StringComparer.Ordinal).ShouldBe(["en", "en-GB", "nl-BE"]);
+        text.TranslationsByLanguage.Keys.Order(StringComparer.Ordinal).ShouldBe(["en", "en-GB", "nl-BE"]);
         text.ToString(CultureInfo.GetCultureInfo("de-DE"), registry: null, appLanguages: ["en-GB", "nl"]).ShouldBe("Hello");
         text.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en-GB", "nl"]).ShouldBe("Dag");
     }
@@ -179,7 +208,7 @@ public sealed class LocalizableTextJsonConverterTests
     public void Write_ShouldWriteLanguagesAsCultureNamesWhateverCaseTheyWereGivenIn()
     {
         // Arrange: a set and a translation of the text itself, each spelling its language in its own way.
-        var registry = TranslationsRegistry.Create([new JsonTranslationsEN(), new JsonBelgianTranslations()]);
+        var registry = LocalizationRegistry.Create([new JsonLocalizationEn(), new JsonBelgianLocalization()]);
         var inline = LocalizableText.FromGeneratedCode("Checkout", ("EN", "Checkout"), ("zh-hans", "结账"));
 
         // Act
@@ -196,8 +225,8 @@ public sealed class LocalizableTextJsonConverterTests
     public void Write_RegionWhoseParentCultureIsNoPrefixOfItsName_ShouldWriteWordingAUserOfTheRegionSees()
     {
         // Arrange: a Taiwanese set that leaves the text as Traditional Chinese words it, and a rewording of that.
-        var registry = TranslationsRegistry.Create(
-            [new JsonTranslationsEN(), new JsonTraditionalChineseTranslations(), new JsonTaiwaneseTranslations(), new JsonRewordedTraditionalChineseTranslations()],
+        var registry = LocalizationRegistry.Create(
+            [new JsonLocalizationEn(), new JsonTraditionalChineseLocalization(), new JsonTaiwaneseLocalization(), new JsonRewordedTraditionalChineseLocalization()],
             "en", "zh-Hant");
         var taiwanese = CultureInfo.GetCultureInfo("zh-TW");
 
@@ -213,7 +242,7 @@ public sealed class LocalizableTextJsonConverterTests
     public void Write_DefaultLanguageWhoseParentCultureIsNoPrefixOfItsName_ShouldShowWhatAUserOfItSees()
     {
         // Arrange: an app whose default language is Taiwanese, with a set for Traditional Chinese alone.
-        var registry = TranslationsRegistry.Create([new JsonTranslationsEN(), new JsonTraditionalChineseTranslations()], "zh-TW");
+        var registry = LocalizationRegistry.Create([new JsonLocalizationEn(), new JsonTraditionalChineseLocalization()], "zh-TW");
         var taiwanese = CultureInfo.GetCultureInfo("zh-TW");
         var french = CultureInfo.GetCultureInfo("fr-FR");
 
@@ -232,8 +261,8 @@ public sealed class LocalizableTextJsonConverterTests
     public void Write_TextWithOneWording_ShouldWriteStringAndLeaveOutEmptyTranslations()
     {
         // Arrange
-        var registry = TranslationsRegistry.Create([]);
-        var declaredByKey = new ResourceText("Customer.Name", "Anna");
+        var registry = LocalizationRegistry.Create([]);
+        var declaredByKey = LocalizableText.Keyed("Customer.Name", "Anna");
 
         // Act
         var ofString = Write(new LocalizableText("Anna"), registry);
@@ -242,8 +271,24 @@ public sealed class LocalizableTextJsonConverterTests
         // Assert: each reads back as it was.
         ofString.ShouldBe("\"Anna\"");
         ofKey.ShouldBe("""{"key":"Customer.Name","defaultText":"Anna"}""");
-        JsonSerializer.Deserialize<LocalizableText>(ofString, Options).ShouldBe(new LocalizableText("Anna"));
-        JsonSerializer.Deserialize<LocalizableText>(ofKey, Options).ShouldBe(declaredByKey);
+        ShouldHold(JsonSerializer.Deserialize<LocalizableText>(ofString, Options), key: null, "Anna");
+        ShouldHold(JsonSerializer.Deserialize<LocalizableText>(ofKey, Options), key: "Customer.Name", "Anna");
+    }
+
+    [Test]
+    public void Write_TextWithValuesWithoutWordingPerLanguage_ShouldWriteDefaultWordingOfTheRegistry()
+    {
+        // Arrange: the registry rewords English but doesn't list it, so the text has no wording per language, and it
+        // takes values, so it has no key either.
+        var registry = LocalizationRegistry.Create([new JsonRewordedCountedLocalizationEn()], "nl");
+        var text = GeneratedCode.CreateSetText<IJsonCountedLocalization, int>("Json.Items", static (set, count) => set.Items(count), new JsonCountedLocalizationEn(), 3);
+
+        // Act
+        var json = Write(text, registry);
+
+        // Assert: the wording of the registry it was written with, as the object a text with more wordings is written
+        // as has, and not that of the default set.
+        json.ShouldBe("\"3 things\"");
     }
 
     [Test]
@@ -254,7 +299,7 @@ public sealed class LocalizableTextJsonConverterTests
     public void Read_JsonThatEndsBeforeTheText_ShouldThrow(string json)
     {
         // Arrange: part of a text with more JSON to come, which the serializer never hands a converter.
-        var converter = (JsonConverter<LocalizableText>)new LocalizableTextJsonConverter().CreateConverter(typeof(LocalizableText), Options);
+        var converter = new LocalizableTextJsonConverter();
 
         // Act & Assert
         Should.Throw<JsonException>(() =>
@@ -267,26 +312,24 @@ public sealed class LocalizableTextJsonConverterTests
     }
 
     [Test]
-    public void Deserialize_ResourceText_ShouldKeepKeyAndShowWordingOfSetsWithoutThem()
+    public void Deserialize_TextOfASet_ShouldKeepKeyAndShowWordingOfSetsWithoutThem()
     {
         // Arrange
-        var registry = TranslationsRegistry.Create([new JsonTranslationsEN(), new JsonTranslationsNL()]);
+        var registry = LocalizationRegistry.Create([new JsonLocalizationEn(), new JsonLocalizationNl()]);
         var json = Write(Greeting, registry);
 
-        // Act: read as the type written, and as the base type a component parameter declares.
-        var text = JsonSerializer.Deserialize<ResourceText>(json, Options)!;
-        var asBase = JsonSerializer.Deserialize<LocalizableText>(json, Options);
+        // Act
+        var text = JsonSerializer.Deserialize<LocalizableText>(json, Options)!;
 
         // Assert: no contract any more, so the wording comes from the text itself, with no sets at all.
         text.Key.ShouldBe("Json.Greeting");
         text.Contract.ShouldBeNull();
         text.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
         text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hello");
-        asBase.ShouldBe(text);
     }
 
     [Test]
-    public void Serialize_ResourceTextAsObject_ShouldWriteTextAsBlazorDoesForParameters()
+    public void Serialize_TextOfASetAsObject_ShouldWriteTextAsBlazorDoesForParameters()
     {
         // Arrange: Blazor writes the parameter values of a component that crosses a render mode as a list of objects,
         // so each value is written as its own type.
@@ -294,7 +337,7 @@ public sealed class LocalizableTextJsonConverterTests
 
         // Act
         var json = JsonSerializer.Serialize(parameters, Options);
-        var greeting = JsonSerializer.Deserialize<ResourceText>(JsonDocument.Parse(json).RootElement[0].GetRawText(), Options)!;
+        var greeting = JsonSerializer.Deserialize<LocalizableText>(JsonDocument.Parse(json).RootElement[0].GetRawText(), Options)!;
 
         // Assert
         json.ShouldContain("\"key\":\"Json.Greeting\"");
@@ -307,14 +350,12 @@ public sealed class LocalizableTextJsonConverterTests
     {
         // Arrange & Act & Assert
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("1", Options));
-        Should.Throw<JsonException>(() => JsonSerializer.Deserialize<ResourceText>("\"Checkout\"", Options));
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("""{"defaultText":null}""", Options));
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("""{"translations":{"nl":"Afrekenen"}}""", Options));
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("""{"defaultText":1}""", Options));
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("""{"defaultText":"Checkout","translations":{" ":"Afrekenen"}}""", Options));
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("""{"defaultText":"Checkout","translations":{"nl":null}}""", Options));
         Should.Throw<JsonException>(() => JsonSerializer.Deserialize<LocalizableText>("""{"key":" ","defaultText":"Checkout"}""", Options));
-        Should.Throw<JsonException>(() => JsonSerializer.Deserialize<ResourceText>("""{"defaultText":"Checkout"}""", Options));
     }
 
     [Test]
@@ -324,7 +365,7 @@ public sealed class LocalizableTextJsonConverterTests
         var text = JsonSerializer.Deserialize<LocalizableText>("\"Checkout\"", Options);
 
         // Assert
-        text.ShouldBe(new LocalizableText("Checkout"));
+        ShouldHold(text, key: null, "Checkout");
     }
 
     [Test]
@@ -334,8 +375,7 @@ public sealed class LocalizableTextJsonConverterTests
         var text = JsonSerializer.Deserialize<LocalizableText>("""{"key":null,"defaultText":"Checkout","translations":null}""", Options);
 
         // Assert
-        text.ShouldBe(new LocalizableText("Checkout"));
-        text.ShouldNotBeOfType<ResourceText>();
+        ShouldHold(text, key: null, "Checkout");
     }
 
     [Test]
@@ -346,7 +386,7 @@ public sealed class LocalizableTextJsonConverterTests
         var none = JsonSerializer.Deserialize<LocalizableText>("null", Options);
 
         // Assert
-        text.ShouldBe(new LocalizableText("Checkout"));
+        ShouldHold(text, key: null, "Checkout");
         none.ShouldBeNull();
     }
 

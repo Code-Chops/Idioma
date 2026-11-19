@@ -4,26 +4,32 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a wording that holds a placeholder of a format string, such as <c>{0}</c> (<c>LOC016</c>): in a text of a
+/// Reports a wording that holds a placeholder of a format string, such as <c>{0}</c> (<c>LOC502</c>): in a text of a
 /// set, in any language, and in a language of <c>LocalizableText.Inline</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nothing fills a placeholder in: a text shows its wording as it is written, so <c>"Hello, {0}!"</c> reaches the user
+/// Nothing fills a placeholder in. A text shows its wording as it is written, so <c>"Hello, {0}!"</c> reaches the user
 /// with its braces. A text takes a value as a method of its set, <c>Greeting(string name)</c>, and an inline text as a
 /// value written into every language, which the build then holds every language to.
 /// </para>
 /// <para>
-/// Read where the wording is written: a string in the body of the property or method, or in the argument of a
-/// language, also the text of an interpolated string, and for a property and an argument a constant they name. A value
-/// of an interpolated string is no placeholder, whatever it holds. Only a member that implements a text of a contract
-/// is read, so a helper of a set may hold what it likes.
+/// Read where the wording is written: the strings a property or method returns, or the argument of a language holds
+/// (<see cref="WrittenWording"/>), and for a property and an argument a constant they name. A string passed to a
+/// method isn't read, because the method may fill the placeholder in, as <c>string.Format("{0} items", count)</c>
+/// does. A value of an interpolated string is no placeholder, whatever it holds. Only a member that implements a text
+/// of a contract is read, so a helper of a set may hold what it likes. A public property is read too when the contract
+/// has a method by its name that the set doesn't implement. It's that text's wording in a language still written as a
+/// property, after the default language made the text a method.
+/// </para>
+/// <para>
+/// The IDE fix writes a parameter in place of each placeholder (<c>PlaceholderCodeFixProvider</c> in the code fixes).
 /// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
 {
-    public const string PlaceholderDiagnosticId = "LOC016";
+    public const string PlaceholderDiagnosticId = "LOC502";
 
     private const string SetAdvice = "Write the text as a method that takes the value, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'";
     private const string InlineAdvice = "Write the value into the wording of every language, as in '$\"Hello, {name}!\"'";
@@ -31,13 +37,14 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor PlaceholderRule = new(
         id: PlaceholderDiagnosticId,
         title: "Placeholder in the wording of a text",
-        messageFormat: "{0} holds the placeholder {1}, which nothing fills in: the user would see it as it is written. {2}.",
+        messageFormat: "{0} holds the placeholder {1}. Nothing fills it in, so users would see {1} as written. {2}.",
         category: "Design",
-        defaultSeverity: DiagnosticSeverity.Error,
+        defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A text shows its wording as it is written, so a placeholder of a format string, such as {0}, reaches the user with its braces. A text that takes a value is a method of its set, which every language implements with the same parameters, and an inline text takes the value in the wording of every language.");
+        description: "A text shows its wording as written, so a format-string placeholder such as {0} reaches the user with its braces. In a set, write a text with a value as a method, which every language implements with the same parameters. In an inline text, write the value into the wording of every language.",
+        helpLinkUri: PackageNames.HelpLink(PlaceholderDiagnosticId));
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(PlaceholderRule);
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [PlaceholderRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -51,17 +58,22 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
 
     private static void Start(CompilationStartAnalysisContext context)
     {
-        if (context.Compilation.GetTypeByMetadataName(PackageNames.TranslationSet) is not { } translations)
+        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizationSet) is not { } localizationSet)
             return;
 
-        context.RegisterOperationAction(AnalyzeInvocation, OperationKind.Invocation);
-        context.RegisterSyntaxNodeAction(c => AnalyzeMember(c, translations), SyntaxKind.PropertyDeclaration, SyntaxKind.MethodDeclaration);
+        // Read once per compilation, and not per argument: an app may write hundreds of inline texts.
+        var codes = SupportedLanguages.ReadCodes(context.Compilation.Assembly);
+
+        context.RegisterOperationAction(c => AnalyzeInvocation(c, codes), OperationKind.Invocation);
+        context.RegisterSyntaxNodeAction(c => AnalyzeMember(c, localizationSet), SyntaxKind.PropertyDeclaration, SyntaxKind.MethodDeclaration);
     }
 
     /// <summary>
     /// Reads the wording of each language of <c>LocalizableText.Inline</c>.
     /// </summary>
-    private static void AnalyzeInvocation(OperationAnalysisContext context)
+    /// <param name="context">The invocation.</param>
+    /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>
+    private static void AnalyzeInvocation(OperationAnalysisContext context, ImmutableArray<string> codes)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
@@ -76,10 +88,10 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
             if (argument.Parameter is not { } parameter)
                 continue;
 
-            var subject = $"The '{SupportedLanguages.FindLanguageOfParameter(parameter.Name, SupportedLanguages.ReadCodes(context.Compilation.Assembly))}' wording";
+            var subject = $"The '{SupportedLanguages.FindLanguageOfParameter(parameter.Name, codes)}' wording";
             var reported = false;
 
-            foreach (var (location, placeholder) in FindWrittenPlaceholders(argument.Value.Syntax))
+            foreach (var (location, placeholder) in FindWrittenPlaceholders(WrittenWording.FindStrings(argument.Value.Syntax as ExpressionSyntax)))
             {
                 reported = true;
                 context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, InlineAdvice));
@@ -94,23 +106,16 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// Reads the wording of a property or method of a set that implements a text of a contract.
     /// </summary>
-    private static void AnalyzeMember(SyntaxNodeAnalysisContext context, INamedTypeSymbol translations)
+    private static void AnalyzeMember(SyntaxNodeAnalysisContext context, INamedTypeSymbol localizationSet)
     {
         var declaration = (MemberDeclarationSyntax)context.Node;
 
-        // Where the wording is written: not the attributes or the parameters of the member, which may hold a string too.
-        SyntaxNode?[] bodies = declaration switch
-        {
-            PropertyDeclarationSyntax property => [property.ExpressionBody, property.Initializer, property.AccessorList],
-            MethodDeclarationSyntax method => [method.ExpressionBody, method.Body],
-            _ => [],
-        };
-
+        // By its shape first, which binds nothing: a method without a body returns no wording.
         if (!OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree)
-            || bodies.All(static body => body is null)
+            || declaration is MethodDeclarationSyntax { ExpressionBody: null, Body: null }
             || context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not { IsStatic: false, ContainingType: { TypeKind: TypeKind.Class } set } member
-            || !set.AllInterfaces.Contains(translations, SymbolEqualityComparer.Default)
-            || !ImplementsText(member, set, translations))
+            || !set.AllInterfaces.Contains(localizationSet, SymbolEqualityComparer.Default)
+            || !ContractTexts.ImplementsText(member, set, localizationSet))
         {
             return;
         }
@@ -119,16 +124,12 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
         var subject = $"'{set.Name}.{member.Name.Substring(member.Name.LastIndexOf('.') + 1)}'";
         var reported = false;
 
-        foreach (var body in bodies)
+        // Where the wording is written: what the member returns, and not its attributes or its parameters, which may
+        // hold a string too.
+        foreach (var (location, placeholder) in FindWrittenPlaceholders(WrittenWording.FindStrings(declaration)))
         {
-            if (body is null)
-                continue;
-
-            foreach (var (location, placeholder) in FindWrittenPlaceholders(body))
-            {
-                reported = true;
-                context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, SetAdvice));
-            }
+            reported = true;
+            context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, SetAdvice));
         }
 
         // A constant the property returns, which is written elsewhere.
@@ -142,82 +143,13 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The placeholders written in a piece of code, each with where it is: in a string, or in the text of an
-    /// interpolated string, as it reads. One per string.
+    /// The placeholders written in the strings of a wording (<see cref="WrittenWording"/>), each with where it is: in a
+    /// string, or in the text of an interpolated string, as it reads. One per string.
     /// </summary>
-    private static IEnumerable<(Location Location, string Placeholder)> FindWrittenPlaceholders(SyntaxNode code)
+    private static IEnumerable<(Location Location, string Placeholder)> FindWrittenPlaceholders(IEnumerable<SyntaxNode> strings)
     {
-        foreach (var node in code.DescendantNodesAndSelf())
-        {
-            var text = node switch
-            {
-                LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.StringLiteralExpression) => literal.Token.ValueText,
-                InterpolatedStringTextSyntax part => MethodWording.ReadText(part),
-                _ => null,
-            };
-
-            if (text is not null && Placeholder.Find(text) is { } placeholder)
-                yield return (node.GetLocation(), placeholder);
-        }
-    }
-
-    /// <summary>
-    /// Whether a property or method of a set implements a text of a contract, or overrides the implementation of one:
-    /// explicitly, or as the member the set implements the text through.
-    /// </summary>
-    private static bool ImplementsText(ISymbol member, INamedTypeSymbol set, INamedTypeSymbol translations)
-    {
-        var explicitly = member switch
-        {
-            IPropertySymbol property => property.ExplicitInterfaceImplementations.CastArray<ISymbol>(),
-            IMethodSymbol method => method.ExplicitInterfaceImplementations.CastArray<ISymbol>(),
-            _ => ImmutableArray<ISymbol>.Empty,
-        };
-
-        if (!explicitly.IsEmpty)
-            return explicitly.Any(text => IsContract(text.ContainingType, translations));
-
-        if (member.DeclaredAccessibility is not Accessibility.Public)
-            return false;
-
-        // Asked of the set which member implements the text, and not told by the name alone.
-        foreach (var contract in set.AllInterfaces)
-        {
-            if (!IsContract(contract, translations))
-                continue;
-
-            foreach (var text in contract.GetMembers(member.Name))
-                if (IsOrOverrides(member, set.FindImplementationForInterfaceMember(text)))
-                    return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Whether a member is the one that implements a text, or overrides it: a set deriving from another names the
-    /// member of that set as the implementation, and its own member is what words the text.
-    /// </summary>
-    private static bool IsOrOverrides(ISymbol member, ISymbol? implementation)
-    {
-        for (var current = member; current is not null; current = current switch
-                 {
-                     IPropertySymbol property => property.OverriddenProperty,
-                     IMethodSymbol method => method.OverriddenMethod,
-                     _ => null,
-                 })
-        {
-            if (SymbolEqualityComparer.Default.Equals(current, implementation))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol translations)
-    {
-        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, translations)
-                         && @interface.AllInterfaces.Contains(translations, SymbolEqualityComparer.Default);
-        return isContract;
+        foreach (var written in strings)
+            if (Placeholder.Find(WrittenWording.Read(written)) is { } placeholder)
+                yield return (written.GetLocation(), placeholder);
     }
 }

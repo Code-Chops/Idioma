@@ -31,12 +31,12 @@ public sealed class TextParametersAnalyzerTests
 
         namespace ShopLibrary;
 
-        public partial class ShopTranslationsEN : ITranslationSet
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
         {
             public virtual string Invited(string host, string guest) => $"{host} invited {guest}";
         }
 
-        public class ShopTranslationsNL : IShopTranslations
+        public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
         {
             public virtual string Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd";
         }
@@ -48,18 +48,18 @@ public sealed class TextParametersAnalyzerTests
     private static string Sets(string dutch, string british = "") => $$"""
         {{Header}}
 
-        public partial class ShopTranslationsEN : ITranslationSet
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
         {
             public virtual string Invited(string host, string guest) => $"{host} invited {guest}";
             public virtual string ItemsInCart(int count, string shop) => $"{count} items in your cart at {shop}";
         }
 
-        public class ShopTranslationsNL : IShopTranslations
+        public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
         {
             {{dutch}}
         }
 
-        public class ShopTranslationsEnGB : ShopTranslationsEN
+        public class ShopLocalizationEnGb : ShopLocalizationEn
         {
             {{british}}
         }
@@ -74,7 +74,7 @@ public sealed class TextParametersAnalyzerTests
 
         public enum Salutation { Unknown, Madam, Sir }
 
-        public partial class GreetingTranslationsEN : ITranslationSet
+        public class GreetingLocalizationEn : ILocalizationSet, IGreetingLocalization
         {
             public virtual string Greeting(string name) => $"Hello, {name}!";
 
@@ -88,12 +88,12 @@ public sealed class TextParametersAnalyzerTests
             public virtual string Stock(int count) => count is 0 ? "Sold out" : count < 5 ? "Almost gone" : "In stock";
         }
 
-        public class GreetingTranslationsNL : IGreetingTranslations
+        public class GreetingLocalizationNl : ILocalizationSet, IGreetingLocalization
         {
             {{dutch}}
         }
 
-        public class GreetingTranslationsEnGB : GreetingTranslationsEN
+        public class GreetingLocalizationEnGb : GreetingLocalizationEn
         {
             {{british}}
         }
@@ -127,10 +127,10 @@ public sealed class TextParametersAnalyzerTests
     }
 
     [Test]
-    [Arguments("""public string Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd";""", "", "ShopTranslationsNL")]
-    [Arguments("""string IShopTranslations.Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd";""", "", "ShopTranslationsNL")]
-    [Arguments("""public string Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd";""", """public override string Invited(string guest, string host) => $"{host} has invited {guest}";""", "ShopTranslationsEnGB")]
-    public async Task SetNamingParametersTheOtherWayRound_ShouldReportLOC020AtEach(string dutch, string british, string set)
+    [Arguments("""public string Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd";""", "", "ShopLocalizationNl")]
+    [Arguments("""string IShopLocalization.Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd";""", "", "ShopLocalizationNl")]
+    [Arguments("""public string Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd";""", """public override string Invited(string guest, string host) => $"{host} has invited {guest}";""", "ShopLocalizationEnGb")]
+    public async Task SetNamingParametersTheOtherWayRound_ShouldReportLOC301AtEach(string dutch, string british, string set)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(
@@ -144,16 +144,16 @@ public sealed class TextParametersAnalyzerTests
         // default set's.
         diagnostics.Length.ShouldBe(2);
         diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == TextParametersAnalyzer.ParameterNamesDifferDiagnosticId);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC020");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC301");
         diagnostics.ShouldAllBe(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var first = diagnostics.OrderBy(static diagnostic => diagnostic.Location.SourceSpan.Start).First();
-        first.GetMessage().ShouldStartWith($"'{set}.Invited' names this parameter 'guest', and 'IShopTranslations.Invited' names it 'host'.");
+        first.GetMessage().ShouldStartWith($"'{set}.Invited' names this parameter 'guest', but 'IShopLocalization.Invited' names it 'host'.");
         first.Location.SourceTree!.ToString()[first.Location.SourceSpan.Start..].ShouldStartWith("guest, string host)");
     }
 
     [Test]
-    public async Task SetNamingOneParameterDifferently_ShouldReportLOC020AtThatParameter()
+    public async Task SetNamingOneParameterDifferently_ShouldReportLOC301AtThatParameter()
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets("""
@@ -163,7 +163,7 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.GetMessage().ShouldStartWith("'ShopTranslationsNL.ItemsInCart' names this parameter 'aantal', and 'IShopTranslations.ItemsInCart' names it 'count'.");
+        diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationNl.ItemsInCart' names this parameter 'aantal', but 'IShopLocalization.ItemsInCart' names it 'count'.");
         diagnostic.Location.SourceTree!.ToString()[diagnostic.Location.SourceSpan.Start..].ShouldStartWith("aantal, string shop)");
     }
 
@@ -176,7 +176,7 @@ public sealed class TextParametersAnalyzerTests
 
             namespace TestApp;
 
-            public sealed class ShopTranslationsDE : IShopTranslations
+            public sealed class ShopLocalizationDe : CodeChops.Idioma.ILocalizationSet, IShopLocalization
             {
                 public string Invited(string guest, string host) => $"{host} hat {guest} eingeladen";
             }
@@ -184,7 +184,7 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC020");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC301");
     }
 
     [Test]
@@ -229,12 +229,26 @@ public sealed class TextParametersAnalyzerTests
     }
 
     [Test]
-    [Arguments("""public string Greeting(string name) => "Hallo!";""", DutchDear, "", "GreetingTranslationsNL", "Greeting")]
-    [Arguments("""public string Greeting(string name) { return "Hallo!"; }""", DutchDear, "", "GreetingTranslationsNL", "Greeting")]
-    [Arguments("""string IGreetingTranslations.Greeting(string name) => "Hallo!";""", DutchDear, "", "GreetingTranslationsNL", "Greeting")]
-    [Arguments(DutchGreeting, """public string Dear(Salutation salutation, string name) => salutation is Salutation.Madam ? "Geachte mevrouw" : "Geachte klant";""", "", "GreetingTranslationsNL", "Dear")]
-    [Arguments(DutchGreeting, DutchDear, """public override string Greeting(string name) => "Hello there!";""", "GreetingTranslationsEnGB", "Greeting")]
-    public async Task SetLeavingOutValueTheDefaultWordingShows_ShouldReportLOC021AtItsParameter(string greeting, string dear, string british, string set, string text)
+    public async Task SetUsingValueOnlyInCondition_ShouldReportNothing()
+    {
+        // Arrange & Act: the English wording shows the count, and the Dutch one only chooses by it. Any use of a value
+        // counts, in a condition or in the wording.
+        var diagnostics = await AnalyzeAsync(Sets("""
+            public string Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd";
+            public string ItemsInCart(int count, string shop) => count is 1 ? $"Eén artikel bij {shop}" : $"Meer artikelen bij {shop}";
+            """));
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("""public string Greeting(string name) => "Hallo!";""", DutchDear, "", "GreetingLocalizationNl", "Greeting", "nl")]
+    [Arguments("""public string Greeting(string name) { return "Hallo!"; }""", DutchDear, "", "GreetingLocalizationNl", "Greeting", "nl")]
+    [Arguments("""string IGreetingLocalization.Greeting(string name) => "Hallo!";""", DutchDear, "", "GreetingLocalizationNl", "Greeting", "nl")]
+    [Arguments(DutchGreeting, """public string Dear(Salutation salutation, string name) => salutation is Salutation.Madam ? "Geachte mevrouw" : "Geachte klant";""", "", "GreetingLocalizationNl", "Dear", "nl")]
+    [Arguments(DutchGreeting, DutchDear, """public override string Greeting(string name) => "Hello there!";""", "GreetingLocalizationEnGb", "Greeting", "en-GB")]
+    public async Task SetLeavingOutValueTheDefaultWordingShows_ShouldReportLOC302AtItsParameter(string greeting, string dear, string british, string set, string text, string language)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Greetings(
@@ -249,9 +263,9 @@ public sealed class TextParametersAnalyzerTests
         // default set's, and whatever shape its body has.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(TextParametersAnalyzer.ValueLeftOutDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC021");
+        diagnostic.Id.ShouldBe("LOC302");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldStartWith($"'{set}.{text}' does not use its parameter 'name', which the default wording of 'IGreetingTranslations.{text}' shows.");
+        diagnostic.GetMessage().ShouldBe($"'{set}.{text}' doesn't use its parameter 'name', but the default wording of 'IGreetingLocalization.{text}' shows it. Use 'name' in every language, or users of '{language}' won't see it.");
         diagnostic.Location.SourceTree!.ToString()[diagnostic.Location.SourceSpan.Start..].ShouldStartWith("name)");
     }
 
@@ -266,7 +280,7 @@ public sealed class TextParametersAnalyzerTests
             """));
 
         // Assert
-        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC020", "LOC021"], ignoreOrder: true);
+        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC301", "LOC302"], ignoreOrder: true);
     }
 
     [Test]
@@ -278,7 +292,7 @@ public sealed class TextParametersAnalyzerTests
 
             namespace TestApp;
 
-            public sealed class ShopTranslationsDE : IShopTranslations
+            public sealed class ShopLocalizationDe : CodeChops.Idioma.ILocalizationSet, IShopLocalization
             {
                 public string Invited(string host, string guest) => $"{host} hat jemanden eingeladen";
             }
@@ -286,8 +300,31 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC021");
-        diagnostic.GetMessage().ShouldStartWith("'ShopTranslationsDE.Invited' does not use its parameter 'guest', which the default wording of 'IShopTranslations.Invited' shows.");
+        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.GetMessage().ShouldBe("'ShopLocalizationDe.Invited' doesn't use its parameter 'guest', but the default wording of 'IShopLocalization.Invited' shows it. Use 'guest' in every language, or users of 'de' won't see it.");
+    }
+
+    [Test]
+    public async Task SetWhoseLanguageTheBuildCannotRead_ShouldReportLOC302WithoutNamingIt()
+    {
+        // Arrange & Act: the German set's LanguageCode is no constant, so only the running app knows its language.
+        var diagnostics = await AnalyzeAsync("""
+            using ShopLibrary;
+
+            namespace TestApp;
+
+            public sealed class GermanShopLocalization : CodeChops.Idioma.ILocalizationSet, IShopLocalization
+            {
+                string CodeChops.Idioma.ILocalizationSet.LanguageCode => System.Environment.GetEnvironmentVariable("SHOP_LANGUAGE") ?? "de";
+
+                public string Invited(string host, string guest) => $"{host} hat jemanden eingeladen";
+            }
+            """, ShopLibrary);
+
+        // Assert
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.GetMessage().ShouldEndWith("Use 'guest' in every language, or users of that language won't see it.");
     }
 
     [Test]
@@ -300,7 +337,7 @@ public sealed class TextParametersAnalyzerTests
             {{DutchStock}}
             """) + """
 
-            public abstract class GermanBase : IGreetingTranslations
+            public abstract class GermanBase : CodeChops.Idioma.ILocalizationSet, IGreetingLocalization
             {
                 public abstract string Greeting(string name);
                 public string Dear(Salutation salutation, string name) => $"Hallo {name}";

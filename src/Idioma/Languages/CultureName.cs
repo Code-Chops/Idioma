@@ -1,35 +1,39 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// What a language code must look like, and how it is written: a culture name such as <c>en</c>, <c>en-GB</c>, or
-/// <c>zh-Hans</c>.
+/// The rules for a language code and how it's written. A language code is a culture name, such as <c>en</c>,
+/// <c>en-GB</c>, or <c>zh-Hans</c>. This class checks a code and writes it in the letter case that culture names use.
 /// </summary>
 internal static class CultureName
 {
-    // Far more than the languages of an app and its libraries; a code beyond it is looked up every time, so that codes
-    // from outside (the languages of a text read from JSON) cannot grow this without end.
+    // Far more than the languages of an app and its libraries, which are the only codes passed in today. A code beyond
+    // it is looked up every time, so a caller that passes codes from outside can't grow Cultures without end. That
+    // doesn't cap memory with ICU, because CultureInfo.GetCultureInfo keeps every culture it creates.
     private const int MaxCulturesKept = 1024;
 
     /// <summary>
-    /// Per code, its culture, or <see langword="null"/> where this machine has none. Kept because a code without a
-    /// culture costs an exception to find out, and under invariant globalization that is every code.
+    /// The culture of each code, or <see langword="null"/> for a code without one. The cultures are kept, because
+    /// finding out that a code has no culture throws an exception. Under invariant globalization, that's every code.
     /// </summary>
     private static ConcurrentDictionary<string, CultureInfo?> Cultures { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Whether a code looks like a culture name: a first part of two to eight ASCII letters, and further parts of one
-    /// to eight ASCII letters or digits, separated by hyphens.
+    /// Returns whether a code is a valid language code. The parts are separated by hyphens. The first part must be two
+    /// to eight ASCII letters. Each later part must be one to eight ASCII letters or digits.
     /// </summary>
-    // The rule the build applies to [assembly: SupportedLanguages] (LOC010), so that a code the build accepts is one
+    // The rule the build applies to [assembly: SupportedLanguages] (LOC101), so that a code the build accepts is one
     // the registry accepts. Not checked against the cultures of this machine: under invariant globalization only the
     // invariant culture exists, and a set for nl must still register there.
     public static bool IsValid(ReadOnlySpan<char> code)
     {
         var isFirst = true;
 
-        foreach (var range in code.Split('-'))
+        // Part by part through IndexOf, not Split. The framework holds no compiled Split over char, and ReadyToRun can't
+        // compile it into this library, so it cost every app four JIT-compiled methods at its first registration.
+        while (true)
         {
-            var part = code[range];
+            var hyphen = code.IndexOf('-');
+            var part = hyphen < 0 ? code : code[..hyphen];
 
             if (part.Length is 0 or > 8 || (isFirst && part.Length < 2))
                 return false;
@@ -38,16 +42,21 @@ internal static class CultureName
                 if (!(isFirst ? Char.IsAsciiLetter(character) : Char.IsAsciiLetterOrDigit(character)))
                     return false;
 
+            if (hyphen < 0)
+                return true;
+
+            code = code[(hyphen + 1)..];
             isFirst = false;
         }
-
-        return true;
     }
 
     /// <summary>
-    /// The culture a code names, or <see langword="null"/> when the code is no culture name or this machine has no
-    /// such culture, as under invariant globalization.
+    /// Returns the culture a code names, or <see langword="null"/>. The result is <see langword="null"/> when the code
+    /// isn't valid. It's also <see langword="null"/> under invariant globalization, where only the invariant culture
+    /// exists.
     /// </summary>
+    /// <exception cref="ArgumentException">When <paramref name="code"/> is null, empty, or white space.</exception>
+    // With ICU, nearly every valid code has a culture, even a made-up one such as qq or nl-US.
     public static CultureInfo? FindCulture(string code)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
@@ -71,11 +80,16 @@ internal static class CultureName
     }
 
     /// <summary>
-    /// A code in the letter case culture names are written in: the language in lower case, each later part of four
-    /// letters capitalized, as a script is, each later part of two letters in upper case, as a region is, and every
-    /// other part in lower case (<c>ZH-hans-cn</c> gives <c>zh-Hans-CN</c>). What follows a part of one character, an
-    /// extension or private use, is all in lower case (<c>EN-ca-X-CA</c> gives <c>en-CA-x-ca</c>). A code that is not
-    /// valid is not refused: its parts are cased the same way.
+    /// Returns a code in the letter case that culture names use, so <c>ZH-hans-cn</c> becomes <c>zh-Hans-CN</c>. Each
+    /// part is cased as follows:
+    /// <list type="bullet">
+    /// <item>The language is lower case.</item>
+    /// <item>Each later part of four letters is capitalized, as a script is.</item>
+    /// <item>Each later part of two letters is upper case, as a region is.</item>
+    /// <item>Every other part is lower case.</item>
+    /// </list>
+    /// Every part after a part of one character, such as an extension or private use, is lower case. So
+    /// <c>EN-ca-X-CA</c> becomes <c>en-CA-x-ca</c>. A code that isn't valid is still cased, not refused.
     /// </summary>
     // The letter case RFC 5646 (section 2.1.1) recommends, and not always that of CultureInfo.Name, which depends on
     // the machine: with ICU a variant is in upper case (ca-ES-VALENCIA).
@@ -89,10 +103,13 @@ internal static class CultureName
 
         var isFirst = true;
         var isAfterSingleCharacter = false;
+        var start = 0;
 
-        foreach (var range in code.AsSpan().Split('-'))
+        // Part by part through IndexOf, for the reason IsValid gives. A code that ends in a hyphen ends in an empty part.
+        while (start <= code.Length)
         {
-            var (start, length) = range.GetOffsetAndLength(code.Length);
+            var hyphen = code.IndexOf('-', start);
+            var length = (hyphen < 0 ? code.Length : hyphen) - start;
             var part = code.AsSpan(start, length);
             var target = buffer.Slice(start, length);
 
@@ -115,9 +132,13 @@ internal static class CultureName
 
             isFirst = false;
             isAfterSingleCharacter |= length is 1;
+            start += length + 1;
         }
 
-        var result = buffer.SequenceEqual(code) ? code : new string(buffer);
+        var result = buffer.SequenceEqual(code)
+            ? code
+            : new string(buffer);
+
         return result;
     }
 }

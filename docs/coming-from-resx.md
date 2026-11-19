@@ -1,53 +1,65 @@
 # Coming from resx
 
-With resx files and `IStringLocalizer`, a text is a string key in an XML file per language. Here it is a property in a C# class per language, or a method for a text that takes values, so what was a lookup at run time is a name the compiler checks. This page maps one to the other, shows how to move a resource file, and how a resource file can still override a wording.
+With resx files and `IStringLocalizer`, a text is a string key in an XML file per language. With Idioma, it's a property in a C# class per language, or a method for a text that takes values. So a lookup at runtime becomes a name the compiler checks. This page maps one to the other, shows how to move a resource file, and shows how a resource file can still override a wording.
 
-Other subjects have a page of their own: [how Idioma works](how-it-works.md), [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), and [what the build rejects](build-errors.md).
+Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
 
 ## What becomes what
 
 | With resx                                                          | With Idioma                                                                     |
 |--------------------------------------------------------------------|---------------------------------------------------------------------------------|
-| `Shop.resx`, the default language                                  | `ShopTranslationsEN`, the set of the default language                           |
-| `Shop.nl.resx`                                                     | `ShopTranslationsNL`                                                            |
+| `Shop.resx`, the default language                                  | `ShopLocalizationEn`, the set of the default language                           |
+| `Shop.nl.resx`                                                     | `ShopLocalizationNl`                                                            |
 | An entry, `<data name="Checkout">`                                 | A property, `public string Checkout => "Checkout";`                             |
-| `localizer["Checkout"]`, or `Shop.Checkout` of the generated class | `ShopTranslations.Checkout`                                                     |
-| `localizer["Greeting", customer.Name]`, with `{0}` in the entry    | `ShopTranslations.Greeting(customer.Name)`, a method with a parameter per value |
+| `localizer["Checkout"]`, or `Shop.Checkout` of the generated class | `ShopLocalization.Checkout`                                                     |
+| `localizer["Greeting", customer.Name]`, with a `{0}` placeholder   | `ShopLocalization.Greeting(customer.Name)`, a method with a parameter per value |
 | `AddLocalization()` and an injected `IStringLocalizer<Shop>`       | Nothing to register or inject                                                   |
-| A mistyped key shows as the key itself                             | A mistyped name does not compile                                                |
-| An entry missing from `Shop.nl.resx` shows in the default language | A text missing from `ShopTranslationsNL` does not compile                       |
+| A mistyped key shows as the key itself                             | A mistyped name doesn't compile                                                 |
+| An entry missing from `Shop.nl.resx` falls back to the default     | A text missing from `ShopLocalizationNl` doesn't compile                        |
 | A satellite assembly per language                                  | Every language compiled into your assembly                                      |
 
 Both follow `CultureInfo.CurrentUICulture`, so the way your app sets the user's language stays as it is.
 
 ## Moving a resource file
 
-The two work side by side, so you can move one resource file at a time:
+You can move one resource file at a time, because the two work side by side:
 
 1. Declare your languages, as in the [getting started guide](../README.md#declare-your-languages).
-2. Write the set of your default language from the default resource file, with a property per entry. A key that is not a valid C# name, such as `checkout-button`, needs a new name. An entry with placeholders becomes a method with a parameter per value ([Pass values to a text](../README.md#pass-values-to-a-text)).
+2. Write the default-language set from the default resource file, with a property per entry. A key that isn't a valid C# name, such as `checkout-button`, needs a new name. An entry with placeholders becomes a method with a parameter per value ([Texts with parameters](../README.md#texts-with-parameters)).
 3. Write a set for each other language from its resource file. The build names every text a set lacks.
-4. Replace each lookup with the text, and delete the resource files. Once the injected localizer or the generated class is gone, the compiler points at every lookup that is left.
+4. Replace each lookup with the text, and delete the resource files. Once the injected localizer or the class resx generated is gone, the compiler points at every lookup that's left.
 
 ## Keeping a resource file as an override
 
-Each text of a set carries a key, which is its full name: `MyApp.Translations.ShopTranslations.Checkout` for `ShopTranslations.Checkout` in the namespace `MyApp.Translations`. The package itself never reads it. An app that still looks wording up through `IStringLocalizer`, to let a resource file or a database change a wording, asks it for that key first and shows the text for the rest:
+Each text of a set carries a key, which is its full name: `MyApp.Localization.ShopLocalization.Checkout` for `ShopLocalization.Checkout` in the namespace `MyApp.Localization`. The package itself never reads it. An app can still let a resource file or a database override a wording through `IStringLocalizer`. An extension method on the localizer asks it for the key first, and shows the text where there's no entry:
 
 ```csharp
-string Show(ResourceText text)
+public static class LocalizerExtensions
 {
-    var found = localizer[text.Key];
+    public static string Show(this IStringLocalizer localizer, LocalizableText text)
+    {
+        if (text.Key is null)
+            return text;
 
-    return found.ResourceNotFound ? text : found.Value;
+        var found = localizer[text.Key];
+
+        return found.ResourceNotFound ? text : found.Value;
+    }
 }
 ```
 
-`Show(ShopTranslations.Checkout)` gives the wording of the entry `MyApp.Translations.ShopTranslations.Checkout` where a resource file has one, and the text's own wording where none has.
+An inline text has no key, so `Show` gives its wording. To give a value of your own a key, create it with `LocalizableText.Keyed("Customer.Name", customer.Name)`. It shows `customer.Name` where no resource file has the entry.
 
-A text that takes values carries them as its `Arguments`, in the order of its parameters. Its entry writes them as placeholders, `{0} items in your cart at {1}` for `ItemsInCart(count, shop)`, and the app fills them in:
+`localizer.Show(ShopLocalization.Checkout)` gives the wording of the entry `MyApp.Localization.ShopLocalization.Checkout` where a resource file has one, and the text's own wording where none has.
+
+Call `Show` wherever a resource file may override a wording, also in Razor markup: `@localizer.Show(ShopLocalization.Checkout)`. A component gets the localizer with `@inject IStringLocalizer<Shop> localizer`. Markup such as `@ShopLocalization.Checkout` and string interpolation show a text through `ToString()`, which doesn't ask the localizer. So a wording shown that way ignores the resource file.
+
+A text that takes values carries them as its `Arguments`, in the order of its parameters. Its entry writes them as placeholders, `{0} items in your cart at {1}` for `ItemsInCart(count, shop)`, and the last line of `Show` fills them in:
 
 ```csharp
 return found.ResourceNotFound ? text : String.Format(found.Value, text.Arguments.AsSpan());
 ```
 
-Such an entry has one wording for every value, where the method can choose between wordings.
+Such a text loses its key when it travels through JSON, as a Blazor component parameter can. It's read back with its values filled in and without its `Arguments`, so `Show` gives that wording.
+
+Such an entry has one wording for every value. The method, by contrast, can choose between wordings.

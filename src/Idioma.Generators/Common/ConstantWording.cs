@@ -15,13 +15,31 @@ internal static class ConstantWording
     /// <param name="cancellationToken">Cancels the read.</param>
     public static string? Read(PropertyDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
-        if (FindExpression(declaration) is not { } expression
-            || semanticModel.GetConstantValue(expression, cancellationToken) is not { HasValue: true, Value: string wording })
-        {
+        if (FindExpression(declaration) is not { } expression)
             return null;
-        }
+
+        if (ReadString(expression) is { } written)
+            return written;
+
+        if (semanticModel.GetConstantValue(expression, cancellationToken) is not { HasValue: true, Value: string wording })
+            return null;
 
         return wording;
+    }
+
+    /// <summary>
+    /// The wording of an expression that is a string by itself, as it reads: <c>"Submit"</c>, a verbatim string, or a
+    /// raw one. <see langword="null"/> for any other expression, whose value only the compiler can tell.
+    /// </summary>
+    // The constant the compiler gives such a string is the value of its token, so nothing is bound to read it. The
+    // generators read every text of every set on every edit, and nearly every wording is written this way.
+    public static string? ReadString(ExpressionSyntax expression)
+    {
+        var written = expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression)
+            ? literal.Token.ValueText
+            : null;
+
+        return written;
     }
 
     /// <summary>

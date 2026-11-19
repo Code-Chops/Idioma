@@ -1,0 +1,20 @@
+<Project>
+
+  <!-- What both benchmark projects compile: the library from source, the texts, and the resx files with the same wording. -->
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/Idioma/Idioma.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../src/Idioma.Generators/Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)*.cs" LinkBase="Shared" />
+
+    <!-- Linked at the project's root, so their resources are named Benchmarks.Shop, which IStringLocalizer<Shop> looks
+         for. -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.resx" Link="Shop.resx" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.nl.resx" Link="Shop.nl.resx" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.en-GB.resx" Link="Shop.en-GB.resx" />
+  </ItemGroup>
+
+</Project>

@@ -4,19 +4,19 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Holds a text that takes values to the parameters of its contract, in every language: to their names
-/// (<c>LOC020</c>), and to the values the default wording shows (<c>LOC021</c>).
+/// (<c>LOC301</c>), and to the values the default wording shows (<c>LOC302</c>).
 /// </summary>
 /// <remarks>
 /// <para>
 /// The compiler holds a set to the types of the parameters and to their order, not to their names, so two parameters of
 /// one type can swap unnoticed: <c>Invited(string guest, string host)</c> in the Dutch set where the contract has
-/// <c>Invited(string host, string guest)</c> compiles, and words the host as the guest for the users of one language.
-/// Nor does it mind a parameter a method never uses: a Dutch <c>Greeting(string name) => "Hallo!"</c> compiles, and
-/// leaves the name out for the users of one language.
+/// <c>Invited(string host, string guest)</c> compiles, and words the host as the guest for Dutch users. Nor does it
+/// mind a parameter a method never uses: a Dutch <c>Greeting(string name) => "Hallo!"</c> compiles, and Dutch users
+/// don't see the name.
 /// </para>
 /// <para>
 /// A value counts as left out when the method does not use it at all, and only where the default wording shows it,
-/// which the generated contract records on the parameter (<c>[ShownValue]</c>). A value the default wording only
+/// which the generated contract records on the method (<c>[ShownValue]</c>). A value the default wording only
 /// chooses by, such as a form of address, may mean nothing in a language that makes no such distinction. Each method
 /// of a set that implements a text of a contract is checked, whether it implements the text by its name, implements
 /// it explicitly, or overrides the method of a set it derives from, also for a contract of another assembly.
@@ -25,28 +25,34 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
 {
-    public const string ParameterNamesDifferDiagnosticId = "LOC020";
-    public const string ValueLeftOutDiagnosticId = "LOC021";
+    public const string ParameterNamesDifferDiagnosticId = "LOC301";
+    public const string ValueLeftOutDiagnosticId = "LOC302";
 
     private static readonly DiagnosticDescriptor ParameterNamesDifferRule = new(
         id: ParameterNamesDifferDiagnosticId,
         title: "Parameter of a text named differently than in its contract",
-        messageFormat: "'{0}.{1}' names this parameter '{2}', and '{3}.{1}' names it '{4}'. Give the parameters of a text the same names in every language: otherwise two values of one type can swap unnoticed for the users of one language.",
+        messageFormat: "'{0}.{1}' names this parameter '{2}', but '{3}.{1}' names it '{4}'. Use the same parameter names in every language, so that two values of one type can't swap unnoticed.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A text that takes values is a method, which every language implements with the parameters of the contract. The compiler checks their types and their order, and not their names, so a set that declares two parameters of one type the other way round compiles, and words each value as the other.");
+        description: "A text with parameters is a method that every language implements with the parameters of the contract. The compiler checks their types and order, but not their names. So a set that declares two parameters of one type the other way round compiles, and swaps the two values.",
+        helpLinkUri: PackageNames.HelpLink(ParameterNamesDifferDiagnosticId));
 
+    // The code of an inline text that leaves a value out, which InlineTextValuesAnalyzer reports. The code is shared on
+    // purpose.
+#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
     private static readonly DiagnosticDescriptor ValueLeftOutRule = new(
         id: ValueLeftOutDiagnosticId,
         title: "Value of a text left out of its wording",
-        messageFormat: "'{0}.{1}' does not use its parameter '{2}', which the default wording of '{3}.{1}' shows. Use the value in the wording of every language: otherwise it is left out for the users of one language.",
+        messageFormat: "'{0}.{1}' doesn't use its parameter '{2}', but the default wording of '{3}.{1}' shows it. Use '{2}' in every language, or users of {4} won't see it.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A text that takes values is a method, which every language implements. The compiler does not mind a parameter a method never uses, so wording that leaves a value out compiles. A value the default wording shows must be used by every language; a value it only chooses a wording by, such as a form of address, may go unused in a language that makes no such distinction.");
+        description: "A text with parameters is a method that every language implements. The compiler allows a parameter a method never uses, so wording that leaves a value out compiles. Every language must use a value the default wording shows. A value the default wording only uses to choose between wordings, such as a form of address, may go unused in a language that makes no such distinction.",
+        helpLinkUri: PackageNames.HelpLink(ValueLeftOutDiagnosticId));
+#pragma warning restore RS1019
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(ParameterNamesDifferRule, ValueLeftOutRule);
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [ParameterNamesDifferRule, ValueLeftOutRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -59,17 +65,17 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
 
     private static void Start(CompilationStartAnalysisContext context)
     {
-        if (context.Compilation.GetTypeByMetadataName(PackageNames.TranslationSet) is not { } translations)
+        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizationSet) is not { } localizationSet)
             return;
 
         // A package without the attribute records no values to hold a set to.
         var shownValue = context.Compilation.GetTypeByMetadataName(PackageNames.ShownValueAttribute);
 
         // On the declaration, for its semantic model: whether a method uses a value is read from its body.
-        context.RegisterSyntaxNodeAction(c => AnalyzeMethod(c, translations, shownValue), SyntaxKind.MethodDeclaration);
+        context.RegisterSyntaxNodeAction(c => AnalyzeMethod(c, localizationSet, shownValue), SyntaxKind.MethodDeclaration);
     }
 
-    private static void AnalyzeMethod(SyntaxNodeAnalysisContext context, INamedTypeSymbol translations, INamedTypeSymbol? shownValue)
+    private static void AnalyzeMethod(SyntaxNodeAnalysisContext context, INamedTypeSymbol localizationSet, INamedTypeSymbol? shownValue)
     {
         var declaration = (MethodDeclarationSyntax)context.Node;
 
@@ -82,7 +88,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
                 ReturnType.SpecialType: SpecialType.System_String,
                 ContainingType: { TypeKind: TypeKind.Class } set,
             } method
-            || !set.AllInterfaces.Contains(translations, SymbolEqualityComparer.Default))
+            || !set.AllInterfaces.Contains(localizationSet, SymbolEqualityComparer.Default))
         {
             return;
         }
@@ -90,7 +96,10 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         // Read once, and only for a text that has a value to hold the method to.
         ImmutableArray<ISymbol>? used = null;
 
-        foreach (var text in FindImplementedTexts(method, set, translations))
+        // The language of the set as LOC302 names it: 'nl', or "that language" when the build can't read it.
+        string? language = null;
+
+        foreach (var text in FindImplementedTexts(method, set, localizationSet))
         {
             var reported = false;
 
@@ -106,7 +115,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
                     context.ReportDiagnostic(Diagnostic.Create(ParameterNamesDifferRule, location, set.Name, text.Name, parameter.Name, text.ContainingType.Name, expected.Name));
                 }
 
-                if (shownValue is null || !IsShown(expected, shownValue))
+                if (shownValue is null || !IsShown(text, expected, shownValue))
                     continue;
 
                 used ??= FindUsedValues(declaration, context.SemanticModel);
@@ -115,7 +124,13 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
                 if (used is { IsDefault: false } values && !values.Contains(parameter, SymbolEqualityComparer.Default))
                 {
                     reported = true;
-                    context.ReportDiagnostic(Diagnostic.Create(ValueLeftOutRule, location, set.Name, text.Name, parameter.Name, text.ContainingType.Name));
+
+                    // Read only for a value left out, as it may bind the classes the set derives from.
+                    language ??= LocalizationDiscovery.ReadLanguage(set, context.SemanticModel.Compilation, context.CancellationToken) is { } code
+                        ? $"'{code}'"
+                        : "that language";
+
+                    context.ReportDiagnostic(Diagnostic.Create(ValueLeftOutRule, location, set.Name, text.Name, parameter.Name, text.ContainingType.Name, language));
                 }
             }
 
@@ -126,7 +141,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// What a method reads in its body, or a default array for a method without a body, or with one that cannot be
+    /// What a method reads in its body, or a default array for a method without a body, or with one that can't be
     /// read, as code that does not compile.
     /// </summary>
     private static ImmutableArray<ISymbol> FindUsedValues(MethodDeclarationSyntax declaration, SemanticModel semanticModel)
@@ -143,13 +158,19 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether the contract records that the default wording shows a value.
+    /// Whether the contract records on a text that its default wording shows the value of a parameter.
     /// </summary>
-    private static bool IsShown(IParameterSymbol parameter, INamedTypeSymbol shownValue)
+    private static bool IsShown(IMethodSymbol text, IParameterSymbol parameter, INamedTypeSymbol shownValue)
     {
-        foreach (var attribute in parameter.GetAttributes())
-            if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, shownValue))
+        foreach (var attribute in text.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, shownValue)
+                && attribute.ConstructorArguments is [{ Value: string name }]
+                && String.Equals(name, parameter.Name, StringComparison.Ordinal))
+            {
                 return true;
+            }
+        }
 
         return false;
     }
@@ -158,10 +179,10 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     /// The texts of the contracts a set's method implements or overrides the implementation of: those it implements
     /// explicitly, else those the set implements through it.
     /// </summary>
-    private static IEnumerable<IMethodSymbol> FindImplementedTexts(IMethodSymbol method, INamedTypeSymbol set, INamedTypeSymbol translations)
+    private static IEnumerable<IMethodSymbol> FindImplementedTexts(IMethodSymbol method, INamedTypeSymbol set, INamedTypeSymbol localizationSet)
     {
         if (!method.ExplicitInterfaceImplementations.IsEmpty)
-            return method.ExplicitInterfaceImplementations.Where(text => IsContract(text.ContainingType, translations));
+            return method.ExplicitInterfaceImplementations.Where(text => IsContract(text.ContainingType, localizationSet));
 
         if (method.DeclaredAccessibility is not Accessibility.Public)
             return [];
@@ -169,7 +190,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         // Asked of the set which method implements the text, and not told by the name: a method of the same name with
         // other parameters implements nothing.
         var implementedTexts = set.AllInterfaces
-            .Where(@interface => IsContract(@interface, translations))
+            .Where(@interface => IsContract(@interface, localizationSet))
             .SelectMany(contract => contract.GetMembers(method.Name).OfType<IMethodSymbol>())
             .Where(text => IsOrOverrides(method, set.FindImplementationForInterfaceMember(text)));
 
@@ -177,7 +198,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether a method is the one that implements a text, or overrides it: a set deriving from another names the
+    /// Whether a method is the one that implements a text, or overrides it. A set deriving from another names the
     /// method of that set as the implementation, and its own method is what words the text.
     /// </summary>
     private static bool IsOrOverrides(IMethodSymbol method, ISymbol? implementation)
@@ -189,10 +210,9 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol translations)
+    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol localizationSet)
     {
-        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, translations)
-                         && @interface.AllInterfaces.Contains(translations, SymbolEqualityComparer.Default);
+        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, localizationSet) && PackageNames.IsContract(@interface);
         return isContract;
     }
 }

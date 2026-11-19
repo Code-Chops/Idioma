@@ -18,7 +18,7 @@ env:
 jobs:
   # Nothing is published that no app has consumed: an app is built against the packed package with the compiler of
   # .NET SDK 10, published with NativeAOT, and run, as in CI (ci.yml). CI runs on main and on pull requests only, so
-  # without this job a tag on a commit that CI never built would publish without it. A job of its own, which cannot
+  # without this job a tag on a commit that CI never built would publish without it. A job of its own, which can't
   # sign in to nuget.org: it installs a toolchain and restores more packages than the publish job does.
   aot-smoke:
     name: NativeAOT smoke test of the package
@@ -40,6 +40,11 @@ jobs:
 
       - name: Pack, publish a consumer with NativeAOT, and run it
         run: ./tests/Idioma.AotSmoke/run.sh
+
+      # A demo fetches the published package, so a demo written for a newer API fails for every visitor until that
+      # version is out. This shows that the demos run with the package as it is packed here.
+      - name: Run the demos against the package
+        run: ./tests/Idioma.Demos/run.sh
 
   publish:
     name: Test, pack, and publish

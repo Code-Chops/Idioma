@@ -1,60 +1,67 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// A text for users that follows their language, such as a button label or a validation message. Wherever you use
-/// it, in markup, in string interpolation, or as a <see cref="string"/>, it shows the wording for
-/// <see cref="CultureInfo.CurrentUICulture"/>.
+/// A text for users that follows their language, such as a button label or a validation message. It shows the wording
+/// for <see cref="CultureInfo.CurrentUICulture"/> wherever you use it: in markup, in string interpolation, or as a
+/// <see cref="string"/>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Start by declaring your languages, the default one first:
-/// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>. Then write each text in
-/// one of two ways. Either way, a text that lacks a language does not build:
+/// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>. A text that lacks one of
+/// them doesn't build. Write each text in one of two ways:
 /// </para>
 /// <list type="bullet">
 /// <item>Inline: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
-/// <item>In one class per language, for a library or a larger group of texts: see <see cref="ITranslationSet"/>.</item>
+/// <item>In one class per language, for a library or a larger group of texts (see <see cref="ILocalizationSet"/>).</item>
 /// </list>
 /// <para>
 /// For wording that differs in a region, list the region next to its language:
-/// <c>[assembly: SupportedLanguages("en", "nl", "en-GB")]</c>. Every text then needs British wording too: an inline
-/// text takes <c>enGB: "Colour"</c>, and a class per language gets a class for <c>en-GB</c>. British users see that
+/// <c>[assembly: SupportedLanguages("en", "nl", "en-GB")]</c>. Every text then needs British wording too. An inline
+/// text takes <c>enGb: "Colour"</c>, and a class per language gets a class for <c>en-GB</c>. British users see that
 /// wording, and other English users keep the <c>en</c> wording.
 /// </para>
 /// <para>
 /// A text shows the first wording it finds:
 /// </para>
 /// <list type="number">
-/// <item>The wording for the user's UI culture, or else for its parent culture: an <c>en</c> wording serves
+/// <item>The wording for the user's UI culture, or else for its parent culture. An <c>en</c> wording serves
 /// <c>en-US</c> and <c>en-GB</c> alike.</item>
-/// <item>The wording for your app's default language. A culture your app does not declare starts here, even for a
-/// library's text that has that culture's language, so no screen ends up in two languages.</item>
-/// <item>The wording for the text's own default language: that of the project that wrote it. This is its
-/// <see cref="DefaultText"/>, unless a registered <see cref="ITranslationSet">set</see> for that language rewords
+/// <item>The wording for your app's default language. A culture your app doesn't declare starts here, even for a
+/// library's text that has that culture's language. So no screen ends up in two languages.</item>
+/// <item>The wording for the text's own default language, that of the project that wrote it. This is its
+/// <see cref="DefaultText"/>, unless a registered <see cref="ILocalizationSet">set</see> for that language rewords
 /// it.</item>
 /// </list>
 /// <para>
 /// To show the wording for another culture, such as the language of an email's recipient, call
-/// <see cref="ToString(CultureInfo)"/>.
+/// <see cref="ToString(CultureInfo)"/>. An app that keeps the user's culture somewhere other than
+/// <see cref="CultureInfo.CurrentUICulture"/> sets <see cref="LocalizationRegistry.CurrentUICultureProvider"/>, and
+/// every text follows that instead.
 /// </para>
 /// <para>
-/// For a value inside the wording, write it into every language as you create the text:
-/// <c>LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a class per language such a text
-/// is a method that takes the value, <c>ShopTranslations.Greeting(customer.Name)</c>, which every language implements
-/// with the same parameters: see <see cref="ITranslationSet"/>.
+/// To put a value in the wording, write it into every language as you create the text:
+/// <c>LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a class per language, such a text
+/// is a method that takes the value, such as <c>ShopLocalization.Greeting(customer.Name)</c>. Every language
+/// implements it with the same parameters (see <see cref="ILocalizationSet"/>).
 /// </para>
 /// <para>
 /// A member that takes a text also takes a <see cref="string"/>, for a value that has no translations, such as a
 /// customer's name: <c>Title = customer.Name</c>. Wording you write as a string, such as <c>Title = "Orders"</c>, is a
-/// build error (<c>LOC011</c>), so a text cannot end up in one language by accident.
+/// build error (<c>LOC500</c>), so a text can't end up in one language by accident.
 /// </para>
 /// <para>
-/// To check what a text shows, compare it with a string: <c>text == "Afrekenen"</c>.
-/// <see cref="Equals(LocalizableText)"/> compares the texts themselves instead, whatever wording they show.
+/// A text equals anything that shows the same wording for the current UI culture: a string or another text. For a
+/// Dutch user, <c>text == "Afrekenen"</c> holds, and so does
+/// <c>text == LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. See <see cref="Equals(LocalizableText)"/>.
 /// </para>
 /// <para>
-/// A text survives JSON, such as a Blazor component parameter that crosses a render mode: it carries every wording it
-/// can show, so it still follows the user's language after it is read back.
+/// A text of a set also has a <see cref="Key"/>, its full name, for an app that looks texts up in resource files
+/// itself. To give a text of your own a key, create it with <see cref="Keyed"/>.
+/// </para>
+/// <para>
+/// A text survives JSON, such as a Blazor component parameter that crosses a render mode. It carries every wording it
+/// can show, so it still follows the user's language after it's read back.
 /// </para>
 /// </remarks>
 /// <example>
@@ -64,8 +71,7 @@ namespace CodeChops.Idioma;
 /// public static class ShopTexts
 /// {
 ///     public static LocalizableText Checkout { get; } = LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
-///     public static LocalizableText Greeting(string name) =>
-///         LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!");
+///     public static LocalizableText Greeting(string name) => LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!");
 /// }
 ///
 /// // For a user whose UI culture is nl-NL: "Afrekenen" and "Hallo, Anna!".
@@ -74,114 +80,202 @@ namespace CodeChops.Idioma;
 /// </code>
 /// </example>
 // The converter also keeps a text from JSON's default shape, which drops the translations on reading (their setter is
-// private) and cannot write a ResourceText at all (its contract is a Type).
+// private) and can't write a text of a set at all (its contract is a Type).
 [JsonConverter(typeof(Internals.LocalizableTextJsonConverter))]
-public partial record LocalizableText
+public sealed partial class LocalizableText : IEquatable<LocalizableText>
 {
     /// <summary>
-    /// The wording for the current UI culture: what markup (<c>@ShopTexts.Checkout</c>) and string interpolation show.
+    /// The wording for the current UI culture. Markup (<c>@ShopTexts.Checkout</c>) and string interpolation show it.
     /// </summary>
-    public sealed override string ToString()
+    /// <remarks>
+    /// <para>
+    /// The current UI culture is <see cref="CultureInfo.CurrentUICulture"/>, unless your app sets
+    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/>.
+    /// </para>
+    /// <para>
+    /// A text of a set that takes values, such as <c>ShopLocalization.Total(amount)</c>, formats them for
+    /// <see cref="CultureInfo.CurrentCulture"/>. Where the provider gives a culture, the text formats them for that
+    /// culture instead, because the thread's cultures then aren't the user's.
+    /// </para>
+    /// </remarks>
+    public override string ToString()
     {
         if (this.HasOnlyDefaultText)
             return this.DefaultText;
 
-        var registry = TranslationsRegistry.Current;
+        // A text among the values of a text being worded on this thread shows as that text does: for its culture, from
+        // its sets, and with the format it chose for values.
+        var wording = WordingScope.Current;
 
-        var text = this.FindText(CultureInfo.CurrentUICulture, registry, registry.AppLanguages);
+        // Shown by a property of a set that is worded for a culture asked for: this text shows for that culture too.
+        // The thread's cultures aren't that culture there. A text that takes values sets them, because its set's method
+        // runs in the culture it words.
+        if (wording.Followed is { } followed)
+        {
+            var followedRegistry = followed.Registry;
+
+            return this.TakesValues
+                ? this.ShowWithValues(followed.Culture, followedRegistry, followedRegistry.AppLanguages, wording.FindValuesCulture(followed.Culture))
+                : this.FindText(followed.Culture, followedRegistry, followedRegistry.AppLanguages);
+        }
+
+        if (wording.Culture is { } wordingCulture)
+            return this.FindText(wordingCulture, wording.Registry, wording.AppLanguages);
+
+        var registry = LocalizationRegistry.Current;
+
+        // A provider gives the user's culture where the thread's cultures aren't the user's, as on a server. So it also
+        // gives the format of the values. Without one, the thread's own cultures are the user's.
+        var providedCulture = LocalizationRegistry.CurrentUICultureProvider?.Invoke();
+        var culture = providedCulture ?? CultureInfo.CurrentUICulture;
+
+        if (!this.TakesValues)
+            return this.FindText(culture, registry, registry.AppLanguages);
+
+        var text = this.ShowWithValues(culture, registry, registry.AppLanguages, valuesCulture: providedCulture);
         return text;
     }
 
     /// <summary>
-    /// The wording shown when the text has none for the user's language: that of the default language, or the only
-    /// wording of a text without translations.
+    /// The wording for a given culture, instead of the one a text shows by default. By default that's the current UI
+    /// culture, which <see cref="LocalizationRegistry.CurrentUICultureProvider"/> can configure. Use this for a culture
+    /// such as the language of an email's recipient:
+    /// <c>ShopTexts.Checkout.ToString(CultureInfo.GetCultureInfo("nl"))</c>.
     /// </summary>
     /// <remarks>
-    /// A text of a set that takes values, such as <c>ShopTranslations.Greeting(customer.Name)</c>, words it with those
-    /// values each time it is read.
+    /// <para>
+    /// A culture without a wording falls back as the current UI culture does (see <see cref="LocalizableText"/>).
+    /// </para>
+    /// <para>
+    /// A text of a set that takes values, such as <c>ShopLocalization.Total(amount)</c>, is worded as for a user of the
+    /// culture. Its values are formatted for that culture too, so a date or a number reads as the recipient writes it.
+    /// A text among its values shows its wording for that culture. For the current UI culture, this gives what
+    /// <see cref="ToString()"/> gives, with the values formatted as it formats them.
+    /// </para>
     /// </remarks>
-    public string DefaultText => this._defaultText ?? this.WordDefaultText();
+    /// <param name="culture">The culture to get the wording for.</param>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    public string ToString(CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
 
-    // Null only for a text that words its default wording itself (WordDefaultText).
-    private readonly string? _defaultText;
+        var text = this.ToString(culture, LocalizationRegistry.Current);
+        return text;
+    }
+
+    /// <summary>
+    /// The wording for a culture, looked up in the sets of the given registry instead of those of the whole app. Use
+    /// it for a part of an app that keeps its own <see cref="ILocalizationSet">sets</see>.
+    /// </summary>
+    /// <remarks>
+    /// Create such a registry with
+    /// <see cref="LocalizationRegistry.Create(IEnumerable{ILocalizationSet})">LocalizationRegistry.Create</see>. The
+    /// languages you pass to it, not those of your app, decide which languages show and which one a culture without
+    /// wording gets. Without languages, the registry shows every language it has a set for. A text among the values of a
+    /// text that takes them is looked up in the same sets.
+    /// </remarks>
+    /// <param name="culture">The culture to get the wording for.</param>
+    /// <param name="registry">
+    /// The sets to look in, or <see langword="null"/> to use only the text's own translations, with your app's
+    /// languages.
+    /// </param>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    public string ToString(CultureInfo culture, LocalizationRegistry? registry)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        // Without a registry there are only the text's own translations, which are the app's: its languages decide.
+        var text = this.ToString(culture, registry, registry?.AppLanguages ?? LocalizationRegistry.SupportedLanguages);
+        return text;
+    }
+
+    /// <summary>
+    /// The wording for a culture, for the given app languages (the default first) instead of those of the registry or
+    /// the app.
+    /// </summary>
+    internal string ToString(CultureInfo culture, LocalizationRegistry? registry, ImmutableArray<string> appLanguages)
+    {
+        if (this.HasOnlyDefaultText)
+            return this.DefaultText;
+
+        if (!this.TakesValues)
+        {
+            // A property of a set may show another text, which then shows for this culture too, from the same sets.
+            // Without a registry, no set words the text but the one of its default language.
+            if (registry is null || !this.IsOfSet)
+                return this.FindText(culture, registry, appLanguages);
+
+            var lookup = registry.Resolve(culture);
+            using var followed = WordingScope.Follow(lookup);
+
+            return this.FindText(culture, registry, appLanguages, lookup);
+        }
+
+        var text = this.ShowWithValues(culture, registry, appLanguages, FindValuesCulture(culture));
+        return text;
+    }
+
+    /// <summary>
+    /// The wording shown when the text has none for the user's language. That's the wording of the text's own default
+    /// language, or the only wording of a text without translations.
+    /// </summary>
+    /// <remarks>
+    /// A text of a set asks the set of its default language for it each time it's read. A text that takes values, such
+    /// as <c>ShopLocalization.Greeting(customer.Name)</c>, is worded with those values. A text among them shows in the
+    /// default language too.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// When the set of the default language gives <see langword="null"/> as the wording. Return a string from it, such
+    /// as an empty one where a value is missing. Also when the text takes values and that set has no language code
+    /// (<c>LOC400</c>).
+    /// </exception>
+    public string DefaultText => this._defaultText ?? this.WordDefaultText();
+    private readonly string? _defaultText; // Null only for a text of a set, which words its default wording itself (WordDefaultText).
 
     // A text made from a plain string, or declared by key alone: without translations of its own and without a
     // contract no step of the order above can find it other wording, in any culture, so it need not walk them.
-    private bool HasOnlyDefaultText => this.TranslationPairs.Length is 0 && this is not ResourceText { Contract: not null };
+    private bool HasOnlyDefaultText => this.TranslationPairs.Length is 0 && this.Contract is null;
 
     /// <summary>
     /// A text with one wording for every culture, for a value that has no translations, such as a customer's name. You
-    /// rarely need this, as a <see cref="string"/> converts to a text by itself.
+    /// rarely need this, because a <see cref="string"/> converts to a text by itself.
     /// </summary>
     /// <remarks>
     /// In an assembly that declares two or more languages with
     /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, passing wording you write in the source is a
-    /// build error (<c>LOC011</c>): write <c>LocalizableText.Inline</c> instead.
+    /// build error (<c>LOC500</c>). Write <c>LocalizableText.Inline</c> instead.
     /// </remarks>
     /// <param name="defaultText">The wording every culture gets. It may be empty, as a value read at run time can be.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="defaultText"/> is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">
-    /// When a type of your own derives from <see cref="LocalizableText"/>: hold a text in a member of your type
-    /// instead.
-    /// </exception>
     public LocalizableText(string defaultText)
     {
         // Null alone: an empty or blank value read at run time, such as a customer's name, is a text too, and so is
         // empty wording passed to LocalizableText.Inline.
         ArgumentNullException.ThrowIfNull(defaultText);
 
-        this.ThrowIfDerived();
-
         this._defaultText = defaultText;
     }
 
     /// <summary>
-    /// A text that words its default wording when that is asked for (<see cref="WordDefaultText"/>), and not as it is
-    /// created: a <see cref="ResourceText"/> that takes values.
+    /// A text of a set, which words its default wording when that's asked for (<see cref="WordDefaultText"/>), not as
+    /// it's created.
     /// </summary>
-    private protected LocalizableText()
+    private LocalizableText(TextOrigin origin)
     {
-        this.ThrowIfDerived();
+        this.Origin = origin;
     }
 
     /// <summary>
-    /// The default wording of a text created without one.
+    /// A copy of a text, for a copy with other translations.
     /// </summary>
-    // Not kept once worded: the values in it are formatted for the culture of the moment, which the next reader may
-    // not share.
-    private protected virtual string WordDefaultText()
-    {
-        throw new InvalidOperationException($"{this.GetType()} was created without a default wording, and words none.");
-    }
-
-    /// <summary>
-    /// A copy of a text, as a <c>with</c> expression makes it. You never need to call this.
-    /// </summary>
-    /// <param name="original">The text to copy.</param>
-    /// <exception cref="NotSupportedException">
-    /// When a type of your own derives from <see cref="LocalizableText"/>: hold a text in a member of your type
-    /// instead.
-    /// </exception>
-    // Written out instead of left to the compiler for the check alone: a derived record can call the copy constructor
-    // of a record, which would otherwise be a way around the check of the constructor above.
-    protected LocalizableText(LocalizableText original)
+    private LocalizableText(LocalizableText original)
     {
         ArgumentNullException.ThrowIfNull(original);
 
-        this.ThrowIfDerived();
-
         this._defaultText = original._defaultText;
         this._translationPairs = original._translationPairs;
-        this._translations = original._translations;
-    }
-
-    // A record cannot be closed to other assemblies while its constructor stays public, and a derived text would break
-    // without a word: JSON reads the converter from the exact type, so it would be written in the default shape,
-    // without its translations, and fail to read back. Checked on the type, which costs two comparisons.
-    private void ThrowIfDerived()
-    {
-        if (this.GetType() != typeof(LocalizableText) && this.GetType() != typeof(ResourceText))
-            throw new NotSupportedException($"{this.GetType()} cannot derive from {nameof(LocalizableText)}: hold a {nameof(LocalizableText)} in a member instead.");
+        this._translationsByLanguage = original._translationsByLanguage;
+        this.Origin = original.Origin;
     }
 
     /// <summary>
@@ -193,18 +287,27 @@ public partial record LocalizableText
 
     #region Equality checks
     /// <summary>
-    /// Whether this text shows the given wording for the current UI culture: <c>text == "Afrekenen"</c> holds for a
-    /// Dutch user.
+    /// Whether two texts show the same wording for the current UI culture. See <see cref="Equals(LocalizableText)"/>.
+    /// </summary>
+    public static bool operator ==(LocalizableText? left, LocalizableText? right) => left is null ? right is null : left.Equals(right);
+
+    /// <summary>
+    /// Whether two texts show different wording for the current UI culture. See <see cref="Equals(LocalizableText)"/>.
+    /// </summary>
+    public static bool operator !=(LocalizableText? left, LocalizableText? right) => !(left == right);
+
+    /// <summary>
+    /// Whether this text shows the given wording for the current UI culture. For a Dutch user,
+    /// <c>text == "Afrekenen"</c> holds.
     /// </summary>
     /// <remarks>
-    /// The comparison is by character, so letter case counts. To compare two texts instead, whatever wording they
-    /// show, use <see cref="Equals(LocalizableText)"/>. A <see langword="null"/> text equals no wording, the empty
-    /// string included: to test for <see langword="null"/>, write <c>text is null</c>. A <see langword="null"/>
-    /// string compares as the empty string.
+    /// The comparison is by character, so letter case counts. <c>text.Equals("Afrekenen")</c> compares the same way. A
+    /// <see langword="null"/> text equals no wording, not even the empty string. To test for <see langword="null"/>,
+    /// write <c>text is null</c>. A <see langword="null"/> string compares as the empty string.
     /// </remarks>
-    // The last sentence is the price of the span, which cannot tell a null string from an empty one. An overload taking
+    // The last sentence is the price of the span, which can't tell a null string from an empty one. An overload taking
     // a string would tell them apart, and make text == null ambiguous.
-    public static bool operator ==(LocalizableText? left, ReadOnlySpan<char> right) => left is not null && left.ToString().AsSpan().SequenceEqual(right);
+    public static bool operator ==(LocalizableText? left, ReadOnlySpan<char> right) => left is not null && left.Equals(right);
 
     /// <summary>
     /// Whether this text shows another wording than the given one for the current UI culture. A
@@ -213,8 +316,8 @@ public partial record LocalizableText
     public static bool operator !=(LocalizableText? left, ReadOnlySpan<char> right) => !(left == right);
 
     /// <summary>
-    /// Whether this text shows the given wording for the current UI culture: <c>"Afrekenen" == text</c> holds for a
-    /// Dutch user. It compares as <c>text == "Afrekenen"</c> does.
+    /// Whether this text shows the given wording for the current UI culture. <c>"Afrekenen" == text</c> compares as
+    /// <c>text == "Afrekenen"</c> does, so it holds for a Dutch user.
     /// </summary>
     public static bool operator ==(ReadOnlySpan<char> left, LocalizableText? right) => right == left;
 
@@ -223,196 +326,89 @@ public partial record LocalizableText
     /// <see langword="null"/> text shows no wording, so this holds for it whatever the wording given.
     /// </summary>
     public static bool operator !=(ReadOnlySpan<char> left, LocalizableText? right) => !(right == left);
+
+    /// <summary>
+    /// Whether this text shows the given wording for the current UI culture. <c>text.Equals("Afrekenen")</c> compares
+    /// as <c>text == "Afrekenen"</c> does, so it holds for a Dutch user.
+    /// </summary>
+    /// <param name="wording">The wording to compare with. A <see langword="null"/> string compares as the empty string.</param>
+    // A span, like the operators: an overload taking a string would make text.Equals(null) ambiguous.
+    public bool Equals(ReadOnlySpan<char> wording) => this.ToString().AsSpan().SequenceEqual(wording);
+
+    /// <summary>
+    /// Whether this text shows the same wording as another text for the current UI culture. Comparing two texts with
+    /// <c>==</c> means the same.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the wording counts, so the key, the contract, and the values don't. For a Dutch user,
+    /// <c>ShopLocalization.Checkout</c> equals <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c> and a
+    /// text made from the string <c>"Afrekenen"</c>. For an English user, it equals only the first, because the second
+    /// shows <c>"Afrekenen"</c> to every user. So <c>texts.Contains(wording)</c> holds when one of the texts shows that
+    /// wording.
+    /// </para>
+    /// <para>
+    /// The answer follows the user's language, and so does <see cref="GetHashCode"/>. A <see cref="HashSet{T}"/> of
+    /// texts, or a <see cref="Dictionary{TKey,TValue}"/> keyed by them, works while the language stays the same. After
+    /// a switch, it can't find the texts it holds. Give a collection that outlives a switch, or that users of
+    /// different languages share, <see cref="ReferenceEqualityComparer.Instance"/>, so it tells texts apart by object.
+    /// </para>
+    /// </remarks>
+    public bool Equals(LocalizableText? other)
+    {
+        if (other is null)
+            return false;
+
+        if (ReferenceEquals(this, other))
+            return true;
+
+        var isEqual = String.Equals(this.ToString(), other.ToString(), StringComparison.Ordinal);
+        return isEqual;
+    }
+
+    /// <summary>
+    /// Whether this text shows the same wording for the current UI culture as another text or a string. See
+    /// <see cref="Equals(LocalizableText)"/>.
+    /// </summary>
+    /// <remarks>
+    /// So <c>object.Equals(text, "Afrekenen")</c> holds for a Dutch user. The other way round doesn't:
+    /// <c>object.Equals("Afrekenen", text)</c> is false, because a string only equals another string.
+    /// </remarks>
+    public override bool Equals(object? obj)
+    {
+        var isEqual = obj switch
+        {
+            LocalizableText text => this.Equals(text),
+            string wording => this.Equals(wording.AsSpan()),
+            _ => false,
+        };
+
+        return isEqual;
+    }
+
+    /// <summary>
+    /// The hash of the wording for the current UI culture, the same as that wording's own hash as a string. It changes
+    /// when the user's language does (see <see cref="Equals(LocalizableText)"/>).
+    /// </summary>
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(this.ToString());
     #endregion
 
     /// <summary>
-    /// The wording for a given culture instead of the current UI culture, such as the language of an email's recipient:
-    /// <c>ShopTexts.Checkout.ToString(CultureInfo.GetCultureInfo("nl"))</c>.
+    /// The wording this text shows per language, for a copy that needs no sets. That's its own translations and, for a
+    /// text of a contract, the wording of every language that the registry has a set for and its
+    /// <see cref="LocalizationRegistry.AppLanguages"/> can show, as a user of that language sees it.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A culture without a wording falls back as the current UI culture does: see <see cref="LocalizableText"/>.
-    /// </para>
-    /// <para>
-    /// A text of a set that takes values, such as <c>ShopTranslations.Total(amount)</c>, is worded as for a user of the
-    /// culture: its values are formatted for that culture too, so that a date or a number reads as the recipient writes
-    /// it, and a text among its values shows its wording for that culture. For the current UI culture this is
-    /// <see cref="ToString()"/>, which formats values for <see cref="CultureInfo.CurrentCulture"/>.
-    /// </para>
-    /// </remarks>
-    /// <param name="culture">The culture to get the wording for.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    public string ToString(CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        var text = this.ToString(culture, TranslationsRegistry.Current);
-        return text;
-    }
-
-    /// <summary>
-    /// The wording for a culture, looked up in the sets of the given registry instead of those of the whole app: for a
-    /// part of an app that keeps its own <see cref="ITranslationSet">sets</see>.
-    /// </summary>
-    /// <remarks>
-    /// Create such a registry with
-    /// <see cref="TranslationsRegistry.Create(IEnumerable{ITranslationSet})">TranslationsRegistry.Create</see>. Its
-    /// <see cref="TranslationsRegistry.AppLanguages"/> decide which languages show and which one a culture without
-    /// wording gets, not the languages of your app.
-    /// </remarks>
-    /// <param name="culture">The culture to get the wording for.</param>
-    /// <param name="registry">
-    /// The sets to look in, or <see langword="null"/> to use only the text's own translations, with your app's
-    /// languages.
-    /// </param>
-    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    public string ToString(CultureInfo culture, TranslationsRegistry? registry)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        // Without a registry there are only the text's own translations, which are the app's: its languages decide.
-        var text = this.ToString(culture, registry, registry?.AppLanguages ?? TranslationsRegistry.SupportedLanguages);
-        return text;
-    }
-
-    /// <summary>
-    /// The wording for a culture, for the given app languages (the default first) instead of those of the registry or
-    /// the app.
-    /// </summary>
-    internal string ToString(CultureInfo culture, TranslationsRegistry? registry, ImmutableArray<string> appLanguages)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        if (this.HasOnlyDefaultText)
-            return this.DefaultText;
-
-        if (!this.TakesValues || culture.Equals(CultureInfo.CurrentUICulture))
-            return this.FindText(culture, registry, appLanguages);
-
-        // A text that takes values is worded by a method of a set, which formats them as it runs: for the current
-        // culture, as an interpolated string does. So it runs as for a user of the culture asked for, which then gives
-        // the wording, the format of the values, and the wording of a text among them. Not for the current UI
-        // culture: there the text shows what ToString() shows, also to a user who reads one language and writes
-        // numbers as another does. Put back in any case: the method is the consumer's, and may throw.
-        var (currentCulture, currentUICulture) = (CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture);
-
-        try
-        {
-            CultureInfo.CurrentCulture = culture;
-            CultureInfo.CurrentUICulture = culture;
-
-            return this.FindText(culture, registry, appLanguages);
-        }
-        finally
-        {
-            CultureInfo.CurrentCulture = currentCulture;
-            CultureInfo.CurrentUICulture = currentUICulture;
-        }
-    }
-
-    /// <summary>
-    /// Whether a set words this text with values the text keeps: a <see cref="ResourceText"/> created with arguments.
-    /// </summary>
-    private protected virtual bool TakesValues => false;
-
-    private string FindText(CultureInfo culture, TranslationsRegistry? registry, ImmutableArray<string> appLanguages)
-    {
-        // The one place that decides the order: the text's own translation for the culture, else the wording of the
-        // sets registered for it (where a regional set leaves a text as its language words it, a rewording of that
-        // language wins: TranslationsRegistry.FindWording); then the same for the app's default language, so that a
-        // library's text falls back to the language the app chose rather than the library's own; then the set
-        // registered for the text's own default language, which may reword the default text; else the default text. A
-        // host with a source of its own (resource files, say) asks that source first and calls this for the rest.
-        // A culture none of the app's languages serves skips the first two: the app's own texts show their default
-        // language there, so a library's text must too, even where the library has the culture's language.
-        var appDefaultLanguage = appLanguages.IsDefaultOrEmpty ? null : appLanguages[0];
-        var showsCulture = appDefaultLanguage is null || IsServed(culture, appLanguages);
-
-        var text = (showsCulture ? this.GetTranslation(culture) : null)
-               ?? (showsCulture && registry is not null ? this.FindTranslation(registry, new CultureFallback(culture)) : null)
-               ?? (appDefaultLanguage is null ? null : this.GetTranslation(appDefaultLanguage, registry))
-               ?? (registry is null ? null : this.FindDefaultTranslation(registry))
-               ?? this.DefaultText;
-
-        return text;
-    }
-
-    /// <summary>
-    /// Whether one of the app's languages serves a culture: the culture, or one it falls back to, is that language or a
-    /// region of it.
-    /// </summary>
-    private static bool IsServed(CultureInfo culture, ImmutableArray<string> appLanguages)
-    {
-        // The names the lookups walk, so that this gate and the lookups agree on which language serves a culture, also
-        // under invariant globalization, where en-GB (if it can be created: PredefinedCulturesOnly off) has no parent
-        // culture and en still serves it.
-        foreach (var name in new CultureFallback(culture))
-            foreach (var language in appLanguages)
-                if (name.StartsWith(language, StringComparison.OrdinalIgnoreCase) && (name.Length == language.Length || name[language.Length] is '-'))
-                    return true;
-
-        return false;
-    }
-
-    /// <summary>
-    /// The wording the registered sets give this text for the first of the names that has a set, or
-    /// <see langword="null"/> when none does.
-    /// </summary>
-    // A text with only inline translations belongs to no contract, so no set can phrase it; ResourceText overrides
-    // this and the one below.
-    private protected virtual string? FindTranslation(TranslationsRegistry registry, CultureFallback names)
-    {
-        return null;
-    }
-
-    /// <summary>
-    /// The wording the set registered for the text's own default language gives it, or <see langword="null"/> when
-    /// the text has no such language or no set does.
-    /// </summary>
-    private protected virtual string? FindDefaultTranslation(TranslationsRegistry registry)
-    {
-        return null;
-    }
-
-    /// <summary>
-    /// The wording for a language code: the text's own translation for it or a language above it, else that of the set
-    /// registered for it or a language above it (see <see cref="FindTranslation"/>).
-    /// </summary>
-    private string? GetTranslation(string language, TranslationsRegistry? registry)
-    {
-        // Through the culture of the language where there is one, so that a text falling back to a language shows what
-        // a user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh)
-        // walks past. By name where there is none: under invariant globalization (a NativeAOT console, a trimmed
-        // WebAssembly app) only the invariant culture can be created by default. Dropping the last subtag (en-GB, then
-        // en) is also how the build checks that a set serves each of the app's languages.
-        var names = CultureFallback.OfLanguage(language);
-
-        foreach (var name in names)
-            if (this.FindOwnTranslation(name) is { } translation)
-                return translation;
-
-        var text = registry is null
-            ? null
-            : this.FindTranslation(registry, names);
-        return text;
-    }
-
-    /// <summary>
-    /// The wording this text shows per language, for a copy that needs no sets: its own translations, and for a text of
-    /// a contract the wording of every language the registry has a set for that its
-    /// <see cref="TranslationsRegistry.AppLanguages"/> can show, as a user of that language sees it.
-    /// </summary>
-    internal ImmutableDictionary<string, string> GetWordingPerLanguage(TranslationsRegistry registry)
+    internal ImmutableDictionary<string, string> GetWordingPerLanguage(LocalizationRegistry registry)
     {
         // Only a text of a contract has wording in the sets; for any other text, the languages of the sets would only
         // repeat its own translations under their regions.
-        if (this is not ResourceText { Contract: not null })
-            return this.Translations;
+        if (this.Contract is null)
+            return this.TranslationsByLanguage;
 
         var appLanguages = registry.AppLanguages;
         var builder = NoTranslations.ToBuilder();
 
-        foreach (var (language, wording) in this.Translations)
+        foreach (var (language, wording) in this.TranslationsByLanguage)
             builder[language] = wording;
 
         // Each app language itself, as the default one is what a culture without wording gets, also where only a set
@@ -435,7 +431,7 @@ public partial record LocalizableText
             if (builder.ContainsKey(language))
                 return;
 
-            using var reader = new ReaderScope(this, language);
+            using var reader = this.EnterLanguage(language, registry);
 
             if (this.GetTranslation(language, registry) is { } wording)
                 builder[language] = wording;
@@ -457,42 +453,170 @@ public partial record LocalizableText
     }
 
     /// <summary>
-    /// The wording this text shows for a culture none of its languages serves, for a copy that needs no sets: that of
-    /// the set registered for its own default language, else its <see cref="DefaultText"/>.
+    /// The wording this text shows for a culture none of its languages serves, for a copy that needs no sets. That's
+    /// the wording of the set registered for its own default language, else its <see cref="DefaultText"/>.
     /// </summary>
-    internal string GetDefaultWording(TranslationsRegistry registry)
+    internal string GetDefaultWording(LocalizationRegistry registry)
     {
-        using var reader = new ReaderScope(this, (this as ResourceText)?.DefaultLanguage);
+        using var reader = this.EnterLanguage(this.DefaultLanguage, registry);
 
-        return this.FindDefaultTranslation(registry) ?? this.DefaultText;
+        var defaultWording = this.FindDefaultTranslation(registry) ?? this.DefaultText;
+        return defaultWording;
     }
 
     /// <summary>
-    /// Makes a language the current UI culture for as long as a text that takes values is worded in that language,
-    /// and puts the UI culture back after.
+    /// Whether a language serves a culture, as one of the app's languages does (see
+    /// <see cref="IsServed(CultureInfo, ImmutableArray{string})"/>).
     /// </summary>
-    // A text among the values shows its wording for the current UI culture, as the method of the set writes it into
-    // the wording. Without this the copy of a text for every language would hold that text in the one language of
-    // whoever writes the copy. The other values stay formatted for the culture of the writer: a language is no
-    // region, and the region of the reader is what a date or a number is written for. Nothing changes for a text
-    // without values, or where this machine has no culture for the language, as under invariant globalization.
-    private readonly ref struct ReaderScope
+    private static bool IsServed(CultureInfo culture, string language)
     {
-        private CultureInfo? Previous { get; }
+        foreach (var name in new CultureFallback(culture))
+            if (IsLanguageOrRegion(name, language))
+                return true;
 
-        public ReaderScope(LocalizableText text, string? language)
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a culture name is a language or a region of it, such as <c>en</c> or <c>en-GB</c> for <c>en</c>.
+    /// </summary>
+    internal static bool IsLanguageOrRegion(string name, string language)
+    {
+        var result = name.StartsWith(language, StringComparison.OrdinalIgnoreCase) && (name.Length == language.Length || name[language.Length] is '-');
+        return result;
+    }
+
+    /// <summary>
+    /// Whether one of the app's languages serves a culture. It does when the culture, or one it falls back to, is that
+    /// language or a region of it.
+    /// </summary>
+    internal static bool IsServed(CultureInfo culture, ImmutableArray<string> appLanguages)
+    {
+        // The names the lookups walk, so that this gate and the lookups agree on which language serves a culture, also
+        // under invariant globalization, where en-GB (if it can be created: PredefinedCulturesOnly off) has no parent
+        // culture and en still serves it.
+        foreach (var name in new CultureFallback(culture))
+            foreach (var language in appLanguages)
+                if (IsLanguageOrRegion(name, language))
+                    return true;
+
+        return false;
+    }
+
+    private string FindText(CultureInfo culture, LocalizationRegistry? registry, ImmutableArray<string> appLanguages,
+        LocalizationRegistry.CultureLookup? lookup = null)
+    {
+        // The one place that decides the order: the text's own translation for the culture, else the wording of the
+        // sets registered for it (where a regional set leaves a text as its language words it, a rewording of that
+        // language wins: LocalizationRegistry.FindWording); then the same for the app's default language, so that a
+        // library's text falls back to the language the app chose rather than the library's own; then the set
+        // registered for the text's own default language, which may reword the default text; else the default text. A
+        // host with a source of its own (resource files, say) asks that source first and calls this for the rest.
+        // A culture none of the app's languages serves skips the first two: the app's own texts show their default
+        // language there, so a library's text must too, even where the library has the culture's language.
+        // The registry keeps how the culture resolves, so a render works that out once and not per text. Whether the
+        // app's languages serve it is kept for the registry's own app languages, which nearly every call passes.
+        lookup ??= registry?.Resolve(culture);
+        var appDefaultLanguage = appLanguages.IsDefaultOrEmpty ? null : appLanguages[0];
+        var showsCulture = appDefaultLanguage is null || (lookup is not null && appLanguages == registry!.AppLanguages
+            ? lookup.ShowsCulture
+            : IsServed(culture, appLanguages));
+
+        var text = (showsCulture ? this.FindOwnTranslation(culture, lookup) : null)
+               ?? (showsCulture && lookup is not null ? this.FindTranslation(registry!, lookup) : null)
+               ?? (appDefaultLanguage is null ? null : this.GetTranslation(appDefaultLanguage, registry))
+               ?? (registry is null ? null : this.FindDefaultTranslation(registry))
+               ?? this.DefaultText;
+
+        return text;
+    }
+
+    /// <summary>
+    /// The text's own wording for a culture or a culture above it, along the names a registry kept for it where there
+    /// is one (see <see cref="GetTranslation(CultureInfo)"/>).
+    /// </summary>
+    private string? FindOwnTranslation(CultureInfo culture, LocalizationRegistry.FallbackLookup? lookup)
+    {
+        if (lookup is null)
+            return this.GetTranslation(culture);
+
+        // A text of a set has none, so it skips the names.
+        if (this._translationPairs.Length is 0)
+            return null;
+
+        foreach (var name in lookup.Names)
+            if (this.FindOwnTranslation(name) is { } translation)
+                return translation;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The wording for a language code. That's the text's own translation for it or a language above it, else the
+    /// wording of the set registered for it or a language above it (see <see cref="FindTranslation"/>).
+    /// </summary>
+    private string? GetTranslation(string language, LocalizationRegistry? registry)
+    {
+        // Through the culture of the language where there is one, so that a text falling back to a language shows what
+        // a user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh)
+        // walks past. By name where there is none: under invariant globalization (a NativeAOT console, a trimmed
+        // WebAssembly app) only the invariant culture can be created by default. Dropping the last subtag (en-GB, then
+        // en) is also how the build checks that a set serves each of the app's languages. A registry keeps those names
+        // per language, with its sets for each.
+        var lookup = registry?.ResolveLanguage(language);
+
+        if (this._translationPairs.Length is not 0)
         {
-            if (!text.TakesValues || language is null || CultureName.FindCulture(language) is not { } culture || culture.Equals(CultureInfo.CurrentUICulture))
-                return;
-
-            this.Previous = CultureInfo.CurrentUICulture;
-            CultureInfo.CurrentUICulture = culture;
+            if (lookup is not null)
+            {
+                foreach (var name in lookup.Names)
+                    if (this.FindOwnTranslation(name) is { } translation)
+                        return translation;
+            }
+            else
+            {
+                foreach (var name in CultureFallback.OfLanguage(language))
+                    if (this.FindOwnTranslation(name) is { } translation)
+                        return translation;
+            }
         }
 
-        public void Dispose()
-        {
-            if (this.Previous is not null)
-                CultureInfo.CurrentUICulture = this.Previous;
-        }
+        // A text among the values shows in this language too, where the user reads another, as for a fallback. A text
+        // without values enters no scope here, on the path of every text a user of an unsupported culture sees. A text
+        // its property shows falls back as it does, so both end in this language anyway.
+        using var scope = this.TakesValues ? this.EnterLanguageUnlessServed(language, registry) : default;
+
+        var text = lookup is null
+            ? null
+            : this.FindTranslation(registry!, lookup);
+
+        return text;
+    }
+
+    /// <summary>
+    /// The default wording of a text of a set, which the set of its default language gives each time it's read.
+    /// </summary>
+    // Not kept once worded: a value is formatted for the culture of the moment, and a text the wording shows follows
+    // the culture of its reader. Kept, the first reader's culture would stay in it for every reader after.
+    private string WordDefaultText()
+    {
+        var origin = this.Origin!;
+        var set = origin.DefaultSet!;
+        var language = origin.DefaultLanguage;
+
+        // From the sets of the whole app, where no text being worded gives others.
+        using var scope = this.EnterLanguageUnlessServed(language, LocalizationRegistry.Current);
+
+        var wording = this.Select(set);
+
+        // A member of a set may hand on a value that's null at run time, such as a nickname from a database, though
+        // it returns a string. Nothing is left to fall back to here, so the text says so rather than show null.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+        if (wording is null)
+            throw new InvalidOperationException(
+                $"{set.GetType()} gives null for the text '{this.Key}', so the text has no wording in '{language}', its default language. "
+                + "Return a string, such as an empty one where a value is missing.");
+
+        return wording;
     }
 }

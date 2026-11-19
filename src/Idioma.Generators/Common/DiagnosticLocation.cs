@@ -6,10 +6,10 @@ namespace CodeChops.Idioma.Generators;
 /// A source location to carry through the pipeline: the syntax tree it lies in, and its span there.
 /// </summary>
 /// <remarks>
-/// The tree, and not only its path and line numbers: a diagnostic at a location inside its tree is one that
-/// <c>#pragma warning disable</c>, <c>[SuppressMessage]</c>, and the severities of an <c>.editorconfig</c> apply to, and
-/// one a code fix finds its document by. A location made from a path alone looks the same in the error list, but none
-/// of those reach it.
+/// It keeps the tree, and not only its path and line numbers, because a diagnostic at a location inside its tree is one
+/// that <c>#pragma warning disable</c>, <c>[SuppressMessage]</c>, and the severities of an <c>.editorconfig</c> apply
+/// to, and one a code fix finds its document by. A location made from a path alone looks the same in the error list,
+/// but none of those reach it.
 /// </remarks>
 // A tree compares by reference, and stays the same object for as long as its file is not edited, so a pipeline step
 // holding a location is reused across edits in other files. An edit in the file itself gives a new tree, and with it a

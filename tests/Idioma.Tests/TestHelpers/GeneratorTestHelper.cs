@@ -89,6 +89,34 @@ internal static class GeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs one generator over <paramref name="source"/> and returns what a named step of its pipeline gave: the value
+    /// the generator works with, before anything is written from it.
+    /// </summary>
+    internal static T GetStepValue<T>(IIncrementalGenerator generator, string stepName, string source)
+    {
+        var driver = (GeneratorDriver)CSharpGeneratorDriver.Create(
+            generators: [generator.AsSourceGenerator()],
+            parseOptions: ParseOptions,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+        var run = driver.RunGenerators(CreateCompilation([], source)).GetRunResult().Results.Single();
+
+        return (T)run.TrackedSteps[stepName].Single().Outputs.Single().Value;
+    }
+
+    /// <summary>
+    /// Compiles <paramref name="source"/> without running a generator, for a test that reads its syntax and asks the
+    /// compiler about it.
+    /// </summary>
+    internal static (SyntaxTree Tree, SemanticModel Model) Compile(string source)
+    {
+        var compilation = CreateCompilation([], source);
+        var tree = compilation.SyntaxTrees.Single();
+
+        return (tree, compilation.GetSemanticModel(tree));
+    }
+
+    /// <summary>
     /// Runs one generator, edits a file unrelated to <paramref name="source"/>, and runs the same driver again. Returns
     /// why each output step ran the second time; every reason being <c>Cached</c> keeps an IDE from re-emitting source
     /// on every keystroke.
@@ -162,6 +190,22 @@ internal static class GeneratorTestHelper
         return
         [
             .. RunAllGenerators(source, references).Diagnostics.Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error),
+        ];
+    }
+
+    /// <summary>
+    /// Runs the generators as a build does, next to another source generator that writes
+    /// <paramref name="writtenByOtherGenerator"/>, and returns every error of the resulting compilation. No generator
+    /// sees what another writes, so a type of that source binds to nothing while this package's generators run.
+    /// </summary>
+    internal static ImmutableArray<Diagnostic> CompileWithGeneratorsNextToAnother(string source, string writtenByOtherGenerator)
+    {
+        var driver = CreateFullDriver(ParseOptions).AddGenerators([new OtherGenerator(writtenByOtherGenerator).AsSourceGenerator()]);
+        driver.RunGeneratorsAndUpdateCompilation(CreateCompilation([], source), out var updated, out var diagnostics);
+
+        return
+        [
+            .. diagnostics.Concat(updated.GetDiagnostics()).Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error),
         ];
     }
 
@@ -322,14 +366,14 @@ internal static class GeneratorTestHelper
         return CSharpGeneratorDriver.Create(generators: [generator.AsSourceGenerator()], parseOptions: ParseOptions);
     }
 
-    private static GeneratorDriver CreateFullDriver(CSharpParseOptions parseOptions)
+    internal static GeneratorDriver CreateFullDriver(CSharpParseOptions parseOptions)
     {
         return CSharpGeneratorDriver.Create(
             generators:
             [
                 new LocalizableTextFactoryGenerator().AsSourceGenerator(),
-                new TranslationSetsGenerator().AsSourceGenerator(),
-                new TranslationsRegistrationGenerator().AsSourceGenerator(),
+                new LocalizationSetsGenerator().AsSourceGenerator(),
+                new LocalizationRegistrationGenerator().AsSourceGenerator(),
             ],
             parseOptions: parseOptions);
     }
@@ -351,6 +395,17 @@ internal static class GeneratorTestHelper
             syntaxTrees: sources.Select(static source => CSharpSyntaxTree.ParseText(source, ParseOptions)),
             references: [.. References, .. references],
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    }
+
+    /// <summary>
+    /// A source generator of another package, which writes one file.
+    /// </summary>
+    private sealed class OtherGenerator(string source) : IIncrementalGenerator
+    {
+        public void Initialize(IncrementalGeneratorInitializationContext context)
+        {
+            context.RegisterSourceOutput(context.CompilationProvider, (output, _) => output.AddSource("WrittenByOtherGenerator.g.cs", source));
+        }
     }
 
     /// <summary>
@@ -407,7 +462,7 @@ internal static class GeneratorTestHelper
         return
         [
             .. platform.Select(static path => (MetadataReference)MetadataReference.CreateFromFile(path)),
-            MetadataReference.CreateFromFile(typeof(ITranslationSet).Assembly.Location),
+            MetadataReference.CreateFromFile(typeof(ILocalizationSet).Assembly.Location),
         ];
     }
 }

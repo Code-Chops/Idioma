@@ -59,11 +59,12 @@ public sealed class DiagnosticLocationTests
 
     [Test]
     [Arguments("", false)]
-    [Arguments("#pragma warning disable LOC003", true)]
-    [Arguments("[System.Diagnostics.CodeAnalysis.SuppressMessage(\"Design\", \"LOC003\")]", true)]
+    [Arguments("#pragma warning disable LOC400", true)]
+    [Arguments("[System.Diagnostics.CodeAnalysis.SuppressMessage(\"Design\", \"LOC400\")]", true)]
     public void DiagnosticAtSet_ShouldFollowSuppressionInItsSource(string suppression, bool expected)
     {
-        // Arrange: a Dutch set that cannot register itself, which the registration generator reports at the set.
+        // Arrange: a Dutch set that can't be registered automatically, which the registration generator reports at
+        // the set.
         var source = $$"""
             using CodeChops.Idioma;
 
@@ -71,13 +72,13 @@ public sealed class DiagnosticLocationTests
 
             namespace TestApp;
 
-            public partial class ShopTranslationsEN : ITranslationSet
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
             {
                 public virtual string Checkout => "Checkout";
             }
 
             {{suppression}}
-            public class ShopTranslationsNL(string shopName) : IShopTranslations
+            public class ShopLocalizationNl(string shopName) : ILocalizationSet, IShopLocalization
             {
                 public virtual string Checkout => $"Afrekenen bij {shopName}";
             }
@@ -88,7 +89,7 @@ public sealed class DiagnosticLocationTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC003");
+        diagnostic.Id.ShouldBe("LOC400");
         diagnostic.IsSuppressed.ShouldBe(expected);
     }
 
@@ -103,9 +104,9 @@ public sealed class DiagnosticLocationTests
 
             namespace TestApp;
 
-            #pragma warning disable LOC004
-            public partial class ShopTranslationsEN : ITranslationSet
-            #pragma warning restore LOC004
+            #pragma warning disable LOC201
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            #pragma warning restore LOC201
             {
                 public virtual string Checkout => "Checkout";
             }
@@ -116,7 +117,7 @@ public sealed class DiagnosticLocationTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC004");
+        diagnostic.Id.ShouldBe("LOC201");
         diagnostic.IsSuppressed.ShouldBeTrue();
     }
 
@@ -127,9 +128,9 @@ public sealed class DiagnosticLocationTests
         const string source = """
             using CodeChops.Idioma;
 
-            #pragma warning disable LOC010
+            #pragma warning disable LOC101
             [assembly: SupportedLanguages("en", "en")]
-            #pragma warning restore LOC010
+            #pragma warning restore LOC101
             """;
 
         // Act
@@ -137,7 +138,7 @@ public sealed class DiagnosticLocationTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC010");
+        diagnostic.Id.ShouldBe("LOC101");
         diagnostic.IsSuppressed.ShouldBeTrue();
     }
 }

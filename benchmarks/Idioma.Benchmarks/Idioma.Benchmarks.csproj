@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The benchmarks on .NET: BenchmarkDotNet for showing a text, and a runner that serves Idioma.Benchmarks.Wasm to
+    Chrome and prints its tables for docs/performance.md. run.sh runs both.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.16.0-preview.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Localization" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="11.0.0" />
+  </ItemGroup>
+
+  <Import Project="../Shared/Shared.props" />
+
+</Project>

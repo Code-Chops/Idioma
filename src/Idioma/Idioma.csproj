@@ -19,19 +19,25 @@
   -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <Version>0.8.0</Version>
+    <!-- The version is in Directory.Build.props, for the generator and the code fixes too. -->
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>The key of a text of a set is its full name: MyApp.Translations.ShopTranslations.Checkout for ShopTranslations.Checkout in the namespace MyApp.Translations, where it was Shop.Checkout. The old key left out the namespace and a trailing Translations, so the texts of two sets of one name shared a key: sets in two namespaces, in a library and in the app that uses it, or ShopTranslationsEN next to ShopEN. Now each text has a key of its own. A set in the global namespace gives ShopTranslations.Checkout, and a namespace part named like a keyword comes without its @.
+    <PackageReleaseNotes>A text takes a value as a method of its set. Write Greeting(string name) in each language and call ShopLocalization.Greeting(customer.Name). LocalizableText.Format is gone, and nothing fills in a placeholder such as {0} any more, so a wording that holds one shows its braces (LOC502, with an IDE fix that writes the method). Each language writes its own plurals in C#, because a wording can depend on its values.
 
-The package itself never reads the key, so every text shows the wording it showed. Only an app or library that looks wording up by the key, as in a resource file through IStringLocalizer, has something to do: rename each entry to the full name of its text, which is the name your code calls the text by, with its namespace in front.
+The build holds every language to the values. A language whose method never uses a value the default wording shows doesn't build (LOC302), and neither does a language of LocalizableText.Inline that leaves out a value the default language shows.
 
-A language code that is wrong is not a culture name in the messages of the build and of the registry, where it was no culture name (LOC010, LOC018), and LOC016 names a brace that is not a placeholder. Only a test that holds such a message to its wording needs the new one.
+The names say localization. A set implements ILocalizationSet and its contract: class ShopLocalizationNl : ILocalizationSet, IShopLocalization. The registry is LocalizationRegistry, and [ExcludeFromLocalizationDiscovery] keeps a set or a member out. A set's name ends in its language in PascalCase, such as ShopLocalizationEnGb for en-GB, and an inline text takes enGb: for it. A class that lists only a contract is no set.
 
-The details have a page per subject under docs/, which the README links to: how Idioma works, language codes, libraries that use Idioma, Blazor, what the build rejects, and coming from resx. New in them: your users get the languages of the app's own project, so an app that keeps its texts in a library declares its languages in both; what the build misses in a call of Format, where a value too few throws when the call runs; and the class the source generator writes to register your sets, which is public in an assembly that has sets.
+ResourceText is part of LocalizableText, which has the Key, the Contract and the Arguments. LocalizableText.Keyed(key, defaultText) replaces new ResourceText(key, defaultText).
 
-The demos are SetDemo.cs and InlineTextDemo.cs, and run in a codespace from the README.</PackageReleaseNotes>
+Two texts are equal when they show the same wording for the current UI culture, as two strings are. A text also equals a string with that wording.
+
+LocalizationRegistry.CurrentUICultureProvider gives the user's culture in an app that keeps it somewhere other than CultureInfo.CurrentUICulture.
+
+The codes of the build's messages are grouped by subject, from LOC100 to LOC601. The page docs/build-errors.md lists each one, and six of them have an IDE fix.
+
+The details have a page per subject under docs/, which the README links to. New is a page on performance, with measurements next to IStringLocalizer.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
-    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, or inline texts. A missing translation, or one that leaves out a value, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
+    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, or inline texts. A missing translation, or one that never uses a value the original shows, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
     <PackageProjectUrl>https://github.com/Code-Chops/Idioma</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Code-Chops/Idioma</RepositoryUrl>

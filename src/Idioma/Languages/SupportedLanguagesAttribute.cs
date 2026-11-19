@@ -1,50 +1,52 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Declares the languages of your assembly, the default language first:
-/// <c>[assembly: SupportedLanguages("en", "nl")]</c>. From then on, the build makes sure that every text in the
-/// assembly exists in each of these languages.
+/// Declares the languages of your assembly, the default language first.
+/// For example: <c>[assembly: SupportedLanguages("en", "nl")]</c>.
+/// The build then makes sure every text in the assembly exists in each of them.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Put the attribute once in any file of the assembly. It gives you two ways to write a text, and both demand every
+/// Put the attribute once in any file of the assembly. You can then write a text in two ways, and both demand every
 /// language:
 /// </para>
 /// <list type="bullet">
 /// <item>An inline text: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. The source generator
-/// writes this method with one required argument per language, so leaving a language out does not compile.</item>
-/// <item>One class per language, for a library or a larger group of texts: see <see cref="ITranslationSet"/>.</item>
+/// writes this method with one required argument per language, so leaving a language out doesn't compile.</item>
+/// <item>A set: one class per language, for a library or a larger group of texts. See
+/// <see cref="ILocalizationSet"/>.</item>
 /// </list>
 /// <para>
-/// Once you list two or more languages, wording you write as a plain string where a text is expected is a build error
-/// (<c>LOC011</c>), so a text cannot end up in one language by accident. A value that is not wording of yours, such as
-/// a customer's name, still converts to a text.
+/// With two or more languages listed, a plain string where a text is expected is a build error (<c>LOC500</c>). So a
+/// text can't end up in one language by accident. A value that isn't your wording, such as a customer's name, still
+/// converts to a text.
 /// </para>
 /// <para>
-/// In an application, the first language is also the one every text falls back to, the texts of the libraries it uses
-/// included: see <see cref="LocalizableText"/>. A library's own default language applies only in an application that
+/// In an application, the first language is the fallback for every text, including the texts of the libraries it
+/// uses. See <see cref="LocalizableText"/>. A library's own default language applies only in an application that
 /// declares no languages.
 /// </para>
 /// <para>
-/// To add a language, add it to the list: the build then reports every text without it, those of the libraries you
-/// use included, so you can work through them. Each language is a culture name in any letter case, neutral
+/// To add a language, add it to the list. The build then reports every text without it, including those of the
+/// libraries you use, so you can work through them. Each language is a culture name in any letter case, neutral
 /// (<c>en</c>) or specific (<c>en-GB</c>).
 /// </para>
 /// <para>
-/// A specific language is a language of its own to the build, also next to its neutral one: with <c>en</c> and
-/// <c>en-GB</c> listed, every inline text takes <c>enGB:</c>, and every class of texts gets a British class beside its
-/// English one, which can derive from it and add nothing. Leave <c>en-GB</c> out, and its users see your English.
+/// To the build, a specific language is a language of its own, also next to its neutral one. With <c>en</c> and
+/// <c>en-GB</c> listed, every inline text takes <c>enGb:</c>. Every English set needs a British set next to it
+/// (<c>LOC201</c>), which can derive from the English set and add nothing. Leave <c>en-GB</c> out, and its users see
+/// your English.
 /// </para>
 /// <para>
-/// An assembly without this attribute has no texts of its own to translate: its strings convert to texts as they are,
-/// and <c>LocalizableText.Inline</c> does not exist there. It can still reword a library's set, or give a library's
+/// An assembly without this attribute has no texts of its own to translate. Its strings convert to texts as they are,
+/// and <c>LocalizableText.Inline</c> doesn't exist there. It can still reword a library's set, or give a library's
 /// contract another language.
 /// </para>
 /// <para>
-/// The build reports a mistake as <c>LOC001</c> to <c>LOC021</c>, listed in
-/// <see href="https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md">What the build rejects</see>.
-/// A test project that compares texts with plain strings can turn off <c>LOC011</c>, <c>LOC012</c>, <c>LOC013</c>, and
-/// <c>LOC017</c> with <c>NoWarn</c>.
+/// The build reports each mistake with a code, such as <c>LOC201</c>.
+/// <see href="https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md">What the build rejects</see> lists
+/// every code with its fix.
+/// A test project that writes texts as plain strings can turn off <c>LOC500</c> with <c>NoWarn</c>.
 /// </para>
 /// </remarks>
 /// <example>
@@ -67,13 +69,13 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// The default language, the first one listed, such as <c>en</c>.
     /// </summary>
     /// <remarks>
-    /// In an application, every text falls back to it: see <see cref="LocalizableText"/>.
+    /// In an application, every text falls back to it. See <see cref="LocalizableText"/>.
     /// </remarks>
     public string DefaultLanguage { get; }
 
     /// <summary>
-    /// Every language listed, the default language first, such as <c>en</c> and <c>nl</c>. To offer the user a choice
-    /// of your app's languages, read <see cref="TranslationsRegistry.SupportedLanguages"/>.
+    /// Every language listed, the default language first. To let the user choose one of your app's languages,
+    /// read <see cref="LocalizationRegistry.SupportedLanguages"/> instead.
     /// </summary>
     public IReadOnlyList<string> Languages { get; }
 
@@ -84,8 +86,12 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// The default language, such as <c>en</c>.
     /// </param>
     /// <param name="otherLanguages">
-    /// The other languages, such as <c>nl</c>: every text must exist in each of them too.
+    /// The other languages, such as <c>nl</c>. Every text must exist in each of them too.
     /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="defaultLanguage"/> or <paramref name="otherLanguages"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">When <paramref name="defaultLanguage"/> is empty or white space.</exception>
     public SupportedLanguagesAttribute(string defaultLanguage, params string[] otherLanguages)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(defaultLanguage);

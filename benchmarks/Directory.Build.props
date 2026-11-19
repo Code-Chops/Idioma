@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Stops the repository's Directory.Build.props from applying here, as in tests/Idioma.AotSmoke. The benchmarks measure
+    the library as an app uses it, so they take none of the repository's analyzers and settings. Their packages are plain
+    package references, which central package management would refuse (NU1008).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The projects compile resx files, which name their resources after this namespace. -->
+    <RootNamespace>Benchmarks</RootNamespace>
+    <!-- As in most apps with resx files: English is in the main assembly, so ResourceManager doesn't look for an English
+         satellite assembly. -->
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
+</Project>

@@ -14,7 +14,7 @@
          1 September 2026 falls under the maintainer's paid Open Source Maintenance Fee (a build-time SponsorCheck from
          Verify 33 onward); 32.0.0 (26 August 2026) is the last stable release before that line. DiffEngine and
          EmptyFiles are published by the same organization and are only transitive (via Verify), so the test project
-         references them directly to pin them. Do not bump without buying a sponsorship. -->
+         references them directly to pin them. Don't bump without buying a sponsorship. -->
     <PackageVersion Include="Verify" Version="[32.0.0]" />
     <PackageVersion Include="Verify.TUnit" Version="[32.0.0]" />
     <PackageVersion Include="DiffEngine" Version="[20.3.1]" />

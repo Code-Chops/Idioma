@@ -30,12 +30,12 @@ public sealed class PlaceholderAnalyzerTests
 
         namespace ShopLibrary;
 
-        public partial class ShopTranslationsEN : ITranslationSet
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
         {
             public virtual string Total => "Total";
         }
 
-        public class ShopTranslationsNL : IShopTranslations
+        public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
         {
             public virtual string Total => "Totaal";
         }
@@ -58,19 +58,19 @@ public sealed class PlaceholderAnalyzerTests
     private static string Sets(string english, string dutch, string british = "") => $$"""
         {{Header}}
 
-        public partial class ShopTranslationsEN : ITranslationSet
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
         {
             {{english}}
         }
 
-        public class ShopTranslationsNL : IShopTranslations
+        public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
         {
             private const string Wording = "Hallo, {0}!";
 
             {{dutch}}
         }
 
-        public class ShopTranslationsEnGB : ShopTranslationsEN
+        public class ShopLocalizationEnGb : ShopLocalizationEn
         {
             {{british}}
         }
@@ -91,12 +91,12 @@ public sealed class PlaceholderAnalyzerTests
     #endregion
 
     [Test]
-    [Arguments("""en: "Hello!", nl: "Hallo, {0}!", enGB: "Hello!" """, "\"Hallo, {0}!\"", "The 'nl' wording holds the placeholder {0}, which nothing fills in")]
-    [Arguments("""en: "Total", nl: "Totaal", enGB: "Total: {0:N2}" """, "\"Total: {0:N2}\"", "The 'en-GB' wording holds the placeholder {0:N2}, which nothing fills in")]
-    [Arguments("""nl: "{1,8} van {0}", en: "Some", enGB: "Some" """, "\"{1,8} van {0}\"", "The 'nl' wording holds the placeholder {1,8}, which nothing fills in")]
-    [Arguments("""en: $"{name}", nl: $"{name}: {{0}}", enGB: $"{name}" """, ": {{0}}\"", "The 'nl' wording holds the placeholder {0}, which nothing fills in")]
-    [Arguments("""en: "Hello!", nl: Wording, enGB: "Hello!" """, "nl: Wording", "The 'nl' wording holds the placeholder {0}, which nothing fills in")]
-    public async Task InlineWordingWithPlaceholder_ShouldReportLOC016(string arguments, string at, string message)
+    [Arguments("""en: "Hello!", nl: "Hallo, {0}!", enGb: "Hello!" """, "\"Hallo, {0}!\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
+    [Arguments("""en: "Total", nl: "Totaal", enGb: "Total: {0:N2}" """, "\"Total: {0:N2}\"", "The 'en-GB' wording holds the placeholder {0:N2}. Nothing fills it in")]
+    [Arguments("""nl: "{1,8} van {0}", en: "Some", enGb: "Some" """, "\"{1,8} van {0}\"", "The 'nl' wording holds the placeholder {1,8}. Nothing fills it in")]
+    [Arguments("""en: $"{name}", nl: $"{name}: {{0}}", enGb: $"{name}" """, ": {{0}}\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
+    [Arguments("""en: "Hello!", nl: Wording, enGb: "Hello!" """, "nl: Wording", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
+    public async Task InlineWordingWithPlaceholder_ShouldReportLOC502(string arguments, string at, string message)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Inline(arguments));
@@ -105,54 +105,56 @@ public sealed class PlaceholderAnalyzerTests
         // interpolated string, and at the argument for a constant it names.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(PlaceholderAnalyzer.PlaceholderDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC016");
-        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldStartWith(message);
         diagnostic.GetMessage().ShouldEndWith("Write the value into the wording of every language, as in '$\"Hello, {name}!\"'.");
         At(diagnostic).ShouldStartWith(at);
     }
 
     [Test]
-    [Arguments("""en: $"Hello, {name}!", nl: $"Hallo, {name}!", enGB: $"Hello, {name}!" """)]
-    [Arguments("""en: $"{count} items", nl: $"{count:N0} stuks", enGB: $"{count,8} items" """)]
-    [Arguments("""en: $"{0} items", nl: $"{1 + 1} stuks", enGB: "Items" """)]
-    [Arguments("""en: "Use {name}", nl: "Gebruik {}", enGB: "Use { 0 } or {x0}" """)]
-    [Arguments("""en: "Braces { and }", nl: "Accolades }{", enGB: "{" """)]
+    [Arguments("""en: $"Hello, {name}!", nl: $"Hallo, {name}!", enGb: $"Hello, {name}!" """)]
+    [Arguments("""en: $"{count} items", nl: $"{count:N0} stuks", enGb: $"{count,8} items" """)]
+    [Arguments("""en: $"{0} items", nl: $"{1 + 1} stuks", enGb: "Items" """)]
+    [Arguments("""en: "Use {name}", nl: "Gebruik {}", enGb: "Use { 0 } or {x0}" """)]
+    [Arguments("""en: "Braces { and }", nl: "Accolades }{", enGb: "{" """)]
+    [Arguments("""en: string.Format("Hello, {0}!", name), nl: string.Format("Hallo, {0}!", name), enGb: $"Total: {string.Format("{0:N2}", count)}" """)]
     public async Task InlineWordingWithoutPlaceholder_ShouldReportNothing(string arguments)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Inline(arguments));
 
         // Assert: a value of an interpolated string is no placeholder, also a number, and braces around anything but
-        // a number are text.
+        // a number are text. A string passed to a method is no wording, because the method may fill the placeholder in.
         diagnostics.ShouldBeEmpty();
     }
 
     [Test]
-    [Arguments("""public virtual string Greeting => "Hello, {0}!";""", DutchGreeting, "", "\"Hello, {0}!\"", "'ShopTranslationsEN.Greeting'")]
-    [Arguments(EnglishGreeting, """public string Greeting => "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopTranslationsNL.Greeting'")]
-    [Arguments(EnglishGreeting, """public string Greeting { get { return "Hallo, {0}!"; } }""", "", "\"Hallo, {0}!\"", "'ShopTranslationsNL.Greeting'")]
-    [Arguments(EnglishGreeting, """public string Greeting { get; } = "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopTranslationsNL.Greeting'")]
-    [Arguments(EnglishGreeting, """string IShopTranslations.Greeting => "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopTranslationsNL.Greeting'")]
-    [Arguments(EnglishGreeting, """public string Greeting => Wording;""", "", "Greeting => Wording", "'ShopTranslationsNL.Greeting'")]
-    [Arguments(EnglishGreeting, DutchGreeting, """public override string Greeting => "Hello there, {0}!";""", "\"Hello there, {0}!\"", "'ShopTranslationsEnGB.Greeting'")]
-    public async Task TextOfSetWithPlaceholder_ShouldReportLOC016(string english, string dutch, string british, string at, string subject)
+    [Arguments("""public virtual string Greeting => "Hello, {0}!";""", DutchGreeting, "", "\"Hello, {0}!\"", "'ShopLocalizationEn.Greeting'")]
+    [Arguments(EnglishGreeting, """public string Greeting => "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopLocalizationNl.Greeting'")]
+    [Arguments(EnglishGreeting, """public string Greeting { get { return "Hallo, {0}!"; } }""", "", "\"Hallo, {0}!\"", "'ShopLocalizationNl.Greeting'")]
+    [Arguments(EnglishGreeting, """public string Greeting { get; } = "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopLocalizationNl.Greeting'")]
+    [Arguments(EnglishGreeting, """string IShopLocalization.Greeting => "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopLocalizationNl.Greeting'")]
+    [Arguments(EnglishGreeting, """public string Greeting => Wording;""", "", "Greeting => Wording", "'ShopLocalizationNl.Greeting'")]
+    [Arguments(EnglishGreeting, DutchGreeting, """public override string Greeting => "Hello there, {0}!";""", "\"Hello there, {0}!\"", "'ShopLocalizationEnGb.Greeting'")]
+    [Arguments("""public virtual string Greeting(string name) => $"Hello, {name}!";""", """public string Greeting => "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopLocalizationNl.Greeting'")]
+    public async Task TextOfSetWithPlaceholder_ShouldReportLOC502(string english, string dutch, string british, string at, string subject)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(english, dutch, british));
 
         // Assert: in every language, the default one included, at the string that holds it, whether the property
         // implements the text, implements it explicitly, or overrides the default set's, and at the property for a
-        // constant it names.
+        // constant it names. Also a property where the text takes a value, as the default language wrote it before.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC016");
-        diagnostic.GetMessage().ShouldStartWith($"{subject} holds the placeholder {{0}}, which nothing fills in");
+        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.GetMessage().ShouldStartWith($"{subject} holds the placeholder {{0}}. Nothing fills it in");
         diagnostic.GetMessage().ShouldEndWith("Write the text as a method that takes the value, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'.");
         At(diagnostic).ShouldStartWith(at);
     }
 
     [Test]
-    public async Task TextThatTakesValuesWithPlaceholder_ShouldReportLOC016AtEachString()
+    public async Task TextThatTakesValuesWithPlaceholder_ShouldReportLOC502AtEachString()
     {
         // Arrange & Act: a method that kept a placeholder next to the value it takes, in one of its wordings and in
         // the text of an interpolated string.
@@ -162,9 +164,80 @@ public sealed class PlaceholderAnalyzerTests
 
         // Assert
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC016");
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.GetMessage().StartsWith("'ShopTranslationsNL.Items' holds the placeholder {1}", StringComparison.Ordinal));
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC502");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.GetMessage().StartsWith("'ShopLocalizationNl.Items' holds the placeholder {1}", StringComparison.Ordinal));
         diagnostics.Select(At).ShouldContain(at => at.StartsWith("\"1 artikel bij {1}\"", StringComparison.Ordinal));
+    }
+
+    [Test]
+    [Arguments(
+        """public virtual string Items(int count) => string.Format("{0} items", count);""",
+        """public string Items(int count) => string.Format("{0} artikelen", count);""")]
+    [Arguments(
+        EnglishGreeting,
+        """public string Greeting => string.Format("Hallo, {0}!", "jij");""")]
+    [Arguments(
+        """public virtual string Items(int count) => $"{count} items";""",
+        """
+        public string Items(int count)
+        {
+            var format = count is 1 ? "{0} artikel" : "{0} artikelen";
+            return string.Format(format, count);
+        }
+        """)]
+    [Arguments(
+        """public virtual string Items(int count) => $"{count} items";""",
+        """
+        public string Items(int count)
+        {
+            string Format() { return "{0} artikelen"; }
+            return string.Format(Format(), count);
+        }
+        """)]
+    [Arguments(
+        EnglishGreeting,
+        """
+        public string Greeting
+        {
+            get
+            {
+                var greeting = "Hallo, {0}!";
+                return greeting;
+            }
+        }
+        """)]
+    public async Task StringTheTextDoesNotReturnAsWritten_ShouldReportNothing(string english, string dutch)
+    {
+        // Arrange & Act
+        var diagnostics = await AnalyzeAsync(Sets(english, dutch));
+
+        // Assert: a string passed to a method isn't the wording, because the method may fill the placeholder in, as
+        // string.Format does. Neither is a format kept in a local variable, or one a local function returns. The build
+        // doesn't follow a local variable, so it also misses the wording the last text returns through one.
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task TextWithBlockBody_ShouldReportLOC502AtEachStringItReturns()
+    {
+        // Arrange & Act: two returns, the second a concatenation, next to a string passed to a method.
+        var diagnostics = await AnalyzeAsync(Sets(
+            """public virtual string Items(int count, string shop) => $"{count} items at {shop}";""",
+            """
+            public string Items(int count, string shop)
+            {
+                if (count is 1)
+                    return "1 artikel bij {1}";
+
+                return string.Format("{0} artikelen", count) + " bij {1}";
+            }
+            """));
+
+        // Assert: at the strings the text returns, and not at the one string.Format fills in.
+        diagnostics.Length.ShouldBe(2);
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.GetMessage().StartsWith("'ShopLocalizationNl.Items' holds the placeholder {1}", StringComparison.Ordinal));
+        diagnostics.Select(At).ShouldContain(at => at.StartsWith("\"1 artikel bij {1}\"", StringComparison.Ordinal));
+        diagnostics.Select(At).ShouldContain(at => at.StartsWith("\" bij {1}\"", StringComparison.Ordinal));
     }
 
     [Test]
@@ -176,10 +249,10 @@ public sealed class PlaceholderAnalyzerTests
             $$"""
             {{EnglishGreeting}}
 
-            [ExcludeFromTranslationDiscovery]
+            [ExcludeFromLocalizationDiscovery]
             public string Pattern => "{0:N2}";
 
-            [ExcludeFromTranslationDiscovery]
+            [ExcludeFromLocalizationDiscovery]
             public string Fill(string value) => string.Format("{0}!", value);
 
             private string Hidden => "{0}";
@@ -200,7 +273,7 @@ public sealed class PlaceholderAnalyzerTests
     }
 
     [Test]
-    public async Task SetOfContractOfAnotherAssembly_ShouldReportLOC016()
+    public async Task SetOfContractOfAnotherAssembly_ShouldReportLOC502()
     {
         // Arrange & Act: an app adds German to a library, in an assembly that declares no languages itself.
         var diagnostics = await AnalyzeAsync("""
@@ -208,7 +281,7 @@ public sealed class PlaceholderAnalyzerTests
 
             namespace TestApp;
 
-            public sealed class ShopTranslationsDE : IShopTranslations
+            public sealed class ShopLocalizationDe : CodeChops.Idioma.ILocalizationSet, IShopLocalization
             {
                 public string Total => "Summe: {0}";
             }
@@ -216,12 +289,12 @@ public sealed class PlaceholderAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC016");
-        diagnostic.GetMessage().ShouldStartWith("'ShopTranslationsDE.Total' holds the placeholder {0}");
+        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationDe.Total' holds the placeholder {0}");
     }
 
     [Test]
-    public async Task InlineWordingInMarkup_ShouldReportLOC016()
+    public async Task InlineWordingInMarkup_ShouldReportLOC502()
     {
         // Arrange & Act: what Razor generates from a page counts as generated code, and is the user's own markup.
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), Header, [], ("Pages/Index_razor.g.cs", """
@@ -232,11 +305,11 @@ public sealed class PlaceholderAnalyzerTests
 
             public static class Index
             {
-                public static LocalizableText Title => LocalizableText.Inline(en: "Orders of {0}", nl: "Bestellingen", enGB: "Orders");
+                public static LocalizableText Title => LocalizableText.Inline(en: "Orders of {0}", nl: "Bestellingen", enGb: "Orders");
             }
             """));
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC016");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC502");
     }
 }

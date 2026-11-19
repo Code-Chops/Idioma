@@ -1,51 +1,286 @@
 # What the build rejects
 
-The build reports the mistakes in the table below.
-
-- Most apply only in an assembly that declares languages. The last column marks those that apply in an assembly without languages as well.
-- `LOC011` starts with the second language you declare: one language has nothing to be translated into.
-- Your IDE offers a fix where one edit does:
-  - `LOC002`: it makes the class partial, names it after its language, or removes `abstract` or `file`.
-  - `LOC007`: it implements the contract.
-  - `LOC017`: it turns `text.Equals(wording)` into `text == wording`.
-
-Other subjects have a page of their own: [how Idioma works](how-it-works.md), [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), and [coming from resx](coming-from-resx.md).
-
-## The codes
-
-Each message says what to change, as this one does:
+Idioma turns translation mistakes into build errors. Each message names what's wrong and what to change:
 
 ```text
-error LOC011: This text is written in one language, and this assembly supports en, nl. Write it as LocalizableText.Inline(en: "...", nl: "...").
+error LOC500: This text is in one language, but this assembly supports en, nl. Write it as LocalizableText.Inline(en: "...", nl: "...").
 ```
 
-| Code               | Mistake                                                                                                                                                                             | Without languages |
-|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|
-| `LOC001`           | A set with texts of its own                                                                                                                                                         | Only there        |
-| `LOC002`           | A default-language set the generator cannot extend: not partial, not named after its language, nested, file-local, generic, abstract, or without a public parameterless constructor |                   |
-| `LOC003` (warning) | A set that cannot register itself                                                                                                                                                   | Yes               |
-| `LOC004`           | A language without a set of its own, also a listed region such as `en-GB` next to `en`, for a generated contract or one written by hand                                             |                   |
-| `LOC005`           | A set for a language not listed, also one you register yourself, and one whose name does not end in a language code: its last two letters count, as `ts` for `ShopTexts`            |                   |
-| `LOC006`           | A set deriving from a set of another language, which would leave texts in that language                                                                                             | Yes               |
-| `LOC007`           | A set that does not implement its contract, which no text would read                                                                                                                |                   |
-| `LOC008`           | A language a referenced library has no set for                                                                                                                                      |                   |
-| `LOC009` (warning) | A language a referenced library's inline texts lack, which nothing can add from outside                                                                                             |                   |
-| `LOC010`           | An invalid or repeated language in the attribute                                                                                                                                    |                   |
-| `LOC011`           | Wording written in one language: `"Orders"`, a `const`, `$"Order {number}"`, `"Order " + number`, `flag ? "Yes" : "No"`, and the same in Razor                                      |                   |
-| `LOC012`           | Calling by hand what only generated code should call                                                                                                                                |                   |
-| `LOC013`           | A language argument without its name, which could swap two languages unnoticed                                                                                                      |                   |
-| `LOC014`           | A text named like the generated class itself, as in `ShopTranslations.ShopTranslations`                                                                                             |                   |
-| `LOC015`           | A `LanguageCode` that implements nothing, on a set deriving from another set without listing `ITranslationSet`                                                                      | Yes               |
-| `LOC016`           | A placeholder of a format string in a wording, as in `"Hello, {0}!"`, in a set or in `LocalizableText.Inline`: nothing fills it in, so write the value as a parameter               | Yes               |
-| `LOC017`           | A string compared as a text, as in `text.Equals("Orders")`, `list.Contains(name)`, or `counts[name]`, which no translated text equals                                               | Yes               |
-| `LOC018`           | A `LanguageCode` that is not a culture name, such as `"en_GB"`, which makes the set throw as it registers                                                                           | Yes               |
-| `LOC019`           | A public method of a default-language set that returns a string and takes parameters, but cannot be a text: generic, sharing its name, or with a parameter the text cannot keep     |                   |
-| `LOC020`           | A parameter of a text that takes values named differently than in its contract, as in `Invited(string guest, string host)` for `Invited(string host, string guest)`                 | Yes               |
-| `LOC021`           | A text that leaves out a value the default wording shows, as in a Dutch `Greeting(string name) => "Hallo!"` for an English `$"Hello, {name}!"`                                      | Yes               |
+This page lists every code, grouped by subject, with an example and the fix. Your IDE offers a fix for the codes marked *(IDE fix)*.
 
-## What still converts
+Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
 
-A value that is not wording of yours still converts to a text, because it has no translations to demand:
+## All codes
+
+The hundreds of a code name its subject. The subjects come in the order of this page.
+
+| Code                                                | Mistake                                                 |
+|-----------------------------------------------------|---------------------------------------------------------|
+| **[Languages](#languages)**                         |                                                         |
+| [`LOC100`](#loc100)                                 | A set or inline text in an assembly without languages   |
+| [`LOC101`](#loc101)                                 | An invalid or repeated language                         |
+| **[Sets](#sets)**                                   |                                                         |
+| [`LOC200`](#loc200) (code fix)                      | A default-language set the generator can't use          |
+| [`LOC201`](#loc201) (code fix)                      | A language without a set                                |
+| [`LOC202`](#loc202)                                 | A set for a language that isn't listed                  |
+| [`LOC203`](#loc203)                                 | A set deriving from another language, as `nl` from `en` |
+| [`LOC204`](#loc204) (code fix)                      | A set that doesn't list its contract                    |
+| [`LOC205`](#loc205)                                 | A text with the name of the generated class             |
+| [`LOC206`](#loc206) (code fix)                      | A text with a setter                                    |
+| **[Texts with parameters](#texts-with-parameters)** |                                                         |
+| [`LOC300`](#loc300)                                 | A public method that can't be a text                    |
+| [`LOC301`](#loc301)                                 | A parameter named differently than in the contract      |
+| [`LOC302`](#loc302)                                 | A value that a translation never uses                   |
+| **[Registration](#registration)**                   |                                                         |
+| [`LOC400`](#loc400) (warning)                       | A set that can't be registered automatically            |
+| [`LOC401`](#loc401)                                 | A `LanguageCode` that implements nothing                |
+| [`LOC402`](#loc402)                                 | A `LanguageCode` that isn't a culture name              |
+| **[Wording](#wording)**                             |                                                         |
+| [`LOC500`](#loc500)                                 | Wording written in one language                         |
+| [`LOC501`](#loc501) (code fix)                      | A language argument without its name                    |
+| [`LOC502`](#loc502) (warning, code fix)             | A placeholder such as `{0}` in a wording                |
+| **[Libraries](#libraries)**                         |                                                         |
+| [`LOC600`](#loc600)                                 | A library without a set for one of your languages       |
+| [`LOC601`](#loc601) (warning)                       | A library whose inline texts lack one of your languages |
+
+## Languages
+
+### LOC100
+
+A set lists `ILocalizationSet` next to a contract of its own assembly, but the assembly declares no languages. The generator needs the languages to write the contract. Add `[assembly: SupportedLanguages("en", "nl")]` with your languages, the default first.
+
+A set that rewords a library's set, or adds a language to a library's contract, needs no languages.
+
+A call of `LocalizableText.Inline` in such an assembly is LOC100 too. The generator writes `Inline` with one parameter per language, so without languages the method doesn't exist, and the compiler reports `CS0117` next to it.
+
+### LOC101
+
+`[assembly: SupportedLanguages]` lists a language that isn't a culture name, or lists one twice. Both are build errors. List each language once, as a culture name such as `en` or `en-GB`.
+
+## Sets
+
+### LOC200
+
+The generator can't use the default-language set, so it writes no texts for it. The set must be:
+
+- named after its language, such as `ShopLocalizationEn`
+- top-level, so not nested
+- not file-local, generic, or abstract
+- with a public parameterless constructor
+- without `required` members
+- the only default-language set of its contract
+
+When only the constructor or a `required` member is the problem, the generator still writes the contract. Otherwise it writes no contract either. The contract your sets list then doesn't exist, so they don't compile (`CS0246`) until you fix this error.
+
+Two sets are the default-language set of one contract when their names differ only in the letter case of the language, as `ShopLocalizationEn` and `ShopLocalizationEN` do. The generator writes the contract from the first by name and reports the other. Remove one of them, or rename it.
+
+The IDE fix renames the class after its language, or removes `abstract` or `file`.
+
+### LOC201
+
+A contract has no set for one of your languages. The message names the class to add:
+
+```text
+error LOC201: 'ShopLocalization' has no set for 'de', which [assembly: SupportedLanguages] requires.
+Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.
+```
+
+The IDE fix adds that class in a file of its own, without texts. The compiler then names each text the set lacks (`CS0535`), and your IDE can add them for you to translate.
+
+This also applies to a listed region, such as `en-GB` next to `en`, and to a contract you wrote by hand. A regional set derives from the set of its language and holds only the texts that differ.
+
+A class that implements the contract without `ILocalizationSet` doesn't count as a set, whatever its name. To make it the set of its language, add `ILocalizationSet` next to the contract.
+
+### LOC202
+
+A set is for a language that `[assembly: SupportedLanguages]` doesn't list. Add the language to the attribute, or remove the set.
+
+This also applies to a set you register yourself.
+
+### LOC203
+
+A set derives from a set of another language, so every text it doesn't override stays in that other language:
+
+```csharp
+public class ShopLocalizationNl : ShopLocalizationEn // Every text it doesn't override stays English
+```
+
+To translate, list `ILocalizationSet` and the contract instead (`: ILocalizationSet, IShopLocalization`), which requires every text. Derive from a set only to reword some of its texts in the same language.
+
+A regional set may derive from the set of its language:
+
+```csharp
+public class ShopLocalizationEnGb : ShopLocalizationEn // Texts it doesn't override fall back to English
+```
+
+One region can't derive from another, because a region doesn't fall back to another region. `ShopLocalizationEnUs : ShopLocalizationEnGb` is LOC203.
+
+### LOC204
+
+A set lists `ILocalizationSet` without its contract, so no text reads it. This also applies to the default-language set. Add the contract next to `ILocalizationSet`, as in `class ShopLocalizationNl : ILocalizationSet, IShopLocalization`. The IDE fix does this for you.
+
+### LOC205
+
+A text has the name of the generated class, as in `ShopLocalization.ShopLocalization`. In C#, a member can't have the name of its own class, so that text isn't generated. Rename the text.
+
+### LOC206
+
+A text has a setter, so its wording can change after the set is created:
+
+```csharp
+public string Greeting { get; set; } = "Hallo!"; // LOC206
+```
+
+Remove the setter. One instance of each set serves every user, so a change of wording reaches all of them. Any setter counts, also a `private` one.
+
+- To set the wording when the set is created, assign it in the constructor or use `init`.
+- To change the wording at run time, read it in the getter, for example from a store.
+
+The IDE fix removes the setter, along with its body. An auto-property can still be assigned in the constructor. Any other assignment stops compiling, which shows you the code that changed the wording.
+
+A member that isn't a text may have a setter, such as a helper marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't catch a getter that returns a field which a method changes.
+
+## Texts with parameters
+
+### LOC300
+
+A public method of the default-language set that returns a `string` is a text with parameters. LOC300 means it can't be one, because the method:
+
+- takes no parameters
+- is generic
+- shares its name with another method of the set
+- has zero parameters
+- takes more than eight parameters
+- has a parameter that is passed by reference, is `params`, has a default value, or is `dynamic`
+- has a parameter of a type a text can't keep until it's shown, such as a pointer or a span
+
+A method that can't become a property isn't reported: an override such as `ToString()`, or a method that another interface of the set asks for.
+
+### LOC301
+
+A set names a parameter differently than the contract does. The compiler checks only the types and order of parameters, so two values of one type could swap unnoticed:
+
+```csharp
+// The contract has Invited(string host, string guest)
+public string Invited(string guest, string host) => $"{host} has invited {guest}"; // LOC301
+```
+
+Use the same parameter names in every language.
+
+### LOC302
+
+A translation never uses a value that the default wording shows:
+
+```csharp
+public string Greeting(string name) => $"Hello, {name}!"; // In ShopLocalizationEn
+public string Greeting(string name) => "Hallo!";          // In ShopLocalizationNl: LOC302, the name is missing
+```
+
+Use the value in every language. Any use counts, in a condition or in the wording, so `count is 1 ? "1 artikel" : "meer artikelen"` uses `count`. A value that the default wording only uses to choose between wordings, such as a form of address, may go unused.
+
+An inline text is held to the same rule. The wording of the default language shows a value where it holds one in an interpolated string:
+
+```csharp
+LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!") // LOC302: the 'nl' wording doesn't use 'name'
+```
+
+A value is a local variable, a parameter, or a field or property of your own assembly. A constant is wording, so it isn't a value. The build reports only what it can read, so these get no error:
+
+- a wording that isn't written in the call, such as a variable or the result of a method
+- a wording that calls a local function or a delegate, which may read the value
+- a wording that reads a local variable declared with the value, as in `var name = user.Name;`
+
+## Registration
+
+### LOC400
+
+A set can't be registered automatically, so its texts won't be found. This is a warning. The generated code that registers sets needs:
+
+- a parameterless constructor
+- no `required` members
+- a language code: the end of its name, starting with a capital, such as `En`, or an implementation of `ILocalizationSet.LanguageCode` (see [language codes](language-codes.md) for a longer code such as `EnGb`)
+- a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
+
+Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an instance to `LocalizationRegistry.Register`.
+
+### LOC401
+
+A set derives from another set and declares a `LanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LanguageCode` then implements nothing, and the set serves the language of its name instead:
+
+```csharp
+public class ShopLocalizationBritish : ShopLocalizationEn // LOC401: LanguageCode is never read
+{
+    public string LanguageCode => "en-GB";
+}
+```
+
+List the interface again: `class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet`.
+
+### LOC402
+
+A set's `LanguageCode` isn't a culture name, such as `"en_GB"`. Registering the set would throw when the app starts. Return a culture name such as `en`, `en-GB` or `zh-Hans`.
+
+This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which would throw where you register it.
+
+## Wording
+
+### LOC500
+
+A text is written in one language, so users of every other language would see it in that language too. These are all LOC500:
+
+```csharp
+Title = "Orders";
+Title = $"Order {number}";
+Title = "Order " + number;
+Title = flag ? "Yes" : "No";
+```
+
+A `const` counts too, and so does the same in Razor. Write the text as `LocalizableText.Inline(en: "...", nl: "...")`, or in a set.
+
+Any letter counts, so a name, a unit, or an abbreviation is reported too: `Title = "Idioma"` and `Title = $"{distance} km"` are LOC500. When it reads the same in every language, write the same wording for each: `LocalizableText.Inline(en: "Idioma", nl: "Idioma")`.
+
+Or keep it in a property marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't check that property's initializer:
+
+```csharp
+[ExcludeFromLocalizationDiscovery] // Reads the same in every language
+public static LocalizableText Brand { get; } = "Idioma";
+```
+
+The attribute covers the initializer alone. What other code assigns to the property is still checked, so a marked component parameter still holds its callers to every language.
+
+LOC500 starts with your second language, because one language has nothing to be translated into. See also [what still converts](#what-still-converts).
+
+### LOC501
+
+An argument of `LocalizableText.Inline` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`.
+
+The IDE fix names each argument after the language of its position.
+
+### LOC502
+
+A wording holds a placeholder of a format string, such as `{0}`. This is a warning. Nothing fills the placeholder in, so users would see `{0}` as written.
+
+- In a set, write the text as a method that takes the value: `public string Greeting(string name) => $"Hello, {name}!";`.
+- In an inline text, write the value into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`.
+
+The build reads only the strings a text returns:
+
+- a string by itself
+- the text of an interpolated string
+- a part of a concatenation, a conditional (`?:` or `??`), or a `switch`
+
+It doesn't read a string passed to a method, because the method may fill the placeholder in. So `string.Format("{0} items", count)` gets no warning. A string kept in a local variable isn't read either.
+
+The IDE fix writes a parameter in place of each placeholder of a set's text. A method uses its own parameters, the first for `{0}`. A property becomes a method:
+
+- When the contract's text takes no values yet, as in the default-language set, the method takes an `object?` per placeholder number. So `"Hello, {0}!"` becomes `public string Greeting(object? arg0) => $"Hello, {arg0}!";`. Then give each parameter its name and type.
+- When the contract's text takes values, the method takes the contract's parameters. So fix the default-language set first, and name its parameters before you fix the other languages.
+
+Fixing every language at once gives each the same parameters: `arg0`, `arg1` and so on. An inline text gets no fix, because its wording has no parameter to take the value.
+
+### What still converts
+
+A value that isn't wording of yours still converts to a text, because it has nothing to translate:
 
 ```csharp
 Title = customer.Name;     // A value read at run time
@@ -54,14 +289,35 @@ Title = "-";               // No letters
 Title = "1234";
 ```
 
-## What the build misses
+### What the build misses
 
-The build misses two things. It cannot tell such a value from wording kept in a local variable or returned by a helper method, so those compile too:
+The build misses two things. First, it can't tell such a value from wording kept in a local variable, a field or a property, or returned by a method, so those compile too:
 
 ```csharp
+private static readonly string Heading = "Orders";
+
 var title = "Orders";
 Title = title;      // Wording, but the build sees a variable
+Title = Heading;    // Wording, but the build sees a field, as it would a property
 Title = GetTitle(); // Wording, but the build sees a method call
 ```
 
-And plain text in Razor markup, such as `<h1>Orders</h1>`, is not a text at all, so the build does not see it either: write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
+A `const` is the exception, because the build reads its value. It's LOC500.
+
+Second, plain text in Razor markup, such as `<h1>Orders</h1>`, isn't a text at all, so the build doesn't see it either. Write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
+
+## Libraries
+
+### LOC600
+
+A library you reference has no set for one of your languages. The message names the set to add to your app:
+
+```text
+error LOC600: No set serves 'Shop.IShopLocalization' in 'de', which this assembly supports. Add 'class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization'.
+```
+
+See [a language the library lacks](libraries-and-apps.md#a-language-the-library-lacks).
+
+### LOC601
+
+A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in the library's default language.

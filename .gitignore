@@ -5,6 +5,7 @@ artifacts/
 *.nupkg
 *.snupkg
 *.binlog
+TestResults/
 
 # IDE and user-specific files
 .idea/

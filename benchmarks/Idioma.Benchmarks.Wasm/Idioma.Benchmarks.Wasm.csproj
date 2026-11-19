@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    The benchmarks in Blazor WebAssembly. Each page load runs every scenario for one culture and reports it to the
+    runner in Idioma.Benchmarks (WasmRunner), which serves this app's published wwwroot to a headless Chrome. Publish
+    with -p:RunAOTCompilation=true for Mono's AOT, which needs the wasm-tools workload, or with -p:UseMonoRuntime=false
+    for the CoreCLR runtime, a preview in .NET 11.
+  -->
+
+  <PropertyGroup>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- Each runtime builds into folders of its own: a CoreCLR publish that found Mono's files there failed. -->
+    <RuntimeVariant>mono-$(UseMonoRuntime)-aot-$(RunAOTCompilation)</RuntimeVariant>
+    <IntermediateOutputPath>obj/$(Configuration)/$(RuntimeVariant)/</IntermediateOutputPath>
+    <OutputPath>bin/$(Configuration)/$(RuntimeVariant)/</OutputPath>
+    <!-- The ICU data of every culture, as an app with a language picker loads it, so any culture can be chosen. -->
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Localization" Version="11.0.0" />
+  </ItemGroup>
+
+  <Import Project="../Shared/Shared.props" />
+
+</Project>

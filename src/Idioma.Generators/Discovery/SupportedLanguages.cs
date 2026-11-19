@@ -53,7 +53,7 @@ internal static class SupportedLanguages
     // The parents .NET itself gives these five on every platform (CultureInfo.Parent), which a text follows at run time.
     // Written out, and not asked of the cultures of this machine, because a compiler may run under invariant
     // globalization, and a build must not report on one machine what it accepts on another. SupportedLanguages.Tests.cs
-    // fails when a runtime gives any culture a parent this table and the prefix rule do not.
+    // fails when a runtime gives any culture a parent this table and the prefix rule don't.
     internal static string? FindScriptParentOfChineseRegion(string code)
     {
         if (code.Length is not 5 || !code.StartsWith("zh-", StringComparison.OrdinalIgnoreCase))
@@ -70,26 +70,20 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// The parameter a language has in the generated factory: the suffix of its set (<see cref="ToTypeSuffix"/>) in
-    /// camel case, so <c>nl</c> where a set ends in <c>NL</c>, <c>enGB</c> for <c>EnGB</c>, and <c>zhHans</c> for
+    /// camelCase, so <c>nl</c> where a set ends in <c>Nl</c>, <c>enGb</c> for <c>EnGb</c>, and <c>zhHans</c> for
     /// <c>ZhHans</c>. A keyword is escaped: <c>@is</c>.
     /// </summary>
     public static string ToParameterName(string code)
     {
-        // The language itself in lower case, and every part after it as the suffix of a set writes it.
-        var parts = code.Split('-');
-        var builder = new StringBuilder(code.Length).Append(parts[0].ToLowerInvariant());
-
-        for (var i = 1; i < parts.Length; i++)
-            AppendCapitalized(builder, parts[i]);
-
-        var name = builder.ToString();
+        var suffix = ToTypeSuffix(code);
+        var name = suffix.Length is 0 ? suffix : Char.ToLowerInvariant(suffix[0]) + suffix.Substring(1);
 
         return SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
     }
 
     /// <summary>
     /// The language a parameter of the generated factory stands for among the languages an assembly lists, such as
-    /// <c>en-GB</c> for <c>enGB</c>. The name of the parameter itself when none of them gives it.
+    /// <c>en-GB</c> for <c>enGb</c>. The name of the parameter itself when none of them gives it.
     /// </summary>
     public static string FindLanguageOfParameter(string parameterName, IEnumerable<string> codes)
     {
@@ -102,43 +96,40 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The suffix a set's name carries for a language: <c>NL</c> and <c>ZhHans</c>.
+    /// The suffix a set's name carries for a language, which is its code in PascalCase: <c>Nl</c> for <c>nl</c>,
+    /// <c>EnGb</c> for <c>en-GB</c>, and <c>ZhHans</c> for <c>zh-Hans</c>. Each part of the code starts with a capital,
+    /// and the rest of it is in lower case, however the attribute writes the code.
     /// </summary>
     public static string ToTypeSuffix(string code)
     {
-        if (code.Length is 2)
-            return code.ToUpperInvariant();
-
         var suffix = new StringBuilder(code.Length);
+
         foreach (var part in code.Split('-'))
-            AppendCapitalized(suffix, part);
+            if (part.Length > 0)
+                suffix.Append(Char.ToUpperInvariant(part[0])).Append(part.Substring(1).ToLowerInvariant());
 
         return suffix.ToString();
     }
 
-    private static void AppendCapitalized(StringBuilder builder, string part)
-    {
-        if (part.Length > 0)
-            builder.Append(Char.ToUpperInvariant(part[0])).Append(part, startIndex: 1, part.Length - 1);
-    }
-
     /// <summary>
-    /// The set to add for a language, as a diagnostic names it: <c>'class ShopTranslationsNL : IShopTranslations'</c>.
-    /// The name alone gives the language, also for a code that is not two letters (<c>ShopTranslationsEnGB</c>), as
+    /// The set to add for a language, as a diagnostic names it:
+    /// <c>'class ShopLocalizationNl : ILocalizationSet, IShopLocalization'</c>.
+    /// The name alone gives the language, also for a code that is not two letters (<c>ShopLocalizationEnGb</c>), as
     /// every language a diagnostic suggests a set for is one the assembly declares (<see cref="FindNamedLanguage"/>).
     /// </summary>
     public static string SuggestSet(string setName, string contract)
     {
-        return $"'class {setName} : {contract}'";
+        return $"'class {setName} : ILocalizationSet, {contract}'";
     }
 
     /// <summary>
-    /// Whether a type's name ends in the suffix of a language (<see cref="ToTypeSuffix"/>), with something before it. A
-    /// two-letter language takes its suffix in upper case (<c>ShopTranslationsNL</c>). A longer one takes it in any
-    /// letter case that starts with a capital (<c>ShopTranslationsEnGB</c>, <c>ShopTranslationsENGB</c>).
+    /// Whether a type's name ends in the suffix of a language (<see cref="ToTypeSuffix"/>), with something before it.
+    /// The suffix is written in PascalCase (<c>ShopLocalizationNl</c>, <c>ShopLocalizationEnGb</c>). It counts in any
+    /// letter case that starts with a capital, so <c>ShopLocalizationNL</c> and <c>ShopLocalizationENGB</c> end in it
+    /// too.
     /// </summary>
-    // The capital marks where the suffix starts. Without it MessagesAR, an Arabic set, would end in the suffix of es-AR
-    // (the "es" of Messages, then AR), and ReceiptBR, a Breton one, in that of pt-BR.
+    // The capital marks where the suffix starts. Without it MessagesAr, an Arabic set, would end in the suffix of es-AR
+    // (the "es" of Messages, then Ar), and ReceiptBr, a Breton one, in that of pt-BR.
     public static bool EndsInTypeSuffix(string typeName, string code)
     {
         var suffix = ToTypeSuffix(code);
@@ -147,18 +138,16 @@ internal static class SupportedLanguages
         if (suffix.Length is 0 || typeName.Length <= suffix.Length)
             return false;
 
-        return code.Length is 2
-            ? typeName.EndsWith(suffix, StringComparison.Ordinal)
-            : typeName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && typeName[typeName.Length - suffix.Length] is >= 'A' and <= 'Z';
+        return typeName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && typeName[typeName.Length - suffix.Length] is >= 'A' and <= 'Z';
     }
 
     /// <summary>
     /// The language a type's name gives it among declared languages that are not two letters: the longest code whose
-    /// suffix the name ends in (<see cref="EndsInTypeSuffix"/>), such as <c>en-GB</c> for <c>ShopTranslationsEnGB</c>
-    /// or <c>fil</c> for <c>ShopTranslationsFil</c>; <see langword="null"/> when none does. A two-letter code needs no
-    /// such match: the last two letters of a name give it at run time.
+    /// suffix the name ends in (<see cref="EndsInTypeSuffix"/>), such as <c>en-GB</c> for <c>ShopLocalizationEnGb</c>
+    /// or <c>fil</c> for <c>ShopLocalizationFil</c>; <see langword="null"/> when none does. A two-letter code needs no
+    /// such match, because the last two letters of a name give it at run time.
     /// </summary>
-    // Only declared codes: a name alone cannot tell ShopTranslationsEnGB (en-GB) from AdminUiNL (nl).
+    // Only declared codes: a name alone can't tell ShopLocalizationEnGb (en-GB) from AdminUiNl (nl).
     public static string? FindNamedLanguage(string typeName, IEnumerable<string> codes)
     {
         string? found = null;
@@ -185,11 +174,11 @@ internal static class SupportedLanguages
         {
             if (code is null)
             {
-                problems.Add("null is not a culture name");
+                problems.Add("null isn't a culture name");
             }
             else if (!IsCultureName(code))
             {
-                problems.Add($"'{code}' is not a culture name");
+                problems.Add($"'{code}' isn't a culture name");
             }
             else if (codes.Contains(code, StringComparer.OrdinalIgnoreCase))
             {
@@ -222,7 +211,7 @@ internal static class SupportedLanguages
     /// <summary>
     /// The languages the attribute lists, in order, each with whether it is the default language, and with
     /// <see langword="null"/> for each one written as <c>null</c>; a list of other languages written as <c>null</c>
-    /// counts as one. A constant the compiler cannot read yet, while the user is still typing, is left out.
+    /// counts as one. A constant the compiler can't read yet, while the user is still typing, is left out.
     /// </summary>
     private static IEnumerable<(string? Code, bool IsDefault)> ReadArguments(AttributeData attribute)
     {
@@ -291,7 +280,7 @@ internal static class SupportedLanguages
 /// </summary>
 /// <remarks>
 /// The default language is <see langword="null"/> when the attribute's first argument is no language the build can use
-/// (<c>LOC010</c>), or cannot be read yet. The next language does not take its place: nothing is held to a default
+/// (<c>LOC101</c>), or can't be read yet. The next language does not take its place: nothing is held to a default
 /// language then, and the valid languages are all other languages. With a default language, it is the first of them.
 /// </remarks>
 internal readonly record struct DeclaredLanguages(

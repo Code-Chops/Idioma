@@ -51,10 +51,24 @@ public sealed class CultureFallbackTests
     [Test]
     public void Names_OfCultureName_ShouldDropSubtagsWithoutCreatingCulture()
     {
-        // Arrange & Act & Assert: a language code, which under invariant globalization cannot become a culture.
+        // Arrange & Act & Assert: a language code, which under invariant globalization can't become a culture.
         Names("zh-Hant-TW").ShouldBe(["zh-Hant-TW", "zh-Hant", "zh"]);
         Names("nl").ShouldBe(["nl"]);
         Should.Throw<ArgumentException>(() => Names(""));
+    }
+
+    [Test]
+    public void Names_OfLanguage_ShouldFollowParentCultures()
+    {
+        // Arrange & Act & Assert: by name alone, zh-TW would skip zh-Hant.
+        Names(CultureFallback.OfLanguage("zh-TW")).ShouldBe(["zh-TW", "zh-Hant", "zh"]);
+    }
+
+    [Test]
+    public void Names_OfLanguageWithAliasCulture_ShouldDropSubtagsByName()
+    {
+        // Arrange & Act & Assert: ICU gives zh-yue the culture yue, whose walk would never try zh-yue.
+        Names(CultureFallback.OfLanguage("zh-yue")).ShouldBe(["zh-yue", "zh"]);
     }
 
     [Test]

@@ -11,6 +11,7 @@
     <File Path="docs/how-it-works.md" />
     <File Path="docs/language-codes.md" />
     <File Path="docs/libraries-and-apps.md" />
+    <File Path="docs/performance.md" />
     <File Path="README.md" />
   </Folder>
   <Folder Name="/Solution Items/">

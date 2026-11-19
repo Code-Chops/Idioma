@@ -1,12 +1,39 @@
 namespace CodeChops.Idioma.Internals;
 
 /// <summary>
+/// <para>
+/// Don't use this attribute directly! It's used by the source generator.
+/// </para>
+/// <para>
 /// Records that the default wording of a text shows a value it takes, such as <c>name</c> in
-/// <c>public string Greeting(string name) => $"Hello, {name}!";</c>, so that the build of every set implementing the
-/// contract checks that its wording uses the value too (<c>LOC021</c>), also in another assembly. The source generator
-/// writes this on the parameters of a contract it generates; you never need to.
+/// <c>public string Greeting(string name) => $"Hello, {name}!";</c>. The build of every set implementing the contract
+/// then checks that its method uses the value too (<c>LOC302</c>), also in another assembly. The source generator
+/// writes this on a method of a contract it generates, once for each value the default wording shows.
+/// </para>
 /// </summary>
-// Located by its metadata-name string.
+// Located by its metadata-name string, and read by constructor position. On the method and not on the parameter,
+// because an IDE's "Implement interface" copies the attributes of a parameter into the set it writes, where this one
+// would warn that it's obsolete. It leaves those of a method out.
+[Obsolete("Don't use this attribute directly. Only generated code applies this attribute on a method of a contract, for each value the default wording shows.")]
 [EditorBrowsable(EditorBrowsableState.Never)]
-[AttributeUsage(AttributeTargets.Parameter)]
-public sealed class ShownValueAttribute : Attribute;
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+public sealed class ShownValueAttribute : Attribute
+{
+    /// <summary>
+    /// The name of the parameter whose value the default wording shows.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string Parameter { get; }
+
+    /// <summary>
+    /// Records a value the default wording shows.
+    /// </summary>
+    /// <param name="parameter">The name of the parameter whose value the default wording shows.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public ShownValueAttribute(string parameter)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(parameter);
+
+        this.Parameter = parameter;
+    }
+}

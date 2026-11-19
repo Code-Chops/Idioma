@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AddToCart" xml:space="preserve"><value>In winkelwagen</value></data>
+  <data name="RemoveFromCart" xml:space="preserve"><value>Uit winkelwagen verwijderen</value></data>
+  <data name="Checkout" xml:space="preserve"><value>Afrekenen</value></data>
+  <data name="ContinueShopping" xml:space="preserve"><value>Verder winkelen</value></data>
+  <data name="YourCart" xml:space="preserve"><value>Je winkelwagen</value></data>
+  <data name="CartIsEmpty" xml:space="preserve"><value>Je winkelwagen is leeg</value></data>
+  <data name="Subtotal" xml:space="preserve"><value>Subtotaal</value></data>
+  <data name="Shipping" xml:space="preserve"><value>Verzending</value></data>
+  <data name="Total" xml:space="preserve"><value>Totaal</value></data>
+  <data name="FreeShipping" xml:space="preserve"><value>Gratis verzending bij bestellingen boven 50 euro</value></data>
+  <data name="PlaceOrder" xml:space="preserve"><value>Bestelling plaatsen</value></data>
+  <data name="OrderConfirmed" xml:space="preserve"><value>Je bestelling is bevestigd</value></data>
+  <data name="OrderNumber" xml:space="preserve"><value>Bestelnummer</value></data>
+  <data name="TrackOrder" xml:space="preserve"><value>Volg je bestelling</value></data>
+  <data name="Delivery" xml:space="preserve"><value>Bezorging</value></data>
+  <data name="DeliveryAddress" xml:space="preserve"><value>Bezorgadres</value></data>
+  <data name="BillingAddress" xml:space="preserve"><value>Factuuradres</value></data>
+  <data name="SameAsDeliveryAddress" xml:space="preserve"><value>Zelfde als bezorgadres</value></data>
+  <data name="FirstName" xml:space="preserve"><value>Voornaam</value></data>
+  <data name="LastName" xml:space="preserve"><value>Achternaam</value></data>
+  <data name="EmailAddress" xml:space="preserve"><value>E-mailadres</value></data>
+  <data name="PhoneNumber" xml:space="preserve"><value>Telefoonnummer</value></data>
+  <data name="StreetAndNumber" xml:space="preserve"><value>Straat en huisnummer</value></data>
+  <data name="PostalCode" xml:space="preserve"><value>Postcode</value></data>
+  <data name="City" xml:space="preserve"><value>Plaats</value></data>
+  <data name="Country" xml:space="preserve"><value>Land</value></data>
+  <data name="Payment" xml:space="preserve"><value>Betaling</value></data>
+  <data name="PaymentMethod" xml:space="preserve"><value>Betaalmethode</value></data>
+  <data name="CreditCard" xml:space="preserve"><value>Creditcard</value></data>
+  <data name="PayNow" xml:space="preserve"><value>Nu betalen</value></data>
+  <data name="PaymentFailed" xml:space="preserve"><value>De betaling is mislukt. Probeer het opnieuw.</value></data>
+  <data name="SignIn" xml:space="preserve"><value>Inloggen</value></data>
+  <data name="SignOut" xml:space="preserve"><value>Uitloggen</value></data>
+  <data name="CreateAccount" xml:space="preserve"><value>Account aanmaken</value></data>
+  <data name="ForgotPassword" xml:space="preserve"><value>Wachtwoord vergeten?</value></data>
+  <data name="Password" xml:space="preserve"><value>Wachtwoord</value></data>
+  <data name="RememberMe" xml:space="preserve"><value>Onthoud mij</value></data>
+  <data name="MyAccount" xml:space="preserve"><value>Mijn account</value></data>
+  <data name="MyOrders" xml:space="preserve"><value>Mijn bestellingen</value></data>
+  <data name="Wishlist" xml:space="preserve"><value>Verlanglijst</value></data>
+  <data name="AddToWishlist" xml:space="preserve"><value>Op verlanglijst zetten</value></data>
+  <data name="Search" xml:space="preserve"><value>Zoeken</value></data>
+  <data name="SearchProducts" xml:space="preserve"><value>Producten zoeken</value></data>
+  <data name="NoResults" xml:space="preserve"><value>Geen producten gevonden voor je zoekopdracht</value></data>
+  <data name="Filter" xml:space="preserve"><value>Filteren</value></data>
+  <data name="SortBy" xml:space="preserve"><value>Sorteren op</value></data>
+  <data name="PriceLowToHigh" xml:space="preserve"><value>Prijs: laag naar hoog</value></data>
+  <data name="PriceHighToLow" xml:space="preserve"><value>Prijs: hoog naar laag</value></data>
+  <data name="Newest" xml:space="preserve"><value>Nieuwste</value></data>
+  <data name="BestSellers" xml:space="preserve"><value>Bestsellers</value></data>
+  <data name="InStock" xml:space="preserve"><value>Op voorraad</value></data>
+  <data name="OutOfStock" xml:space="preserve"><value>Niet op voorraad</value></data>
+  <data name="OnlyAFewLeft" xml:space="preserve"><value>Nog maar een paar over</value></data>
+  <data name="Size" xml:space="preserve"><value>Maat</value></data>
+  <data name="Color" xml:space="preserve"><value>Kleur</value></data>
+  <data name="Quantity" xml:space="preserve"><value>Aantal</value></data>
+  <data name="ProductDetails" xml:space="preserve"><value>Productdetails</value></data>
+  <data name="Description" xml:space="preserve"><value>Omschrijving</value></data>
+  <data name="Reviews" xml:space="preserve"><value>Beoordelingen</value></data>
+  <data name="WriteReview" xml:space="preserve"><value>Schrijf een beoordeling</value></data>
+  <data name="Rating" xml:space="preserve"><value>Waardering</value></data>
+  <data name="RecommendedForYou" xml:space="preserve"><value>Aanbevolen voor jou</value></data>
+  <data name="RecentlyViewed" xml:space="preserve"><value>Recent bekeken</value></data>
+  <data name="Sale" xml:space="preserve"><value>Uitverkoop</value></data>
+  <data name="NewArrivals" xml:space="preserve"><value>Nieuw binnen</value></data>
+  <data name="Categories" xml:space="preserve"><value>Categorieën</value></data>
+  <data name="AllProducts" xml:space="preserve"><value>Alle producten</value></data>
+  <data name="Home" xml:space="preserve"><value>Startpagina</value></data>
+  <data name="ContactUs" xml:space="preserve"><value>Neem contact op</value></data>
+  <data name="CustomerService" xml:space="preserve"><value>Klantenservice</value></data>
+  <data name="Returns" xml:space="preserve"><value>Retourneren</value></data>
+  <data name="ReturnPolicy" xml:space="preserve"><value>Je kunt artikelen binnen 30 dagen retourneren</value></data>
+  <data name="FrequentlyAskedQuestions" xml:space="preserve"><value>Veelgestelde vragen</value></data>
+  <data name="AboutUs" xml:space="preserve"><value>Over ons</value></data>
+  <data name="PrivacyPolicy" xml:space="preserve"><value>Privacybeleid</value></data>
+  <data name="TermsAndConditions" xml:space="preserve"><value>Algemene voorwaarden</value></data>
+  <data name="CookieNotice" xml:space="preserve"><value>We gebruiken cookies om je ervaring te verbeteren</value></data>
+  <data name="AcceptCookies" xml:space="preserve"><value>Cookies accepteren</value></data>
+  <data name="NewsletterSignUp" xml:space="preserve"><value>Meld je aan voor onze nieuwsbrief</value></data>
+  <data name="Subscribe" xml:space="preserve"><value>Aanmelden</value></data>
+  <data name="Unsubscribe" xml:space="preserve"><value>Afmelden</value></data>
+  <data name="Save" xml:space="preserve"><value>Opslaan</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Annuleren</value></data>
+  <data name="Delete" xml:space="preserve"><value>Verwijderen</value></data>
+  <data name="Edit" xml:space="preserve"><value>Bewerken</value></data>
+  <data name="Close" xml:space="preserve"><value>Sluiten</value></data>
+  <data name="Back" xml:space="preserve"><value>Terug</value></data>
+  <data name="Next" xml:space="preserve"><value>Volgende</value></data>
+  <data name="Previous" xml:space="preserve"><value>Vorige</value></data>
+  <data name="Loading" xml:space="preserve"><value>Bezig met laden...</value></data>
+  <data name="SomethingWentWrong" xml:space="preserve"><value>Er is iets misgegaan</value></data>
+  <data name="TryAgain" xml:space="preserve"><value>Opnieuw proberen</value></data>
+  <data name="ChangesSaved" xml:space="preserve"><value>Je wijzigingen zijn opgeslagen</value></data>
+  <data name="RequiredField" xml:space="preserve"><value>Dit veld is verplicht</value></data>
+  <data name="InvalidEmailAddress" xml:space="preserve"><value>Vul een geldig e-mailadres in</value></data>
+  <data name="PasswordTooShort" xml:space="preserve"><value>Het wachtwoord moet minstens 8 tekens hebben</value></data>
+  <data name="Language" xml:space="preserve"><value>Taal</value></data>
+  <data name="Currency" xml:space="preserve"><value>Valuta</value></data>
+  <data name="Notifications" xml:space="preserve"><value>Meldingen</value></data>
+  <data name="Settings" xml:space="preserve"><value>Instellingen</value></data>
+</root>

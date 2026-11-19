@@ -1,41 +1,46 @@
 # Language codes
 
-A set's language is the end of its name. A two-letter code is the last two letters: `ShopTranslationsEN` serves `en`, and every culture under it.
+A set's language code is the end of its name, written in PascalCase. A two-letter code is the last two letters: `ShopLocalizationEn` serves `en` and every culture under it.
 
-A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name as well, written in PascalCase (`ShopTranslationsEnGB`, `ShopTranslationsZhHans`, `ShopTranslationsFil`), but only when `[assembly: SupportedLanguages]` lists it. A set deriving from such a set serves the same language.
+A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name only when `[assembly: SupportedLanguages]` lists it. It's written in PascalCase too: `ShopLocalizationEnGb`, `ShopLocalizationZhHans`, `ShopLocalizationFil`. A set deriving from such a set serves the same language.
 
-An inline text takes the same codes as the names of its arguments, in camelCase: `nl:` where a set's name ends in `NL`, and `enGB:`, `zhHans:`, and `fil:` for the sets above.
+Only the capital that starts the code counts. After it, the code matches in any letter case, so `ShopLocalizationEN` and `ShopLocalizationEnGB` work too. Without that capital, a name has no code. So `LocalizationSet` doesn't serve Estonian (`et`), and gets build warning `LOC400`.
 
-A name alone cannot tell `ShopTranslationsEnGB` (British English) from `AdminUiNL` (Dutch). So when the code is not listed, only the last two letters count: `ShopTranslationsEnGB` serves `gb`, which is not a language (build error `LOC005`).
+An inline text takes the same codes as parameter names, in camelCase: `nl:` where a set's name ends in `Nl`, and `enGb:`, `zhHans:`, and `fil:` for the sets above.
 
-Other subjects have a page of their own: [how Idioma works](how-it-works.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), and [coming from resx](coming-from-resx.md).
+When a longer code isn't listed, only the last two letters count. A name alone can't tell `ShopLocalizationEnGb` (British English) from `AdminUiNl` (Dutch). So an unlisted `ShopLocalizationEnGb` serves `gb`, which isn't a language (build error `LOC202`).
+
+Other subjects have a page of their own: [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
 
 ## Regional variants
 
-For English in the United States and Britain, you need no `en-US` set: `ShopTranslationsEN` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. There are two ways to add one:
+You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. There are two ways to add one:
 
-- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`. The name is enough. British English is then a language of its own to the build: every contract needs a British set (`LOC004`), which can derive from the English one and add nothing, and every inline text takes a British wording (`enGB:`).
+- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`, and the name is enough. The build then treats British English as a language of its own. Every contract needs a British set (`LOC201`), which can derive from the English one and add nothing, and every inline text takes a British wording (`enGb:`).
 
   ```csharp
-  public class ShopTranslationsEnGB : ShopTranslationsEN
+  public class ShopLocalizationEnGb : ShopLocalizationEn
   {
       public override string Cart => "Basket";
   }
   ```
 
-- Leave it out, `("en", "nl")`, so that your other sets and your inline texts show their English in Britain, and implement `LanguageCode` in the set:
+- Leave it out, `("en", "nl")`, and implement `LanguageCode` in the set. Your other sets and your inline texts then show their English in Britain.
 
   ```csharp
-  public class ShopTranslationsEnGB : ShopTranslationsEN, ITranslationSet
+  public class ShopLocalizationEnGb : ShopLocalizationEn, ILocalizationSet
   {
-      string ITranslationSet.LanguageCode => "en-GB";
+      string ILocalizationSet.LanguageCode => "en-GB";
 
       public override string Cart => "Basket";
   }
   ```
 
-A set deriving from another set lists `ITranslationSet` again to implement `LanguageCode`, as in the second example; without it, its `LanguageCode` implements nothing (`LOC015`). The code it returns is a culture name: a constant that is not one, such as `"en_GB"`, is build error `LOC018`.
+A set that derives from another set lists `ILocalizationSet` again to implement `LanguageCode`, as in the second example. Without it, its `LanguageCode` implements nothing (`LOC401`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC402`.
 
-Separate `en-US` and `en-GB` sets without an `en` set work as well, with two drawbacks. Each set then has every text, as one region cannot derive from another (`LOC006`: texts it does not override would stay American). And a user whose culture is plain `en`, or `en-AU`, gets your default language.
+Separate `en-US` and `en-GB` sets without an `en` set work too, with two drawbacks:
 
-A regional default language works the same way: with `[assembly: SupportedLanguages("en-GB", "nl")]`, `public partial class ShopTranslationsEnGB : ITranslationSet` gives the contract `IShopTranslations`.
+- Each set has every text, because one region can't derive from another (`LOC203`). Texts it doesn't override would stay American.
+- A user whose culture is plain `en`, or `en-AU`, gets your default language.
+
+A regional default language works the same way. With `[assembly: SupportedLanguages("en-GB", "nl")]`, `public class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization` gives the contract `IShopLocalization`.

@@ -3,7 +3,7 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// An immutable array that compares by value, element by element, instead of by the underlying array reference. Use
 /// this rather than a bare <see cref="ImmutableArray{T}"/> for any sequence that flows through an incremental generator
-/// pipeline: a pipeline step is reused from cache only when its input compares equal.
+/// pipeline, because a pipeline step is reused from cache only when its input compares equal.
 /// </summary>
 internal readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable<EquatableArray<T>>, IReadOnlyList<T>
     where T : IEquatable<T>

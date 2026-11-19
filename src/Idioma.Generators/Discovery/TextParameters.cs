@@ -8,9 +8,20 @@ namespace CodeChops.Idioma.Generators;
 internal static class TextParameters
 {
     /// <summary>
+    /// The most values a text takes, as the overloads of <c>GeneratedCode.CreateSetText</c> take them.
+    /// </summary>
+    public const int MaxValues = 8;
+
+    /// <summary>
+    /// What <c>LOC300</c> says of a text written as a method without parameters
+    /// (<see cref="IsTextWithoutParameters"/>), as the clause of its message.
+    /// </summary>
+    public const string WithoutParametersProblem = "it takes no parameters, so write it as a property";
+
+    /// <summary>
     /// Whether a member has the shape of a text that takes values: a public instance method, declared as a method,
     /// that returns a <see cref="string"/> and takes at least one parameter. A method without parameters is no text,
-    /// as a text without values is a property.
+    /// as a text without values is a property (<see cref="IsTextWithoutParameters"/>).
     /// </summary>
     public static bool IsTextMethod(ISymbol member, out IMethodSymbol method)
     {
@@ -31,6 +42,57 @@ internal static class TextParameters
     }
 
     /// <summary>
+    /// Whether a member is a text written as a method without parameters, as in
+    /// <c>public string Greeting() => "Hello";</c>. It has the shape of a text that takes values
+    /// (<see cref="IsTextMethod"/>) but takes none, so it is no text, and what calls it as one would not compile.
+    /// <c>LOC300</c> says to write it as a property.
+    /// </summary>
+    /// <remarks>
+    /// A method that plainly is no text is left alone:
+    /// <list type="bullet">
+    /// <item>An override, such as <c>ToString()</c>, or a method that hides a member of a class the set derives
+    /// from.</item>
+    /// <item>A method that implements a member of an interface.</item>
+    /// <item>A generic method, or one the compiler writes, as for a record.</item>
+    /// </list>
+    /// </remarks>
+    public static bool IsTextWithoutParameters(ISymbol member, out IMethodSymbol method)
+    {
+        method = (member as IMethodSymbol)!;
+
+        if (member is not IMethodSymbol
+            {
+                MethodKind: MethodKind.Ordinary,
+                DeclaredAccessibility: Accessibility.Public,
+                IsStatic: false,
+                IsOverride: false,
+                IsGenericMethod: false,
+                IsImplicitlyDeclared: false,
+                ReturnsByRef: false,
+                ReturnsByRefReadonly: false,
+                Parameters.Length: 0,
+                ReturnType.SpecialType: SpecialType.System_String,
+            })
+        {
+            return false;
+        }
+
+        var set = method.ContainingType;
+
+        // A member of that name in a class the set derives from, which the method hides: ToString() written with new.
+        for (var baseType = set.BaseType; baseType is not null; baseType = baseType.BaseType)
+            if (!baseType.GetMembers(method.Name).IsEmpty)
+                return false;
+
+        foreach (var @interface in set.AllInterfaces)
+            foreach (var implemented in @interface.GetMembers(method.Name))
+                if (SymbolEqualityComparer.Default.Equals(set.FindImplementationForInterfaceMember(implemented), method))
+                    return false;
+
+        return true;
+    }
+
+    /// <summary>
     /// Whether a class declares no other member of a method's name. Only then can a doc comment link to the method by
     /// its name alone, and only then is the name a key of its own.
     /// </summary>
@@ -42,7 +104,7 @@ internal static class TextParameters
 
     /// <summary>
     /// What keeps a method of the shape of a text (<see cref="IsTextMethod"/>) from being one, as the clause of the
-    /// <c>LOC019</c> message, or <see langword="null"/> when nothing does.
+    /// <c>LOC300</c> message, or <see langword="null"/> when nothing does.
     /// </summary>
     // Each of these would not compile in the generated class, or would compile into something else than the set says:
     // the class repeats the parameters, keeps the values in the text, and hands them to the set of the user's language
@@ -51,6 +113,11 @@ internal static class TextParameters
     {
         if (method.IsGenericMethod)
             return "it is generic";
+
+        // The generated class creates the text through an overload per number of values (GeneratedCode), which keeps
+        // each value as its own type.
+        if (method.Parameters.Length > MaxValues)
+            return $"it takes {method.Parameters.Length} values, and a text takes at most {MaxValues}";
 
         if (!HasNameOfItsOwn(method))
             return "its set has another method of that name, and a text is told from the others by its name";
@@ -67,7 +134,7 @@ internal static class TextParameters
                 return $"its parameter '{parameter.Name}' has a default value, which another language's set could give another value";
 
             if (parameter.Type is { IsRefLikeType: true } or IPointerTypeSymbol or IFunctionPointerTypeSymbol)
-                return $"its parameter '{parameter.Name}' is of a type a text cannot keep until it is shown: a pointer, or a ref struct such as a span";
+                return $"its parameter '{parameter.Name}' is of a type a text can't keep until it is shown: a pointer, or a ref struct such as a span";
 
             if (parameter.Type.TypeKind is TypeKind.Dynamic)
                 return $"its parameter '{parameter.Name}' is dynamic";
@@ -104,7 +171,7 @@ internal static class TextParameters
     /// <c>salutation switch { Salutation.Madam => "Dear madam", _ => "Dear customer" }</c> only chooses by
     /// <c>salutation</c>.
     /// </summary>
-    // What every other language is held to (LOC021): a value the default wording shows must be in theirs, and a value
+    // What every other language is held to (LOC302): a value the default wording shows must be in theirs, and a value
     // it only chooses by may mean nothing in a language that makes no such distinction. Told from where the value
     // stands, which errs to the side of showing: a value handed on to a helper counts as shown.
     private static bool[] FindShownParameters(IMethodSymbol method, MethodDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
@@ -114,22 +181,95 @@ internal static class TextParameters
         if ((declaration.ExpressionBody?.Expression ?? (SyntaxNode?)declaration.Body) is not { } body)
             return shown;
 
+        HashSet<string>? redeclared = null;
+
         foreach (var node in body.DescendantNodesAndSelf())
         {
-            // By its name first, which costs nothing: only a name a parameter carries is bound.
+            // By its name first, which costs nothing: only a name a parameter carries is read.
             if (node is not IdentifierNameSyntax identifier
-                || !method.Parameters.Any(parameter => String.Equals(parameter.Name, identifier.Identifier.ValueText, StringComparison.Ordinal))
-                || semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is not IParameterSymbol parameter
-                || !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, method)
-                || shown[parameter.Ordinal])
+                || !method.Parameters.Any(parameter => String.Equals(parameter.Name, identifier.Identifier.ValueText, StringComparison.Ordinal)))
             {
                 continue;
             }
 
-            shown[parameter.Ordinal] = !OnlyChooses(identifier, body);
+            // Then by where it stands, and by the compiler only where that doesn't say which parameter it is.
+            if (FindParameterBySyntax(identifier, method, body, ref redeclared) is not { } ordinal)
+            {
+                if (semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is not IParameterSymbol parameter
+                    || !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, method))
+                {
+                    continue;
+                }
+
+                ordinal = parameter.Ordinal;
+            }
+
+            if (!shown[ordinal])
+                shown[ordinal] = !OnlyChooses(identifier, body);
         }
 
         return shown;
+    }
+
+    /// <summary>
+    /// The position of the parameter a name stands for, where the syntax says so by itself: the name stands where a
+    /// value is read, as in <c>{name}</c> or <c>count is 1</c>, one parameter carries it, and the body declares nothing
+    /// else of that name. <see langword="null"/> wherever only the compiler can tell.
+    /// </summary>
+    // A parameter is the nearest thing a name in the body of its method can stand for. So a name that is read as a
+    // value, and that nothing nearer declares anew, is the parameter. This is what the generators read of every text
+    // that takes values on every edit, and binding the body costs more than everything else read of it.
+    internal static int? FindParameterBySyntax(IdentifierNameSyntax identifier, IMethodSymbol method, SyntaxNode body, ref HashSet<string>? redeclared)
+    {
+        var name = identifier.Identifier.ValueText;
+        IParameterSymbol? found = null;
+
+        foreach (var parameter in method.Parameters)
+        {
+            if (!String.Equals(parameter.Name, name, StringComparison.Ordinal))
+                continue;
+
+            // Two parameters of one name, which does not compile.
+            if (found is not null)
+                return null;
+
+            found = parameter;
+        }
+
+        // A parameter named like its type (Color Color) may stand for the type.
+        if (found is null || String.Equals(found.Type.Name, name, StringComparison.Ordinal) || !IsReadAsValue(identifier))
+            return null;
+
+        // What the body declares itself, as a lambda parameter or a pattern does: there the name stands for something
+        // else, or does not compile. Every name of it once, for all the parameters.
+        if (redeclared is null)
+        {
+            redeclared = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var token in body.DescendantTokens())
+                if (token.IsKind(SyntaxKind.IdentifierToken) && token.Parent is not IdentifierNameSyntax)
+                    redeclared.Add(token.ValueText);
+        }
+
+        return redeclared.Contains(name) ? null : found.Ordinal;
+    }
+
+    /// <summary>
+    /// Whether a name stands where only a value can stand, and not a type, a member, or the name of an argument.
+    /// </summary>
+    private static bool IsReadAsValue(IdentifierNameSyntax identifier)
+    {
+        var isReadAsValue = identifier.Parent switch
+        {
+            InterpolationSyntax or ArgumentSyntax or ParenthesizedExpressionSyntax or ConditionalExpressionSyntax => true,
+            IsPatternExpressionSyntax or SwitchExpressionSyntax or SwitchExpressionArmSyntax => true,
+            ArrowExpressionClauseSyntax or ReturnStatementSyntax or PrefixUnaryExpressionSyntax or PostfixUnaryExpressionSyntax => true,
+            BinaryExpressionSyntax binary => !binary.IsKind(SyntaxKind.IsExpression) && !binary.IsKind(SyntaxKind.AsExpression),
+            MemberAccessExpressionSyntax member => member.Expression == identifier,
+            _ => false,
+        };
+
+        return isReadAsValue;
     }
 
     /// <summary>
@@ -165,6 +305,58 @@ internal static class TextParameters
     }
 
     /// <summary>
+    /// Whether a parameter of a method is of a type that binds to nothing yet, as one another generator writes, itself
+    /// or in a part of it, such as <c>OrderId?</c> or <c>IReadOnlyList&lt;OrderId&gt;</c>. Such a type is written by
+    /// the words it is written in, which name it only where the method's using directives are
+    /// (<see cref="ReadUsings"/>).
+    /// </summary>
+    public static bool HasUnboundType(IMethodSymbol method)
+    {
+        var hasUnboundType = method.Parameters.Any(static parameter => IsUnbound(parameter.Type));
+        return hasUnboundType;
+
+        static bool IsUnbound(ITypeSymbol type)
+        {
+            var isUnbound = type switch
+            {
+                IErrorTypeSymbol => true,
+                IArrayTypeSymbol array => IsUnbound(array.ElementType),
+                INamedTypeSymbol named => named.TypeArguments.Any(IsUnbound),
+                _ => false,
+            };
+
+            return isUnbound;
+        }
+    }
+
+    /// <summary>
+    /// The using directives in reach of a method, as the file of a contract repeats them: those of its file, and those
+    /// of the namespace declarations around it, the outermost first. A <see langword="global"/> one is left out,
+    /// because it reaches every file already.
+    /// </summary>
+    public static (ImmutableArray<string> OfFile, ImmutableArray<string> OfNamespace) ReadUsings(MethodDeclarationSyntax declaration)
+    {
+        var ofFile = ImmutableArray.CreateBuilder<string>();
+        var ofNamespace = ImmutableArray.CreateBuilder<string>();
+
+        foreach (var ancestor in declaration.Ancestors().Reverse())
+        {
+            var (usings, target) = ancestor switch
+            {
+                CompilationUnitSyntax file => (file.Usings, ofFile),
+                BaseNamespaceDeclarationSyntax @namespace => (@namespace.Usings, ofNamespace),
+                _ => (default, ofFile),
+            };
+
+            foreach (var directive in usings)
+                if (directive.GlobalKeyword.IsKind(SyntaxKind.None))
+                    target.Add(directive.WithoutTrivia().NormalizeWhitespace().ToString());
+        }
+
+        return (ofFile.ToImmutable(), ofNamespace.ToImmutable());
+    }
+
+    /// <summary>
     /// A type as generated code can write it, in parts: each part starts at a type that lies in a namespace, and holds
     /// what follows it up to the next such type.
     /// </summary>
@@ -190,7 +382,9 @@ internal static class TextParameters
                 Append(parts, "?");
                 return;
 
-            // A type that binds to nothing, as one another generator writes: by the words it is written in.
+            // A type that binds to nothing, as one another generator writes: by the words it is written in. The file
+            // of the contract repeats the using directives of the method, so that they name the type there too
+            // (HasUnboundType).
             case IErrorTypeSymbol:
                 Append(parts, type.ToDisplayString());
                 break;
@@ -237,7 +431,8 @@ internal static class TextParameters
     }
 
     /// <summary>
-    /// Writes a tuple with the names its elements are given: a set implementing the contract must name them alike.
+    /// Writes a tuple with the names its elements are given, because a set implementing the contract must name them
+    /// alike.
     /// </summary>
     private static void WriteTuple(ImmutableArray<IFieldSymbol> elements, List<(string? Namespace, StringBuilder Text)> parts)
     {
@@ -251,7 +446,7 @@ internal static class TextParameters
             Write(elements[i].Type, parts);
 
             if (elements[i].IsExplicitlyNamedTupleElement)
-                Append(parts, $" {TranslationSetsGenerator.EscapeIdentifier(elements[i].Name)}");
+                Append(parts, $" {LocalizationSetsGenerator.EscapeIdentifier(elements[i].Name)}");
         }
 
         Append(parts, ")");
@@ -270,10 +465,10 @@ internal static class TextParameters
         }
         else
         {
-            parts.Add((TranslationsDiscovery.GetNamespaceName(type.ContainingNamespace), new StringBuilder()));
+            parts.Add((LocalizationDiscovery.GetNamespaceName(type.ContainingNamespace), new StringBuilder()));
         }
 
-        Append(parts, TranslationSetsGenerator.EscapeIdentifier(type.Name));
+        Append(parts, LocalizationSetsGenerator.EscapeIdentifier(type.Name));
 
         if (type.TypeArguments.Length is 0)
             return;
@@ -333,12 +528,22 @@ internal static class TextParameters
 
 /// <summary>
 /// A parameter of a text that takes values: its name, its type as generated code can write it, and whether the
-/// default-language wording shows the value, which every other language is then held to (<c>LOC021</c>).
+/// default-language wording shows the value, which every other language is then held to (<c>LOC302</c>).
 /// </summary>
 internal readonly record struct TextParameter(
     string Name,
     EquatableArray<TypeNamePart> Type,
     bool IsShown);
+
+/// <summary>
+/// The using directives the file of a contract repeats, each as it is written (<c>using MyApp.Domain;</c>): those of
+/// the files of the default-language set, and those of the namespace declarations around it. Empty unless a text takes
+/// a value of a type that binds to nothing yet, as one another generator writes: that type is written by the words it
+/// is written in, which name it only where these directives are.
+/// </summary>
+internal readonly record struct RepeatedUsings(
+    EquatableArray<string> OfFile,
+    EquatableArray<string> OfNamespace);
 
 /// <summary>
 /// A part of a type's name as generated code writes it: the namespace the type at its start lies in (<c>""</c> for the

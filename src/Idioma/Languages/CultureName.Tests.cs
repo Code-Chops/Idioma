@@ -61,6 +61,9 @@ public sealed class CultureNameTests
     [Test]
     [Arguments("nl_be", "nl_be")]
     [Arguments("NL--be", "nl--BE")]
+    [Arguments("NL-", "nl-")]
+    [Arguments("-NL", "-NL")]
+    [Arguments("-", "-")]
     [Arguments("", "")]
     public void Normalize_OfCodeThatIsNotValid_ShouldCaseItsPartsWithoutThrowing(string code, string expected)
     {
@@ -92,7 +95,7 @@ public sealed class CultureNameTests
     public void IsValid_ShouldAgreeWithRuleOfBuild(string code)
     {
         // Arrange & Act & Assert: a code the build accepts in [assembly: SupportedLanguages] is one the registry
-        // accepts, and the other way around. The two rules are separate code, as the generator cannot reference this
+        // accepts, and the other way around. The two rules are separate code, as the generator can't reference this
         // assembly.
         CultureName.IsValid(code).ShouldBe(Generators.SupportedLanguages.IsCultureName(code));
     }

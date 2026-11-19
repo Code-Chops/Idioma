@@ -66,3 +66,8 @@ jobs:
 
       - name: Pack, publish a consumer with NativeAOT, and run it
         run: ./tests/Idioma.AotSmoke/run.sh
+
+      # A demo fetches the published package, so a demo written for a newer API fails for every visitor until that
+      # version is out. This shows that the demos run with the package as it is packed here.
+      - name: Run the demos against the package
+        run: ./tests/Idioma.Demos/run.sh

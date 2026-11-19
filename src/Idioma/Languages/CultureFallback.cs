@@ -1,13 +1,18 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// The names to try when looking up a culture, most specific first: the culture, then each parent culture
-/// (<c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>), then the last of those names with its subtags dropped one at a time.
-/// For a culture name instead of a culture, only the subtags are dropped: <c>zh-TW</c>, then <c>zh</c>. The invariant
-/// culture gives no names, and an empty name is refused.
+/// The names to try when looking up a culture, most specific first:
+/// <list type="number">
+/// <item>The culture.</item>
+/// <item>Each parent culture.</item>
+/// <item>The last of those names, with its subtags dropped one at a time.</item>
+/// </list>
+/// For <c>zh-TW</c> that's <c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>. For a culture name instead of a culture, only
+/// the subtags are dropped: <c>zh-TW</c>, then <c>zh</c>. The invariant culture gives no names. A name that's empty or
+/// white space is refused.
 /// </summary>
 // Through CultureInfo.Parent, because a parent need not be a prefix of the name (zh-TW falls back to zh-Hant), and by
-// name as well: under invariant globalization a culture either cannot be created at all (the default) or has the
+// name as well: under invariant globalization a culture either can't be created at all (the default) or has the
 // invariant culture as its parent (PredefinedCulturesOnly off), while en still serves en-GB, as the build checks it.
 // By name alone for a language code, so that the walk never needs a CultureInfo. A plain struct enumerator, and a
 // name that dropping a subtag gives is kept for the next walk, so a lookup allocates nothing once its names are kept:
@@ -17,16 +22,23 @@ internal readonly struct CultureFallback
 {
     // Far more than the languages of an app and the cultures of its users; a name beyond it is cut on every walk, so
     // that culture names from outside (a request header, where invariant globalization with PredefinedCulturesOnly
-    // off lets any name become a culture) cannot grow this without end.
+    // off lets any name become a culture) can't grow this without end.
     private const int MaxNamesKept = 1024;
 
     /// <summary>
-    /// Per culture name, the name above it: the same name without its last subtag (<c>zh-Hant-TW</c> gives
-    /// <c>zh-Hant</c>, <c>en-GB</c> gives <c>en</c>). Kept so that a walk by name hands out the same strings each time
-    /// instead of cutting new ones, up to <see cref="MaxNamesKept"/> names.
+    /// Per culture name, the name above it, which is the same name without its last subtag (<c>zh-Hant-TW</c> gives
+    /// <c>zh-Hant</c>, <c>en-GB</c> gives <c>en</c>). Up to <see cref="MaxNamesKept"/> names are kept, so a walk by name
+    /// hands out the same strings each time instead of cutting new ones.
     /// </summary>
     // Keyed by the exact spelling, so en-GB and EN-gb are kept apart: each walk gives back the casing it was asked for.
     private static ConcurrentDictionary<string, string> NamesAbove { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether <see cref="NamesAbove"/> holds <see cref="MaxNamesKept"/> names, so no more are kept.
+    /// </summary>
+    // Names are never removed, so this is set once. A walk past the limit then skips NamesAbove.Count, which takes all
+    // of the dictionary's locks. A thread that doesn't see it set yet reads Count once more, which is harmless.
+    private static bool HasKeptMaxNames { get; set; }
 
     private CultureInfo? Culture { get; }
     private string? Name { get; }
@@ -46,11 +58,18 @@ internal readonly struct CultureFallback
     }
 
     /// <summary>
-    /// The names to try for a language code as a user of that language gets them: through its culture where this
-    /// machine has one (<c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>), else by name alone.
+    /// The names to try for a language code, as a user of that language gets them. They come through the culture of
+    /// that name, so <c>zh-TW</c> gives <c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>. They come by name alone when
+    /// there's no culture of that name:
+    /// <list type="bullet">
+    /// <item>The code isn't valid.</item>
+    /// <item>This machine has no culture for it, as under invariant globalization.</item>
+    /// <item>Its culture goes by another name, as ICU gives <c>zh-yue</c> the culture <c>yue</c>.</item>
+    /// </list>
     /// </summary>
-    // So that a text falling back to a language shows what a user of that language sees. By name where the culture
-    // goes by another name than the code (an alias), which its walk would never try.
+    // So that a text falling back to a language shows what a user of that language sees. By name for an alias, because
+    // the walk of its culture would never try the code itself. With ICU, nearly every valid code has a culture of that
+    // name, even a made-up one such as qq.
     public static CultureFallback OfLanguage(string language)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
@@ -111,8 +130,13 @@ internal readonly struct CultureFallback
                 // The string that is kept, also when another thread kept one for this name in the meantime: every
                 // walk then hands out that one, where two threads walking a name for the first time would otherwise
                 // each go on with a string of their own.
+                if (HasKeptMaxNames)
+                    return above;
+
                 if (NamesAbove.Count < MaxNamesKept)
                     above = NamesAbove.GetOrAdd(name, above);
+                else
+                    HasKeptMaxNames = true;
 
                 return above;
             }

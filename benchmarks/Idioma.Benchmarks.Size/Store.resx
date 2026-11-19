@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AddToCart" xml:space="preserve"><value>Add to cart</value></data>
+  <data name="RemoveFromCart" xml:space="preserve"><value>Remove from cart</value></data>
+  <data name="Checkout" xml:space="preserve"><value>Checkout</value></data>
+  <data name="ContinueShopping" xml:space="preserve"><value>Continue shopping</value></data>
+  <data name="YourCart" xml:space="preserve"><value>Your cart</value></data>
+  <data name="CartIsEmpty" xml:space="preserve"><value>Your cart is empty</value></data>
+  <data name="Subtotal" xml:space="preserve"><value>Subtotal</value></data>
+  <data name="Shipping" xml:space="preserve"><value>Shipping</value></data>
+  <data name="Total" xml:space="preserve"><value>Total</value></data>
+  <data name="FreeShipping" xml:space="preserve"><value>Free shipping on orders over 50 euros</value></data>
+  <data name="PlaceOrder" xml:space="preserve"><value>Place order</value></data>
+  <data name="OrderConfirmed" xml:space="preserve"><value>Your order has been confirmed</value></data>
+  <data name="OrderNumber" xml:space="preserve"><value>Order number</value></data>
+  <data name="TrackOrder" xml:space="preserve"><value>Track your order</value></data>
+  <data name="Delivery" xml:space="preserve"><value>Delivery</value></data>
+  <data name="DeliveryAddress" xml:space="preserve"><value>Delivery address</value></data>
+  <data name="BillingAddress" xml:space="preserve"><value>Billing address</value></data>
+  <data name="SameAsDeliveryAddress" xml:space="preserve"><value>Same as delivery address</value></data>
+  <data name="FirstName" xml:space="preserve"><value>First name</value></data>
+  <data name="LastName" xml:space="preserve"><value>Last name</value></data>
+  <data name="EmailAddress" xml:space="preserve"><value>Email address</value></data>
+  <data name="PhoneNumber" xml:space="preserve"><value>Phone number</value></data>
+  <data name="StreetAndNumber" xml:space="preserve"><value>Street and house number</value></data>
+  <data name="PostalCode" xml:space="preserve"><value>Postal code</value></data>
+  <data name="City" xml:space="preserve"><value>City</value></data>
+  <data name="Country" xml:space="preserve"><value>Country</value></data>
+  <data name="Payment" xml:space="preserve"><value>Payment</value></data>
+  <data name="PaymentMethod" xml:space="preserve"><value>Payment method</value></data>
+  <data name="CreditCard" xml:space="preserve"><value>Credit card</value></data>
+  <data name="PayNow" xml:space="preserve"><value>Pay now</value></data>
+  <data name="PaymentFailed" xml:space="preserve"><value>The payment failed. Please try again.</value></data>
+  <data name="SignIn" xml:space="preserve"><value>Sign in</value></data>
+  <data name="SignOut" xml:space="preserve"><value>Sign out</value></data>
+  <data name="CreateAccount" xml:space="preserve"><value>Create an account</value></data>
+  <data name="ForgotPassword" xml:space="preserve"><value>Forgot your password?</value></data>
+  <data name="Password" xml:space="preserve"><value>Password</value></data>
+  <data name="RememberMe" xml:space="preserve"><value>Remember me</value></data>
+  <data name="MyAccount" xml:space="preserve"><value>My account</value></data>
+  <data name="MyOrders" xml:space="preserve"><value>My orders</value></data>
+  <data name="Wishlist" xml:space="preserve"><value>Wishlist</value></data>
+  <data name="AddToWishlist" xml:space="preserve"><value>Add to wishlist</value></data>
+  <data name="Search" xml:space="preserve"><value>Search</value></data>
+  <data name="SearchProducts" xml:space="preserve"><value>Search products</value></data>
+  <data name="NoResults" xml:space="preserve"><value>No products match your search</value></data>
+  <data name="Filter" xml:space="preserve"><value>Filter</value></data>
+  <data name="SortBy" xml:space="preserve"><value>Sort by</value></data>
+  <data name="PriceLowToHigh" xml:space="preserve"><value>Price: low to high</value></data>
+  <data name="PriceHighToLow" xml:space="preserve"><value>Price: high to low</value></data>
+  <data name="Newest" xml:space="preserve"><value>Newest</value></data>
+  <data name="BestSellers" xml:space="preserve"><value>Best sellers</value></data>
+  <data name="InStock" xml:space="preserve"><value>In stock</value></data>
+  <data name="OutOfStock" xml:space="preserve"><value>Out of stock</value></data>
+  <data name="OnlyAFewLeft" xml:space="preserve"><value>Only a few left</value></data>
+  <data name="Size" xml:space="preserve"><value>Size</value></data>
+  <data name="Color" xml:space="preserve"><value>Color</value></data>
+  <data name="Quantity" xml:space="preserve"><value>Quantity</value></data>
+  <data name="ProductDetails" xml:space="preserve"><value>Product details</value></data>
+  <data name="Description" xml:space="preserve"><value>Description</value></data>
+  <data name="Reviews" xml:space="preserve"><value>Reviews</value></data>
+  <data name="WriteReview" xml:space="preserve"><value>Write a review</value></data>
+  <data name="Rating" xml:space="preserve"><value>Rating</value></data>
+  <data name="RecommendedForYou" xml:space="preserve"><value>Recommended for you</value></data>
+  <data name="RecentlyViewed" xml:space="preserve"><value>Recently viewed</value></data>
+  <data name="Sale" xml:space="preserve"><value>Sale</value></data>
+  <data name="NewArrivals" xml:space="preserve"><value>New arrivals</value></data>
+  <data name="Categories" xml:space="preserve"><value>Categories</value></data>
+  <data name="AllProducts" xml:space="preserve"><value>All products</value></data>
+  <data name="Home" xml:space="preserve"><value>Home</value></data>
+  <data name="ContactUs" xml:space="preserve"><value>Contact us</value></data>
+  <data name="CustomerService" xml:space="preserve"><value>Customer service</value></data>
+  <data name="Returns" xml:space="preserve"><value>Returns</value></data>
+  <data name="ReturnPolicy" xml:space="preserve"><value>You can return items within 30 days</value></data>
+  <data name="FrequentlyAskedQuestions" xml:space="preserve"><value>Frequently asked questions</value></data>
+  <data name="AboutUs" xml:space="preserve"><value>About us</value></data>
+  <data name="PrivacyPolicy" xml:space="preserve"><value>Privacy policy</value></data>
+  <data name="TermsAndConditions" xml:space="preserve"><value>Terms and conditions</value></data>
+  <data name="CookieNotice" xml:space="preserve"><value>We use cookies to improve your experience</value></data>
+  <data name="AcceptCookies" xml:space="preserve"><value>Accept cookies</value></data>
+  <data name="NewsletterSignUp" xml:space="preserve"><value>Sign up for our newsletter</value></data>
+  <data name="Subscribe" xml:space="preserve"><value>Subscribe</value></data>
+  <data name="Unsubscribe" xml:space="preserve"><value>Unsubscribe</value></data>
+  <data name="Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Next" xml:space="preserve"><value>Next</value></data>
+  <data name="Previous" xml:space="preserve"><value>Previous</value></data>
+  <data name="Loading" xml:space="preserve"><value>Loading...</value></data>
+  <data name="SomethingWentWrong" xml:space="preserve"><value>Something went wrong</value></data>
+  <data name="TryAgain" xml:space="preserve"><value>Try again</value></data>
+  <data name="ChangesSaved" xml:space="preserve"><value>Your changes have been saved</value></data>
+  <data name="RequiredField" xml:space="preserve"><value>This field is required</value></data>
+  <data name="InvalidEmailAddress" xml:space="preserve"><value>Enter a valid email address</value></data>
+  <data name="PasswordTooShort" xml:space="preserve"><value>The password must be at least 8 characters</value></data>
+  <data name="Language" xml:space="preserve"><value>Language</value></data>
+  <data name="Currency" xml:space="preserve"><value>Currency</value></data>
+  <data name="Notifications" xml:space="preserve"><value>Notifications</value></data>
+  <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+</root>

@@ -17,7 +17,7 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         Sir,
     }
 
-    public partial class GeneratedTranslationsEN : ITranslationSet
+    public class GeneratedLocalizationEn : ILocalizationSet, IGeneratedLocalization
     {
         public virtual string Checkout => "Checkout";
         public virtual string Greeting => "Hello!";
@@ -43,7 +43,7 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         public virtual string Removed(LocalizableText what) => $"{what} removed";
     }
 
-    public sealed class GeneratedTranslationsNL : IGeneratedTranslations
+    public sealed class GeneratedLocalizationNl : ILocalizationSet, IGeneratedLocalization
     {
         public string Checkout => "Afrekenen";
         public string Greeting => "Hallo!";
@@ -69,18 +69,18 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     /// Rewords one text of a set of this assembly, so it registers after that set: in English it must win over it.
     /// So with one text that takes a value.
     /// </summary>
-    public sealed class RewordedGeneratedTranslationsEN : GeneratedTranslationsEN
+    public sealed class RewordedGeneratedLocalizationEn : GeneratedLocalizationEn
     {
         public override string Checkout => "Pay";
         public override string Welcome(string name) => $"Good to see you, {name}!";
     }
 
     /// <summary>
-    /// Opted out, so it stays unregistered. Registered, it would win over <see cref="GeneratedTranslationsNL"/>, which
+    /// Opted out, so it stays unregistered. Registered, it would win over <see cref="GeneratedLocalizationNl"/>, which
     /// comes before it in name order.
     /// </summary>
-    [ExcludeFromTranslationDiscovery]
-    public sealed class UnregisteredGeneratedTranslationsNL : IGeneratedTranslations
+    [ExcludeFromLocalizationDiscovery]
+    public sealed class UnregisteredGeneratedLocalizationNl : ILocalizationSet, IGeneratedLocalization
     {
         public string Checkout => "Betalen";
         public string Greeting => "Goedendag!";
@@ -95,7 +95,7 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     /// <summary>
     /// A helper next to the generated texts: the generated class is partial.
     /// </summary>
-    public static partial class GeneratedTranslations
+    public static partial class GeneratedLocalization
     {
         public static string ShoutCheckout() => Checkout.ToString().ToUpperInvariant();
     }
@@ -138,7 +138,7 @@ namespace CodeChops.Idioma.Tests
             using var _ = new UICultureScope("nl-NL");
 
             // Act & Assert
-            GeneratedTranslations.Checkout.ToString().ShouldBe("Afrekenen");
+            GeneratedLocalization.Checkout.ToString().ShouldBe("Afrekenen");
         }
 
         [Test]
@@ -148,11 +148,11 @@ namespace CodeChops.Idioma.Tests
             using var _ = new UICultureScope("nl-NL");
 
             // Act
-            string assigned = GeneratedTranslations.Checkout;
+            string assigned = GeneratedLocalization.Checkout;
 
             // Assert
             assigned.ShouldBe("Afrekenen");
-            (GeneratedTranslations.Checkout == "Afrekenen").ShouldBeTrue();
+            (GeneratedLocalization.Checkout == "Afrekenen").ShouldBeTrue();
         }
 
         [Test]
@@ -162,8 +162,8 @@ namespace CodeChops.Idioma.Tests
             using var _ = new UICultureScope("en-US");
 
             // Act & Assert: the reworded text, and the inherited one.
-            GeneratedTranslations.Checkout.ToString().ShouldBe("Pay");
-            GeneratedTranslations.Greeting.ToString().ShouldBe("Hello!");
+            GeneratedLocalization.Checkout.ToString().ShouldBe("Pay");
+            GeneratedLocalization.Greeting.ToString().ShouldBe("Hello!");
         }
 
         [Test]
@@ -174,21 +174,21 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: one value, a wording chosen by a number, a wording chosen by an enum, and a value of a
             // type of another namespace than the set's.
-            GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Welkom, Max!");
-            GeneratedTranslations.ItemsInCart(1, "Idioma").ToString().ShouldBe("1 artikel in je winkelwagen bij Idioma");
-            GeneratedTranslations.ItemsInCart(count: 3, shop: "Idioma").ToString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
-            GeneratedTranslations.Dear(Salutation.Madam).ToString().ShouldBe("Geachte mevrouw");
-            GeneratedTranslations.Dear(Salutation.Unknown).ToString().ShouldBe("Geachte klant");
-            GeneratedTranslations.DeliveredOn(new DateOnly(2026, 11, 15)).ToString().ShouldBe("Bezorgd op 2026-11-15");
+            GeneratedLocalization.Welcome("Max").ToString().ShouldBe("Welkom, Max!");
+            GeneratedLocalization.ItemsInCart(1, "Idioma").ToString().ShouldBe("1 artikel in je winkelwagen bij Idioma");
+            GeneratedLocalization.ItemsInCart(count: 3, shop: "Idioma").ToString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+            GeneratedLocalization.Dear(Salutation.Madam).ToString().ShouldBe("Geachte mevrouw");
+            GeneratedLocalization.Dear(Salutation.Unknown).ToString().ShouldBe("Geachte klant");
+            GeneratedLocalization.DeliveredOn(new DateOnly(2026, 11, 15)).ToString().ShouldBe("Bezorgd op 2026-11-15");
         }
 
         [Test]
         public void GeneratedTextThatTakesValues_ShouldFollowLanguageAfterItIsCreated()
         {
             // Arrange: created for an English user, as a text held in a field is.
-            ResourceText text;
+            LocalizableText text;
             using (new UICultureScope("en-US"))
-                text = GeneratedTranslations.ItemsInCart(3, "Idioma");
+                text = GeneratedLocalization.ItemsInCart(3, "Idioma");
 
             // Act & Assert: shown to a Dutch user, in markup, as a string, compared, and for a culture that is passed.
             using var _ = new UICultureScope("nl-NL");
@@ -207,12 +207,12 @@ namespace CodeChops.Idioma.Tests
             // wording of the set it derives from, and a culture without a set gets the default language.
             using (new UICultureScope("en-US"))
             {
-                GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
-                GeneratedTranslations.Dear(Salutation.Sir).ToString().ShouldBe("Dear sir");
+                GeneratedLocalization.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
+                GeneratedLocalization.Dear(Salutation.Sir).ToString().ShouldBe("Dear sir");
             }
 
             using (new UICultureScope("fr-FR"))
-                GeneratedTranslations.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
+                GeneratedLocalization.Welcome("Max").ToString().ShouldBe("Good to see you, Max!");
         }
 
         [Test]
@@ -224,7 +224,7 @@ namespace CodeChops.Idioma.Tests
 
             try
             {
-                var total = GeneratedTranslations.Total(1234.5m);
+                var total = GeneratedLocalization.Total(1234.5m);
 
                 // Act & Assert: for the reader of this thread, and for the customer, in wording and in number.
                 total.ToString().ShouldBe("Total: 1,234.50");
@@ -243,7 +243,7 @@ namespace CodeChops.Idioma.Tests
         {
             // Arrange: an English reader, and a text whose value is a text itself.
             using var _ = new UICultureScope("en-US");
-            var removed = GeneratedTranslations.Removed(InlineTexts.Orders);
+            var removed = GeneratedLocalization.Removed(InlineTexts.Orders);
 
             // Act
             var json = JsonSerializer.Serialize(removed);
@@ -264,41 +264,44 @@ namespace CodeChops.Idioma.Tests
         public void GeneratedTextThatTakesValues_ShouldCarryKeyContractAndArguments()
         {
             // Arrange & Act
-            var text = GeneratedTranslations.ItemsInCart(3, "Idioma");
+            var text = GeneratedLocalization.ItemsInCart(3, "Idioma");
 
             // Assert: the key is the full name of the method, without its parameters.
-            text.Key.ShouldBe("CodeChops.Idioma.Tests.GeneratedSets.GeneratedTranslations.ItemsInCart");
-            text.Contract.ShouldBe(typeof(IGeneratedTranslations));
+            text.Key.ShouldBe("CodeChops.Idioma.Tests.GeneratedSets.GeneratedLocalization.ItemsInCart");
+            text.Contract.ShouldBe(typeof(IGeneratedLocalization));
             text.DefaultLanguage.ShouldBe("en");
             text.DefaultText.ShouldBe("3 items in your cart at Idioma");
             text.Arguments.ShouldBe([3, "Idioma"]);
-            GeneratedTranslations.Checkout.Arguments.ShouldBeEmpty();
+            GeneratedLocalization.Checkout.Arguments.ShouldBeEmpty();
 
             // As an app fills in wording it looked up by the key (docs/coming-from-resx.md).
             String.Format(CultureInfo.InvariantCulture, "{0} at {1}", text.Arguments.AsSpan()).ShouldBe("3 at Idioma");
         }
 
         [Test]
-        public void GeneratedTextsThatTakeValues_ShouldBeEqualWhenTheirValuesAre()
+        public void GeneratedTextsThatTakeValues_ShouldBeEqualWhenTheyReadTheSame()
         {
-            // Arrange & Act & Assert: also where two values read the same in the default language. The English set
-            // words both an unknown salutation and one it has no case for as "Dear customer".
-            GeneratedTranslations.ItemsInCart(3, "Idioma").ShouldBe(GeneratedTranslations.ItemsInCart(3, "Idioma"));
-            GeneratedTranslations.ItemsInCart(3, "Idioma").GetHashCode().ShouldBe(GeneratedTranslations.ItemsInCart(3, "Idioma").GetHashCode());
-            GeneratedTranslations.ItemsInCart(3, "Idioma").ShouldNotBe(GeneratedTranslations.ItemsInCart(4, "Idioma"));
-            GeneratedTranslations.Dear(Salutation.Unknown).ShouldNotBe(GeneratedTranslations.Dear((Salutation)99));
-            GeneratedTranslations.Dear(Salutation.Unknown).DefaultText.ShouldBe(GeneratedTranslations.Dear((Salutation)99).DefaultText);
+            // Arrange: an English user. The English set words both an unknown salutation and one it has no case for as
+            // "Dear customer".
+            using var _ = new UICultureScope("en-US");
+
+            // Act & Assert: also where the values differ.
+            GeneratedLocalization.ItemsInCart(3, "Idioma").ShouldBe(GeneratedLocalization.ItemsInCart(3, "Idioma"));
+            GeneratedLocalization.ItemsInCart(3, "Idioma").GetHashCode().ShouldBe(GeneratedLocalization.ItemsInCart(3, "Idioma").GetHashCode());
+            GeneratedLocalization.ItemsInCart(3, "Idioma").ShouldNotBe(GeneratedLocalization.ItemsInCart(4, "Idioma"));
+            GeneratedLocalization.Dear(Salutation.Unknown).ShouldBe(GeneratedLocalization.Dear((Salutation)99));
+            GeneratedLocalization.Dear(Salutation.Madam).ShouldNotBe(GeneratedLocalization.Dear(Salutation.Sir));
         }
 
         [Test]
         public void GeneratedTextThatTakesValues_ShouldTravelThroughJsonWithItsWordingInEveryLanguage()
         {
             // Arrange
-            var text = GeneratedTranslations.ItemsInCart(3, "Idioma");
+            var text = GeneratedLocalization.ItemsInCart(3, "Idioma");
 
             // Act
             var json = JsonSerializer.Serialize(text);
-            var read = JsonSerializer.Deserialize<ResourceText>(json)!;
+            var read = JsonSerializer.Deserialize<LocalizableText>(json)!;
 
             // Assert: worded with its values when it is written, so that it needs neither the sets nor the values to
             // show each language once it is read back.
@@ -307,10 +310,21 @@ namespace CodeChops.Idioma.Tests
             translations.GetProperty("en").GetString().ShouldBe("3 items in your cart at Idioma");
             translations.GetProperty("nl").GetString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
 
-            read.Key.ShouldBe(text.Key);
+            // Without its key, because it's read back without its values: a resource file entry found by the key
+            // would show its placeholders as written.
+            document.RootElement.TryGetProperty("key", out _).ShouldBeFalse();
+            text.Key.ShouldNotBeNull();
+            read.Key.ShouldBeNull();
             read.Arguments.ShouldBeEmpty();
             read.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("3 artikelen in je winkelwagen bij Idioma");
             read.ToString(CultureInfo.GetCultureInfo("en-US")).ShouldBe("3 items in your cart at Idioma");
+
+            // Equal to the text it was written from, because both show the same wording.
+            using (new UICultureScope("nl-NL"))
+                read.ShouldBe(text);
+
+            using (new UICultureScope("en-US"))
+                read.ShouldBe(text);
         }
 
         [Test]
@@ -320,30 +334,30 @@ namespace CodeChops.Idioma.Tests
             using var _ = new UICultureScope("fr-FR");
 
             // Act & Assert
-            GeneratedTranslations.Checkout.ToString().ShouldBe("Pay");
+            GeneratedLocalization.Checkout.ToString().ShouldBe("Pay");
         }
 
         [Test]
         public void ExcludedSet_ShouldNotRegisterItself()
         {
             // Arrange
-            var sets = TranslationsRegistry.Current.Sets;
+            var sets = LocalizationRegistry.Current.Sets;
 
             // Act & Assert: the other sets did, and Dutch keeps their wording.
-            sets.ShouldContain(set => set is GeneratedTranslationsNL);
-            sets.ShouldNotContain(set => set is UnregisteredGeneratedTranslationsNL);
+            sets.ShouldContain(set => set is GeneratedLocalizationNl);
+            sets.ShouldNotContain(set => set is UnregisteredGeneratedLocalizationNl);
 
             using var _ = new UICultureScope("nl-NL");
-            GeneratedTranslations.Checkout.ToString().ShouldBe("Afrekenen");
+            GeneratedLocalization.Checkout.ToString().ShouldBe("Afrekenen");
         }
 
         [Test]
         public void SetDerivedFromSetOfItsAssembly_ShouldRegisterAfterIt()
         {
             // Arrange & Act
-            var sets = TranslationsRegistry.Current.Sets;
-            var english = sets.IndexOf(sets.Single(set => set.GetType() == typeof(GeneratedTranslationsEN)));
-            var reworded = sets.IndexOf(sets.Single(set => set is RewordedGeneratedTranslationsEN));
+            var sets = LocalizationRegistry.Current.Sets;
+            var english = sets.IndexOf(sets.Single(set => set.GetType() == typeof(GeneratedLocalizationEn)));
+            var reworded = sets.IndexOf(sets.Single(set => set is RewordedGeneratedLocalizationEn));
 
             // Assert
             english.ShouldBeLessThan(reworded);
@@ -356,7 +370,7 @@ namespace CodeChops.Idioma.Tests
             using var _ = new UICultureScope("nl-NL");
 
             // Act & Assert
-            GeneratedTranslations.ShoutCheckout().ShouldBe("AFREKENEN");
+            GeneratedLocalization.ShoutCheckout().ShouldBe("AFREKENEN");
         }
 
         [Test]
@@ -396,8 +410,8 @@ namespace CodeChops.Idioma.Tests
 
                 for (var i = 0; i < 2_000; i++)
                 {
-                    if (!String.Equals(GeneratedTranslations.Checkout.ToString(), user.Checkout, StringComparison.Ordinal)
-                        || !String.Equals(GeneratedTranslations.Welcome("Max").ToString(), user.Welcome, StringComparison.Ordinal)
+                    if (!String.Equals(GeneratedLocalization.Checkout.ToString(), user.Checkout, StringComparison.Ordinal)
+                        || !String.Equals(GeneratedLocalization.Welcome("Max").ToString(), user.Welcome, StringComparison.Ordinal)
                         || !String.Equals(InlineTexts.Orders.ToString(), user.Orders, StringComparison.Ordinal))
                     {
                         wrong++;
@@ -415,7 +429,7 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        [NotInParallel(nameof(TranslationsRegistry))]
+        [NotInParallel(nameof(LocalizationRegistry))]
         [Arguments("nl-NL")]
         [Arguments("nl-BE")]
         [Arguments("en-US")]
@@ -427,7 +441,7 @@ namespace CodeChops.Idioma.Tests
             // which make the next read build the registry anew: that read is this thread's, and would count.
             using var _ = new UICultureScope(culture);
             var uiCulture = CultureInfo.CurrentUICulture;
-            var checkout = GeneratedTranslations.Checkout;
+            var checkout = GeneratedLocalization.Checkout;
             var orders = InlineTexts.Orders;
 
             // Act & Assert: a text of a set and an inline one, the way each is shown, and compared with a string.
@@ -442,29 +456,33 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        [NotInParallel(nameof(TranslationsRegistry))]
+        [NotInParallel(nameof(LocalizationRegistry))]
         public void CreatingATextThatTakesValues_ShouldAllocateOnlyTheTextAndItsValues()
         {
             // Arrange: what the docs promise a text that takes values costs. A Dutch reader, whose language has one
             // set, so that showing the text words it once.
             using var _ = new UICultureScope("nl-NL");
-            var name = "Max";
+            const string name = "Max";
 
             // Act: per call, the least of a few rounds of ten thousand.
-            var created = Allocated(() => GeneratedTranslations.Welcome(name)) / 10_000;
-            var shown = Allocated(() => GeneratedTranslations.Welcome(name).ToString()) / 10_000;
+            var created = Allocated(() => GeneratedLocalization.Welcome(name)) / 10_000;
+            var shown = Allocated(() => GeneratedLocalization.Welcome(name).ToString()) / 10_000;
+            var counted = Allocated(() => GeneratedLocalization.ItemsInCart(3, name)) / 10_000;
 
-            // Assert: the text itself (96 bytes) and the array of its one value (32), and no function that holds the
-            // value, no default wording, and no default language. Shown, the wording besides ("Welkom, Max!", 48).
-            created.ShouldBeLessThanOrEqualTo(128, "text that takes a value, created");
-            shown.ShouldBeLessThanOrEqualTo(176, "text that takes a value, created and shown");
+            // Assert: the text itself (48 bytes) and the object that holds its key, contract, and values (72 for one
+            // string), and no function that holds the values, no default wording, and no default language. Shown, the
+            // wording besides ("Welkom, Max!", 48). A number is kept as an int, not boxed: 8 bytes more for it, where a
+            // box is 24.
+            created.ShouldBeLessThanOrEqualTo(120, "text that takes a value, created");
+            shown.ShouldBeLessThanOrEqualTo(168, "text that takes a value, created and shown");
+            counted.ShouldBeLessThanOrEqualTo(128, "text that takes a number and a string, created");
         }
 
         /// <summary>
         /// The bytes this thread allocates in an action, the least of a few rounds after a warm-up: a round that meets the
         /// JIT or a lazily built table is not what a page that shows texts pays for each time.
         /// </summary>
-        private static long Allocated<T>(Func<T> action)
+        internal static long Allocated<T>(Func<T> action)
         {
             T? sink = default;
 
@@ -496,20 +514,20 @@ namespace CodeChops.Idioma.Tests
 
             // Assert: the first is the default wording, and every language, the default included, a translation.
             text.DefaultText.ShouldBe("Orders");
-            text.Translations.Keys.ShouldBe(["en", "nl"], ignoreOrder: true);
-            text.Translations["en"].ShouldBe("Orders");
-            text.Translations["nl"].ShouldBe("Bestellingen");
+            text.TranslationsByLanguage.Keys.ShouldBe(["en", "nl"], ignoreOrder: true);
+            text.TranslationsByLanguage["en"].ShouldBe("Orders");
+            text.TranslationsByLanguage["nl"].ShouldBe("Bestellingen");
         }
 
         [Test]
         public void ApplicationDeclaringLanguages_ShouldRegisterItsLanguagesAtStart()
         {
             // Arrange & Act: this test project is an application declaring ("en", "nl").
-            var languages = TranslationsRegistry.SupportedLanguages;
+            var languages = LocalizationRegistry.SupportedLanguages;
 
             // Assert
             languages.ShouldBe(["en", "nl"]);
-            TranslationsRegistry.DefaultLanguage.ShouldBe("en");
+            LocalizationRegistry.DefaultLanguage.ShouldBe("en");
         }
 
         [Test]
@@ -520,14 +538,14 @@ namespace CodeChops.Idioma.Tests
 
             // Act
             var languages = (SupportedLanguagesAttribute)Attribute.GetCustomAttribute(assembly, typeof(SupportedLanguagesAttribute))!;
-            var sets = Attribute.GetCustomAttributes(assembly, typeof(TranslationSetAttribute)).Cast<TranslationSetAttribute>().ToArray();
+            var sets = Attribute.GetCustomAttributes(assembly, typeof(LocalizationSetAttribute)).Cast<LocalizationSetAttribute>().ToArray();
             var inlineTexts = Attribute.GetCustomAttribute(assembly, typeof(InlineTextsAttribute));
 
             // Assert: what the build of an assembly referencing this one reads.
             languages.Languages.ShouldBe(["en", "nl"]);
             inlineTexts.ShouldNotBeNull();
-            sets.ShouldContain(set => set.Contract == "CodeChops.Idioma.Tests.GeneratedSets.IGeneratedTranslations" && set.Language == "en");
-            sets.ShouldContain(set => set.Contract == "CodeChops.Idioma.Tests.GeneratedSets.IGeneratedTranslations" && set.Language == "nl");
+            sets.ShouldContain(set => set.Contract == "CodeChops.Idioma.Tests.GeneratedSets.IGeneratedLocalization" && set.Language == "en");
+            sets.ShouldContain(set => set.Contract == "CodeChops.Idioma.Tests.GeneratedSets.IGeneratedLocalization" && set.Language == "nl");
         }
     }
 }

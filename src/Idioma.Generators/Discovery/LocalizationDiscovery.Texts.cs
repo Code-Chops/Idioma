@@ -1,0 +1,336 @@
+namespace CodeChops.Idioma.Generators;
+
+// The part of LocalizationDiscovery that reads the texts of a set: which members are texts, which it declares or
+// inherits, and their wording, for the doc comments of the generated members. A plain comment: the compiler merges the
+// XML docs of every partial declaration, and the type's summary lives in LocalizationDiscovery.cs.
+internal static partial class LocalizationDiscovery
+{
+    /// <summary>
+    /// The texts a cref can name on this set: the public string properties the class declares itself, and its methods
+    /// of the shape of a text that takes values (<see cref="TextParameters.IsTextMethod"/>). A cref does not find a
+    /// member through a class that only inherits it (<c>ShopLocalizationEnGb.Checkout</c>, declared by
+    /// <c>ShopLocalizationEn</c>, is <c>CS1574</c>), so those are named where they are declared
+    /// (<see cref="GetInheritedTexts"/>). An explicit interface implementation has no such name, and a method that
+    /// shares its name with another has none of its own (<c>CS0419</c>).
+    /// </summary>
+    private static ImmutableArray<string> GetDeclaredTexts(INamedTypeSymbol type)
+    {
+        var names = ImmutableArray.CreateBuilder<string>();
+
+        foreach (var member in type.GetMembers())
+            if (IsNameableText(member) && !String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal))
+                names.Add(member.Name);
+
+        var declaredTexts = names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
+        return declaredTexts;
+    }
+
+    /// <summary>
+    /// Whether a member is a text a cref can name by its name alone: a public string property, or a method of the
+    /// shape of a text that takes values whose class declares no other member of that name.
+    /// </summary>
+    private static bool IsNameableText(ISymbol member)
+    {
+        var isNameableText = IsPublicStringProperty(member, out _)
+                             || (TextParameters.IsTextMethod(member, out var method) && TextParameters.HasNameOfItsOwn(method));
+
+        return isNameableText;
+    }
+
+    /// <summary>
+    /// The texts this set inherits (public string properties, and methods of the shape of a text that takes values),
+    /// each with the nearest class declaring it: where a cref names a text the set does not declare itself, such as
+    /// <c>ShopLocalizationEn.Checkout</c> for a British set that leaves <c>Checkout</c> as it is. A text that the set,
+    /// or a class between it and the one declaring the text, implements explicitly is left out, because that
+    /// implementation is its wording, and has no name. So is a method that shares its name with another of its class,
+    /// which a cref can't name by its name alone.
+    /// </summary>
+    private static ImmutableArray<InheritedText> GetInheritedTexts(INamedTypeSymbol type)
+    {
+        var texts = ImmutableArray.CreateBuilder<InheritedText>();
+
+        // The names a nearer class has settled: those it declares, and those it implements explicitly.
+        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var members = current.GetMembers();
+
+            foreach (var member in members)
+            {
+                if (!IsNameableText(member) || !settled.Add(member.Name) || SymbolEqualityComparer.Default.Equals(current, type))
+                    continue;
+
+                texts.Add(new InheritedText(
+                    Name: member.Name,
+                    Namespace: GetNamespaceName(current.ContainingNamespace),
+                    TypeName: GetCrefName(current)));
+            }
+
+            // After the texts a cref can name, so that a class holding both is linked at the one with a name. A method
+            // that shares its name with another settles it too: the nearest class has the wording, name or no name.
+            foreach (var member in members)
+            {
+                if (member is IPropertySymbol { IsStatic: false } or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation }
+                    && GetExplicitlyImplementedName(member) is { } name)
+                {
+                    settled.Add(name);
+                }
+                else if (TextParameters.IsTextMethod(member, out _))
+                {
+                    settled.Add(member.Name);
+                }
+            }
+        }
+
+        var orderedTexts = texts.OrderBy(static text => text.Name, StringComparer.Ordinal).ToImmutableArray();
+        return orderedTexts;
+    }
+
+    /// <summary>
+    /// The names of the texts a set's own class words, rather than leaving them to the class it derives from. They're
+    /// the public string properties and the methods of the shape of a text that it declares, overrides included, and
+    /// the members it implements explicitly. The generated registrar records them for a set deriving from another, so
+    /// the registry knows which texts the set rewords without calling it.
+    /// </summary>
+    private static ImmutableArray<string> GetOwnTexts(INamedTypeSymbol type)
+    {
+        var names = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (var member in type.GetMembers())
+        {
+            if (IsPublicStringProperty(member, out _) || TextParameters.IsTextMethod(member, out _))
+            {
+                names.Add(member.Name);
+            }
+            else if (member is IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String }
+                         or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation, ReturnType.SpecialType: SpecialType.System_String }
+                     && GetExplicitlyImplementedName(member) is { } name)
+            {
+                names.Add(name);
+            }
+        }
+
+        names.Remove(LanguageCodeMemberName);
+
+        return [.. names];
+    }
+
+    /// <summary>
+    /// The wording this set gives each of its texts that returns a constant, from the nearest class implementing the
+    /// text, in the order of the names: its own property, the property it inherits (<see cref="GetInheritedTexts"/>), or
+    /// an explicit implementation, which wins over a property of the same name in its class. A text a class implements
+    /// explicitly for two interfaces has no one wording, and a text whose wording is no constant, or is declared where
+    /// this compilation has no syntax for it, has none either. A text that takes values has the wording its method
+    /// writes, with each value in braces (<see cref="MethodWording"/>), unless its class has two methods of its name.
+    /// </summary>
+    private static ImmutableArray<TextWording> GetWordings(INamedTypeSymbol type, WordingReader reader, CancellationToken cancellationToken)
+    {
+        var wordings = ImmutableArray.CreateBuilder<TextWording>();
+
+        // The names a nearer class has settled, with a wording or without one.
+        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var members = current.GetMembers();
+
+            // Null for a name the class implements explicitly more than once.
+            var explicitImplementations = new Dictionary<string, ISymbol?>(StringComparer.Ordinal);
+            foreach (var member in members)
+            {
+                if (member is IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String }
+                        or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation, ReturnType.SpecialType: SpecialType.System_String }
+                    && GetExplicitlyImplementedName(member) is { } name)
+                {
+                    explicitImplementations[name] = explicitImplementations.ContainsKey(name) ? null : member;
+                }
+            }
+
+            foreach (var pair in explicitImplementations)
+                if (settled.Add(pair.Key) && pair.Value is not null && reader.Read(pair.Value, cancellationToken) is { } wording)
+                    wordings.Add(new TextWording(pair.Key, wording));
+
+            foreach (var member in members)
+                if (IsPublicStringProperty(member, out _) && settled.Add(member.Name) && reader.Read(member, cancellationToken) is { } wording)
+                    wordings.Add(new TextWording(member.Name, wording));
+
+            // Two methods of one name have no one wording, and settle the name all the same.
+            foreach (var member in members)
+            {
+                if (TextParameters.IsTextMethod(member, out var method)
+                    && settled.Add(method.Name)
+                    && TextParameters.HasNameOfItsOwn(method)
+                    && reader.Read(method, cancellationToken) is { } wording)
+                {
+                    wordings.Add(new TextWording(method.Name, wording));
+                }
+            }
+        }
+
+        var orderedWordings = wordings.OrderBy(static wording => wording.Name, StringComparer.Ordinal).ToImmutableArray();
+        return orderedWordings;
+    }
+
+    /// <summary>
+    /// A class as a cref names it inside its namespace, its type parameters in braces: <c>DutchBase{T}</c>.
+    /// </summary>
+    private static string GetCrefName(INamedTypeSymbol type)
+    {
+        var crefName = type.OriginalDefinition.ToDisplayString(CrefNameFormat).Replace('<', '{').Replace('>', '}');
+        return crefName;
+    }
+
+    /// <summary>
+    /// The name of the member a property or method implements explicitly (<c>Checkout</c> for
+    /// <c>string IShopLocalization.Checkout</c>), or <see langword="null"/> for any other member.
+    /// </summary>
+    // Read from the member's own name, which holds the interface as it is written: the symbol names no implemented
+    // member for a contract generated here, which binds to nothing yet.
+    private static string? GetExplicitlyImplementedName(ISymbol member)
+    {
+        var separator = member.Name.LastIndexOf('.');
+
+        var explicitlyImplementedName = separator < 0 ? null : member.Name.Substring(separator + 1);
+        return explicitlyImplementedName;
+    }
+
+    /// <summary>
+    /// The texts: the public, instance, non-indexer <see cref="string"/> properties with a public getter declared by
+    /// the class itself, and its methods of the shape of a text that takes values
+    /// (<see cref="TextParameters.IsTextMethod"/>), in the order they're written, by file and then by position (an inherited member belongs to the base's
+    /// own contract). <c>LanguageCode</c> (the <c>ILocalizationSet</c> member, which a set may override) and explicit
+    /// interface implementations are not texts, and neither is a member marked
+    /// <c>[ExcludeFromLocalizationDiscovery]</c>. A method of that shape that can't be a text
+    /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC300</c>). So is
+    /// a text written as a method without parameters (<see cref="TextParameters.IsTextWithoutParameters"/>). With
+    /// them come the using directives the contract repeats (<see cref="RepeatedUsings"/>).
+    /// </summary>
+    private static ImmutableArray<LocalizationMember> GetTextMembers(INamedTypeSymbol type, WordingReader reader,
+        CancellationToken cancellationToken, out ImmutableArray<UnsupportedText> unsupported, out RepeatedUsings usings)
+    {
+        var members = ImmutableArray.CreateBuilder<(Location Location, LocalizationMember Member)>();
+        var unsupportedTexts = ImmutableArray.CreateBuilder<UnsupportedText>();
+        var usingsOfFile = ImmutableArray.CreateBuilder<string>();
+        var usingsOfNamespace = ImmutableArray.CreateBuilder<string>();
+
+        foreach (var member in type.GetMembers())
+        {
+            // A member marked [ExcludeFromLocalizationDiscovery] is no text, whatever its shape: a helper that has to
+            // be public.
+            if (String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal) || IsExcluded(member))
+                continue;
+
+            var declaration = member.DeclaringSyntaxReferences.Length > 0
+                ? member.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) as MemberDeclarationSyntax
+                : null;
+
+            if (IsPublicStringProperty(member, out var property))
+            {
+                members.Add((DeclaredAt(member), new LocalizationMember(
+                    Name: property.Name,
+                    HasDocComment: declaration is not null && HasDocComment(declaration),
+                    DefaultText: declaration is PropertyDeclarationSyntax ? reader.Read(declaration, cancellationToken) : null,
+                    Parameters: default)));
+            }
+            else if (TextParameters.IsTextMethod(member, out var method))
+            {
+                if (TextParameters.FindProblem(method) is { } problem)
+                {
+                    unsupportedTexts.Add(new UnsupportedText(method.Name, problem, DiagnosticLocation.From(method.Locations[0])));
+                    continue;
+                }
+
+                // A type another generator writes binds to nothing yet, and is written by the words the method writes
+                // it in. They name it only next to the using directives of the method, which the contract repeats.
+                if (declaration is MethodDeclarationSyntax written && TextParameters.HasUnboundType(method))
+                {
+                    var (ofFile, ofNamespace) = TextParameters.ReadUsings(written);
+                    usingsOfFile.AddRange(ofFile);
+                    usingsOfNamespace.AddRange(ofNamespace);
+                }
+
+                members.Add((DeclaredAt(member), new LocalizationMember(
+                    Name: method.Name,
+                    HasDocComment: declaration is not null && HasDocComment(declaration),
+                    DefaultText: declaration is MethodDeclarationSyntax ? reader.Read(declaration, cancellationToken) : null,
+                    Parameters: TextParameters.Read(
+                        method,
+                        declaration as MethodDeclarationSyntax,
+                        // Only in a tree of this compilation, as for the wording (WordingReader.FindModel).
+                        declaration is null ? null : reader.FindModel(declaration.SyntaxTree),
+                        cancellationToken))));
+            }
+            else if (TextParameters.IsTextWithoutParameters(member, out var withoutParameters))
+            {
+                // No text, and reported: what calls it as one would find nothing by its name (CS0117).
+                unsupportedTexts.Add(new UnsupportedText(withoutParameters.Name, TextParameters.WithoutParametersProblem, DiagnosticLocation.From(withoutParameters.Locations[0])));
+            }
+        }
+
+        unsupported = unsupportedTexts.ToImmutable();
+
+        // Each directive once, though two texts may bring it, or two files of a partial set.
+        usings = new RepeatedUsings(
+            new EquatableArray<string>([.. usingsOfFile.Distinct(StringComparer.Ordinal)]),
+            new EquatableArray<string>([.. usingsOfNamespace.Distinct(StringComparer.Ordinal)]));
+
+        // As written on the set, by file and then by position, so that a partial set orders the same on every build.
+        // A member from a referenced assembly has no file, and keeps the order its metadata gives.
+        var ordered = members.ToImmutable()
+            .OrderBy(static item => item.Location.IsInSource ? item.Location.SourceTree!.FilePath : "", StringComparer.Ordinal)
+            .ThenBy(static item => item.Location.IsInSource ? item.Location.SourceSpan.Start : 0)
+            .Select(static item => item.Member)
+            .ToImmutableArray();
+
+        return ordered;
+    }
+
+    /// <summary>
+    /// Where a member is written, or <see cref="Location.None"/> when it comes from a referenced assembly.
+    /// </summary>
+    private static Location DeclaredAt(ISymbol member)
+    {
+        var location = member.Locations.FirstOrDefault(static location => location.IsInSource) ?? Location.None;
+        return location;
+    }
+
+    private static bool IsPublicStringProperty(ISymbol member, out IPropertySymbol property)
+    {
+        property = (member as IPropertySymbol)!;
+
+        var isPublicStringProperty = member is IPropertySymbol
+        {
+            DeclaredAccessibility: Accessibility.Public,
+            IsStatic: false,
+            IsIndexer: false,
+            GetMethod.DeclaredAccessibility: Accessibility.Public,
+            ExplicitInterfaceImplementations.Length: 0,
+            Type.SpecialType: SpecialType.System_String,
+        };
+
+        return isPublicStringProperty;
+    }
+
+    /// <summary>
+    /// Whether the property or method carries a doc comment. Checked on the trivia rather than through the symbol,
+    /// because a project that emits no documentation file parses <c>///</c> as a plain comment, and the symbol reports
+    /// none.
+    /// </summary>
+    private static bool HasDocComment(MemberDeclarationSyntax declaration)
+    {
+        foreach (var trivia in declaration.GetLeadingTrivia())
+        {
+            if (trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
+                return true;
+
+            if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) && trivia.ToString().StartsWith("///", StringComparison.Ordinal))
+                return true;
+
+            if (trivia.IsKind(SyntaxKind.MultiLineCommentTrivia) && trivia.ToString().StartsWith("/**", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+}

@@ -2,7 +2,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="LocalizableText"/>: the text's own translations, the order a wording is looked up in, and the
-/// two conversions to and from a string. The contract half lives in the <see cref="ResourceText"/> tests.
+/// two conversions to and from a string. Texts of a set and texts with a key are tested in LocalizableTextSetsTests.
 /// </summary>
 public sealed class LocalizableTextTests
 {
@@ -20,17 +20,17 @@ public sealed class LocalizableTextTests
         public void Dispose() => CultureInfo.CurrentUICulture = this.Previous;
     }
 
-    private interface ITextTranslations : ITranslationSet
+    private interface ITextLocalization : ILocalizationSet
     {
         string Greeting { get; }
     }
 
-    private sealed class TextTranslationsEN : ITextTranslations
+    private sealed class TextLocalizationEn : ITextLocalization
     {
         public string Greeting => "Hello";
     }
 
-    private sealed class TextTranslationsNL : ITextTranslations
+    private sealed class TextLocalizationNl : ITextLocalization
     {
         public string Greeting => "Hallo";
     }
@@ -43,59 +43,8 @@ public sealed class LocalizableTextTests
         public override CultureInfo Parent => InvariantCulture;
     }
 
-    /// <summary>
-    /// A text type of a consumer's own, which the package does not allow.
-    /// </summary>
-    private sealed record TextDerived(string Wording) : LocalizableText(Wording);
-
-    /// <summary>
-    /// A text type of a consumer's own that copies a text instead of creating one.
-    /// </summary>
-    private sealed record TextCopied : LocalizableText
-    {
-        public TextCopied(LocalizableText original)
-            : base(original)
-        {
-        }
-    }
-
     private static string TakeString(string value) => value;
     #endregion
-
-    [Test]
-    public void Constructor_OfDerivedType_ShouldThrow()
-    {
-        // Arrange & Act & Assert: a derived text would be written to JSON without its translations and fail to read
-        // back, so it fails where it is created, naming the type.
-        Should.Throw<NotSupportedException>(() => new TextDerived("Name")).Message.ShouldContain(nameof(TextDerived));
-    }
-
-    [Test]
-    public void CopyConstructor_OfDerivedType_ShouldThrow()
-    {
-        // Arrange & Act & Assert: the copy constructor of a record is open to a derived record too.
-        Should.Throw<NotSupportedException>(() => new TextCopied(new LocalizableText("Name"))).Message.ShouldContain(nameof(TextCopied));
-    }
-
-    [Test]
-    public void With_ShouldCopyTextAndItsTranslations()
-    {
-        // Arrange
-        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
-        var resourceText = new ResourceText("Customer.Name", "Name").WithTranslation("nl", "Naam");
-
-        // Act
-        var copy = text with { };
-        var resourceCopy = resourceText with { };
-
-        // Assert
-        copy.ShouldNotBeSameAs(text);
-        copy.ShouldBe(text);
-        copy.Translations["nl"].ShouldBe("Naam");
-        resourceCopy.ShouldBe(resourceText);
-        resourceCopy.Key.ShouldBe("Customer.Name");
-    }
-
     [Test]
     public void ToString_ShouldGiveWordingForCurrentUICulture()
     {
@@ -150,7 +99,7 @@ public sealed class LocalizableTextTests
         // its target's. This pins that it compiles.
         using var _ = new UICultureScope("nl-NL");
         var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
-        var useText = true;
+        const bool useText = true;
 
         // Act
         string result = useText ? text : "Other";
@@ -166,10 +115,10 @@ public sealed class LocalizableTextTests
         LocalizableText text = "Name";
         LocalizableText? nothing = (string?)null;
 
-        // Assert: a plain text, not a resource text.
-        text.ShouldBeOfType<LocalizableText>();
+        // Assert: a plain text, without a key.
+        text.Key.ShouldBeNull();
         text.DefaultText.ShouldBe("Name");
-        text.Translations.ShouldBeEmpty();
+        text.TranslationsByLanguage.ShouldBeEmpty();
         nothing.ShouldBeNull();
     }
 
@@ -178,8 +127,8 @@ public sealed class LocalizableTextTests
     {
         // Arrange: the same text with and without an inline translation, and a registry serving Dutch.
         var culture = CultureInfo.GetCultureInfo("nl-NL");
-        var registry = TranslationsRegistry.Create([new TextTranslationsNL()]);
-        var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
+        var registry = LocalizationRegistry.Create([new TextLocalizationNl()]);
+        var declared = LocalizableText.Create<ITextLocalization>("Text.Greeting", t => t.Greeting, new TextLocalizationEn());
 
         // Act & Assert
         declared.ToString(culture, registry).ShouldBe("Hallo");
@@ -191,8 +140,8 @@ public sealed class LocalizableTextTests
     {
         // Arrange
         var culture = CultureInfo.GetCultureInfo("de-DE");
-        var registry = TranslationsRegistry.Create([new TextTranslationsNL()]);
-        var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
+        var registry = LocalizationRegistry.Create([new TextLocalizationNl()]);
+        var declared = LocalizableText.Create<ITextLocalization>("Text.Greeting", t => t.Greeting, new TextLocalizationEn());
 
         // Act & Assert
         declared.ToString(culture, registry).ShouldBe("Hello");
@@ -203,9 +152,9 @@ public sealed class LocalizableTextTests
     public void ToString_OfTextWithoutTranslationsOrContract_ShouldBeDefaultTextInEveryCulture()
     {
         // Arrange: a registry with sets and app languages, none of which can phrase a text of no contract.
-        var registry = TranslationsRegistry.Create([new TextTranslationsEN(), new TextTranslationsNL()], "nl", "en");
+        var registry = LocalizationRegistry.Create([new TextLocalizationEn(), new TextLocalizationNl()], "nl", "en");
         var plain = new LocalizableText("Name");
-        var keyed = new ResourceText("Customer.Name", "Jan");
+        var keyed = LocalizableText.Keyed("Customer.Name", "Jan");
 
         // Act & Assert: the default text itself, for a culture with a set, one without, and the invariant culture.
         foreach (var culture in new[] { CultureInfo.GetCultureInfo("nl-BE"), CultureInfo.GetCultureInfo("fr-FR"), CultureInfo.InvariantCulture })
@@ -286,7 +235,7 @@ public sealed class LocalizableTextTests
     {
         // Arrange
         var culture = CultureInfo.GetCultureInfo("nl-NL");
-        var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
+        var declared = LocalizableText.Create<ITextLocalization>("Text.Greeting", t => t.Greeting, new TextLocalizationEn());
 
         // Act & Assert
         declared.ToString(culture, registry: null).ShouldBe("Hello");
@@ -320,20 +269,9 @@ public sealed class LocalizableTextTests
         // Assert: key-less, default kept, languages looked up regardless of case.
         text.ShouldBeOfType<LocalizableText>();
         text.DefaultText.ShouldBe("Name");
-        text.Translations.Count.ShouldBe(2);
-        text.Translations["NL"].ShouldBe("Naam");
-        text.Translations["de"].ShouldBe("Name (de)");
-    }
-
-    [Test]
-    public void FromGeneratedCode_ShouldKeepLastTextForRepeatedLanguage()
-    {
-        // Arrange & Act: the same language twice, in two spellings.
-        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"), ("NL", "Volledige naam"));
-
-        // Assert
-        text.Translations.Count.ShouldBe(1);
-        text.Translations["nl"].ShouldBe("Volledige naam");
+        text.TranslationsByLanguage.Count.ShouldBe(2);
+        text.TranslationsByLanguage["NL"].ShouldBe("Naam");
+        text.TranslationsByLanguage["de"].ShouldBe("Name (de)");
     }
 
     [Test]
@@ -346,11 +284,11 @@ public sealed class LocalizableTextTests
         var extended = text.WithTranslation("de", "Name (de)").WithTranslation("nl", "Volledige naam");
 
         // Assert
-        text.Translations.Count.ShouldBe(1);
-        text.Translations["nl"].ShouldBe("Naam");
-        extended.Translations.Count.ShouldBe(2);
-        extended.Translations["nl"].ShouldBe("Volledige naam");
-        extended.Translations["de"].ShouldBe("Name (de)");
+        text.TranslationsByLanguage.Count.ShouldBe(1);
+        text.TranslationsByLanguage["nl"].ShouldBe("Naam");
+        extended.TranslationsByLanguage.Count.ShouldBe(2);
+        extended.TranslationsByLanguage["nl"].ShouldBe("Volledige naam");
+        extended.TranslationsByLanguage["de"].ShouldBe("Name (de)");
     }
 
     [Test]
@@ -358,14 +296,14 @@ public sealed class LocalizableTextTests
     {
         // Arrange: the map of the original is built before the copy is made.
         var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
-        text.Translations.Count.ShouldBe(1);
+        text.TranslationsByLanguage.Count.ShouldBe(1);
 
         // Act: a language in another letter case replaces, a new one is added.
         var extended = text.WithTranslation("NL", "Volledige naam").WithTranslation("de", "Name (de)");
 
         // Assert
-        extended.Translations.Count.ShouldBe(2);
-        extended.Translations["nl"].ShouldBe("Volledige naam");
+        extended.TranslationsByLanguage.Count.ShouldBe(2);
+        extended.TranslationsByLanguage["nl"].ShouldBe("Volledige naam");
         extended.GetTranslation(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Volledige naam");
         extended.GetTranslation(CultureInfo.GetCultureInfo("de-DE")).ShouldBe("Name (de)");
         text.GetTranslation(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Naam");
@@ -380,22 +318,37 @@ public sealed class LocalizableTextTests
         LocalizableText plain = "Name";
 
         // Act & Assert: built once, and one shared empty map for a text without translations.
-        text.Translations.ShouldBeSameAs(text.Translations);
-        text.Translations.KeyComparer.ShouldBe(StringComparer.OrdinalIgnoreCase);
-        plain.Translations.ShouldBeSameAs(LocalizableText.NoTranslations);
+        text.TranslationsByLanguage.ShouldBeSameAs(text.TranslationsByLanguage);
+        text.TranslationsByLanguage.KeyComparer.ShouldBe(StringComparer.OrdinalIgnoreCase);
+        plain.TranslationsByLanguage.ShouldBeSameAs(LocalizableText.NoTranslations);
     }
 
     [Test]
-    public void Equals_ShouldIgnoreOrderAndLetterCaseOfLanguages()
+    public void Equals_BetweenTexts_ShouldCompareWordingForCurrentUICulture()
     {
-        // Arrange
-        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"), ("de", "Name (de)"));
+        // Arrange: texts that read alike in Dutch, in another order of languages, with other English, or with one
+        // wording for every culture.
+        var text = LocalizableText.FromGeneratedCode("Name", ("en", "Name"), ("nl", "Naam"));
+        var reordered = LocalizableText.FromGeneratedCode("Name", ("NL", "Naam"), ("EN", "Name"));
+        var fullName = LocalizableText.FromGeneratedCode("Full name", ("en", "Full name"), ("nl", "Naam"));
+        LocalizableText dutch = "Naam";
 
         // Act & Assert
-        text.Equals(LocalizableText.FromGeneratedCode("Name", ("DE", "Name (de)"), ("NL", "Naam"))).ShouldBeTrue();
-        text.Equals(LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"), ("de", "Anders"))).ShouldBeFalse();
-        text.Equals(LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"), ("fr", "Name (de)"))).ShouldBeFalse();
-        text.Equals(LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"))).ShouldBeFalse();
+        using (new UICultureScope("nl-NL"))
+        {
+            text.Equals(reordered).ShouldBeTrue();
+            text.Equals(fullName).ShouldBeTrue();
+            text.Equals(dutch).ShouldBeTrue();
+            text.Equals(LocalizableText.FromGeneratedCode("Name", ("en", "Name"), ("nl", "Volledige naam"))).ShouldBeFalse();
+            text.Equals((LocalizableText?)null).ShouldBeFalse();
+        }
+
+        using (new UICultureScope("en-US"))
+        {
+            text.Equals(reordered).ShouldBeTrue();
+            text.Equals(fullName).ShouldBeFalse();
+            text.Equals(dutch).ShouldBeFalse();
+        }
     }
 
     [Test]
@@ -405,7 +358,6 @@ public sealed class LocalizableTextTests
         Should.Throw<ArgumentNullException>(() => LocalizableText.FromGeneratedCode(null!, ("nl", "Naam")));
         Should.Throw<ArgumentNullException>(() => LocalizableText.FromGeneratedCode("Name", ("nl", null!)));
         Should.Throw<ArgumentNullException>(() => LocalizableText.FromGeneratedCode("Name", (null!, "Naam")));
-        Should.Throw<ArgumentException>(() => LocalizableText.FromGeneratedCode("Name", ("", "Naam")));
         Should.Throw<ArgumentException>(() => new LocalizableText("Name").WithTranslation("", "Naam"));
         Should.Throw<ArgumentException>(() => new LocalizableText("Name").WithTranslation(" ", "Naam"));
         Should.Throw<ArgumentNullException>(() => new LocalizableText("Name").WithTranslation("nl", null!));
@@ -434,9 +386,9 @@ public sealed class LocalizableTextTests
         // Arrange: nl-BE as invariant globalization creates it, whose parent is the invariant culture, in an app that
         // declares nl. It showed English before the lookups also walked by name.
         var belgian = new TextInvariantParentCulture("nl-BE");
-        var registry = TranslationsRegistry.Create([new TextTranslationsNL()]);
+        var registry = LocalizationRegistry.Create([new TextLocalizationNl()]);
         var inline = LocalizableText.FromGeneratedCode("Orders", ("en", "Orders"), ("nl", "Bestellingen"));
-        var declared = ResourceText.Create<ITextTranslations>("Text.Greeting", t => t.Greeting, new TextTranslationsEN());
+        var declared = LocalizableText.Create<ITextLocalization>("Text.Greeting", t => t.Greeting, new TextLocalizationEn());
 
         // Act & Assert
         inline.GetTranslation(belgian).ShouldBe("Bestellingen");
@@ -449,7 +401,7 @@ public sealed class LocalizableTextTests
     {
         // Arrange
         var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
-        var wording = "Naam";
+        const string wording = "Naam";
 
         // Act & Assert: a literal and a variable, on either side, following the culture.
         using (new UICultureScope("nl-NL"))
@@ -505,7 +457,7 @@ public sealed class LocalizableTextTests
     [Test]
     public void EqualityOperator_WithNullStringVariable_ShouldCompareAsEmptyString()
     {
-        // Arrange: a span cannot tell a null string from an empty one.
+        // Arrange: a span can't tell a null string from an empty one.
         var text = new LocalizableText("Name");
         var empty = new LocalizableText("");
         string? nothing = null;
@@ -516,45 +468,154 @@ public sealed class LocalizableTextTests
     }
 
     [Test]
-    public void EqualityOperator_BetweenTexts_ShouldCompareTextsRatherThanWording()
+    public void EqualityOperator_BetweenTexts_ShouldCompareWordingForCurrentUICulture()
     {
-        // Arrange: two texts showing the same wording for this culture.
-        using var _ = new UICultureScope("nl-NL");
+        // Arrange: a translated text, and a text with one wording that only Dutch users see alike.
         var translated = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
         LocalizableText plain = "Naam";
 
         // Act & Assert
-        translated.ToString().ShouldBe(plain.ToString());
-        (translated == plain).ShouldBeFalse();
-        (translated == LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"))).ShouldBeTrue();
+        using (new UICultureScope("nl-NL"))
+        {
+            (translated == plain).ShouldBeTrue();
+            (translated != plain).ShouldBeFalse();
+        }
+
+        using (new UICultureScope("en-US"))
+        {
+            (translated == plain).ShouldBeFalse();
+            (translated != plain).ShouldBeTrue();
+            (translated == LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"))).ShouldBeTrue();
+        }
     }
 
     [Test]
-    public void Equals_WithString_ShouldCompareTextsRatherThanWording()
+    public void Equals_WithString_ShouldCompareWordingForCurrentUICulture()
     {
-        // Arrange: what a collection relies on, so it stays structural.
-        using var _ = new UICultureScope("nl-NL");
+        // Arrange
+        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+        const string wording = "Naam";
+        string? nothing = null;
+
+        // Act & Assert: a literal and a variable, following the culture, as == does.
+        using (new UICultureScope("nl-NL"))
+        {
+            text.Equals("Naam").ShouldBeTrue();
+            text.Equals(wording).ShouldBeTrue();
+            text.Equals("naam").ShouldBeFalse();
+            text.Equals("Name").ShouldBeFalse();
+            text.Equals(nothing).ShouldBeFalse();
+        }
+
+        using (new UICultureScope("en-US"))
+        {
+            text.Equals("Naam").ShouldBeFalse();
+            text.Equals("Name").ShouldBeTrue();
+        }
+
+        // A null string compares as the empty string, and null itself is no text.
+        new LocalizableText("").Equals(nothing).ShouldBeTrue();
+        text.Equals(null).ShouldBeFalse();
+    }
+
+    [Test]
+    public void Equals_WithStringOnTextWithKey_ShouldCompareWording()
+    {
+        // Arrange
+        var text = LocalizableText.Keyed("Customer.Name", "Anna");
+        const string wording = "Anna";
+
+        // Act & Assert: a string is compared with the wording, also for a text with a key.
+        text.Equals("Anna").ShouldBeTrue();
+        text.Equals(wording).ShouldBeTrue();
+        text.Equals("Customer.Name").ShouldBeFalse();
+        text.Equals(LocalizableText.Keyed("Customer.Name", "Anna")).ShouldBeTrue();
+        text.Equals(null).ShouldBeFalse();
+    }
+
+    [Test]
+    public void Contains_WithString_ShouldFindTextShowingThatWording()
+    {
+        // Arrange: a collection compares texts, and the string becomes a text with that one wording for every culture.
         var translated = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
-        List<LocalizableText> texts = [translated];
+        List<LocalizableText> texts = [new LocalizableText("Other"), translated];
+        const string wording = "Naam";
+
+        // Act & Assert: also through the lookups that take an object.
+        using (new UICultureScope("nl-NL"))
+        {
+            texts.Contains(wording).ShouldBeTrue();
+            texts.IndexOf(wording).ShouldBe(1);
+            Array.IndexOf(texts.ToArray(), wording).ShouldBe(1);
+        }
+
+        using (new UICultureScope("en-US"))
+        {
+            texts.Contains(wording).ShouldBeFalse();
+            texts.Contains("Name").ShouldBeTrue();
+        }
+    }
+
+    [Test]
+    public void EqualsObject_WithString_ShouldCompareWordingOneWayOnly()
+    {
+        // Arrange
+        using var _ = new UICultureScope("nl-NL");
+        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+        object wording = "Naam";
+
+        // Act & Assert: a string's own Equals only takes another string.
+        text.Equals(wording).ShouldBeTrue();
+        Object.Equals(text, wording).ShouldBeTrue();
+        Object.Equals(wording, text).ShouldBeFalse();
+        text.Equals((object)"Name").ShouldBeFalse();
+        text.Equals((object)1).ShouldBeFalse();
+    }
+
+    [Test]
+    public void GetHashCode_ShouldBeThatOfTheWordingForCurrentUICulture()
+    {
+        // Arrange
+        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+
+        // Act & Assert: texts that read alike hash alike, and like the wording itself.
+        using (new UICultureScope("nl-NL"))
+        {
+            text.GetHashCode().ShouldBe(new LocalizableText("Naam").GetHashCode());
+            text.GetHashCode().ShouldBe(StringComparer.Ordinal.GetHashCode("Naam"));
+            LocalizableText[] texts = [text, "Naam", "Name"];
+            texts.Distinct().Count().ShouldBe(2);
+        }
+
+        using (new UICultureScope("en-US"))
+            text.GetHashCode().ShouldBe(StringComparer.Ordinal.GetHashCode("Name"));
+    }
+
+    [Test]
+    public void Collection_WithReferenceComparer_ShouldFindTextsAfterLanguageSwitch()
+    {
+        // Arrange: as the docs advise for a collection that outlives a language switch.
+        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+        var counts = new Dictionary<LocalizableText, int>(ReferenceEqualityComparer.Instance);
+
+        using (new UICultureScope("nl-NL"))
+            counts[text] = 1;
 
         // Act & Assert
-        translated.Equals("Naam").ShouldBeFalse();
-        texts.Contains("Naam").ShouldBeFalse();
-        texts.Contains(translated).ShouldBeTrue();
+        using (new UICultureScope("en-US"))
+            counts[text].ShouldBe(1);
     }
 
     [Test]
-    public void Equality_ShouldBeStructuralIncludingTranslations()
+    public void ComparingWording_WithoutLetterCaseOrForSorting_ShouldWorkThroughStrings()
     {
-        // Arrange & Act & Assert
-        new LocalizableText("Name").ShouldBe((LocalizableText)"Name");
-        new LocalizableText("Name").GetHashCode().ShouldBe(((LocalizableText)"Name").GetHashCode());
-        LocalizableText.FromGeneratedCode("Name", ("nl", "Naam")).ShouldBe(LocalizableText.FromGeneratedCode("Name", ("NL", "Naam")));
-        LocalizableText.FromGeneratedCode("Name", ("nl", "Naam")).GetHashCode().ShouldBe(LocalizableText.FromGeneratedCode("Name", ("NL", "Naam")).GetHashCode());
-        LocalizableText.FromGeneratedCode("Name", ("nl", "Naam")).ShouldNotBe(LocalizableText.FromGeneratedCode("Name", ("nl", "Volledige naam")));
-        LocalizableText.FromGeneratedCode("Name", ("nl", "Naam")).ShouldNotBe(new LocalizableText("Name"));
-        new LocalizableText("Name").ShouldNotBe(new LocalizableText("Other"));
-        new ResourceText("Key", "Name").ShouldNotBe(new LocalizableText("Name"));
-        new LocalizableText("Name").ShouldNotBe(new ResourceText("Key", "Name"));
+        // Arrange: as the docs show it.
+        using var _ = new UICultureScope("nl-NL");
+        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+        LocalizableText[] texts = [text, LocalizableText.FromGeneratedCode("Address", ("nl", "Adres"))];
+
+        // Act & Assert
+        String.Equals(text, "naam", StringComparison.CurrentCultureIgnoreCase).ShouldBeTrue();
+        texts.OrderBy(static item => (string)item, StringComparer.CurrentCulture).Select(static item => item.ToString()).ShouldBe(["Adres", "Naam"]);
     }
 }

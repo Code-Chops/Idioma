@@ -3,7 +3,7 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// Finds a placeholder of a format string in a wording: <c>{0}</c>, with or without an alignment or a format, as in
 /// <c>{1,8}</c> and <c>{0:N2}</c>. Nothing fills one in, so in a wording it is a value that was meant to be there and
-/// is not (<c>LOC016</c>).
+/// is not (<c>LOC502</c>).
 /// </summary>
 internal static class Placeholder
 {

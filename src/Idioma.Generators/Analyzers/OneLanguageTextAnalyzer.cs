@@ -4,52 +4,78 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Closes what the generated factory cannot in an assembly that declares <c>[assembly: SupportedLanguages(...)]</c>:
-/// <c>LOC011</c> for wording written in one language, <c>LOC012</c> for calling by hand what only generated code should
-/// call, and <c>LOC013</c> for a language argument without its name.
+/// Closes what the generated factory can't in an assembly that declares <c>[assembly: SupportedLanguages(...)]</c>:
+/// <c>LOC500</c> for wording written in one language, and <c>LOC501</c> for a language argument without its name. In
+/// an assembly without the attribute, it reports a call of <c>LocalizableText.Inline</c> (<c>LOC100</c>), which the
+/// compiler alone reports as a method that doesn't exist.
 /// </summary>
 /// <remarks>
 /// Wording means text written in the source: a constant holding a letter, also inside an interpolation, a concatenation,
-/// a conditional, a coalesce, or a switch. A runtime value (a customer's name) converts to a text as it always did: it
-/// has no translations to demand, and the build cannot tell it from wording kept in a local variable, which therefore
-/// passes too. Generated code is left alone, as its author cannot fix a report on it, except what Razor generates from a
-/// <c>.razor</c> or <c>.cshtml</c> file, which is the user's own markup and maps back to it.
+/// a conditional, a coalesce, or a switch. A runtime value (a customer's name) converts to a text as it always did,
+/// because it has no translations to demand. The build can't tell it from wording kept in a local variable, which
+/// therefore passes too. Generated code is left alone, as its author can't fix a report on it, except what Razor
+/// generates from a <c>.razor</c> or <c>.cshtml</c> file, which is the user's own markup and maps back to it. So is the
+/// initializer of a property marked <c>[ExcludeFromLocalizationDiscovery]</c>, whose author marked its wording as the
+/// same in every language, such as a name.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
 {
-    public const string OneLanguageDiagnosticId = "LOC011";
-    public const string GeneratedCodeOnlyDiagnosticId = "LOC012";
-    public const string UnnamedLanguageDiagnosticId = "LOC013";
+    public const string OneLanguageDiagnosticId = "LOC500";
+    public const string UnnamedLanguageDiagnosticId = "LOC501";
+
+    /// <summary>
+    /// The code a set in an assembly without languages gets too (<see cref="LocalizationSetsGenerator"/>).
+    /// </summary>
+    public const string NoLanguagesDeclaredDiagnosticId = LocalizationSetsGenerator.NoLanguagesDeclaredDiagnosticId;
+
+    /// <summary>
+    /// The property of <c>LOC501</c> that holds the language of each argument of the call, in the order they're
+    /// written, separated by commas: <c>en,nl</c>. Its code fix names the arguments from it, also in a workspace that
+    /// hasn't run the generator that writes <c>LocalizableText.Inline</c>.
+    /// </summary>
+    public const string ParameterNamesProperty = "ParameterNames";
+
+    /// <summary>
+    /// The factory of a text with a key, <c>LocalizableText.Keyed(key, defaultText)</c>.
+    /// </summary>
+    private const string KeyedName = "Keyed";
 
     private static readonly DiagnosticDescriptor OneLanguageRule = new(
         id: OneLanguageDiagnosticId,
         title: "Text written in one language",
-        messageFormat: "This text is written in one language, and this assembly supports {0}. Write it as LocalizableText.Inline({1}).",
+        messageFormat: "This text is in one language, but this assembly supports {0}. Write it as LocalizableText.Inline({1}).",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Every language of [assembly: SupportedLanguages] must be able to show every text. A string converts to a text, which suits a value such as a customer's name, but wording written in the source would show in this one language to everybody.");
-
-    private static readonly DiagnosticDescriptor GeneratedCodeOnlyRule = new(
-        id: GeneratedCodeOnlyDiagnosticId,
-        title: "Called by hand what only generated code should call",
-        messageFormat: "'{0}' is for generated code, and would let a text miss a language. Write the text as LocalizableText.Inline({1}), or in a set per language.",
-        category: "Design",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "These members exist because generated code in another assembly has to call them. Called by hand they can create a text without all the languages of [assembly: SupportedLanguages].");
+        description: "Every text must show in every language of [assembly: SupportedLanguages]. A string converts to a text, which suits a value such as a customer's name. But wording written in the source would show in this one language to everybody. For wording that reads the same in every language, such as a name, mark the property that holds it [ExcludeFromLocalizationDiscovery], and its initializer isn't checked.",
+        helpLinkUri: PackageNames.HelpLink(OneLanguageDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnnamedLanguageRule = new(
         id: UnnamedLanguageDiagnosticId,
         title: "Language argument without its name",
-        messageFormat: "Name the language of this wording: LocalizableText.Inline({0}). Without names two languages can swap unnoticed.",
+        messageFormat: "Name the language of this wording: LocalizableText.Inline({0}). Without names, two languages can swap unnoticed.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Every parameter of LocalizableText.Inline is a string, so wording in the wrong position compiles and shows in the wrong language.");
+        description: "Every parameter of LocalizableText.Inline is a string, so wording in the wrong position compiles and shows in the wrong language.",
+        helpLinkUri: PackageNames.HelpLink(UnnamedLanguageDiagnosticId));
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(OneLanguageRule, GeneratedCodeOnlyRule, UnnamedLanguageRule);
+    // The code of a set in an assembly without languages, which the generator reports: both say that the attribute is
+    // missing, and both have the same fix. So the code is shared on purpose.
+#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
+    private static readonly DiagnosticDescriptor InlineWithoutLanguagesRule = new(
+        id: NoLanguagesDeclaredDiagnosticId,
+        title: "Inline text in an assembly without languages",
+        messageFormat: "LocalizableText.Inline takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The source generator writes LocalizableText.Inline with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such method (CS0117).",
+        helpLinkUri: PackageNames.HelpLink(NoLanguagesDeclaredDiagnosticId));
+#pragma warning restore RS1019
+
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [OneLanguageRule, UnnamedLanguageRule, InlineWithoutLanguagesRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -65,68 +91,154 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     {
         var codes = SupportedLanguages.ReadCodes(context.Compilation.Assembly);
         var text = context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText);
-        var resourceText = context.Compilation.GetTypeByMetadataName(PackageNames.ResourceText);
-        var generatedCode = context.Compilation.GetTypeByMetadataName(PackageNames.GeneratedCode);
 
-        if (codes.Length is 0 || text is null)
+        if (text is null)
             return;
+
+        if (codes.Length is 0)
+        {
+            // Without languages there is no factory, and the compiler only says that LocalizableText has no Inline.
+            context.RegisterSyntaxNodeAction(c => AnalyzeInlineWithoutLanguages(c, text), SyntaxKind.InvocationExpression);
+            return;
+        }
 
         var languages = String.Join(", ", codes);
         var sample = String.Join(", ", codes.Select(static code => $"{SupportedLanguages.ToParameterName(code)}: \"...\""));
 
-        context.RegisterOperationAction(c => AnalyzeInvocation(c, generatedCode, sample), OperationKind.Invocation);
+        context.RegisterOperationAction(c => AnalyzeInvocation(c, sample), OperationKind.Invocation);
 
         // One language has nothing to be translated into.
         if (codes.Length < 2)
             return;
 
-        context.RegisterOperationAction(c => AnalyzeConversion(c, text, languages, sample), OperationKind.Conversion);
-        context.RegisterOperationAction(c => AnalyzeCreation(c, text, resourceText, languages, sample), OperationKind.ObjectCreation);
+        // Null in a package without the attribute, where no initializer is left alone.
+        var excluded = context.Compilation.GetTypeByMetadataName(PackageNames.ExcludeFromLocalizationDiscoveryAttribute);
+
+        context.RegisterOperationAction(c => AnalyzeConversion(c, text, excluded, languages, sample), OperationKind.Conversion);
+        context.RegisterOperationAction(c => AnalyzeCreation(c, text, excluded, languages, sample), OperationKind.ObjectCreation);
+        context.RegisterOperationAction(c => AnalyzeKeyed(c, text, excluded, languages, sample), OperationKind.Invocation);
     }
 
-    private static void AnalyzeConversion(OperationAnalysisContext context, INamedTypeSymbol text, string languages, string sample)
+    /// <summary>
+    /// Reports a call of <c>LocalizableText.Inline</c> that binds to nothing, in an assembly that declares no languages.
+    /// </summary>
+    private static void AnalyzeInlineWithoutLanguages(SyntaxNodeAnalysisContext context, INamedTypeSymbol text)
+    {
+        // By its shape first, which binds nothing: nearly every call is another one.
+        if (context.Node is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } invocation
+            || !String.Equals(access.Name.Identifier.ValueText, LocalizableTextFactoryGenerator.FactoryName, StringComparison.Ordinal)
+            || !IsHandWritten(context.IsGeneratedCode, invocation.SyntaxTree))
+        {
+            return;
+        }
+
+        // Only on the text type, and only where nothing of that name exists, such as an extension of the consumer.
+        if (context.SemanticModel.GetSymbolInfo(access.Expression, context.CancellationToken).Symbol is INamedTypeSymbol receiver
+            && SymbolEqualityComparer.Default.Equals(receiver, text)
+            && context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken) is { Symbol: null, CandidateSymbols.IsEmpty: true })
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InlineWithoutLanguagesRule, access.Name.GetLocation()));
+        }
+    }
+
+    private static void AnalyzeConversion(OperationAnalysisContext context, INamedTypeSymbol text, INamedTypeSymbol? excluded,
+        string languages, string sample)
     {
         var conversion = (IConversionOperation)context.Operation;
 
         if (conversion.OperatorMethod is { Parameters.Length: 1 } method
             && SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
             && method.Parameters[0].Type.SpecialType is SpecialType.System_String
-            && IsHandWritten(context)
-            && HoldsWording(conversion.Operand)
-            && TextComparisonAnalyzer.FindComparison(conversion, text) is null) // LOC017 reports a string compared as a text, which no wording in any language would fix.
+            && IsChecked(context, excluded)
+            && HoldsWording(conversion.Operand))
         {
             context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, conversion.Syntax.GetLocation(), languages, sample));
         }
     }
 
-    private static void AnalyzeCreation(OperationAnalysisContext context, INamedTypeSymbol text, INamedTypeSymbol? resourceText, string languages, string sample)
+    private static void AnalyzeCreation(OperationAnalysisContext context, INamedTypeSymbol text, INamedTypeSymbol? excluded,
+        string languages, string sample)
     {
         var creation = (IObjectCreationOperation)context.Operation;
-        var type = creation.Type;
 
-        if (!SymbolEqualityComparer.Default.Equals(type, text) && !SymbolEqualityComparer.Default.Equals(type, resourceText))
+        if (!SymbolEqualityComparer.Default.Equals(creation.Type, text))
             return;
 
-        // The wording of new LocalizableText(wording) and new ResourceText(key, wording): a key is no wording.
-        var wording = creation.Arguments.FirstOrDefault(static argument => String.Equals(argument.Parameter?.Name, "defaultText", StringComparison.Ordinal));
-
-        if (wording is not null && IsHandWritten(context) && HoldsWording(wording.Value))
+        if (IsWordingWritten(context, excluded, creation.Arguments))
             context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, creation.Syntax.GetLocation(), languages, sample));
     }
 
-    private static void AnalyzeInvocation(OperationAnalysisContext context, INamedTypeSymbol? generatedCode, string sample)
+    /// <summary>
+    /// <c>LocalizableText.Keyed(key, wording)</c>: the key is no wording, but the default text is.
+    /// </summary>
+    private static void AnalyzeKeyed(OperationAnalysisContext context, INamedTypeSymbol text, INamedTypeSymbol? excluded,
+        string languages, string sample)
+    {
+        var invocation = (IInvocationOperation)context.Operation;
+        var method = invocation.TargetMethod;
+
+        if (!String.Equals(method.Name, KeyedName, StringComparison.Ordinal) || !SymbolEqualityComparer.Default.Equals(method.ContainingType, text))
+            return;
+
+        if (IsWordingWritten(context, excluded, invocation.Arguments))
+            context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, invocation.Syntax.GetLocation(), languages, sample));
+    }
+
+    /// <summary>
+    /// Whether the <c>defaultText</c> argument of a call is wording that LOC500 checks (<see cref="IsChecked"/>).
+    /// </summary>
+    private static bool IsWordingWritten(OperationAnalysisContext context, INamedTypeSymbol? excluded, ImmutableArray<IArgumentOperation> arguments)
+    {
+        var wording = arguments.FirstOrDefault(static argument => String.Equals(argument.Parameter?.Name, "defaultText", StringComparison.Ordinal));
+
+        var isWordingWritten = wording is not null && IsChecked(context, excluded) && HoldsWording(wording.Value);
+        return isWordingWritten;
+    }
+
+    /// <summary>
+    /// Whether LOC500 checks the wording of an operation. It does in the user's own source
+    /// (<see cref="IsHandWritten(OperationAnalysisContext)"/>), except in the initializer of a property marked
+    /// <c>[ExcludeFromLocalizationDiscovery]</c> (<see cref="IsInExcludedInitializer"/>).
+    /// </summary>
+    private static bool IsChecked(OperationAnalysisContext context, INamedTypeSymbol? excluded)
+    {
+        var isChecked = IsHandWritten(context) && !IsInExcludedInitializer(context.Operation, excluded);
+        return isChecked;
+    }
+
+    /// <summary>
+    /// Whether an operation lies in the initializer of a property marked <c>[ExcludeFromLocalizationDiscovery]</c>, as in
+    /// <c>public static LocalizableText Brand { get; } = "Idioma";</c>. Its author marked that wording as the same in
+    /// every language, such as a name.
+    /// </summary>
+    // The initializer alone, and not every assignment to the property: a marked component parameter would otherwise
+    // leave the wording of every caller unchecked.
+    private static bool IsInExcludedInitializer(IOperation operation, INamedTypeSymbol? excluded)
+    {
+        if (excluded is null)
+            return false;
+
+        for (var current = operation.Parent; current is not null; current = current.Parent)
+        {
+            if (current is not IPropertyInitializerOperation initializer)
+                continue;
+
+            var isExcluded = initializer.InitializedProperties.Any(property => property.GetAttributes()
+                .Any(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, excluded)));
+
+            return isExcluded;
+        }
+
+        return false;
+    }
+
+    private static void AnalyzeInvocation(OperationAnalysisContext context, string sample)
     {
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod;
 
         if (!IsHandWritten(context))
             return;
-
-        if (IsGeneratedCodeOnly(method, generatedCode))
-        {
-            context.ReportDiagnostic(Diagnostic.Create(GeneratedCodeOnlyRule, invocation.Syntax.GetLocation(), $"{method.ContainingType.Name}.{method.Name}", sample));
-            return;
-        }
 
         if (!IsFactory(method))
             return;
@@ -135,16 +247,39 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         {
             if (argument.Syntax is ArgumentSyntax { NameColon: null })
             {
-                context.ReportDiagnostic(Diagnostic.Create(UnnamedLanguageRule, argument.Syntax.GetLocation(), sample));
+                var properties = FindParameterNames(invocation) is { } names
+                    ? ImmutableDictionary<string, string?>.Empty.Add(ParameterNamesProperty, names)
+                    : null;
+
+                context.ReportDiagnostic(Diagnostic.Create(UnnamedLanguageRule, argument.Syntax.GetLocation(), properties, sample));
                 return;
             }
         }
     }
 
-    private static bool IsGeneratedCodeOnly(IMethodSymbol method, INamedTypeSymbol? generatedCode)
+    /// <summary>
+    /// The parameter of each argument of a call, in the order the arguments are written, separated by commas, or
+    /// <see langword="null"/> when an argument has no parameter, as in a call that doesn't compile.
+    /// </summary>
+    private static string? FindParameterNames(IInvocationOperation invocation)
     {
-        var isGeneratedCodeOnly = SymbolEqualityComparer.Default.Equals(method.ContainingType, generatedCode);
-        return isGeneratedCodeOnly;
+        if (invocation.Syntax is not InvocationExpressionSyntax { ArgumentList.Arguments: var written })
+            return null;
+
+        var names = new string?[written.Count];
+
+        foreach (var argument in invocation.Arguments)
+        {
+            var index = argument.Syntax is ArgumentSyntax syntax ? written.IndexOf(syntax) : -1;
+
+            if (index < 0 || argument.Parameter is not { } parameter)
+                continue;
+
+            names[index] = parameter.Name;
+        }
+
+        var parameterNames = names.Any(static name => name is null) ? null : String.Join(",", names);
+        return parameterNames;
     }
 
     /// <summary>

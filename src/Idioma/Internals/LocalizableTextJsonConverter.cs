@@ -1,35 +1,51 @@
 namespace CodeChops.Idioma.Internals;
 
 /// <summary>
-/// Writes a <see cref="LocalizableText"/> or a <see cref="ResourceText"/> as JSON and reads it back, so that a text
-/// survives JSON, such as a Blazor component parameter that crosses a render mode. You never need this type: both
-/// texts name it in their <see cref="JsonConverterAttribute"/>.
+/// <para>
+/// You never need to use this type directly, because <see cref="LocalizableText"/> names it in its
+/// <see cref="JsonConverterAttribute"/>.
+/// </para>
+/// <para>
+/// Writes a <see cref="LocalizableText"/> as JSON and reads it back. This lets a text survive JSON, such as a Blazor
+/// component parameter that crosses a render mode.
+/// </para>
 /// </summary>
 /// <remarks>
 /// <para>
-/// A text is written with every wording it can show: its default wording, its own translations, and for a text of an
-/// <see cref="ITranslationSet"/> contract the wording of every language your app declares that a set is registered for,
-/// their regions included, as a user of that language sees it when the text is written. A resource text keeps its
-/// <see cref="ResourceText.Key"/>:
-/// <c>{"key":"MyApp.Translations.ShopTranslations.Checkout","defaultText":"Checkout",
+/// A text is written with every wording it can show:
+/// </para>
+/// <list type="bullet">
+/// <item>Its default wording.</item>
+/// <item>Its own translations.</item>
+/// <item>For a text of an <see cref="ILocalizationSet"/> contract, the wording of each language your app declares. Also
+/// that of every language a set is registered for that starts with the same language as one of them, such as
+/// <c>en-GB</c> or <c>zh-TW</c> for an app that declares <c>en</c> or <c>zh-Hant</c>. In an app that declares no
+/// languages, that's every language a set is registered for. Each is the wording a user of that language sees when
+/// the text is written.</item>
+/// </list>
+/// <para>
+/// A text with a key keeps its <see cref="LocalizableText.Key"/>:
+/// <c>{"key":"MyApp.Localization.ShopLocalization.Checkout","defaultText":"Checkout",
 /// "translations":{"en":"Checkout","nl":"Afrekenen"}}</c>.
+/// A text that takes values leaves its key out. It's read back without its <see cref="LocalizableText.Arguments"/>,
+/// so a resource file entry found by the key would have no values to fill in.
 /// A text with one wording for every culture and no key, such as a customer's name, is written as that wording:
 /// <c>"Anna"</c>. A text without translations leaves <c>translations</c> out.
 /// </para>
 /// <para>
 /// Read back, the text shows that wording for every culture, even after a switch of language, without the sets. It
-/// belongs to no contract anymore, so a set registered later does not reword it.
+/// belongs to no contract anymore, so a set registered later doesn't reword it.
 /// </para>
 /// <para>
 /// A JSON string reads as a text with that one wording for every culture, as a <see cref="string"/> converts to a
-/// text, so JSON written by hand can hold <c>"title": "Orders"</c>. A <c>key</c> or <c>translations</c> that is
-/// <c>null</c> reads as left out. A <see cref="ResourceText"/> always needs its object, for its key.
+/// text. So JSON written by hand can hold <c>"title": "Orders"</c>. A <c>key</c> or <c>translations</c> that is
+/// <see langword="null"/> reads as left out.
 /// </para>
 /// </remarks>
-// A factory, as each of the two types needs a converter of its own type. Public, because the System.Text.Json source
-// generator creates the converter a type names from the code it writes into the consumer's assembly.
+// Public, because the System.Text.Json source generator creates the converter a type names from the code it writes
+// into the consumer's assembly.
 [EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class LocalizableTextJsonConverter : JsonConverterFactory
+public sealed class LocalizableTextJsonConverter : JsonConverter<LocalizableText>
 {
     private const string KeyName = "key";
     private const string DefaultTextName = "defaultText";
@@ -38,38 +54,42 @@ public sealed class LocalizableTextJsonConverter : JsonConverterFactory
 
     /// <inheritdoc />
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public override bool CanConvert(Type typeToConvert)
+    public override LocalizableText Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        return typeToConvert == typeof(LocalizableText) || typeToConvert == typeof(ResourceText);
+        return Read(ref reader);
     }
 
     /// <inheritdoc />
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, LocalizableText value, JsonSerializerOptions options)
     {
-        return typeToConvert == typeof(ResourceText) ? ResourceTextConverter.Instance : TextConverter.Instance;
+        Write(writer, value, LocalizationRegistry.Current);
     }
 
     /// <summary>
     /// Writes a text, with the wording the sets of a registry give it.
     /// </summary>
-    internal static void Write(Utf8JsonWriter writer, LocalizableText text, TranslationsRegistry registry)
+    internal static void Write(Utf8JsonWriter writer, LocalizableText text, LocalizationRegistry registry)
     {
         var wordingPerLanguage = text.GetWordingPerLanguage(registry);
-        var resourceText = text as ResourceText;
+
+        // A text that takes values is written with them filled in, and reads back without them. A resource file entry
+        // found by its key would then show its placeholders as written, so the text travels without a key.
+        var key = text.TakesValues ? null : text.Key;
 
         // A text with one wording and no key is that wording, as it reads back from a string: a customer's name
-        // travels as the name alone.
-        if (resourceText is null && wordingPerLanguage.IsEmpty)
+        // travels as the name alone. The wording the registry gives it, as in the object below: a set it registers may
+        // reword the default language of a text that takes values.
+        if (key is null && wordingPerLanguage.IsEmpty)
         {
-            writer.WriteStringValue(text.DefaultText);
+            writer.WriteStringValue(text.GetDefaultWording(registry));
             return;
         }
 
         writer.WriteStartObject();
 
-        if (resourceText is not null)
-            writer.WriteString(KeyName, resourceText.Key);
+        if (key is not null)
+            writer.WriteString(KeyName, key);
 
         writer.WriteString(DefaultTextName, text.GetDefaultWording(registry));
 
@@ -98,18 +118,16 @@ public sealed class LocalizableTextJsonConverter : JsonConverterFactory
     }
 
     /// <summary>
-    /// Reads a text: a resource text when the JSON holds a key, or when <paramref name="requiresKey"/> demands one.
+    /// Reads a text with its key when the JSON holds one.
     /// </summary>
-    private static LocalizableText Read(ref Utf8JsonReader reader, bool requiresKey)
+    private static LocalizableText Read(ref Utf8JsonReader reader)
     {
-        // A string is a text without translations, as it is everywhere else; a resource text has a key to carry.
-        if (reader.TokenType is JsonTokenType.String && !requiresKey)
+        // A string is a text without translations, as it is everywhere else.
+        if (reader.TokenType is JsonTokenType.String)
             return new LocalizableText(reader.GetString()!);
 
         if (reader.TokenType is not JsonTokenType.StartObject)
-            throw new JsonException(requiresKey
-                ? $"A {nameof(ResourceText)} is a JSON object with a \"{KeyName}\" and a \"{DefaultTextName}\", not {reader.TokenType}."
-                : $"A text is a JSON string, or a JSON object with a \"{DefaultTextName}\", not {reader.TokenType}.");
+            throw new JsonException($"A text is a JSON string, or a JSON object with a \"{DefaultTextName}\", not {reader.TokenType}.");
 
         string? key = null;
         string? defaultText = null;
@@ -136,12 +154,11 @@ public sealed class LocalizableTextJsonConverter : JsonConverterFactory
             throw new JsonException($"A text needs its \"{DefaultTextName}\".");
 
         if (key is not null && String.IsNullOrWhiteSpace(key))
-            throw new JsonException($"The \"{KeyName}\" of a text cannot be empty or white-space.");
+            throw new JsonException($"The \"{KeyName}\" of a text can't be empty or white-space.");
 
-        if (requiresKey && key is null)
-            throw new JsonException($"A {nameof(ResourceText)} needs its \"{KeyName}\".");
-
-        var text = key is null ? new LocalizableText(defaultText) : new ResourceText(key, defaultText);
+        var text = key is null
+            ? new LocalizableText(defaultText)
+            : LocalizableText.Keyed(key, defaultText);
 
         text = translations.IsEmpty ? text : text.WithTranslations(translations);
         return text;
@@ -160,7 +177,7 @@ public sealed class LocalizableTextJsonConverter : JsonConverterFactory
             ReadToken(ref reader);
 
             if (String.IsNullOrWhiteSpace(language))
-                throw new JsonException("A language of a text's translations cannot be empty or white-space.");
+                throw new JsonException("A language of a text's translations can't be empty or white-space.");
 
             builder[language] = ReadString(ref reader, language);
         }
@@ -186,35 +203,5 @@ public sealed class LocalizableTextJsonConverter : JsonConverterFactory
             : throw new JsonException($"\"{name}\" of a text is a string, not {reader.TokenType}.");
 
         return readString;
-    }
-
-    private sealed class TextConverter : JsonConverter<LocalizableText>
-    {
-        public static TextConverter Instance { get; } = new();
-
-        public override LocalizableText Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            return LocalizableTextJsonConverter.Read(ref reader, requiresKey: false);
-        }
-
-        public override void Write(Utf8JsonWriter writer, LocalizableText value, JsonSerializerOptions options)
-        {
-            LocalizableTextJsonConverter.Write(writer, value, TranslationsRegistry.Current);
-        }
-    }
-
-    private sealed class ResourceTextConverter : JsonConverter<ResourceText>
-    {
-        public static ResourceTextConverter Instance { get; } = new();
-
-        public override ResourceText Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            return (ResourceText)LocalizableTextJsonConverter.Read(ref reader, requiresKey: true);
-        }
-
-        public override void Write(Utf8JsonWriter writer, ResourceText value, JsonSerializerOptions options)
-        {
-            LocalizableTextJsonConverter.Write(writer, value, TranslationsRegistry.Current);
-        }
     }
 }

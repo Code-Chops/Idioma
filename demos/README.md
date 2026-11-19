@@ -5,7 +5,7 @@ This folder has two demos of [Idioma](../README.md). Each is a complete app in o
 - [`SetDemo.cs`](SetDemo.cs) writes its texts in a set per language.
 - [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline.
 
-Both support English, Dutch, and British English (`en-GB`), a [regional variant](../README.md#add-a-regional-variant-such-as-british-english) of English, and print their texts in each.
+Both support English, Dutch, and British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English, and print their texts in each.
 
 ## In your browser
 
