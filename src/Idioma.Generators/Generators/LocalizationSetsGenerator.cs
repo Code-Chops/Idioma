@@ -7,11 +7,13 @@ namespace CodeChops.Idioma.Generators;
 /// (<c>IShopLocalization</c>, one <see cref="string"/> member per public string property, marked
 /// <c>[LocalizationContract]</c>), which the set lists itself, and the static partial class named after the set without
 /// its language suffix
-/// (<c>ShopLocalization</c>, one <c>LocalizableText</c> per member, keyed by its full name, as in
-/// <c>MyApp.Localization.ShopLocalization.Checkout</c>, and worded by the set, and no other member); the interface and
-/// the class take the set's accessibility. A public method of the set that returns a <see cref="string"/> and takes
+/// (<c>ShopLocalization</c>, one <c>LocalizableText</c> per member, with its full name as its full key, as in
+/// <c>MyApp.Localization.ShopLocalization.Checkout</c>, and worded by the set, and a method <c>GetTextByKey</c> that gives the
+/// text with a key, which is its name); the interface and the class take the set's accessibility. A public method of the set that returns a <see cref="string"/> and takes
 /// parameters is a text that takes values: the contract repeats it, and the class holds a method of its name and
-/// parameters that creates the <c>LocalizableText</c> with the values it is called with. Each
+/// parameters that creates the <c>LocalizableText</c> with the values it is called with. A set that lists
+/// <c>ILocalizationSet&lt;TEnum&gt;</c> holds the texts of an enum: the contract gets a member for every member of
+/// the enum, and the class a method <c>GetTextByValue</c> that gives the text of a value. Each
 /// generated member inherits the property's doc comment through <c>&lt;inheritdoc cref/&gt;</c>, or else is documented
 /// with its default-language wording, and links to its wording in every language, which it shows next to the link.
 /// </summary>
@@ -38,17 +40,19 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// <summary>
     /// The property of a diagnostic that holds the name that resolves it, for its code fix to apply: the name the class
     /// should carry (<c>LOC200</c>, when a rename resolves it), the contract to add next to <c>ILocalizationSet</c>
-    /// (<c>LOC204</c>, when this build generates that contract), or the set to add (<c>LOC201</c>).
+    /// (<c>LOC204</c>, when this build generates that contract), or the set to add (<c>LOC201</c> and <c>LOC600</c>).
     /// </summary>
     public const string SuggestedNameProperty = "SuggestedName";
 
     /// <summary>
     /// The property of <c>LOC201</c> that holds the namespace of the set to add, empty for the global namespace.
+    /// <c>LOC600</c> has none, because the set of a library's contract lies in a namespace of the app, which the fix
+    /// chooses.
     /// </summary>
     public const string SuggestedNamespaceProperty = "SuggestedNamespace";
 
     /// <summary>
-    /// The property of <c>LOC201</c> that holds the declaration of the set to add, without a body:
+    /// The property of <c>LOC201</c> and <c>LOC600</c> that holds the declaration of the set to add, without a body:
     /// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>.
     /// </summary>
     public const string SuggestedDeclarationProperty = "SuggestedDeclaration";
@@ -91,7 +95,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor DerivedFromOtherLanguageRule = Error(
         DerivedFromOtherLanguageDiagnosticId,
         "Localization set derives from a set of another language",
-        "'{0}' is a set for '{1}' but derives from '{2}', so every text it doesn't override stays in '{3}'. To translate, implement the contract instead, which requires every text. To reword '{2}', give '{0}' the language '{3}': end its name in it, or implement LanguageCode.",
+        "'{0}' is a set for '{1}' but derives from '{2}', so every text it doesn't override stays in '{3}'. To translate, implement the contract instead, which requires every text. To reword '{2}', give '{0}' the language '{3}': end its name in it, or implement LocalizationLanguageCode.",
         "Derive from a set only to reword some of its texts in the same language. In another language, it compiles with texts left untranslated. A regional set may derive from the set of its language, as en-GB from en. Reported in every assembly, with or without [assembly: SupportedLanguages].");
 
     private static readonly DiagnosticDescriptor MissingContractRule = Error(
@@ -118,9 +122,9 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
 
     private static readonly DiagnosticDescriptor ReservedTextNameRule = Error(
         ReservedTextNameDiagnosticId,
-        "Text named like the generated class",
-        "'{0}' has a text named '{1}', like the generated class '{2}', which can't hold a member of its own name. '{2}.{1}' isn't generated. Rename the text.",
-        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class.");
+        "Text named like the generated class or its method",
+        "'{0}' has a text named '{1}', like {2}. Rename the text.",
+        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey either, because the generated class gets a method of that name, which gives a text by its key. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value.");
 
     private static readonly DiagnosticDescriptor UnsupportedTextRule = Error(
         UnsupportedTextDiagnosticId,
@@ -205,9 +209,10 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
 
             if (finding.NewSet is { } newSet)
             {
-                properties = properties
-                    .Add(SuggestedNamespaceProperty, newSet.Namespace)
-                    .Add(SuggestedDeclarationProperty, newSet.Declaration);
+                properties = properties.Add(SuggestedDeclarationProperty, newSet.Declaration);
+
+                if (newSet.Namespace is { } newSetNamespace)
+                    properties = properties.Add(SuggestedNamespaceProperty, newSetNamespace);
             }
 
             context.ReportDiagnostic(Diagnostic.Create(rule, finding.Location.ToLocation(), properties.IsEmpty ? null : properties,
@@ -289,11 +294,14 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         var name = contract.ContractName;
         var textsName = EscapeIdentifier(contract.TextsName);
         var @namespace = EscapeNamespace(contract.Namespace);
-        var texts = contract.Members.Where(member => !LocalizationSetsAnalysis.IsReservedTextName(member.Name, contract.TextsName)).ToArray();
+        var texts = contract.Members
+            .Where(member => !LocalizationSetsAnalysis.IsReservedTextName(member.Name, contract.TextsName, hasLookup: contract.Enums.Length > 0))
+            .ToArray();
         var accessibility = contract.IsPublic ? "public" : "internal";
         var sampleMember = GetSampleText(texts);
 
-        var aliases = GetNamespaceAliases(contract);
+        var sets = IndexSets(contract);
+        var aliases = GetNamespaceAliases(contract, sets);
 
         // What creates a text is imported here, at the top of the file, and called by its name alone. Inside the
         // generated class a text stands before every namespace of its name, so behind a text named CodeChops the
@@ -343,7 +351,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             /// The contract of <see cref="{{className}}"/>, with one member per text.
             /// Every language in <c>[assembly: SupportedLanguages]</c> has a set that implements it next to <see cref="{{PackageNames.LocalizationSet}}"/>, named with its language as suffix.
             /// A language without a set, or a set without a text, is a build error rather than a fallback at run time.
-            /// Each set is registered automatically, so there is nothing to register.
+            /// Each set is registered automatically, so there's nothing to register.
             /// </summary>
             [{{PackageNames.InternalsNamespace}}.LocalizationContract]
             {{accessibility}} interface {{name}}
@@ -351,7 +359,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             """);
         foreach (var member in contract.Members)
         {
-            AppendMemberDocs(sb, contract, aliases, className, member);
+            AppendMemberDocs(sb, contract, sets, aliases, className, member);
 
             if (!member.IsMethod)
             {
@@ -377,7 +385,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         sb.AppendLine("}");
 
         if (contract.HasTexts)
-            AppendTexts(sb, contract, aliases, className, name, textsName, texts, accessibility, sampleMember);
+            AppendTexts(sb, contract, sets, aliases, className, name, textsName, texts, accessibility, sampleMember);
 
         sb.AppendLine($"#pragma warning restore {LocalizationRegistrationGenerator.ObsoleteWarnings}");
         sb.AppendLine("#nullable restore");
@@ -399,7 +407,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// <summary>
     /// Writes the generated class with the texts of a contract, and the set they take their default wording from.
     /// </summary>
-    private static void AppendTexts(StringBuilder sb, LocalizationContract contract, SortedDictionary<string, string> aliases, string className,
+    private static void AppendTexts(StringBuilder sb, LocalizationContract contract, IndexedSet[] sets, SortedDictionary<string, string> aliases, string className,
         string name, string textsName, LocalizationMember[] texts, string accessibility, string sampleMember)
     {
         sb.AppendLine();
@@ -420,7 +428,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             {
             """);
 
-        // Nothing but the texts, so that a text can take any name but the class's own (LOC205). Each key is written out
+        // Nothing but the texts, so that a text can take any name but the class's own and those of the methods below (LOC205). Each key is written out
         // in full, as in "MyApp.Localization.ShopLocalization.Checkout": a constant for the prefix would take a name
         // from the texts.
         for (var i = 0; i < texts.Length; i++)
@@ -432,7 +440,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             if (i > 0)
                 sb.AppendLine();
 
-            AppendMemberDocs(sb, contract, aliases, className, member);
+            AppendMemberDocs(sb, contract, sets, aliases, className, member);
 
             if (!member.IsMethod)
             {
@@ -452,6 +460,13 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName}({RenderParameters(member, contract.Namespace, aliases)}) => CreateSetText<{name}, {types}>({keyLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), DefaultSet<{className}>.Instance, {arguments});");
         }
 
+        // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
+        // and for every set, the method that gives a text by its key.
+        foreach (var @enum in contract.Enums)
+            AppendLookup(sb, contract, aliases, texts, @enum);
+
+        AppendGet(sb, contract, aliases, name, textsName, texts);
+
         // The end of the texts, and the set every text takes its default wording from. File-local, so that inside this
         // file its name binds to it even next to another type of that name. Generic, so that no text can stand before
         // it: a name with a type argument is not looked for among the texts. DefaultSet alone would find a text named
@@ -468,26 +483,127 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    /// Writes the method that gives the text of a value of an enum, for a set of the texts of that enum:
+    /// <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>. Each member of the enum gives the text named after it, and a
+    /// value that is no member, such as a combination of flags, gives a text that shows it as <c>ToString()</c> does.
+    /// </summary>
+    // Of two members of one value, the first gives its text: a switch takes a value once. A member whose text the
+    // class doesn't hold, because of its name (LOC205), has no arm, and shows as a value that is no member.
+    private static void AppendLookup(StringBuilder sb, LocalizationContract contract, SortedDictionary<string, string> aliases,
+        LocalizationMember[] texts, LocalizedEnum @enum)
+    {
+        var type = RenderType(@enum.Type, contract.Namespace, aliases);
+        var properties = new HashSet<string>(texts.Where(static text => !text.IsMethod).Select(static text => text.Name), StringComparer.Ordinal);
+        var members = @enum.Members.Where(member => member.IsFirstOfItsValue && properties.Contains(member.Name)).ToArray();
+
+        // Apart from every text: inside the method its parameter stands before a text of its name.
+        var value = "value";
+        while (texts.Any(text => String.Equals(text.Name, value, StringComparison.Ordinal)))
+            value += "_";
+
+        // A type with type arguments, as an enum inside a generic class has, is no name a cref can hold.
+        var enumLink = type.Contains("<") ? $"<c>{EscapeXml(type)}</c>" : $"<see cref=\"{type}\"/>";
+        var example = members.Length > 0
+            ? $", such as <see cref=\"{EscapeIdentifier(members[0].Name)}\"/> for <c>{EscapeXml(@enum.Name)}.{members[0].Name}</c>"
+            : "";
+
+        sb.AppendLine();
+        sb.AppendLine($$"""
+                /// <summary>
+                /// The text of a value of {{enumLink}}{{example}}.
+                /// </summary>
+                /// <remarks>
+                /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
+                /// </remarks>
+                {{(@enum.IsPublic ? "public" : "internal")}} static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.LookupName}}({{type}} {{value}}) => {{value}} switch
+                {
+            """);
+
+        // The enum by its full name from the global namespace on: in a pattern, a text of the enum's name would stand
+        // before it. What creates the text of any other value is called with its type argument, which no text has.
+        foreach (var member in members)
+            sb.AppendLine($"        {@enum.FullyQualifiedName}.{EscapeIdentifier(member.Name)} => {EscapeIdentifier(member.Name)},");
+
+        sb.AppendLine($$"""
+                    _ => CreateUndefinedEnumText<{{@enum.FullyQualifiedName}}>({{value}}),
+                };
+            """);
+    }
+
+    /// <summary>
+    /// Writes the method that gives a text by its key, which is its name:
+    /// <c>ShopLocalization.GetTextByKey("Checkout")</c>, or
+    /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c> for a text that takes values. A key no text has
+    /// throws, and so do values that aren't those the text takes.
+    /// </summary>
+    // Each text by the name of its class in front, because the parameters of the method stand before a text named
+    // key or values. What checks the values is called with a type argument, which no text has, and the types
+    // of the parameters are named from the global namespace on.
+    private static void AppendGet(StringBuilder sb, LocalizationContract contract, SortedDictionary<string, string> aliases,
+        string name, string textsName, LocalizationMember[] texts)
+    {
+        var example = texts.Length > 0 ? $", such as <c>{EscapeXml(SymbolDisplay.FormatLiteral(texts[0].Name, quote: true))}</c>" : "";
+
+        sb.AppendLine();
+        sb.AppendLine($$"""
+                /// <summary>
+                /// The text with a key. The key is the name of the text{{example}}.
+                /// </summary>
+                /// <param name="key">The <see cref="{{PackageNames.LocalizableText}}.Key"/> of the text: its name, in the same letter case.</param>
+                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
+                /// <exception cref="global::System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
+                /// <exception cref="global::System.Collections.Generic.KeyNotFoundException">When no text has the key.</exception>
+                /// <exception cref="global::System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
+                public static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.GetName}}(string key, params global::System.ReadOnlySpan<object?> values) => key switch
+                {
+            """);
+
+        foreach (var member in texts)
+        {
+            var keyLiteral = SymbolDisplay.FormatLiteral(member.Name, quote: true);
+            var text = $"{textsName}.{EscapeIdentifier(member.Name)}";
+
+            if (!member.IsMethod)
+            {
+                sb.AppendLine($"        {keyLiteral} => GetKeyedText<{name}>({text}, key, values),");
+                continue;
+            }
+
+            var count = member.Parameters.Length;
+            var arguments = String.Join(", ", member.Parameters.Select((parameter, index)
+                => $"GetKeyedValue<{RenderType(parameter.Type, contract.Namespace, aliases)}>(key, values, {index}, {count}, {SymbolDisplay.FormatLiteral(parameter.Name, quote: true)})"));
+
+            sb.AppendLine($"        {keyLiteral} => {text}({arguments}),");
+        }
+
+        sb.AppendLine($$"""
+                    _ => throw CreateUnknownKeyException<{{name}}>(key, {{SymbolDisplay.FormatLiteral(contract.TextsName, quote: true)}}),
+                };
+            """);
+    }
+
+    /// <summary>
     /// The alias the file of a contract gives each namespace outside its own that holds a set it links to, a class a
-    /// set inherits a text from, or the type of a parameter of a text that takes values: <c>Namespace_Shop_Dutch</c>
-    /// for <c>Shop.Dutch</c>. In the order of the namespaces, so that the file is written the same way each time.
+    /// set inherits a text from, the type of a parameter of a text that takes values, or an enum whose members the
+    /// set has a text for: <c>Namespace_Shop_Dutch</c> for <c>Shop.Dutch</c>. In the order of the namespaces, so that
+    /// the file is written the same way each time.
     /// </summary>
     // Named after the namespace, with a prefix that keeps it apart from the namespace itself: an alias named like
     // something the global namespace holds can't be used.
-    private static SortedDictionary<string, string> GetNamespaceAliases(LocalizationContract contract)
+    private static SortedDictionary<string, string> GetNamespaceAliases(LocalizationContract contract, IndexedSet[] sets)
     {
         var aliases = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var names = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var member in contract.Members)
         {
-            foreach (var set in contract.Sets)
+            foreach (var set in sets)
             {
                 Add(GetCrefTarget(set, member.Name).Namespace);
 
                 // The set itself is named next to its wording when it shares its language (GetWordingNote).
-                if (SharesLanguage(contract, set))
-                    Add(set.Namespace);
+                if (set.SharesLanguage)
+                    Add(set.Link.Namespace);
             }
 
             foreach (var parameter in member.Parameters)
@@ -495,6 +611,11 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                     if (part.Namespace is { } typeNamespace)
                         Add(typeNamespace);
         }
+
+        foreach (var @enum in contract.Enums)
+            foreach (var part in @enum.Type)
+                if (part.Namespace is { } enumNamespace)
+                    Add(enumNamespace);
 
         return aliases;
 
@@ -513,13 +634,54 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Whether another set linked from a contract has the language of this one, as a set rewording its own language
-    /// has. The links to both then name the set.
+    /// The sets a contract links to, each with its texts by name (<see cref="IndexedSet"/>), in the order of
+    /// <see cref="LocalizationContract.Sets"/>.
     /// </summary>
-    private static bool SharesLanguage(LocalizationContract contract, SetLink set)
+    private static IndexedSet[] IndexSets(LocalizationContract contract)
     {
-        var sharesLanguage = contract.Sets.Count(other => String.Equals(other.Language, set.Language, StringComparison.OrdinalIgnoreCase)) > 1;
-        return sharesLanguage;
+        var setsPerLanguage = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var set in contract.Sets)
+            setsPerLanguage[set.Language] = setsPerLanguage.TryGetValue(set.Language, out var count) ? count + 1 : 1;
+
+        var sets = contract.Sets.Select(set => new IndexedSet(set, sharesLanguage: setsPerLanguage[set.Language] > 1)).ToArray();
+        return sets;
+    }
+
+    /// <summary>
+    /// A set a contract links to, with its texts by name. The file of a contract asks every set about every text, so
+    /// a search through the set's texts for each would take the square of their number.
+    /// </summary>
+    private sealed class IndexedSet
+    {
+        public IndexedSet(SetLink link, bool sharesLanguage)
+        {
+            this.Link = link;
+            this.SharesLanguage = sharesLanguage;
+            this.DeclaredTexts = new HashSet<string>(link.DeclaredTexts, StringComparer.Ordinal);
+
+            // The first class by a text's name is the nearest one declaring it.
+            foreach (var inherited in link.InheritedTexts)
+                if (!this.InheritedTexts.ContainsKey(inherited.Name))
+                    this.InheritedTexts.Add(inherited.Name, inherited);
+
+            foreach (var wording in link.Wordings)
+                this.Wordings[wording.Name] = wording.Wording;
+        }
+
+        public SetLink Link { get; }
+
+        /// <summary>
+        /// Whether another set linked from the contract has the language of this one, as a set rewording its own
+        /// language has. The links to both then name the set.
+        /// </summary>
+        public bool SharesLanguage { get; }
+
+        public HashSet<string> DeclaredTexts { get; }
+
+        public Dictionary<string, InheritedText> InheritedTexts { get; } = new(StringComparer.Ordinal);
+
+        public Dictionary<string, string> Wordings { get; } = new(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -539,16 +701,15 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// </summary>
     // A cref does not find a member through a class that only inherits it (CS1574), a text implemented explicitly has
     // no name to link to at all, and a method that shares its name with another has none of its own (CS0419).
-    private static (string Namespace, string TypeName, bool HasMember, bool IsInherited) GetCrefTarget(SetLink set, string member)
+    private static (string Namespace, string TypeName, bool HasMember, bool IsInherited) GetCrefTarget(IndexedSet set, string member)
     {
-        if (set.DeclaredTexts.AsImmutableArray().Contains(member, StringComparer.Ordinal))
-            return (set.Namespace, EscapeIdentifier(set.Name), HasMember: true, IsInherited: false);
+        if (set.DeclaredTexts.Contains(member))
+            return (set.Link.Namespace, EscapeIdentifier(set.Link.Name), HasMember: true, IsInherited: false);
 
-        foreach (var inherited in set.InheritedTexts)
-            if (String.Equals(inherited.Name, member, StringComparison.Ordinal))
-                return (inherited.Namespace, inherited.TypeName, HasMember: true, IsInherited: true);
+        if (set.InheritedTexts.TryGetValue(member, out var inherited))
+            return (inherited.Namespace, inherited.TypeName, HasMember: true, IsInherited: true);
 
-        return (set.Namespace, EscapeIdentifier(set.Name), HasMember: false, IsInherited: false);
+        return (set.Link.Namespace, EscapeIdentifier(set.Link.Name), HasMember: false, IsInherited: false);
     }
 
     /// <summary>
@@ -556,7 +717,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// contract's own namespace by its name alone, as the file itself lies there, and a class of another namespace
     /// through the alias of that namespace.
     /// </summary>
-    private static string GetCref(string @namespace, SortedDictionary<string, string> aliases, SetLink set, string member)
+    private static string GetCref(string @namespace, SortedDictionary<string, string> aliases, IndexedSet set, string member)
     {
         var target = GetCrefTarget(set, member);
         var type = GetCrefType(@namespace, aliases, target.Namespace, target.TypeName);
@@ -581,21 +742,16 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// and the class the wording comes from when the set inherits it (<c>: Checkout (inherited from
     /// ShopLocalizationEn)</c> for a British set that leaves <c>Checkout</c> as it is).
     /// </summary>
-    private static string GetWordingNote(string @namespace, SortedDictionary<string, string> aliases, SetLink set, string member, bool sharesLanguage)
+    private static string GetWordingNote(string @namespace, SortedDictionary<string, string> aliases, IndexedSet set, string member)
     {
-        string? wording = null;
-        foreach (var candidate in set.Wordings)
-        {
-            if (String.Equals(candidate.Name, member, StringComparison.Ordinal))
-                wording = candidate.Wording;
-        }
+        set.Wordings.TryGetValue(member, out var wording);
 
         var details = new List<string>();
 
-        if (sharesLanguage)
-            details.Add($"<see cref=\"{GetCrefType(@namespace, aliases, set.Namespace, EscapeIdentifier(set.Name))}\"/>");
+        if (set.SharesLanguage)
+            details.Add($"<see cref=\"{GetCrefType(@namespace, aliases, set.Link.Namespace, EscapeIdentifier(set.Link.Name))}\"/>");
 
-        if (set.IsExcluded)
+        if (set.Link.IsExcluded)
             details.Add("excluded from discovery");
 
         var target = GetCrefTarget(set, member);
@@ -636,7 +792,8 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// (<c>&lt;inheritdoc cref/&gt;</c>), else its default-language wording, else a plain description, followed by a link
     /// to its wording in every language, with that wording next to it (<see cref="GetWordingNote"/>).
     /// </summary>
-    private static void AppendMemberDocs(StringBuilder sb, LocalizationContract contract, SortedDictionary<string, string> aliases, string className, LocalizationMember member)
+    private static void AppendMemberDocs(StringBuilder sb, LocalizationContract contract, IndexedSet[] sets, SortedDictionary<string, string> aliases, string className,
+        LocalizationMember member)
     {
         if (member.HasDocComment)
         {
@@ -664,12 +821,12 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 /// Wording:
                 /// <list type="bullet">
             """);
-        foreach (var set in contract.Sets)
+        foreach (var set in sets)
         {
             var cref = GetCref(contract.Namespace, aliases, set, member.Name);
-            var note = GetWordingNote(contract.Namespace, aliases, set, member.Name, SharesLanguage(contract, set));
+            var note = GetWordingNote(contract.Namespace, aliases, set, member.Name);
 
-            sb.AppendLine($"    /// <item><description><see cref=\"{cref}\">{set.Language}</see>{note}</description></item>");
+            sb.AppendLine($"    /// <item><description><see cref=\"{cref}\">{set.Link.Language}</see>{note}</description></item>");
         }
         sb.AppendLine("""
                 /// </list>

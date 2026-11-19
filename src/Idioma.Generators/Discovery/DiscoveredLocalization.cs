@@ -35,13 +35,13 @@ namespace CodeChops.Idioma.Generators;
 /// </para>
 /// <list type="bullet">
 /// <item><see cref="Language"/> is always a culture name, or <see langword="null"/> when the build can't read one.
-/// <see cref="NameGivesNoLanguage"/> tells a set without any language from one whose <c>LanguageCode</c> the build
+/// <see cref="NameGivesNoLanguage"/> tells a set without any language from one whose <c>LocalizationLanguageCode</c> the build
 /// can't read.</item>
-/// <item><see cref="InvalidLanguageCode"/> is the constant its <c>LanguageCode</c> holds when that's no culture
+/// <item><see cref="InvalidLanguageCode"/> is the constant its <c>LocalizationLanguageCode</c> holds when that's no culture
 /// name.</item>
 /// <item><see cref="RecordedLanguageCode"/> is the code the generated registrar records for it. It's read from its
-/// name, or from that of a set it derives from, when the set doesn't implement <c>LanguageCode</c>.</item>
-/// <item>The class whose <c>LanguageCode</c> implements nothing, if any, with where to report it.</item>
+/// name, or from that of a set it derives from, when the set doesn't implement <c>LocalizationLanguageCode</c>.</item>
+/// <item>The class whose <c>LocalizationLanguageCode</c> implements nothing, if any, with where to report it.</item>
 /// </list>
 /// <para>
 /// Its texts:
@@ -53,8 +53,15 @@ namespace CodeChops.Idioma.Generators;
 /// <see cref="UnsupportedTexts"/> its methods that have the shape of a text but can't be one. <see cref="Usings"/>
 /// are the using directives its contract repeats, for a text that takes a value of a type another generator
 /// writes.</item>
+/// <item><see cref="Enums"/> are the enums whose members it has a text for, which it lists as
+/// <c>ILocalizationSet&lt;TEnum&gt;</c>. <see cref="Texts"/> holds a text for each of their members, also for one the
+/// set doesn't declare.</item>
 /// <item><see cref="DeclaredTexts"/>, <see cref="InheritedTexts"/>, and <see cref="Wordings"/> are what the doc
 /// comments of the generated contract link to and show.</item>
+/// <item><see cref="TypeNamedLikeTexts"/> is the type of its namespace that has the name its generated class would
+/// get, as a message names it (<c>the enum 'OrderStatus'</c>), if any.</item>
+/// <item><see cref="ReservedTexts"/> are its texts with a name its generated class can't give them, with where each is
+/// written. Most sets have none.</item>
 /// <item>These are read only for the generator that writes the contracts
 /// (<see cref="DiscoveredTexts.OfContract"/>).</item>
 /// </list>
@@ -94,7 +101,32 @@ internal readonly record struct DiscoveredLocalization(
     EquatableArray<TextWording> Wordings,
     EquatableArray<LocalizationMember> Texts,
     EquatableArray<UnsupportedText> UnsupportedTexts,
-    RepeatedUsings Usings);
+    RepeatedUsings Usings,
+    EquatableArray<LocalizedEnum> Enums,
+    string? TypeNamedLikeTexts,
+    EquatableArray<ReservedText> ReservedTexts);
+
+/// <summary>
+/// An enum whose members a set has a text for, because the set lists <c>ILocalizationSet&lt;TEnum&gt;</c>: its type as
+/// generated code can write it, its full name behind <c>global::</c>, its name as a message writes it, with the types
+/// that hold it (<c>Order.Status</c>), its namespace (<c>""</c> for the global namespace), whether code outside its
+/// assembly can name it, and its members in the order they're written.
+/// </summary>
+internal readonly record struct LocalizedEnum(
+    EquatableArray<TypeNamePart> Type,
+    string FullyQualifiedName,
+    string Name,
+    string Namespace,
+    bool IsPublic,
+    EquatableArray<LocalizedEnumMember> Members);
+
+/// <summary>
+/// A member of an enum a set has a text for: its name, which is the name of its text, and whether it's the first
+/// member of its value. Of <c>Default = 0</c> and <c>None = 0</c>, only <c>Default</c> is.
+/// </summary>
+internal readonly record struct LocalizedEnumMember(
+    string Name,
+    bool IsFirstOfItsValue);
 
 /// <summary>
 /// The wording a set gives one of its texts, when that is a constant, or what the method of a text that takes values
@@ -115,7 +147,7 @@ internal readonly record struct InheritedText(
     string TypeName);
 
 /// <summary>
-/// A <c>LanguageCode</c> holding a constant that is no culture name: the class or interface that declares it, the
+/// A <c>LocalizationLanguageCode</c> holding a constant that is no culture name: the class or interface that declares it, the
 /// constant, and where the property is. What <c>LOC402</c> reports.
 /// </summary>
 internal readonly record struct InvalidLanguageCode(
@@ -188,7 +220,7 @@ internal readonly record struct SourceAncestor(
     ImmutableArray<UnresolvedBaseType> UnresolvedBaseTypes);
 
 /// <summary>
-/// Which <c>LanguageCode</c> property implements <c>ILocalizationSet.LanguageCode</c> for a set
+/// Which <c>LocalizationLanguageCode</c> property implements <c>ILocalizationSet.LocalizationLanguageCode</c> for a set
 /// (<see langword="null"/>: the default, from the type's name), and the most derived one that implements nothing.
 /// </summary>
 internal readonly record struct LanguageCodeMapping(
@@ -220,6 +252,15 @@ internal readonly record struct LocalizationMember(
 internal readonly record struct UnsupportedText(
     string Name,
     string Problem,
+    DiagnosticLocation Location);
+
+/// <summary>
+/// A text of a default-language set with a name its generated class can't give it: its name, and where it's written.
+/// That's the member of the set, or the member of the enum for a text the set doesn't declare. What <c>LOC205</c>
+/// reports.
+/// </summary>
+internal readonly record struct ReservedText(
+    string Name,
     DiagnosticLocation Location);
 
 /// <summary>
@@ -272,7 +313,7 @@ internal enum DiscoveredTexts
     /// <summary>
     /// What a contract is written from: <see cref="DiscoveredLocalization.Texts"/>,
     /// <see cref="DiscoveredLocalization.UnsupportedTexts"/>, <see cref="DiscoveredLocalization.Usings"/>,
-    /// <see cref="DiscoveredLocalization.DeclaredTexts"/>,
+    /// <see cref="DiscoveredLocalization.Enums"/>, <see cref="DiscoveredLocalization.DeclaredTexts"/>,
     /// <see cref="DiscoveredLocalization.InheritedTexts"/>, and <see cref="DiscoveredLocalization.Wordings"/>.
     /// <see cref="DiscoveredLocalization.OwnTexts"/> stays empty.
     /// </summary>

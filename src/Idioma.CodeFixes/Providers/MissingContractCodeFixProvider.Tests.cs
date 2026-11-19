@@ -66,6 +66,35 @@ public sealed class MissingContractCodeFixProviderTests
     }
 
     [Test]
+    public async Task SetOfEnumListingOnlyItsSetInterface_ShouldGetItsContractNextToIt()
+    {
+        // Arrange
+        const string DefaultSetOfEnum = """
+            public enum OrderStatus { Pending }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+            }
+            """;
+        const string Body = """
+            {
+                public string Pending => "In behandeling";
+            }
+            """;
+        var source = $"{Header}\n\n{DefaultSetOfEnum}\n\npublic sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>\n{Body}";
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: next to the interface that makes it a set, as for any other set.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Title.ShouldBe("Implement 'IOrderStatusLocalization'");
+        fix.Sources.ShouldHaveSingleItem().ShouldBe($"{Header}\n\n{DefaultSetOfEnum}\n\npublic sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization\n{Body}");
+        ShouldReportNothing([.. fix.Sources]);
+    }
+
+    [Test]
     public async Task PartialSetListingILocalizationSetInAnotherFile_ShouldBeFixedThere()
     {
         // Arrange: the part the diagnostic sits on is not the part that lists the interface.

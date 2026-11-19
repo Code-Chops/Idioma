@@ -149,8 +149,8 @@ public sealed class PlaceholderCodeFixProviderTests
         // Act
         var fixes = await FixAsync(Sets(EnglishGreeting, dutch));
 
-        // Assert
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(Sets(EnglishGreeting, expected));
+        // Assert: the block is formatted, which writes the line endings of the platform, so those don't count here.
+        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ReplaceLineEndings().ShouldBe(Sets(EnglishGreeting, expected).ReplaceLineEndings());
     }
 
     [Test]
@@ -322,5 +322,55 @@ public sealed class PlaceholderCodeFixProviderTests
             .Replace("""Greeting => "Hiya, {0}! You've {1:N0} items.";""", """Greeting(object? arg0, object? arg1) => $"Hiya, {arg0}! You've {arg1:N0} items.";""", StringComparison.Ordinal));
         GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
         (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), fixedSource, [])).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task FixAll_LanguageWithFewerPlaceholders_ShouldGetTheParametersOfTheOthers()
+    {
+        // Arrange: Dutch shows the name alone, where English also shows the number of items.
+        var source = Sets(
+            """public virtual string Greeting => "Hello, {0}! You have {1} items.";""",
+            """public string Greeting => "Hallo, {0}!";""");
+
+        // Act
+        var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), source)).ShouldHaveSingleItem();
+
+        // Assert: Dutch takes both values, so it still implements the contract. That it leaves one out is LOC302's to say.
+        fixedSource.ShouldBe(Sets(
+            """public virtual string Greeting(object? arg0, object? arg1) => $"Hello, {arg0}! You have {arg1} items.";""",
+            """public string Greeting(object? arg0, object? arg1) => $"Hallo, {arg0}!";"""));
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("Choose from {1, 2, 3}")]
+    [Arguments("Sizes {40,42,44}")]
+    [Arguments("Between {1,} and {2, x}")]
+    public async Task BracesThatHoldNoPlaceholder_ShouldGetNoWarningAndNoFix(string wording)
+    {
+        // Arrange: a comma after the number, but no whole number after it, so string.Format wouldn't read it either.
+        var source = Sets($"public virtual string Hint => \"{wording}\";", """public string Hint => "Kies";""");
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldBeEmpty();
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task PlaceholderWithSpacedAlignment_ShouldKeepItAsWritten()
+    {
+        // Arrange
+        const string english = """public virtual string Total(decimal amount) => "Total: {0, -8:N2}";""";
+        const string dutch = """public string Total(decimal amount) => $"Totaal: {amount}";""";
+
+        // Act
+        var fixes = await FixAsync(Sets(english, dutch));
+
+        // Assert
+        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(Sets(
+            """public virtual string Total(decimal amount) => $"Total: {amount, -8:N2}";""", dutch));
     }
 }

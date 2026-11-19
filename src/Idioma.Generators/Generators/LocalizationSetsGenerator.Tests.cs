@@ -806,7 +806,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class ShopLocalizationZhHans : ILocalizationSet, IShopLocalization
             {
-                string ILocalizationSet.LanguageCode => "zh-Hans";
+                string ILocalizationSet.LocalizationLanguageCode => "zh-Hans";
                 public string Checkout => "结账";
             }
 
@@ -824,7 +824,7 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void OnlyPublicInstanceStringPropertiesAreTexts()
     {
-        // Arrange: LanguageCode is the ILocalizationSet member, a virtual property is a text (so a set can derive and
+        // Arrange: LocalizationLanguageCode is the ILocalizationSet member, a virtual property is a text (so a set can derive and
         // override), an inherited property belongs to the base (it is not redeclared), a property without a public
         // getter could not implement the contract member, and the rest are not texts by shape.
         const string source = """
@@ -841,7 +841,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public class ShopLocalizationEn : ShopWordingBase, ILocalizationSet, IShopLocalization
             {
-                public string LanguageCode => "en";
+                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
                 public virtual string Total => "Total";
                 internal string Hidden => "Hidden";
@@ -860,7 +860,7 @@ public sealed class LocalizationSetsGeneratorTests
         // Assert
         text.ShouldContain("    string Checkout { get; }");
         text.ShouldContain("    string Total { get; }");
-        foreach (var name in new[] { "LanguageCode", "Inherited", "Hidden", "Secret", "Shared", "Count", "Field", "Method" })
+        foreach (var name in new[] { "LocalizationLanguageCode", "Inherited", "Hidden", "Secret", "Shared", "Count", "Field", "Method" })
             text.ShouldNotContain($"string {name} {{ get; }}", customMessage: name);
     }
 
@@ -1153,6 +1153,10 @@ public sealed class LocalizationSetsGeneratorTests
         error.Id.ShouldBe("LOC205");
         error.GetMessage().ShouldContain($"'OptionLocalizationEn' has a text named '{name}'");
         error.GetMessage().ShouldContain($"'OptionLocalization.{name}' isn't generated");
+
+        // At the text of the default-language set, which is what to rename.
+        error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe(name);
+        error.Location.GetLineSpan().StartLinePosition.Line.ShouldBe(8);
     }
 
     [Test]
@@ -1209,7 +1213,7 @@ public sealed class LocalizationSetsGeneratorTests
     public void SetDerivingFromSetOfProjectReferencedAsCompilation_ShouldNotStopTheGenerator()
     {
         // Arrange: an IDE hands a generator a project of the same solution as its compilation, where a build hands over
-        // the assembly. The LanguageCode the library's set implements then has syntax, in a tree of that other
+        // the assembly. The LocalizationLanguageCode the library's set implements then has syntax, in a tree of that other
         // compilation, which this one has no semantic model for.
         var library = GeneratorTestHelper.CompileProjectWithGenerators("RegionalLibrary", """
             using CodeChops.Idioma;
@@ -1230,7 +1234,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public class GridLocalizationEnGb : GridLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "en-GB";
+                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
                 public override string Colour => "Colour";
             }
@@ -1303,11 +1307,11 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("public sealed class ShopLocalization : ILocalizationSet { public string LanguageCode => \"en\"; public string Checkout => \"Checkout\"; }", "its name doesn't end in En")]
-    [Arguments("public abstract class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it is abstract")]
-    [Arguments("public sealed class ShopLocalizationEn<T> : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it is generic")]
-    [Arguments("file sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it is file-local")]
-    [Arguments("public static partial class Container { public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; } }", "it is nested in 'Container'")]
+    [Arguments("public sealed class ShopLocalization : ILocalizationSet { public string LocalizationLanguageCode => \"en\"; public string Checkout => \"Checkout\"; }", "its name doesn't end in En")]
+    [Arguments("public abstract class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it's abstract")]
+    [Arguments("public sealed class ShopLocalizationEn<T> : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it's generic")]
+    [Arguments("file sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it's file-local")]
+    [Arguments("public static partial class Container { public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; } }", "it's nested in 'Container'")]
     public void DefaultSetGeneratorCannotExtend_ShouldReportLOC200AndEmitNothing(string declaration, string expectedReason)
     {
         // Arrange
@@ -1762,7 +1766,7 @@ public sealed class LocalizationSetsGeneratorTests
             {
                 private static string Language { get; } = "nl";
 
-                public string LanguageCode => Language;
+                public string LocalizationLanguageCode => Language;
                 public string First => "Eerste";
             }
             """);
@@ -1911,11 +1915,11 @@ public sealed class LocalizationSetsGeneratorTests
     [Arguments("public class ShopLocalizationEnGb : ShopLocalizationEn;")]
     [Arguments("public class ShopLocalizationEnGb : ShopLocalizationEn { public override string Cart => \"Basket\"; }")]
     [Arguments("public class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization { public string Cart => \"Basket\"; }")]
-    [Arguments("public class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet { string ILocalizationSet.LanguageCode => \"en-GB\"; }")]
+    [Arguments("public class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet { string ILocalizationSet.LocalizationLanguageCode => \"en-GB\"; }")]
     public void ListedRegionWithSetOfItsOwn_ShouldReportNothing(string british)
     {
         // Arrange & Act: a set that derives from the English one and adds nothing will do, as will one that implements
-        // the contract itself, or one that gives its language in LanguageCode.
+        // the contract itself, or one that gives its language in LocalizationLanguageCode.
         var result = Run($$"""
             using CodeChops.Idioma;
 
@@ -2173,8 +2177,8 @@ public sealed class LocalizationSetsGeneratorTests
         // Assert: list the code, or implement it.
         var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnlistedLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationNlBe' is a set for 'be'");
-        diagnostic.GetMessage().ShouldContain("If it is meant for 'nl-BE', list 'nl-BE' in the attribute");
-        diagnostic.GetMessage().ShouldContain("implement 'string ILocalizationSet.LanguageCode => \"nl-BE\";'");
+        diagnostic.GetMessage().ShouldContain("If it's meant for 'nl-BE', list 'nl-BE' in the attribute");
+        diagnostic.GetMessage().ShouldContain("implement 'string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";'");
     }
 
     [Test]
@@ -2251,7 +2255,7 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void DefaultSetNamedAfterLongCode_ShouldGenerateContractThatCompiles()
     {
-        // Arrange & Act: a regional default language, with no LanguageCode written by hand.
+        // Arrange & Act: a regional default language, with no LocalizationLanguageCode written by hand.
         const string source = """
             using CodeChops.Idioma;
 
@@ -2293,7 +2297,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
             {
-                string ILocalizationSet.LanguageCode => "nl-BE";
+                string ILocalizationSet.LocalizationLanguageCode => "nl-BE";
                 public string Checkout => "Afrekenen";
             }
             """);
@@ -2321,7 +2325,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class ShopLocalizationGb : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "en-GB";
+                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -2349,7 +2353,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class ShopLocalizationNlBe : ShopLocalizationNl, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "nl-BE";
+                string ILocalizationSet.LocalizationLanguageCode => "nl-BE";
                 public override string Checkout => "Betalen";
             }
             """);
@@ -2377,7 +2381,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class ShopLocalizationGb : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "en-GB";
+                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
                 public override string Colour => "Colour";
             }
             """);
@@ -2514,7 +2518,7 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void SetListingILocalizationSetAgainWithoutDeclaredLanguages_ShouldReportNothing()
     {
-        // Arrange & Act: listing ILocalizationSet again is how a set deriving from another implements LanguageCode, so
+        // Arrange & Act: listing ILocalizationSet again is how a set deriving from another implements LocalizationLanguageCode, so
         // it does not start a contract that would need languages (LOC100).
         var result = Run("""
             using CodeChops.Idioma;
@@ -2523,7 +2527,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class MyGridTexts : GridLibrary.GridLocalizationEn, ILocalizationSet
             {
-                public string LanguageCode => "en";
+                public string LocalizationLanguageCode => "en";
                 public override string First => "Begin";
             }
             """, GridLibrary);
@@ -2549,7 +2553,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed class ShopLocalizationBritish : ShopLocalizationEn
             {
-                public string LanguageCode => "en-GB";
+                public string LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -3108,14 +3112,14 @@ public sealed class LocalizationSetsGeneratorTests
     [Arguments("\"en\\nx\"")]
     public void SetWithLanguageCodeThatIsNoCultureName_ShouldNotStopTheGeneratorOrBeHeldToALanguage(string languageCode)
     {
-        // Arrange: what a LanguageCode holds while it is being typed. The contract must still be written: without it
+        // Arrange: what a LocalizationLanguageCode holds while it is being typed. The contract must still be written: without it
         // every IShopLocalization of the project stops compiling.
         var source = $$"""
             {{ShopSets}}
 
             public class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => {{languageCode}};
+                string ILocalizationSet.LocalizationLanguageCode => {{languageCode}};
             }
             """;
 
@@ -3208,6 +3212,66 @@ public sealed class LocalizationSetsGeneratorTests
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe("LOC200");
         error.GetMessage().ShouldContain(expectedReason);
+    }
+
+    [Test]
+    [Arguments("public enum OrderStatus { Pending }", "ILocalizationSet<OrderStatus>", "the enum 'OrderStatus'")]
+    [Arguments("public enum Other { Pending } public class OrderStatus;", "ILocalizationSet<Other>", "the class 'OrderStatus'")]
+    [Arguments("public enum Other { Pending } public static class OrderStatus;", "ILocalizationSet<Other>", "the class 'OrderStatus'")]
+    [Arguments("public enum Other { Pending } public record struct OrderStatus;", "ILocalizationSet", "the record 'OrderStatus'")]
+    [Arguments("public enum Other { Pending } public interface OrderStatus;", "ILocalizationSet", "the interface 'OrderStatus'")]
+    public void DefaultSetWhoseGeneratedClassIsNamedLikeAnotherType_ShouldReportLOC200AsItsOnlyError(string types, string setInterface, string expectedType)
+    {
+        // Arrange & Act: a set named after its enum, without a word such as Localization in between. The generated
+        // class would be a second type of that name (CS0101), in a file the user can't change.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            {{types}}
+
+            public sealed class OrderStatusEn : {{setInterface}}, IOrderStatus
+            {
+                public string Pending => "Pending";
+            }
+            """);
+
+        // Assert: one error, at the set. The contract is still written, so the set compiles.
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC200");
+        error.GetMessage().ShouldStartWith($"'OrderStatusEn' is the default-language set of a contract, but its generated class would be named 'OrderStatus', like {expectedType}. Rename the set or that type.");
+    }
+
+    [Test]
+    public void DefaultSetNextToStaticPartialClassNamedLikeItsGeneratedClass_ShouldCompile()
+    {
+        // Arrange & Act: the class is a part of the generated class, with a helper next to the texts. A type of that
+        // name with a type parameter is another type.
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public static partial class ShopLocalization
+            {
+                public static string Both => $"{Checkout} {Checkout}";
+            }
+
+            public sealed class ShopLocalization<T>;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert
+        errors.ShouldBeEmpty();
     }
 
     [Test]
@@ -3374,7 +3438,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public sealed partial class {{name}} : ILocalizationSet
             {
-                public string LanguageCode => "en";
+                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
             }
             """);
@@ -3391,7 +3455,7 @@ public sealed class LocalizationSetsGeneratorTests
     public void DefaultSetWhoseNameGivesNoLanguage_ShouldBeToldTheNameThatEndsInIt(string name, string expectedName)
     {
         // Arrange & Act: the set lists the contract generated from it, as a default-language set does. Its name ends in
-        // no language, and it implements no LanguageCode.
+        // no language, and it implements no LocalizationLanguageCode.
         var result = Run($$"""
             using CodeChops.Idioma;
 
@@ -3435,8 +3499,8 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("private static readonly string Code = \"nl\"; public string LanguageCode => Code;")]
-    [Arguments("public string LanguageCode => System.Globalization.CultureInfo.GetCultureInfo(\"nl\").Name;")]
+    [Arguments("private static readonly string Code = \"nl\"; public string LocalizationLanguageCode => Code;")]
+    [Arguments("public string LocalizationLanguageCode => System.Globalization.CultureInfo.GetCultureInfo(\"nl\").Name;")]
     public void SetOfGeneratedContractWithUnreadableLanguage_ShouldNotBeReportedAsMissing(string languageCode)
     {
         // Arrange & Act: the build can't tell which language the set serves, so it may be the Dutch one, and asking
@@ -3476,7 +3540,7 @@ public sealed class LocalizationSetsGeneratorTests
             [ExcludeFromLocalizationDiscovery]
             public class ShopWording(string language) : ILocalizationSet, IShopLocalization
             {
-                public string LanguageCode => language;
+                public string LocalizationLanguageCode => language;
                 public virtual string Checkout => "Afrekenen";
             }
             """);
@@ -3506,7 +3570,7 @@ public sealed class LocalizationSetsGeneratorTests
             {
                 private static readonly string Code = "nl";
 
-                public string LanguageCode => Code;
+                public string LocalizationLanguageCode => Code;
                 public virtual string First => "Eerste";
             }
             """);
@@ -3538,7 +3602,7 @@ public sealed class LocalizationSetsGeneratorTests
             {
                 private static readonly string Code = "nl";
 
-                public string LanguageCode => Code;
+                public string LocalizationLanguageCode => Code;
                 public virtual string Checkout => "Afrekenen";
             }
             """));
@@ -3551,14 +3615,14 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void SetImplementingLanguageCodeOfAnotherInterface_ShouldServeLanguageOfItsName()
     {
-        // Arrange & Act: the explicit implementation is not that of ILocalizationSet.LanguageCode, which the set leaves
+        // Arrange & Act: the explicit implementation is not that of ILocalizationSet.LocalizationLanguageCode, which the set leaves
         // to its name. Taken for it, the set would count as German: unlisted, and the Dutch one missing.
         var result = Run($$"""
             {{Header}}
 
             public interface IHasCode
             {
-                string LanguageCode { get; }
+                string LocalizationLanguageCode { get; }
             }
 
             public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
@@ -3568,7 +3632,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public class ShopLocalizationNl : ILocalizationSet, IShopLocalization, IHasCode
             {
-                string IHasCode.LanguageCode => "de";
+                string IHasCode.LocalizationLanguageCode => "de";
 
                 public virtual string Checkout => "Afrekenen";
             }
@@ -3858,7 +3922,7 @@ public sealed class LocalizationSetsGeneratorTests
             {
                 public string Greeting(string name) => $"Hello, {name}!";
                 public virtual string Farewell(string name) => $"Goodbye, {name}!";
-                public string LanguageCode(int unused) => "en";
+                public string LocalizationLanguageCode(int unused) => "en";
                 internal string Hidden(string name) => name;
                 private string Secret(string name) => name;
                 public static string Shared(string name) => name;
@@ -3878,12 +3942,12 @@ public sealed class LocalizationSetsGeneratorTests
         text.ShouldContain("    string Farewell(string name);");
         ShownValues(text, "Greeting").ShouldBe(["name"]);
         ShownValues(text, "Farewell").ShouldBe(["name"]);
-        foreach (var name in new[] { "Inherited", "LanguageCode", "Hidden", "Secret", "Shared", "Count", "Nothing", "Reference" })
+        foreach (var name in new[] { "Inherited", "LocalizationLanguageCode", "Hidden", "Secret", "Shared", "Count", "Nothing", "Reference" })
             text.ShouldNotContain($" {name}(", customMessage: name);
     }
 
     [Test]
-    [Arguments("public string Greeting<T>(T name) => $\"Hello, {name}!\";", "it is generic")]
+    [Arguments("public string Greeting<T>(T name) => $\"Hello, {name}!\";", "it's generic")]
     [Arguments("public string Greeting(string name) => name; private string Greeting(string name, bool formal) => name;", "its set has another method of that name")]
     [Arguments("public string Greeting(ref string name) => name;", "its parameter 'name' is passed by reference")]
     [Arguments("public string Greeting(in int count) => \"\";", "its parameter 'count' is passed by reference")]
@@ -4723,6 +4787,605 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         errors.ShouldBeEmpty();
+    }
+    #endregion
+
+    #region Texts of an enum
+    /// <summary>
+    /// An enum with a set per language that holds a text for each of its members.
+    /// </summary>
+    private const string OrderStatusSets = $$"""
+        {{Header}}
+
+        public enum OrderStatus
+        {
+            Pending,
+            Shipped,
+        }
+
+        public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+        {
+            public string Pending => "Pending";
+
+            /// <summary>
+            /// The order is on its way.
+            /// </summary>
+            public string Shipped => "Shipped";
+        }
+
+        public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+        {
+            public string Pending => "In behandeling";
+            public string Shipped => "Verzonden";
+        }
+        """;
+
+    [Test]
+    public Task SetOfEnum_ShouldEmitTextPerMemberAndMethodThatGivesTextOfValue()
+    {
+        // Arrange & Act
+        var result = Run(OrderStatusSets);
+
+        // Assert
+        var run = result.Results.ShouldHaveSingleItem();
+        run.Diagnostics.ShouldBeEmpty();
+
+        return Verify(ContractText(result));
+    }
+
+    [Test]
+    public void SetOfEnum_ShouldCompileWithoutWarningsAndWithResolvedCrefs()
+    {
+        // Arrange & Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(OrderStatusSets);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(OrderStatusSets);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(OrderStatusSets);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization")]
+    [Arguments("public sealed class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalization")]
+    public void EnumMemberWithoutText_ShouldNotCompileInAnyLanguage(string dutchSet)
+    {
+        // Arrange & Act: neither set has a text for Shipped. The contract comes from the enum's members, so it asks
+        // both for it, whichever of the two interfaces the Dutch set lists.
+        var source = $$"""
+            {{Header}}
+
+            public enum OrderStatus { Pending, Shipped }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+            }
+
+            {{dutchSet}}
+            {
+                public string Pending => "In behandeling";
+            }
+            """;
+
+        var result = Run(source);
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert: after the texts that are written, and without a word from the generator.
+        DiagnosticIds(result).ShouldBeEmpty();
+        ContractText(result).ShouldContain("    string Shipped { get; }");
+        errors.Select(static error => error.Id).ShouldBe(["CS0535", "CS0535"]);
+        errors.ShouldAllBe(static error => error.GetMessage().Contains("IOrderStatusLocalization.Shipped"));
+    }
+
+    [Test]
+    public void SetOfEnum_ShouldKeepItsTextsInTheOrderTheyAreWrittenAndAddTheRestInTheOrderOfTheEnum()
+    {
+        // Arrange & Act: a text that is no member, a member, and two members the set has no text for.
+        var text = ContractText(Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending, Shipped, Delivered }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Caption => "Order status";
+                public string Delivered => "Delivered";
+            }
+            """));
+
+        // Assert
+        string[] members = ["string Caption { get; }", "string Delivered { get; }", "string Pending { get; }", "string Shipped { get; }"];
+        members.Select(member => text.IndexOf(member, StringComparison.Ordinal)).ShouldBeInOrder();
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText Caption { get; }");
+        text.ShouldContain("\"TestApp.OrderStatusLocalization.Shipped\"");
+    }
+
+    [Test]
+    public void EnumMembersOfOneValue_ShouldEachHaveATextAndTheFirstGiveTheTextOfTheValue()
+    {
+        // Arrange
+        var source = $$"""
+            {{Header}}
+
+            public enum OrderStatus { Pending, Waiting = Pending, Shipped }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Waiting => "Waiting";
+                public string Shipped => "Shipped";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+                public string Waiting => "Wachtend";
+                public string Shipped => "Verzonden";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert: a switch takes a value once.
+        errors.ShouldBeEmpty();
+        text.ShouldContain("    string Waiting { get; }");
+        text.ShouldContain("        global::TestApp.OrderStatus.Pending => Pending,");
+        text.ShouldNotContain("global::TestApp.OrderStatus.Waiting");
+    }
+
+    [Test]
+    public void SetOfEnumOfAnotherNamespaceOrInsideAClass_ShouldCompileWithoutWarningsAndWithResolvedCrefs()
+    {
+        // Arrange: an enum of another namespace, behind a class of the set's namespace named like the start of that
+        // namespace, and an internal enum inside a class, with a member named like a keyword. Texts named like the
+        // enum, like the parameter of the generated method, and like what that method calls stand before those
+        // names inside the generated class.
+        const string source = """
+            using CodeChops.Idioma;
+            using Domain.Orders;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace Domain.Orders
+            {
+                public enum OrderStatus { Pending, Shipped }
+            }
+
+            namespace TestApp
+            {
+                public static class Domain;
+
+                public static class Shipping
+                {
+                    internal enum Speed { @default, Express }
+                }
+
+                public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+                {
+                    public string Pending => "Pending";
+                    public string Shipped => "Shipped";
+                    public string OrderStatus => "Order status";
+                    public string value => "Value";
+                    public string CreateUndefinedEnumText => "Unknown";
+                }
+
+                public sealed class SpeedLocalizationEn : ILocalizationSet<Shipping.Speed>, ISpeedLocalization
+                {
+                    public string @default => "Standard";
+                    public string Express => "Express";
+                }
+
+                public static class Usage
+                {
+                    public static LocalizableText Status { get; } = OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped);
+                    internal static LocalizableText Speed { get; } = SpeedLocalization.GetTextByValue(Shipping.Speed.@default);
+                }
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+        var contracts = Run(source).Results.ShouldHaveSingleItem().GeneratedSources.Select(static generated => generated.SourceText.ToString()).ToArray();
+
+        // Assert: the method is as accessible as its enum.
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+        contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_Domain_Orders.OrderStatus value_)"));
+        contracts.ShouldContain(static contract => contract.Contains("internal static CodeChops.Idioma.LocalizableText GetTextByValue(Shipping.Speed value)"));
+    }
+
+    [Test]
+    public void MethodNamedAfterEnumMember_ShouldReportLOC300AndLeaveItsTextAProperty()
+    {
+        // Arrange & Act
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending, Shipped }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Shipped(int parcels) => $"Shipped in {parcels} parcels";
+            }
+            """);
+
+        // Assert: at the method. The contract still asks for the member's text as a property.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnsupportedTextDiagnosticId);
+        diagnostic.GetMessage().ShouldContain("'OrderStatusLocalizationEn.Shipped' is a public method that returns a string");
+        diagnostic.GetMessage().ShouldContain("it has the name of 'OrderStatus.Shipped', and the text of an enum member is a property, because it takes no values");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Shipped");
+
+        var text = ContractText(result);
+        text.ShouldContain("    string Shipped { get; }");
+        text.ShouldNotContain("string Shipped(int parcels)");
+    }
+
+    [Test]
+    public void TextNamedGetTextByValueInSetOfEnum_ShouldReportLOC205AndCompileOtherwise()
+    {
+        // Arrange & Act: the contract keeps the text, so the sets still compile; only the generated text is left out.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            {{Header}}
+
+            public enum OrderStatus { Pending }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string GetTextByValue => "of";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+                public string GetTextByValue => "van";
+            }
+            """);
+
+        // Assert
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC205");
+        error.GetMessage().ShouldBe("'OrderStatusLocalizationEn' has a text named 'GetTextByValue', like the generated method 'OrderStatusLocalization.GetTextByValue', which gives the text of an enum value. The text 'OrderStatusLocalization.GetTextByValue' isn't generated. Rename the text.");
+        error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe("GetTextByValue");
+    }
+
+    [Test]
+    public void TextNamedGetTextByValueInSetWithoutEnum_ShouldBeATextLikeAnyOther()
+    {
+        // Arrange & Act
+        var source = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string GetTextByValue => "of";
+            }
+            """;
+
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        ContractText(Run(source)).ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue { get; }");
+    }
+
+    [Test]
+    [Arguments("TestApp", "ILocalizationSet<OrderStatus>")]
+    [Arguments("Domain.Orders", "ILocalizationSet<Domain.Orders.OrderStatus>")]
+    public void LanguageWithoutSetOfEnum_ShouldBeToldToAddSetThatListsTheEnum(string enumNamespace, string expectedInterface)
+    {
+        // Arrange & Act
+        var result = Run($$"""
+            using CodeChops.Idioma;
+            using {{enumNamespace}};
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace {{enumNamespace}}
+            {
+                public enum OrderStatus { Pending }
+            }
+
+            namespace TestApp
+            {
+                public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+                {
+                    public string Pending => "Pending";
+                }
+            }
+            """);
+
+        // Assert: the set to add lists what the default-language set lists, in the message and in what the IDE writes.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        diagnostic.GetMessage().ShouldContain($"Add 'class OrderStatusLocalizationNl : {expectedInterface}, IOrderStatusLocalization'.");
+        diagnostic.Properties[LocalizationSetsGenerator.SuggestedDeclarationProperty].ShouldBe($"public class OrderStatusLocalizationNl : {expectedInterface}, IOrderStatusLocalization");
+    }
+
+    [Test]
+    public void SetOfEnumInOtherLanguageWithoutContract_ShouldReportLOC204Only()
+    {
+        // Arrange & Act
+        var result = Run($$"""
+            {{Header}}
+
+            public enum OrderStatus { Pending }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>
+            {
+                public string Pending => "In behandeling";
+            }
+            """);
+
+        // Assert: a set like any other, which the generic interface is no contract of.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingContractDiagnosticId);
+        diagnostic.GetMessage().ShouldContain("'OrderStatusLocalizationNl' is a set for 'nl' but doesn't implement 'IOrderStatusLocalization'");
+        diagnostic.Properties[LocalizationSetsGenerator.SuggestedNameProperty].ShouldBe("IOrderStatusLocalization");
+    }
+
+    [Test]
+    public void RegionalSetOfEnum_ShouldDeriveFromSetOfItsLanguageAndOverrideWhatDiffers()
+    {
+        // Arrange & Act
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "en-GB")]
+
+            namespace TestApp;
+
+            public enum Colour { Grey }
+
+            public class ColourLocalizationEn : ILocalizationSet<Colour>, IColourLocalization
+            {
+                public virtual string Grey => "Gray";
+            }
+
+            public sealed class ColourLocalizationEnGb : ColourLocalizationEn
+            {
+                public override string Grey => "Grey";
+            }
+            """);
+
+        // Assert
+        errors.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetOfTwoEnums_ShouldGetAMethodForEachAndOneTextForMembersOfOneName()
+    {
+        // Arrange
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public enum Size { Small, Unknown }
+
+            public enum Colour { Red, Unknown }
+
+            public sealed class OptionLocalizationEn : ILocalizationSet<Size>, ILocalizationSet<Colour>, IOptionLocalization
+            {
+                public string Small => "Small";
+                public string Red => "Red";
+                public string Unknown => "Unknown";
+            }
+
+            public static class Usage
+            {
+                public static LocalizableText Size { get; } = OptionLocalization.GetTextByValue(TestApp.Size.Unknown);
+                public static LocalizableText Colour { get; } = OptionLocalization.GetTextByValue(TestApp.Colour.Unknown);
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var text = ContractText(Run(source));
+
+        // Assert
+        errors.ShouldBeEmpty();
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Colour value) => value switch");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Size value) => value switch");
+        text.ShouldContain("        global::TestApp.Colour.Unknown => Unknown,");
+        text.ShouldContain("        global::TestApp.Size.Unknown => Unknown,");
+        text.Split("    string Unknown { get; }").Length.ShouldBe(2);
+    }
+
+    [Test]
+    public void SetOfEnumOfAReferencedAssembly_ShouldHaveATextForEveryMember()
+    {
+        // Arrange & Act: an enum of the framework, read from metadata.
+        var source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class MidpointRoundingLocalizationEn : ILocalizationSet<System.MidpointRounding>, IMidpointRoundingLocalization
+            {
+                public string ToEven => "To even";
+                public string AwayFromZero => "Away from zero";
+                public string ToZero => "Toward zero";
+                public string ToNegativeInfinity => "Down";
+                public string ToPositiveInfinity => "Up";
+            }
+            """;
+
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var text = ContractText(Run(source));
+
+        // Assert
+        errors.ShouldBeEmpty();
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_System.MidpointRounding value) => value switch");
+        text.ShouldContain("        global::System.MidpointRounding.ToEven => ToEven,");
+        text.ShouldContain("        _ => CreateUndefinedEnumText<global::System.MidpointRounding>(value),");
+    }
+    #endregion
+
+    #region Texts by key
+    [Test]
+    public void GeneratedClass_ShouldGetMethodThatGivesTextByItsKey()
+    {
+        // Arrange & Act
+        var text = ContractText(Run(GreetingSets));
+
+        // Assert: an arm per text, by its name. A text that takes values takes each from the values passed.
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params global::System.ReadOnlySpan<object?> values) => key switch");
+        text.ShouldContain("        \"Checkout\" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),");
+        text.ShouldContain("        \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\"), GetKeyedValue<string>(key, values, 1, 2, \"shop\")),");
+        text.ShouldContain("        _ => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");
+    }
+
+    [Test]
+    public void MethodThatGivesTextByKey_ShouldCompileWhateverTheTextsAreNamedOrTake()
+    {
+        // Arrange: texts named like the parameters of the method, like what it declares and calls, and like a
+        // keyword, in a namespace with a part named System. One takes a value of a type of another namespace, behind
+        // a class named like the start of that namespace, and one a value that may be null.
+        const string source = """
+            #nullable enable
+            using CodeChops.Idioma;
+            using Domain.Orders;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace Domain.Orders
+            {
+                public enum OrderStatus { Pending }
+            }
+
+            namespace TestApp.System
+            {
+                public static class Domain;
+
+                public sealed class OptionLocalizationEn : ILocalizationSet, IOptionLocalization
+                {
+                    public string key => "Key";
+                                        public string values => "Values";
+                    public string text => "Text";
+                    public string @event => "Event";
+                    public string GetKeyedText => "Keyed text";
+                    public string GetKeyedValue => "Keyed value";
+                    public string CreateUnknownKeyException => "Unknown";
+                    public string Status(OrderStatus status, string? note) => $"{status}: {note}";
+                }
+
+                public static class Usage
+                {
+                    public static LocalizableText Key { get; } = OptionLocalization.GetTextByKey("key");
+                    public static LocalizableText Event { get; } = OptionLocalization.GetTextByKey("event");
+                    public static LocalizableText Status { get; } = OptionLocalization.GetTextByKey("Status", OrderStatus.Pending, null);
+                }
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetWithoutTexts_ShouldGetMethodThatKnowsNoKey()
+    {
+        // Arrange & Act
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization;
+            """;
+
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        ContractText(Run(source)).ShouldContain("        _ => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");
+    }
+
+    [Test]
+    [Arguments("public string GetTextByKey => \"Get\";")]
+    [Arguments("public string GetTextByKey(string what) => $\"Get {what}\";")]
+    public void TextNamedGetTextByKey_ShouldReportLOC205AndCompileOtherwise(string text)
+    {
+        // Arrange & Act: the contract keeps the text, so the set still compiles; only the generated text is left out.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+                {{text}}
+            }
+            """);
+
+        // Assert
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC205");
+        error.GetMessage().ShouldBe("'ShopLocalizationEn' has a text named 'GetTextByKey', like the generated method 'ShopLocalization.GetTextByKey', which gives a text by its key. The text 'ShopLocalization.GetTextByKey' isn't generated. Rename the text.");
+        error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe("GetTextByKey");
+    }
+
+    [Test]
+    public void DefaultSetGeneratedCodeCannotCreate_ShouldGetNoMethodThatGivesTextByKey()
+    {
+        // Arrange & Act: without the texts, there is nothing a key could name.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn(string shop) : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => $"Checkout at {shop}";
+            }
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBe([LocalizationSetsGenerator.CannotExtendDiagnosticId]);
+        ContractText(result).ShouldNotContain(" GetTextByKey(string key");
     }
     #endregion
 }

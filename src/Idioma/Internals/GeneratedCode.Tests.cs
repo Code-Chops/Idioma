@@ -32,7 +32,89 @@ public sealed class GeneratedCodeTests
         // Assert: generated code calls these by name, so a rename or namespace change must update the generators'
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
-        members.Distinct(StringComparer.Ordinal).ShouldBe(["CreateText", "CreateSetText", "RegisterLanguages", "RecordSet"], ignoreOrder: true);
+        members.Distinct(StringComparer.Ordinal).ShouldBe(
+            ["CreateText", "CreateSetText", "CreateUndefinedEnumText", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet"],
+            ignoreOrder: true);
+    }
+
+    [Test]
+    public void GetKeyedText_ShouldGiveTheTextUnlessValuesWerePassed()
+    {
+        // Arrange
+        LocalizableText text = LocalizableText.Keyed("Checkout", "Checkout");
+
+        // Act
+        var given = GeneratedCode.GetKeyedText<IGeneratedCodeLocalization>(text, "Checkout", []);
+        var exception = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedText<IGeneratedCodeLocalization>(text, "Checkout", ["Anna"]));
+
+        // Assert
+        given.ShouldBeSameAs(text);
+        exception.ParamName.ShouldBe("values");
+        exception.Message.ShouldStartWith("The text 'Checkout' of 'IGeneratedCodeLocalization' takes no values, but 1 was passed.");
+    }
+
+    [Test]
+    public void GetKeyedValue_ShouldGiveTheValueOfTheParameter()
+    {
+        // Arrange & Act & Assert: by its position, as its own type, and null where the type allows it.
+        GeneratedCode.GetKeyedValue<int>("Items", [3, "Idioma"], index: 0, count: 2, "count").ShouldBe(3);
+        GeneratedCode.GetKeyedValue<string>("Items", [3, "Idioma"], index: 1, count: 2, "shop").ShouldBe("Idioma");
+        GeneratedCode.GetKeyedValue<string?>("Greeting", [null], index: 0, count: 1, "name").ShouldBeNull();
+        GeneratedCode.GetKeyedValue<int?>("Items", [null], index: 0, count: 1, "count").ShouldBeNull();
+        GeneratedCode.GetKeyedValue<object>("Items", [3], index: 0, count: 1, "count").ShouldBe(3);
+    }
+
+    [Test]
+    public void GetKeyedValue_ShouldRefuseAnotherNumberOfValuesThanTheTextTakes()
+    {
+        // Arrange & Act
+        var tooFew = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", [], index: 0, count: 2, "count"));
+        var tooMany = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<string>("Greeting", ["Anna", "Max"], index: 0, count: 1, "name"));
+
+        // Assert
+        tooFew.ParamName.ShouldBe("values");
+        tooFew.Message.ShouldStartWith("The text 'Items' takes 2 values, but 0 were passed.");
+        tooMany.Message.ShouldStartWith("The text 'Greeting' takes 1 value, but 2 were passed.");
+    }
+
+    [Test]
+    public void GetKeyedValue_ShouldRefuseValueOfAnotherTypeWithoutConvertingIt()
+    {
+        // Arrange & Act: an int for a long, and null for a type that has none.
+        var otherType = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<long>("Items", [3], index: 0, count: 1, "count"));
+        var noValue = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", [null], index: 0, count: 1, "count"));
+
+        // Assert
+        otherType.ParamName.ShouldBe("values");
+        otherType.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int64' for 'count', but a value of type 'System.Int32' was passed.");
+        noValue.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', but null was passed.");
+    }
+
+    [Test]
+    public void CreateUnknownKeyException_ShouldNameTheKeyAndTheClass()
+    {
+        // Arrange & Act
+        var unknown = GeneratedCode.CreateUnknownKeyException<IGeneratedCodeLocalization>("Crat", "ShopLocalization");
+        var missing = GeneratedCode.CreateUnknownKeyException<IGeneratedCodeLocalization>(key: null, "ShopLocalization");
+
+        // Assert
+        unknown.ShouldBeOfType<KeyNotFoundException>().Message.ShouldStartWith("'ShopLocalization' has no text with the key 'Crat'.");
+        missing.ShouldBeOfType<ArgumentNullException>().ParamName.ShouldBe("key");
+    }
+
+    [Test]
+    [Arguments(DayOfWeek.Friday, "Friday")]
+    [Arguments((DayOfWeek)42, "42")]
+    public void CreateUndefinedEnumText_ShouldShowValueAsToStringWritesIt(DayOfWeek value, string expected)
+    {
+        // Arrange & Act: as the method GetTextByValue of a generated class calls it, for a value none of its texts is named after.
+        var text = GeneratedCode.CreateUndefinedEnumText(value);
+
+        // Assert: the same in every language, and no text of a set.
+        text.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe(expected);
+        text.DefaultText.ShouldBe(expected);
+        text.Key.ShouldBeNull();
+        text.FullKey.ShouldBeNull();
     }
 
     [Test]
@@ -57,7 +139,8 @@ public sealed class GeneratedCodeTests
         var text = GeneratedCode.CreateSetText<IGeneratedCodeLocalization, string>("Shop.Greeting", static (set, value) => set.Greeting(value), new GeneratedCodeLocalizationEn(), name);
 
         // Assert
-        text.Key.ShouldBe("Shop.Greeting");
+        text.Key.ShouldBe("Greeting");
+        text.FullKey.ShouldBe("Shop.Greeting");
         text.Contract.ShouldBe(typeof(IGeneratedCodeLocalization));
         text.DefaultText.ShouldBe("Hello, Anna!");
         text.Arguments.ShouldBe(["Anna"]);
@@ -71,7 +154,7 @@ public sealed class GeneratedCodeTests
 
         // Assert
         text.DefaultText.ShouldBe("Orders");
-        text.GetTranslation(new CultureInfo("nl-NL")).ShouldBe("Bestellingen");
+        text.GetWording(new CultureInfo("nl-NL")).ShouldBe("Bestellingen");
     }
 
     [Test]
@@ -84,7 +167,7 @@ public sealed class GeneratedCodeTests
 
         // Assert
         text.DefaultText.ShouldBe(english);
-        text.GetTranslation(new CultureInfo("nl-NL")).ShouldBe(dutch);
+        text.GetWording(new CultureInfo("nl-NL")).ShouldBe(dutch);
     }
 
     [Test]
@@ -116,8 +199,8 @@ public sealed class GeneratedCodeTests
 
         // Assert
         other.ShouldNotBeSameAs(deliveries);
-        deliveries.GetTranslation(dutch).ShouldBe("Leveringen");
-        other.GetTranslation(dutch).ShouldBe("Bezorgingen");
+        deliveries.GetWording(dutch).ShouldBe("Leveringen");
+        other.GetWording(dutch).ShouldBe("Bezorgingen");
     }
 
     [Test]
@@ -134,9 +217,9 @@ public sealed class GeneratedCodeTests
 
         // Assert: each shows its own value, also where a later text took the slot of an earlier one.
         ada.DefaultText.ShouldBe("Hello, Ada!");
-        ada.GetTranslation(dutch).ShouldBe("Hallo, Ada!");
+        ada.GetWording(dutch).ShouldBe("Hallo, Ada!");
         bob.DefaultText.ShouldBe("Hello, Bob!");
-        bob.GetTranslation(dutch).ShouldBe("Hallo, Bob!");
+        bob.GetWording(dutch).ShouldBe("Hallo, Bob!");
     }
 
     [Test]

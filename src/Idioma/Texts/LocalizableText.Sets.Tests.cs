@@ -24,7 +24,7 @@ public sealed class LocalizableTextSetsTests
     }
 
     /// <summary>
-    /// A set whose name gives no language, so its LanguageCode throws.
+    /// A set whose name gives no language, so its LocalizationLanguageCode throws.
     /// </summary>
     private sealed class SetLocalization1 : ISetLocalization
     {
@@ -60,7 +60,7 @@ public sealed class LocalizableTextSetsTests
     /// </summary>
     private sealed class SetStandaloneEnglishLocalization : ISetLocalization
     {
-        public string LanguageCode => "en";
+        public string LocalizationLanguageCode => "en";
         public string Greeting => "Hello";
         public string Farewell => "So long";
     }
@@ -90,7 +90,7 @@ public sealed class LocalizableTextSetsTests
     /// </summary>
     private sealed class SetBritishLocalization : SetLocalizationEn, ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "en-GB";
+        string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
         public override string Farewell => "Cheerio";
     }
@@ -101,7 +101,7 @@ public sealed class LocalizableTextSetsTests
     /// </summary>
     private sealed class SetStandaloneBritishLocalization : ISetLocalization
     {
-        public string LanguageCode => "en-GB";
+        public string LocalizationLanguageCode => "en-GB";
         public string Greeting => "Hello";
         public string Farewell => "Cheerio";
     }
@@ -112,20 +112,20 @@ public sealed class LocalizableTextSetsTests
     /// </summary>
     private class SetChineseLocalization : ISetLocalization
     {
-        public virtual string LanguageCode => "zh";
+        public virtual string LocalizationLanguageCode => "zh";
         public virtual string Greeting => "Ni hao";
         public virtual string Farewell => "Zaijian";
     }
 
     private class SetTraditionalChineseLocalization : SetChineseLocalization
     {
-        public override string LanguageCode => "zh-Hant";
+        public override string LocalizationLanguageCode => "zh-Hant";
         public override string Farewell => "Zaijian (Hant)";
     }
 
     private sealed class SetTaiwaneseLocalization : SetTraditionalChineseLocalization
     {
-        public override string LanguageCode => "zh-Hant-TW";
+        public override string LocalizationLanguageCode => "zh-Hant-TW";
     }
 
     /// <summary>
@@ -170,7 +170,7 @@ public sealed class LocalizableTextSetsTests
     /// </summary>
     private sealed class RecordedBritishLocalization : RecordedLocalizationEn, ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "en-GB";
+        string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
         public override string Greeting => "Hello";
         public override string Farewell => "Cheerio";
@@ -328,11 +328,11 @@ public sealed class LocalizableTextSetsTests
     {
         // Arrange & Act & Assert: a set of the contract selects its member; a set of another contract, and a key-only
         // text, are outside the contract.
-        Greeting.GetTranslation(new SetLocalizationNl()).ShouldBe("Hallo");
-        Greeting.GetTranslation(new SetLocalizationEn()).ShouldBe("Hello");
-        Greeting.GetTranslation(new SetOtherLocalizationNl()).ShouldBeNull();
-        LocalizableText.Keyed("MyApp.Greeting", "Hello").GetTranslation(new SetLocalizationNl()).ShouldBeNull();
-        Should.Throw<ArgumentNullException>(() => Greeting.GetTranslation((ILocalizationSet)null!));
+        Greeting.GetWording(new SetLocalizationNl()).ShouldBe("Hallo");
+        Greeting.GetWording(new SetLocalizationEn()).ShouldBe("Hello");
+        Greeting.GetWording(new SetOtherLocalizationNl()).ShouldBeNull();
+        LocalizableText.Keyed("MyApp.Greeting", "Hello").GetWording(new SetLocalizationNl()).ShouldBeNull();
+        Should.Throw<ArgumentNullException>(() => Greeting.GetWording((ILocalizationSet)null!));
     }
 
     [Test]
@@ -342,7 +342,8 @@ public sealed class LocalizableTextSetsTests
         var text = Greeting;
 
         // Assert
-        text.Key.ShouldBe("Set.Greeting");
+        text.Key.ShouldBe("Greeting");
+        text.FullKey.ShouldBe("Set.Greeting");
         text.DefaultText.ShouldBe("Hello");
         text.Contract.ShouldBe(typeof(ISetLocalization));
         text.DefaultLanguage.ShouldBe("en");
@@ -383,8 +384,11 @@ public sealed class LocalizableTextSetsTests
         Should.Throw<ArgumentNullException>(() => LocalizableText.Create<ISetLocalization>("K", selector: null!, new SetLocalizationEn()));
         Should.Throw<ArgumentNullException>(() => LocalizableText.Create<ISetLocalization>("K", t => t.Greeting, defaultSet: null!)).ParamName.ShouldBe("defaultSet");
 
-        // The key first, before the set's LanguageCode runs, whose exception would hide the argument's.
+        // The key first, before the set's LocalizationLanguageCode runs, whose exception would hide the argument's.
         Should.Throw<ArgumentException>(() => LocalizableText.Create<ISetLocalization>("", t => t.Greeting, new SetLocalization1())).ParamName.ShouldBe("key");
+
+        // A text that takes values names the key as its caller does too.
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.CreateSetText<ISetCountedLocalization, int>(null!, static (set, value) => set.Items(value), new SetCountedLocalizationEn(), 3)).ParamName.ShouldBe("key");
 
         // A set of another contract can't give the default wording. The set is named as the parameter of
         // GeneratedCode.CreateSetText, which passes it on.
@@ -398,8 +402,10 @@ public sealed class LocalizableTextSetsTests
         var text = LocalizableText.Keyed("MyApp.Greeting", "Hello");
         var registry = LocalizationRegistry.Create([new SetLocalizationNl()]);
 
-        // Act & Assert: this package never reads the key, and a text without a contract matches no set.
+        // Act & Assert: this package never reads the key, and a text without a contract matches no set. Such a text has
+        // one key, which is not cut at its dot.
         text.Key.ShouldBe("MyApp.Greeting");
+        text.FullKey.ShouldBe("MyApp.Greeting");
         text.Contract.ShouldBeNull();
         text.TranslationsByLanguage.ShouldBeEmpty();
         text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry).ShouldBe("Hello");
@@ -423,9 +429,10 @@ public sealed class LocalizableTextSetsTests
 
         // Assert: still a text of the same contract, now with an inline translation on top.
         text.Key.ShouldBe(Greeting.Key);
+        text.FullKey.ShouldBe(Greeting.FullKey);
         text.Contract.ShouldBe(typeof(ISetLocalization));
-        text.GetTranslation(new SetLocalizationNl()).ShouldBe("Hallo");
-        text.GetTranslation(CultureInfo.GetCultureInfo("fr-FR")).ShouldBe("Bonjour");
+        text.GetWording(new SetLocalizationNl()).ShouldBe("Hallo");
+        text.GetWording(CultureInfo.GetCultureInfo("fr-FR")).ShouldBe("Bonjour");
         Greeting.TranslationsByLanguage.ShouldBeEmpty();
     }
 
@@ -457,12 +464,13 @@ public sealed class LocalizableTextSetsTests
         var text = GeneratedCode.CreateSetText<ISetCountedLocalization, int>("Set.Items", static (set, value) => set.Items(value), new SetCountedLocalizationEn(), count);
 
         // Assert: the default wording is that of the set it is created with, and every other set words it when asked.
-        text.Key.ShouldBe("Set.Items");
+        text.Key.ShouldBe("Items");
+        text.FullKey.ShouldBe("Set.Items");
         text.Contract.ShouldBe(typeof(ISetCountedLocalization));
         text.DefaultLanguage.ShouldBe("en");
         text.DefaultText.ShouldBe("3 items");
         text.Arguments.ShouldBe([3]);
-        text.GetTranslation(new SetCountedLocalizationNl()).ShouldBe("3 artikelen");
+        text.GetWording(new SetCountedLocalizationNl()).ShouldBe("3 artikelen");
         text.ToString(CultureInfo.GetCultureInfo("nl-NL"), registry).ShouldBe("3 artikelen");
         text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry).ShouldBe("3 items");
         text.WithTranslation("fr", "3 articles").Arguments.ShouldBe([3]);
@@ -882,11 +890,11 @@ public sealed class LocalizableTextSetsTests
 
         // Act & Assert: the Dutch set shows the text among the values in Dutch, also to a user who reads English.
         using (new CulturesScope(uiCulture: "en-US", culture: "en-US"))
-            removed.GetTranslation(new SetCountedLocalizationNl()).ShouldBe("Winkelwagen verwijderd");
+            removed.GetWording(new SetCountedLocalizationNl()).ShouldBe("Winkelwagen verwijderd");
 
         // The English set keeps the region of a British user, so the text among the values is British.
         using (new CulturesScope(uiCulture: "en-GB", culture: "en-GB"))
-            removed.GetTranslation(new SetCountedLocalizationEn()).ShouldBe("Basket removed");
+            removed.GetWording(new SetCountedLocalizationEn()).ShouldBe("Basket removed");
     }
 
     [Test]
@@ -1246,7 +1254,7 @@ public sealed class LocalizableTextSetsTests
     }
 
     /// <summary>
-    /// A set whose name gives no language, so its LanguageCode throws.
+    /// A set whose name gives no language, so its LocalizationLanguageCode throws.
     /// </summary>
     private sealed class SetShowingLocalization1 : ISetShowingLocalization
     {
@@ -1324,10 +1332,10 @@ public sealed class LocalizableTextSetsTests
         var hint = CreateHint();
 
         // Act & Assert: the Dutch set shows the text of its property in Dutch, also to a user who reads English.
-        hint.GetTranslation(new SetShowingLocalizationNl()).ShouldBe("Open de Winkelwagen om te betalen");
+        hint.GetWording(new SetShowingLocalizationNl()).ShouldBe("Open de Winkelwagen om te betalen");
 
         // A set without a language shows it in the user's language, and doesn't throw as for a text that takes values.
-        hint.GetTranslation(new SetShowingLocalization1()).ShouldBe("Open Cart");
+        hint.GetWording(new SetShowingLocalization1()).ShouldBe("Open Cart");
     }
 
     [Test]
@@ -1354,6 +1362,43 @@ public sealed class LocalizableTextSetsTests
 
         CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
         CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
+    }
+
+    [Test]
+    public void ToString_ForCultureOfSameNameAsOneShownBefore_ShouldFormatValuesOfTextThatPropertyShowsForGivenCulture()
+    {
+        // Arrange: an English user, a text whose property shows a text that takes a value, and two Dutch cultures of
+        // one name, of which the second writes a number its own way.
+        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
+        var dutch = CultureInfo.GetCultureInfo("nl-NL");
+        var ownDutch = (CultureInfo)dutch.Clone();
+        ownDutch.NumberFormat.NumberGroupSeparator = " ";
+        var registry = LocalizationRegistry.Create([new SetShowingLocalizationEn(), new SetShowingLocalizationNl(), new SetProvidedLocalizationEn(), new SetProvidedLocalizationNl()]);
+        var summary = CreateSummary();
+
+        // Act & Assert: the registry keeps what it worked out for the first culture of the name, and each culture still
+        // formats the number itself, as it does for the text that takes the value.
+        summary.ToString(dutch, registry).ShouldBe("Overzicht: Totaal: 1.234,50");
+        summary.ToString(ownDutch, registry).ShouldBe("Overzicht: Totaal: 1 234,50");
+        ShownTotal.ToString(ownDutch, registry).ShouldBe("Totaal: 1 234,50");
+    }
+
+    [Test]
+    [Arguments("nl-NL", "nl-NL")]
+    [Arguments("en-US", "nl-NL")]
+    public void ToString_ForCultureOfSameNameAsCultureOfThread_ShouldFormatValuesForGivenCulture(string uiCulture, string culture)
+    {
+        // Arrange: a thread that formats as Dutch already, and a Dutch culture of the same name that writes a number its
+        // own way. The two are equal as cultures, and still format differently.
+        using var _ = new CulturesScope(uiCulture: uiCulture, culture: culture);
+        var ownDutch = (CultureInfo)CultureInfo.GetCultureInfo("nl-NL").Clone();
+        ownDutch.NumberFormat.NumberGroupSeparator = " ";
+        var registry = LocalizationRegistry.Create([new SetShowingLocalizationEn(), new SetShowingLocalizationNl(), new SetProvidedLocalizationEn(), new SetProvidedLocalizationNl()]);
+        var summary = CreateSummary();
+
+        // Act & Assert: the text that takes the value, and the text whose property shows it.
+        ShownTotal.ToString(ownDutch, registry).ShouldBe("Totaal: 1 234,50");
+        summary.ToString(ownDutch, registry).ShouldBe("Overzicht: Totaal: 1 234,50");
     }
 
     private sealed class SetFlagLocalizationEn : ISetFlagLocalization

@@ -27,7 +27,7 @@ public sealed class ILocalizationSetTests
     /// </summary>
     private sealed class SimplifiedChineseLocalization : ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "zh-Hans";
+        string ILocalizationSet.LocalizationLanguageCode => "zh-Hans";
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public sealed class ILocalizationSetTests
     /// </summary>
     private sealed class ImplementedLocalizationNlBe : ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "nl-NL";
+        string ILocalizationSet.LocalizationLanguageCode => "nl-NL";
     }
 
     private sealed class FirstRecordedLocalizationZhHans : ILocalizationSet;
@@ -65,15 +65,15 @@ public sealed class ILocalizationSetTests
     public void LanguageCode_ShouldDefaultToTypeNameSuffixInLowerCase()
     {
         // Arrange & Act & Assert: the suffix in any letter case after its capital.
-        ((ILocalizationSet)new ContractLocalizationNl()).LanguageCode.ShouldBe("nl");
-        ((ILocalizationSet)new ContractLocalizationDE()).LanguageCode.ShouldBe("de");
+        ((ILocalizationSet)new ContractLocalizationNl()).LocalizationLanguageCode.ShouldBe("nl");
+        ((ILocalizationSet)new ContractLocalizationDE()).LocalizationLanguageCode.ShouldBe("de");
     }
 
     [Test]
     public void LanguageCode_ShouldThrowForNameEndingInLettersWithoutCapital()
     {
         // Arrange & Act: the capital marks where a code starts, so "Set" holds none, where "et" would be Estonian.
-        var exception = Should.Throw<InvalidOperationException>(() => ((ILocalizationSet)new ContractLocalizationSet()).LanguageCode);
+        var exception = Should.Throw<InvalidOperationException>(() => ((ILocalizationSet)new ContractLocalizationSet()).LocalizationLanguageCode);
 
         // Assert
         exception.Message.ShouldContain("its name doesn't end in a language code that starts with a capital");
@@ -87,7 +87,7 @@ public sealed class ILocalizationSetTests
         var registry = LocalizationRegistry.Create([set]);
 
         // Act & Assert: zh-Hans-CN resolves through zh-Hans; zh-Hant-TW walks zh-Hant and zh, neither registered.
-        ((ILocalizationSet)set).LanguageCode.ShouldBe("zh-Hans");
+        ((ILocalizationSet)set).LocalizationLanguageCode.ShouldBe("zh-Hans");
         registry.Find<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hans-CN")).ShouldBeSameAs(set);
         registry.Find<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hant-TW")).ShouldBeNull();
     }
@@ -101,10 +101,10 @@ public sealed class ILocalizationSetTests
 
         // Act & Assert: the record wins over the last two letters (be), a rewording inherits it, and an implementation
         // wins over a record.
-        ((ILocalizationSet)new RecordedLocalizationNlBe()).LanguageCode.ShouldBe("nl-BE");
-        ((ILocalizationSet)new RecordedRewording()).LanguageCode.ShouldBe("nl-BE");
+        ((ILocalizationSet)new RecordedLocalizationNlBe()).LocalizationLanguageCode.ShouldBe("nl-BE");
+        ((ILocalizationSet)new RecordedRewording()).LocalizationLanguageCode.ShouldBe("nl-BE");
         ILocalizationSet.GetLanguageCode(typeof(RecordedRewording)).ShouldBe("nl-BE");
-        ((ILocalizationSet)new ImplementedLocalizationNlBe()).LanguageCode.ShouldBe("nl-NL");
+        ((ILocalizationSet)new ImplementedLocalizationNlBe()).LocalizationLanguageCode.ShouldBe("nl-NL");
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class ILocalizationSetTests
         Should.Throw<ArgumentException>(() => LocalizationRegistry.RecordSet<FirstRecordedLocalizationZhHans>("zh-Hant", []));
 
         // Assert
-        ((ILocalizationSet)new FirstRecordedLocalizationZhHans()).LanguageCode.ShouldBe("zh-Hans");
+        ((ILocalizationSet)new FirstRecordedLocalizationZhHans()).LocalizationLanguageCode.ShouldBe("zh-Hans");
     }
 
     [Test]
@@ -162,7 +162,7 @@ public sealed class ILocalizationSetTests
 
             // Assert: the message names the type and points at the naming rule and the property to implement.
             exception.Message.ShouldContain(setType.Name);
-            exception.Message.ShouldContain(nameof(ILocalizationSet.LanguageCode));
+            exception.Message.ShouldContain(nameof(ILocalizationSet.LocalizationLanguageCode));
         }
     }
 
@@ -179,5 +179,15 @@ public sealed class ILocalizationSetTests
         // Assert: the source generators reference this name as a string constant, so a rename or namespace change must
         // update the generator constant in the same commit.
         typeof(ILocalizationSet).FullName.ShouldBe("CodeChops.Idioma.ILocalizationSet");
+    }
+
+    [Test]
+    public void SetOfEnum_ShouldBeASetUnderTheNameTheGeneratorsRead()
+    {
+        // Assert: the generators tell this interface by its name and its one type parameter, and a set that lists it
+        // is a set like any other.
+        typeof(ILocalizationSet<>).FullName.ShouldBe("CodeChops.Idioma.ILocalizationSet`1");
+        typeof(ILocalizationSet).IsAssignableFrom(typeof(ILocalizationSet<DayOfWeek>)).ShouldBeTrue();
+        typeof(ILocalizationSet<>).GetMembers().ShouldBeEmpty();
     }
 }

@@ -18,12 +18,32 @@ internal sealed record LocalizationSetsAnalysis(
     private static readonly Regex LongCodeSuffix = new("(?<=.)([A-Z][a-z]{1,2})([A-Z][a-z]{3}|[A-Z][A-Za-z])$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     /// <summary>
-    /// Whether a text can't become a member of the generated texts class: it carries the class's own name, which C#
-    /// allows no member (<c>LOC205</c>). The class declares no member of its own, so that no other name is taken.
+    /// The name of the method the generated class of a set of the texts of an enum gets, which gives the text of a
+    /// value: <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>.
     /// </summary>
-    public static bool IsReservedTextName(string name, string textsName)
+    public const string LookupName = "GetTextByValue";
+
+    /// <summary>
+    /// The name of the method every generated class gets, which gives a text by its key:
+    /// <c>ShopLocalization.GetTextByKey("Checkout")</c>.
+    /// </summary>
+    public const string GetName = "GetTextByKey";
+
+    /// <summary>
+    /// Whether a text can't become a member of the generated texts class (<c>LOC205</c>). It carries the class's own
+    /// name, which C# allows no member, the name of the method that gives a text by its key
+    /// (<see cref="GetName"/>), or the name of the method that gives the text of an enum value
+    /// (<see cref="LookupName"/>). The class declares no other member of its own, so that no other name is taken.
+    /// </summary>
+    /// <param name="name">The name of the text.</param>
+    /// <param name="textsName">The name of the generated class.</param>
+    /// <param name="hasLookup">Whether the class gets the method, as that of a set of the texts of an enum does.</param>
+    public static bool IsReservedTextName(string name, string textsName, bool hasLookup)
     {
-        var isReserved = String.Equals(name, textsName, StringComparison.Ordinal);
+        var isReserved = String.Equals(name, textsName, StringComparison.Ordinal)
+                         || String.Equals(name, GetName, StringComparison.Ordinal)
+                         || (hasLookup && String.Equals(name, LookupName, StringComparison.Ordinal));
+
         return isReserved;
     }
 
@@ -44,7 +64,7 @@ internal sealed record LocalizationSetsAnalysis(
         var excludedSets = candidates.Where(static candidate => candidate.IsExcluded).ToImmutableArray();
         var excluded = excludedSets.Where(static set => set.Language is not null).ToImmutableArray();
 
-        // A set whose language the build can't read (its LanguageCode is no constant, or comes from another assembly)
+        // A set whose language the build can't read (its LocalizationLanguageCode is no constant, or comes from another assembly)
         // may be the set of any language. So a contract it implements is not said to miss one, here or in an assembly
         // referencing this one: that would ask for a set that exists.
         var unreadable = sets.Concat(excludedSets).Where(static set => set.Language is null).ToImmutableArray();
@@ -159,10 +179,17 @@ internal sealed record LocalizationSetsAnalysis(
                 if (IsServed(referencedSets, contract, code) || IsServed(ownSets, contract, code))
                     continue;
 
+                // The contract by its full name, each part as code writes it. The set lies wherever the app keeps it, so
+                // the fix chooses its namespace.
+                var setName = SuggestSetName(contract, code);
+                var writtenContract = String.Join(".", contract.Split('.').Select(LocalizationSetsGenerator.EscapeIdentifier));
+
                 findings.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.LibraryMissingLanguage,
                     declared.Location,
-                    new EquatableArray<string>([contract, code, SupportedLanguages.SuggestSet(SuggestSetName(contract, code), contract)])));
+                    new EquatableArray<string>([contract, code, SupportedLanguages.SuggestSet(setName, contract)]),
+                    SuggestedName: setName,
+                    NewSet: new NewLocalizationSet(Namespace: null, $"public class {setName} : {SupportedLanguages.SetInterface}, {writtenContract}")));
             }
         }
 
@@ -287,6 +314,18 @@ internal sealed record LocalizationSetsAnalysis(
                 hasTexts = false;
             }
 
+            // The generated class would be a second type of its name (CS0101), so it isn't written. The contract is, as
+            // for a set that can't be created: the sets list it.
+            if (set.TypeNamedLikeTexts is { } typeOfName)
+            {
+                findings?.Add(new LocalizationSetsFinding(
+                    LocalizationSetsRule.CannotExtend,
+                    set.Location,
+                    new EquatableArray<string>([set.Name, $"its generated class would be named '{baseName}', like {typeOfName}. Rename the set or that type"])));
+
+                hasTexts = false;
+            }
+
             // The default-language set lists its contract next to ILocalizationSet, as every set does: the generated
             // texts read its wording through the contract.
             if (!LocalizationDiscovery.ListsGeneratedContract(set, generatedContracts, contractFullName))
@@ -299,8 +338,24 @@ internal sealed record LocalizationSetsAnalysis(
             }
 
             foreach (var member in set.Texts)
-                if (IsReservedTextName(member.Name, baseName))
-                    findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.ReservedTextName, set.Location, new EquatableArray<string>([set.Name, member.Name, baseName])));
+            {
+                if (!IsReservedTextName(member.Name, baseName, hasLookup: set.Enums.Length > 0))
+                    continue;
+
+                var taken = member.Name switch
+                {
+                    _ when String.Equals(member.Name, baseName, StringComparison.Ordinal)
+                        => $"the generated class '{baseName}', which can't hold a member of its own name. '{baseName}.{member.Name}' isn't generated",
+                    GetName => $"the generated method '{baseName}.{GetName}', which gives a text by its key. The text '{baseName}.{member.Name}' isn't generated",
+                    _ => $"the generated method '{baseName}.{LookupName}', which gives the text of an enum value. The text '{baseName}.{member.Name}' isn't generated",
+                };
+
+                // At the text, which is what to rename, and not at the set.
+                var reserved = set.ReservedTexts.FirstOrDefault(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal));
+                var location = reserved.Name is null ? set.Location : reserved.Location;
+
+                findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.ReservedTextName, location, new EquatableArray<string>([set.Name, member.Name, taken])));
+            }
 
             // At the method, which is what to change, and not at the set.
             foreach (var method in set.UnsupportedTexts)
@@ -336,7 +391,7 @@ internal sealed record LocalizationSetsAnalysis(
                     }
 
                     var setName = $"{baseName}{SupportedLanguages.ToTypeSuffix(code)}";
-                    var (suggestion, newSet) = SuggestSet(setName, contractName, code, set.Namespace, set.IsPublic, implementers.Prepend(set));
+                    var (suggestion, newSet) = SuggestSet(setName, GetSetInterface(set), contractName, code, set.Namespace, set.IsPublic, implementers.Prepend(set));
 
                     findings.Add(new LocalizationSetsFinding(
                         LocalizationSetsRule.MissingLanguage,
@@ -379,7 +434,8 @@ internal sealed record LocalizationSetsAnalysis(
                 Members: set.Texts,
                 Sets: new EquatableArray<SetLink>(links),
                 HasTexts: hasTexts,
-                Usings: set.Usings));
+                Usings: set.Usings,
+                Enums: set.Enums));
         }
     }
 
@@ -490,7 +546,7 @@ internal sealed record LocalizationSetsAnalysis(
 
                 // Public where one of the contract's sets is, which the new set then matches.
                 var setName = SuggestSetName(contract, code);
-                var (suggestion, newSet) = SuggestSet(setName, simpleName, code, contractNamespace, members.Any(static set => set.IsPublic), members);
+                var (suggestion, newSet) = SuggestSet(setName, SupportedLanguages.SetInterface, simpleName, code, contractNamespace, members.Any(static set => set.IsPublic), members);
 
                 findings.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.MissingLanguage,
@@ -564,7 +620,7 @@ internal sealed record LocalizationSetsAnalysis(
     private static LocalizationSetsFinding UnlistedLanguage(DiscoveredLocalization set, string language, EquatableArray<string> codes)
     {
         var advice = GuessLongCode(set.Name, codes) is { } meant
-            ? $"If it is meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ILocalizationSet.LanguageCode => \"{meant}\";'. Otherwise add '{language}' to the attribute, or remove the set."
+            ? $"If it's meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ILocalizationSet.LocalizationLanguageCode => \"{meant}\";'. Otherwise add '{language}' to the attribute, or remove the set."
             : "Add the language to the attribute, or remove the set.";
 
         var unlistedLanguageFinding = new LocalizationSetsFinding(
@@ -641,12 +697,13 @@ internal sealed record LocalizationSetsAnalysis(
     /// implements the contract.
     /// </summary>
     /// <param name="setName">The name of the set to add.</param>
+    /// <param name="setInterface">What the set lists before its contract (<see cref="GetSetInterface"/>).</param>
     /// <param name="contract">The contract as the namespace of the new set names it.</param>
     /// <param name="code">The language the set is for.</param>
     /// <param name="namespace">The namespace of the new set: that of the contract.</param>
     /// <param name="isPublic">Whether a set that implements the contract is public, as the contract's sets are.</param>
     /// <param name="sets">The sets of the contract, among which a set of a language above the region.</param>
-    private static (string Suggestion, NewLocalizationSet NewSet) SuggestSet(string setName, string contract, string code, string @namespace, bool isPublic,
+    private static (string Suggestion, NewLocalizationSet NewSet) SuggestSet(string setName, string setInterface, string contract, string code, string @namespace, bool isPublic,
         IEnumerable<DiscoveredLocalization> sets)
     {
         // The nearest one: zh-Hans before zh for zh-Hans-CN. A sealed set has nothing deriving from it.
@@ -658,8 +715,8 @@ internal sealed record LocalizationSetsAnalysis(
 
         if (above.Language is null)
         {
-            var declaration = $"{(isPublic ? "public" : "internal")} class {setName} : ILocalizationSet, {contract}";
-            return (SupportedLanguages.SuggestSet(setName, contract), new NewLocalizationSet(@namespace, declaration));
+            var declaration = $"{(isPublic ? "public" : "internal")} class {setName} : {setInterface}, {contract}";
+            return (SupportedLanguages.SuggestSet(setName, contract, setInterface), new NewLocalizationSet(@namespace, declaration));
         }
 
         // As accessible as the set it derives from, which a derived class can't exceed. Named by its full name where it
@@ -673,6 +730,28 @@ internal sealed record LocalizationSetsAnalysis(
         var derived = $"{(above.IsPublic ? "public" : "internal")} {keyword} {setName} : {baseClass}";
 
         return (suggestion, new NewLocalizationSet(@namespace, derived));
+    }
+
+    /// <summary>
+    /// What a set of a contract lists before the contract, as its default-language set does: <c>ILocalizationSet</c>,
+    /// or <c>ILocalizationSet&lt;OrderStatus&gt;</c> for a set of the texts of an enum. The enum stands by its name
+    /// alone where it lies in the namespace of the set, and by its full name elsewhere.
+    /// </summary>
+    private static string GetSetInterface(DiscoveredLocalization defaultSet)
+    {
+        if (defaultSet.Enums.Length is 0)
+            return SupportedLanguages.SetInterface;
+
+        var setInterface = String.Join(", ", defaultSet.Enums.Select(@enum =>
+        {
+            var name = String.Equals(@enum.Namespace, defaultSet.Namespace, StringComparison.Ordinal)
+                ? @enum.Name
+                : @enum.FullyQualifiedName.Substring("global::".Length);
+
+            return $"{SupportedLanguages.SetInterface}<{name}>";
+        }));
+
+        return setInterface;
     }
 
     /// <summary>
@@ -715,9 +794,10 @@ internal sealed record LocalizationSetsAnalysis(
 /// <summary>
 /// Everything a generated contract is built from: the name of its file, the default-language set, whether the generated
 /// types are public like it or internal, the derived names, its text members in declaration order, the sets translating
-/// them, whether the generated class holds the texts, and the using directives its file repeats
-/// (<see cref="RepeatedUsings"/>). The class doesn't hold the texts when the generated code can't create the set for
-/// their default wording (<c>LOC200</c>).
+/// them, whether the generated class holds the texts, the using directives its file repeats
+/// (<see cref="RepeatedUsings"/>), and the enums whose members it has a text for, each of which the generated class
+/// gets a method for that gives the text of a value. The class doesn't hold the texts when the generated code can't
+/// create the set for their default wording (<c>LOC200</c>).
 /// </summary>
 internal sealed record LocalizationContract(
     string HintName,
@@ -730,7 +810,8 @@ internal sealed record LocalizationContract(
     EquatableArray<LocalizationMember> Members,
     EquatableArray<SetLink> Sets,
     bool HasTexts,
-    RepeatedUsings Usings);
+    RepeatedUsings Usings,
+    EquatableArray<LocalizedEnum> Enums);
 
 /// <summary>
 /// A set translating a generated contract, for the crefs on its texts: its language, a culture name, its namespace and
@@ -757,7 +838,7 @@ internal readonly record struct ProvidedLocalizationSet(
 {
     /// <summary>
     /// What stands for the language of a set whose language its build could not read, as its
-    /// <c>ILocalizationSet.LanguageCode</c> is no constant or comes from another assembly. It is no culture name, so it
+    /// <c>ILocalizationSet.LocalizationLanguageCode</c> is no constant or comes from another assembly. It is no culture name, so it
     /// serves no language, and a build that knows it takes the contract to miss none.
     /// </summary>
     public const string UnreadableLanguage = "*";
@@ -776,7 +857,7 @@ internal readonly record struct ReferencedLocalization(
 /// <summary>
 /// A diagnostic to report: which rule, where, and the arguments of its message. A finding a name resolves carries it,
 /// for the code fix to apply: the name the class should carry (<c>LOC200</c>), the contract it should implement
-/// (<c>LOC204</c>), or the set to add (<c>LOC201</c>), which also carries how to write that set.
+/// (<c>LOC204</c>), or the set to add (<c>LOC201</c> and <c>LOC600</c>), which also carries how to write that set.
 /// </summary>
 internal readonly record struct LocalizationSetsFinding(
     LocalizationSetsRule Rule,
@@ -786,11 +867,14 @@ internal readonly record struct LocalizationSetsFinding(
     NewLocalizationSet? NewSet = null);
 
 /// <summary>
-/// A set the code fix of <c>LOC201</c> adds in a file of its own: its namespace, empty for the global one, and its
-/// declaration without a body, such as <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>.
+/// A set the code fix of <c>LOC201</c> or <c>LOC600</c> adds in a file of its own: its namespace, empty for the global
+/// one, and its declaration without a body, such as
+/// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>. The namespace is
+/// <see langword="null"/> for a set of a library's contract (<c>LOC600</c>), which the fix gives the namespace of the
+/// app.
 /// </summary>
 internal readonly record struct NewLocalizationSet(
-    string Namespace,
+    string? Namespace,
     string Declaration);
 
 /// <summary>
@@ -840,7 +924,9 @@ internal enum LocalizationSetsRule
     LibraryCannotBeTranslated,
 
     /// <summary>
-    /// <c>LOC205</c>: a text of a default-language set is named like a member of the generated texts class.
+    /// <c>LOC205</c>: a text of a default-language set is named like the generated texts class, or like a method of
+    /// that class: the one that gives a text by its key, or the one that gives the text of an enum
+    /// value.
     /// </summary>
     ReservedTextName,
 

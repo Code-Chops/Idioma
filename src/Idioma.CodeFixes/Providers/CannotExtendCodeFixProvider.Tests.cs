@@ -68,7 +68,7 @@ public sealed class CannotExtendCodeFixProviderTests
         var set = File("""
             public sealed class ShopLocalization : ILocalizationSet, IShopLocalization
             {
-                public string LanguageCode => "en";
+                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
             }
             """);
@@ -95,12 +95,12 @@ public sealed class CannotExtendCodeFixProviderTests
     [Test]
     public async Task SetNamedAfterItsLanguageWithoutCapital_ShouldGetItsSuffixInPlaceOfThatEnding()
     {
-        // Arrange: LanguageCode gives the set its language. Its name ends in that code without the capital that starts
+        // Arrange: LocalizationLanguageCode gives the set its language. Its name ends in that code without the capital that starts
         // a suffix, so the name gives no language.
         var set = File("""
             public sealed class ShopLocalizationen : ILocalizationSet, IShopLocalization
             {
-                public string LanguageCode => "en";
+                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
             }
             """);
@@ -162,7 +162,7 @@ public sealed class CannotExtendCodeFixProviderTests
     [Test]
     public async Task SetWhoseNameGivesNoLanguage_ShouldBeRenamedAfterTheDefaultLanguage()
     {
-        // Arrange: no LanguageCode gives the set a language, and its name ends in none.
+        // Arrange: no LocalizationLanguageCode gives the set a language, and its name ends in none.
         var set = File("""
             public sealed class ShopLocalization : ILocalizationSet, IShopLocalization
             {

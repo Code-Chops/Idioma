@@ -88,7 +88,7 @@ public static class GeneratedCode
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When <paramref name="defaultSet"/> has no language code, because its name doesn't end in one, and it doesn't
-    /// implement <see cref="ILocalizationSet.LanguageCode"/>. Name the set after its language (<c>ShopLocalizationEn</c>),
+    /// implement <see cref="ILocalizationSet.LocalizationLanguageCode"/>. Name the set after its language (<c>ShopLocalizationEn</c>),
     /// or implement that property.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -319,6 +319,147 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
+    /// Creates the text of an enum value that isn't a member of its enum, such as a combination of flags. The method
+    /// <c>GetTextByValue</c> of a generated class calls this for a value that no text of its
+    /// <see cref="ILocalizationSet{TEnum}">set</see> is named after.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// The text shows the value as <see cref="Enum.ToString()"/> writes it, in every language. That's its number, or
+    /// the names of its flags.
+    /// </remarks>
+    /// <typeparam name="TEnum">The enum.</typeparam>
+    /// <param name="value">The value.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LocalizableText CreateUndefinedEnumText<TEnum>(TEnum value)
+        where TEnum : struct, Enum
+    {
+        var text = new LocalizableText(value.ToString());
+        return text;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// Checks that no values were passed for a text without parameters, and returns the text. The method <c>GetTextByKey</c> of
+    /// a generated class calls this for such a text: <c>ShopLocalization.GetTextByKey("Checkout")</c>.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
+    /// <param name="text">The text the key names.</param>
+    /// <param name="key">The key the text was asked for by. See <see cref="LocalizableText.Key"/>.</param>
+    /// <param name="values">The values that were passed.</param>
+    /// <exception cref="ArgumentException">
+    /// When <paramref name="values"/> holds a value, because the text takes none.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LocalizableText GetKeyedText<TContract>(LocalizableText text, string key, ReadOnlySpan<object?> values)
+        where TContract : class
+    {
+        if (!values.IsEmpty)
+        {
+            throw new ArgumentException(
+                $"The text '{key}' of '{typeof(TContract).Name}' takes no values, but {Count(values.Length)} passed. Pass the key alone.",
+                nameof(values));
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// Takes the value of one parameter of a text from the values that were passed. The method <c>GetTextByKey</c> of a
+    /// generated class calls this for each parameter of a text with parameters:
+    /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c>.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// A value isn't converted. An <see cref="int"/> isn't accepted for a parameter of type <see cref="long"/>.
+    /// <see langword="null"/> is accepted for a parameter whose type allows it.
+    /// </remarks>
+    /// <typeparam name="TValue">The type of the parameter.</typeparam>
+    /// <param name="key">The key the text was asked for by. See <see cref="LocalizableText.Key"/>.</param>
+    /// <param name="values">The values that were passed, in the order of the parameters.</param>
+    /// <param name="index">The position of the parameter.</param>
+    /// <param name="count">The number of parameters the text has.</param>
+    /// <param name="parameterName">The name of the parameter.</param>
+    /// <exception cref="ArgumentException">
+    /// When <paramref name="values"/> doesn't hold one value per parameter, or the value at
+    /// <paramref name="index"/> isn't of type <typeparamref name="TValue"/>.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static TValue GetKeyedValue<TValue>(string key, ReadOnlySpan<object?> values, int index, int count, string parameterName)
+    {
+        if (values.Length != count)
+        {
+            throw new ArgumentException(
+                $"The text '{key}' takes {count} {(count is 1 ? "value" : "values")}, but {Count(values.Length)} passed. Pass one for each of its parameters, in their order, after the key.",
+                nameof(values));
+        }
+
+        var value = values[index];
+
+        if (value is TValue typed)
+            return typed;
+
+        if (value is null && default(TValue) is null)
+            return default!;
+
+        var passed = value is null ? "null was" : $"a value of type '{value.GetType()}' was";
+
+        throw new ArgumentException(
+            $"The text '{key}' takes a value of type '{typeof(TValue)}' for '{parameterName}', but {passed} passed. Pass a value of that type, because a value isn't converted.",
+            nameof(values));
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// Creates the exception that the method <c>GetTextByKey</c> of a generated class throws for a key that none of its texts
+    /// has.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TContract">The contract of the generated class.</typeparam>
+    /// <param name="key">The key that was passed.</param>
+    /// <param name="className">The name of the generated class, such as <c>ShopLocalization</c>.</param>
+    /// <returns>
+    /// An <see cref="ArgumentNullException"/> when <paramref name="key"/> is <see langword="null"/>, and a
+    /// <see cref="KeyNotFoundException"/> for any other key.
+    /// </returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static Exception CreateUnknownKeyException<TContract>(string? key, string className)
+        where TContract : class
+    {
+        if (key is null)
+            return new ArgumentNullException(nameof(key));
+
+        var exception = new KeyNotFoundException(
+            $"'{className}' has no text with the key '{key}'. A key is the name of a text of '{typeof(TContract).Name}', in the same letter case.");
+
+        return exception;
+    }
+
+    /// <summary>
+    /// How many values were passed, as a message says it: <c>1 was</c>, or <c>2 were</c>.
+    /// </summary>
+    private static string Count(int values)
+    {
+        var count = values is 1 ? "1 was" : $"{values} were";
+        return count;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
     /// Sets the app's <see cref="LocalizationRegistry.SupportedLanguages"/> when an application that declares
     /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> starts. Only the first call counts,
     /// so an application loaded later, such as the app a test project tests, can't change them.
@@ -350,7 +491,7 @@ public static class GeneratedCode
     /// </summary>
     /// <param name="languageCode">
     /// The language: a culture name such as <c>en-GB</c>. <see langword="null"/> for a set that implements
-    /// <see cref="ILocalizationSet.LanguageCode"/>.
+    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/>.
     /// </param>
     /// <param name="ownTexts">
     /// The names of the texts the set's own class words, such as <c>Checkout</c>, for a set that derives from another.

@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Generators;
 /// rewording something of another assembly goes to <c>Register</c>, because load order is not registration order. An
 /// app's override must win over the library it rewords even when the library loads later. Within a tier a set comes
 /// after the sets it derives from, so it wins over them. Before that it records what the build read about each set
-/// (<c>GeneratedCode.RecordSet</c>). That's the language of each set that doesn't implement <c>LanguageCode</c>, so that
+/// (<c>GeneratedCode.RecordSet</c>). That's the language of each set that doesn't implement <c>LocalizationLanguageCode</c>, so that
 /// the run time never reads a set's name. A renamed type, as an obfuscator leaves it, keeps its language. So does a set
 /// named after a longer code, such as <c>ShopLocalizationEnGb</c>, whose last two letters alone would give <c>gb</c>.
 /// For a set deriving from another, it's also the texts its own class words, so that the registry knows which texts
@@ -69,23 +69,23 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Sets are registered automatically, by generated code that creates an instance of each. That needs a top-level class with a parameterless constructor, and a language code. The code is the end of the class name, starting with a capital (two letters, as in ShopLocalizationNl, or a longer code that [assembly: SupportedLanguages] lists, as in ShopLocalizationEnGb), or an implementation of ILocalizationSet.LanguageCode. Without this warning, a set that can't be registered would silently leave its texts in their default language. A nested or file-local set is reported only when it rewords another assembly's texts.",
+        description: "Sets are registered automatically, by generated code that creates an instance of each. That needs a top-level class with a parameterless constructor, and a language code. The code is the end of the class name, starting with a capital (two letters, as in ShopLocalizationNl, or a longer code that [assembly: SupportedLanguages] lists, as in ShopLocalizationEnGb), or an implementation of ILocalizationSet.LocalizationLanguageCode. Without this warning, a set that can't be registered would silently leave its texts in their default language. A nested or file-local set is reported only when it rewords another assembly's texts.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmappedLanguageCodeRule = new(
         id: UnmappedLanguageCodeDiagnosticId,
-        title: "LanguageCode that implements nothing",
-        messageFormat: "'{0}' inherits ILocalizationSet without listing it, so its LanguageCode implements nothing and the set serves the language of its name. List the interface again: 'class {0} : {1}, ILocalizationSet'.",
+        title: "LocalizationLanguageCode that implements nothing",
+        messageFormat: "'{0}' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing and the set serves the language of its name. List the interface again: 'class {0} : {1}, ILocalizationSet'.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A class implements an interface member only if it lists the interface. A set that derives from another set inherits that set's implementation of ILocalizationSet.LanguageCode. A LanguageCode the set declares itself is never read, unless it overrides the inherited one, so the set registers under the language of its name.",
+        description: "A class implements an interface member only if it lists the interface. A set that derives from another set inherits that set's implementation of ILocalizationSet.LocalizationLanguageCode. A LocalizationLanguageCode the set declares itself is never read, unless it overrides the inherited one, so the set registers under the language of its name.",
         helpLinkUri: PackageNames.HelpLink(UnmappedLanguageCodeDiagnosticId));
 
     private static readonly DiagnosticDescriptor InvalidLanguageCodeRule = new(
         id: InvalidLanguageCodeDiagnosticId,
-        title: "LanguageCode that isn't a culture name",
-        messageFormat: "'{0}' gives \"{1}\" as its LanguageCode, which isn't a culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
+        title: "LocalizationLanguageCode that isn't a culture name",
+        messageFormat: "'{0}' gives \"{1}\" as its LocalizationLanguageCode, which isn't a culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -473,7 +473,7 @@ internal readonly record struct ReferencedRegistrar(
     string RegistrarName);
 
 /// <summary>
-/// A class declaring a <c>LanguageCode</c> that implements nothing, with the class it derives from and where to report
+/// A class declaring a <c>LocalizationLanguageCode</c> that implements nothing, with the class it derives from and where to report
 /// it: what <c>LOC401</c> reports.
 /// </summary>
 internal readonly record struct UnmappedLanguageCode(

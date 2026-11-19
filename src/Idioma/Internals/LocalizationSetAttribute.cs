@@ -24,7 +24,7 @@ public sealed class LocalizationSetAttribute : Attribute
 
     /// <summary>
     /// The language the set serves, or <c>*</c> when the build couldn't read it. Such a set may serve any language.
-    /// The build can't read the set's <see cref="ILocalizationSet.LanguageCode"/> in these cases:
+    /// The build can't read the set's <see cref="ILocalizationSet.LocalizationLanguageCode"/> in these cases:
     /// <list type="bullet">
     /// <item>It isn't a constant.</item>
     /// <item>It comes from another assembly.</item>

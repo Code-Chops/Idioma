@@ -58,13 +58,15 @@ public sealed partial class LocalizableText
     /// The culture to format the values for when this text is shown for a culture asked for: that culture, or
     /// <see langword="null"/> where the thread follows it already and formats the values as the user does.
     /// </summary>
+    // The same culture, and not one equal to it: a clone of the thread's culture with its own number format is equal to it,
+    // and formats differently.
     // For a culture the thread follows anyway, ToString(culture) shows what ToString() shows. A provided culture is never
     // the thread's own, so the values are formatted for it.
     private static CultureInfo? FindValuesCulture(CultureInfo culture)
     {
         var followedCulture = WordingScope.GetFollowedCulture(out var providedCulture);
 
-        var valuesCulture = providedCulture is null && culture.Equals(followedCulture) ? null : culture;
+        var valuesCulture = providedCulture is null && ReferenceEquals(culture, followedCulture) ? null : culture;
         return valuesCulture;
     }
 

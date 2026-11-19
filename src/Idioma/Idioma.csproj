@@ -23,11 +23,15 @@
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
     <PackageReleaseNotes>A text takes a value as a method of its set. Write Greeting(string name) in each language and call ShopLocalization.Greeting(customer.Name). LocalizableText.Format is gone, and nothing fills in a placeholder such as {0} any more, so a wording that holds one shows its braces (LOC502, with an IDE fix that writes the method). Each language writes its own plurals in C#, because a wording can depend on its values.
 
+A set can hold the texts of an enum. List ILocalizationSet&lt;OrderStatus&gt; in place of ILocalizationSet, and every member of the enum needs a text in every language (CS0535). OrderStatusLocalization.GetTextByValue(order.Status) gives the text of a value.
+
 The build holds every language to the values. A language whose method never uses a value the default wording shows doesn't build (LOC302), and neither does a language of LocalizableText.Inline that leaves out a value the default language shows.
 
-The names say localization. A set implements ILocalizationSet and its contract: class ShopLocalizationNl : ILocalizationSet, IShopLocalization. The registry is LocalizationRegistry, and [ExcludeFromLocalizationDiscovery] keeps a set or a member out. A set's name ends in its language in PascalCase, such as ShopLocalizationEnGb for en-GB, and an inline text takes enGb: for it. A class that lists only a contract is no set.
+The names say localization. A set implements ILocalizationSet and its contract: class ShopLocalizationNl : ILocalizationSet, IShopLocalization. The registry is LocalizationRegistry, and [ExcludeFromLocalizationDiscovery] keeps a set or a member out. A set's name ends in its language in PascalCase, such as ShopLocalizationEnGb for en-GB, and an inline text takes enGb: for it. A class that lists only a contract is no set. A set states its language in LocalizationLanguageCode, which was LanguageCode: string ILocalizationSet.LocalizationLanguageCode => "en-GB". LocalizableText.GetWording(set) replaces GetTranslation(set).
 
-ResourceText is part of LocalizableText, which has the Key, the Contract and the Arguments. LocalizableText.Keyed(key, defaultText) replaces new ResourceText(key, defaultText).
+ResourceText is part of LocalizableText, which has the Key, the FullKey, the Contract and the Arguments. The Key of a text of a set is its name, such as Checkout, and its FullKey is its full name, such as MyApp.Localization.ShopLocalization.Checkout. Read FullKey where you look a text up in a shared resource file. LocalizableText.Keyed(key, defaultText) replaces new ResourceText(key, defaultText).
+
+Every generated class has a method GetTextByKey, for a key your code only has at run time. ShopLocalization.GetTextByKey("Checkout") gives the text, and GetTextByKey("Greeting", customer.Name) a text with parameters. A key no text has throws. No text can be named GetTextByKey any more (LOC205).
 
 Two texts are equal when they show the same wording for the current UI culture, as two strings are. A text also equals a string with that wording.
 

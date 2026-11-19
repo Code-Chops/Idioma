@@ -121,7 +121,7 @@ What to know:
 
 ## Run it yourself
 
-The benchmarks are in [`benchmarks`](../benchmarks). One script runs them all, and writes the tables to `benchmarks/obj/results`:
+The benchmarks are in [`benchmarks`](../benchmarks). One script runs them all, and writes the tables to `benchmarks/results`:
 
 ```shell
 ./benchmarks/run.sh

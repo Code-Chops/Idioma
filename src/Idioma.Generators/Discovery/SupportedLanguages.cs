@@ -117,10 +117,21 @@ internal static class SupportedLanguages
     /// The name alone gives the language, also for a code that is not two letters (<c>ShopLocalizationEnGb</c>), as
     /// every language a diagnostic suggests a set for is one the assembly declares (<see cref="FindNamedLanguage"/>).
     /// </summary>
-    public static string SuggestSet(string setName, string contract)
+    /// <param name="setName">The name of the set to add.</param>
+    /// <param name="contract">The contract the set implements.</param>
+    /// <param name="setInterface">
+    /// What the set lists before its contract: <c>ILocalizationSet</c>, or <c>ILocalizationSet&lt;OrderStatus&gt;</c>
+    /// for a set of the texts of an enum.
+    /// </param>
+    public static string SuggestSet(string setName, string contract, string setInterface = SetInterface)
     {
-        return $"'class {setName} : ILocalizationSet, {contract}'";
+        return $"'class {setName} : {setInterface}, {contract}'";
     }
+
+    /// <summary>
+    /// The interface every set lists, as a diagnostic and a code fix write it.
+    /// </summary>
+    public const string SetInterface = "ILocalizationSet";
 
     /// <summary>
     /// Whether a type's name ends in the suffix of a language (<see cref="ToTypeSuffix"/>), with something before it.

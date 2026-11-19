@@ -62,7 +62,8 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
 
             for (var i = 0; i < baseList.Types.Count; i++)
             {
-                if (partModel.GetTypeInfo(baseList.Types[i].Type, cancellationToken).Type is INamedTypeSymbol listed && PackageNames.IsLocalizationSet(listed))
+                if (partModel.GetTypeInfo(baseList.Types[i].Type, cancellationToken).Type is INamedTypeSymbol listed
+                    && (PackageNames.IsLocalizationSet(listed) || PackageNames.IsLocalizationSetOfEnum(listed)))
                     return await AddAsync(solution, part, i + 1, name, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -79,27 +80,6 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     private static Task<Solution> AddAsync(Solution solution, TypeDeclarationSyntax part, int index, string name, CancellationToken cancellationToken)
     {
         var added = SyntaxFactory.SimpleBaseType(SyntaxFactory.IdentifierName(name));
-        return CodeFixSupport.ReplaceNodesAsync(solution, [part], original => Insert(original, index, added), cancellationToken);
-    }
-
-    /// <summary>
-    /// The declaration with an interface inserted into its base list at an index. The new entry takes over what stood
-    /// around the entry it displaces, such as the space or line break before the class's body.
-    /// </summary>
-    private static TypeDeclarationSyntax Insert(TypeDeclarationSyntax declaration, int index, BaseTypeSyntax added)
-    {
-        var baseList = declaration.BaseList!;
-        var types = baseList.Types;
-        var comma = SyntaxFactory.Token(SyntaxKind.CommaToken).WithTrailingTrivia(SyntaxFactory.Space);
-
-        // A list of entries and commas, in turn: entry i stands at 2i.
-        var items = index == types.Count
-            ? types.Replace(types[^1], types[^1].WithoutTrailingTrivia()).GetWithSeparators()
-                .Add(comma)
-                .Add(added.WithTrailingTrivia(types[^1].GetTrailingTrivia()))
-            : types.Replace(types[index], types[index].WithoutLeadingTrivia()).GetWithSeparators()
-                .InsertRange(2 * index, [added.WithLeadingTrivia(types[index].GetLeadingTrivia()), comma]);
-
-        return declaration.WithBaseList(baseList.WithTypes(SyntaxFactory.SeparatedList<BaseTypeSyntax>(items)));
+        return CodeFixSupport.ReplaceNodesAsync(solution, [part], original => CodeFixSupport.InsertBaseType(original, index, added), cancellationToken);
     }
 }

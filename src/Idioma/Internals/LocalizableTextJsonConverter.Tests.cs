@@ -40,7 +40,7 @@ public sealed class LocalizableTextJsonConverterTests
     /// </summary>
     private sealed class JsonBritishLocalization : JsonLocalizationEn, ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "en-GB";
+        string ILocalizationSet.LocalizationLanguageCode => "en-GB";
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public sealed class LocalizableTextJsonConverterTests
     /// </summary>
     private sealed class JsonBelgianLocalization : IJsonLocalization
     {
-        string ILocalizationSet.LanguageCode => "NL-be";
+        string ILocalizationSet.LocalizationLanguageCode => "NL-be";
 
         public string Greeting => "Dag";
     }
@@ -86,7 +86,7 @@ public sealed class LocalizableTextJsonConverterTests
     /// </summary>
     private class JsonTraditionalChineseLocalization : IJsonLocalization, ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "zh-Hant";
+        string ILocalizationSet.LocalizationLanguageCode => "zh-Hant";
 
         public virtual string Greeting => "你好";
     }
@@ -96,7 +96,7 @@ public sealed class LocalizableTextJsonConverterTests
     /// </summary>
     private sealed class JsonTaiwaneseLocalization : JsonTraditionalChineseLocalization, ILocalizationSet
     {
-        string ILocalizationSet.LanguageCode => "zh-TW";
+        string ILocalizationSet.LocalizationLanguageCode => "zh-TW";
     }
 
     /// <summary>
@@ -321,8 +321,11 @@ public sealed class LocalizableTextJsonConverterTests
         // Act
         var text = JsonSerializer.Deserialize<LocalizableText>(json, Options)!;
 
-        // Assert: no contract any more, so the wording comes from the text itself, with no sets at all.
+        // Assert: no contract any more, so the wording comes from the text itself, with no sets at all. It travelled
+        // with its full key, which is the one key it has now.
+        Greeting.Key.ShouldBe("Greeting");
         text.Key.ShouldBe("Json.Greeting");
+        text.FullKey.ShouldBe("Json.Greeting");
         text.Contract.ShouldBeNull();
         text.ToString(CultureInfo.GetCultureInfo("nl-BE"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
         text.ToString(CultureInfo.GetCultureInfo("fr-FR"), registry: null, appLanguages: ["en", "nl"]).ShouldBe("Hello");
@@ -404,6 +407,6 @@ public sealed class LocalizableTextJsonConverterTests
 
         // Assert
         read.ShouldNotBeNull().Length.ShouldBe(2000);
-        read[^1].GetTranslation(CultureInfo.GetCultureInfo("nl")).ShouldBe("Bestellingen");
+        read[^1].GetWording(CultureInfo.GetCultureInfo("nl")).ShouldBe("Bestellingen");
     }
 }

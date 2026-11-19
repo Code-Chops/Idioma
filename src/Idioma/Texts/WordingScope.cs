@@ -44,6 +44,7 @@ internal readonly ref struct WordingScope
     // For a scope in which a culture is only followed: what was followed before it.
     private bool IsFollowed { get; }
     private LocalizationRegistry.CultureLookup? PreviousFollowed { get; }
+    private CultureInfo? PreviousFollowedCulture { get; }
     private FollowedValues PreviousFollowedValues { get; }
     private WordingContext PreviousWording { get; }
 
@@ -72,7 +73,7 @@ internal readonly ref struct WordingScope
         var uiCulture = CultureInfo.CurrentUICulture;
         var currentCulture = CultureInfo.CurrentCulture;
         var changesUiCulture = !culture.Equals(uiCulture);
-        var changesCulture = valuesCulture is not null && !valuesCulture.Equals(currentCulture);
+        var changesCulture = valuesCulture is not null && !ReferenceEquals(valuesCulture, currentCulture);
 
         if (changesUiCulture || changesCulture)
             this.PreviousContext = ExecutionContext.Capture();
@@ -94,14 +95,17 @@ internal readonly ref struct WordingScope
         this.IsEntered = true;
     }
 
-    // A scope in which texts follow the culture of a lookup, and the thread's cultures stay as they are.
-    private WordingScope(LocalizationRegistry.CultureLookup lookup, FollowedValues values)
+    // A scope in which texts follow a culture, as a lookup resolves it, and the thread's cultures stay as they are. The
+    // culture is the one given, not the lookup's, which is the first culture of that name the registry saw.
+    private WordingScope(LocalizationRegistry.CultureLookup lookup, CultureInfo culture, FollowedValues values)
     {
         this.PreviousFollowed = Entered.Followed;
+        this.PreviousFollowedCulture = Entered.FollowedCulture;
         this.PreviousFollowedValues = Entered.FollowedValues;
         this.IsFollowed = true;
 
         Entered.Followed = lookup;
+        Entered.FollowedCulture = culture;
         Entered.FollowedValues = values;
     }
 
@@ -110,12 +114,14 @@ internal readonly ref struct WordingScope
     /// that is shown for a culture asked for. A text it shows is worded for that culture, from the sets of the lookup's
     /// registry.
     /// </summary>
-    // One reference is written, to a lookup the registry keeps. Setting the UI culture copies the execution context,
-    // and writing a whole context here made a text without values take 32 ns where it takes 12 ns (measured
-    // 2026-11-19). Such a text is shown far more often than one that takes values.
-    public static WordingScope Follow(LocalizationRegistry.CultureLookup lookup)
+    /// <param name="lookup">How the registry resolves <paramref name="culture"/>.</param>
+    /// <param name="culture">The culture to follow. It also formats the values of a text that is shown.</param>
+    // Two references are written, to a lookup the registry keeps and to the culture. Setting the UI culture copies the
+    // execution context, and writing a whole context here made a text without values take 32 ns where it takes 12 ns
+    // (measured 2026-11-19). Such a text is shown far more often than one that takes values.
+    public static WordingScope Follow(LocalizationRegistry.CultureLookup lookup, CultureInfo culture)
     {
-        return new WordingScope(lookup, FollowedValues.OfCulture);
+        return new WordingScope(lookup, culture, FollowedValues.OfCulture);
     }
 
     /// <summary>
@@ -137,12 +143,12 @@ internal readonly ref struct WordingScope
         var wording = Entered;
 
         if (wording.Followed is { } followed)
-            return new WordingScope(followed.Registry.Resolve(culture), wording.FollowedValues);
+            return new WordingScope(followed.Registry.Resolve(culture), culture, wording.FollowedValues);
 
         if (wording.Culture is not null)
-            return wording.Registry is { } wordingRegistry ? new WordingScope(wordingRegistry.Resolve(culture), FollowedValues.OfThread) : default;
+            return wording.Registry is { } wordingRegistry ? new WordingScope(wordingRegistry.Resolve(culture), culture, FollowedValues.OfThread) : default;
 
-        return registry is null ? default : new WordingScope(registry.Resolve(culture), FollowedValues.OfReader);
+        return registry is null ? default : new WordingScope(registry.Resolve(culture), culture, FollowedValues.OfReader);
     }
 
     /// <summary>
@@ -157,7 +163,7 @@ internal readonly ref struct WordingScope
     /// </param>
     public static CultureInfo GetFollowedCulture(out CultureInfo? providedCulture)
     {
-        var wordingCulture = Entered.Followed?.Culture ?? Entered.Culture;
+        var wordingCulture = Entered.FollowedCulture ?? Entered.Culture;
         providedCulture = wordingCulture is null ? LocalizationRegistry.CurrentUICultureProvider?.Invoke() : null;
 
         var culture = wordingCulture ?? providedCulture ?? CultureInfo.CurrentUICulture;
@@ -195,6 +201,7 @@ internal readonly ref struct WordingScope
         if (this.IsFollowed)
         {
             Entered.Followed = this.PreviousFollowed;
+            Entered.FollowedCulture = this.PreviousFollowedCulture;
             Entered.FollowedValues = this.PreviousFollowedValues;
             return;
         }

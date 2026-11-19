@@ -106,7 +106,7 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// The languages this registry has at least one set for, such as <c>en</c> and <c>nl</c>, as each set's
-    /// <see cref="ILocalizationSet.LanguageCode"/> gives them. In <see cref="Current"/>, that includes the languages of
+    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/> gives them. In <see cref="Current"/>, that includes the languages of
     /// the libraries your app uses. So it can list more languages than your app declares.
     /// </summary>
     /// <remarks>
@@ -165,7 +165,7 @@ public sealed partial class LocalizationRegistry
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LanguageCode"/> return a culture name such
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
     public static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets)
@@ -198,7 +198,7 @@ public sealed partial class LocalizationRegistry
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LanguageCode"/> return a culture name such
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
     public static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, string defaultLanguage,
@@ -264,7 +264,7 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name.
     /// </exception>
-    // Each set's LanguageCode is read once, here. It's consumer code, and every lookup afterwards goes by the language
+    // Each set's LocalizationLanguageCode is read once, here. It's consumer code, and every lookup afterwards goes by the language
     // the set is filed under.
     private static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, ImmutableArray<string> appLanguages)
     {
@@ -364,7 +364,7 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// The set implementing a contract that is registered for one language, or <see langword="null"/> when none is. The
-    /// language is an <see cref="ILocalizationSet.LanguageCode"/>, matched in any letter case, without the culture walk.
+    /// language is an <see cref="ILocalizationSet.LocalizationLanguageCode"/>, matched in any letter case, without the culture walk.
     /// Among several sets for the language, the last in <see cref="Sets"/> wins.
     /// </summary>
     internal ILocalizationSet? FindByLanguage(Type contract, string language)
@@ -381,7 +381,7 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     private static string ReadLanguageCode(ILocalizationSet set)
     {
-        var languageCode = set.LanguageCode;
+        var languageCode = set.LocalizationLanguageCode;
 
         // Checked here, as the lookup tables can't hold a null key, and every text reads them: an unchecked null
         // would make each one throw, far from the registration that caused it. A code that is no culture name (en_GB,
@@ -391,7 +391,7 @@ public sealed partial class LocalizationRegistry
         {
             var given = languageCode is null ? "null" : $"\"{languageCode}\"";
 
-            throw new InvalidOperationException($"{set.GetType()} gives {given} as its {nameof(ILocalizationSet)}.{nameof(ILocalizationSet.LanguageCode)}. Return a culture name, such as en or en-GB.");
+            throw new InvalidOperationException($"{set.GetType()} gives {given} as its {nameof(ILocalizationSet)}.{nameof(ILocalizationSet.LocalizationLanguageCode)}. Return a culture name, such as en or en-GB.");
         }
 
         return languageCode;

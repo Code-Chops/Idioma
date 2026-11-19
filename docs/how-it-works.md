@@ -1,6 +1,6 @@
 # How Idioma works
 
-You don't need to read this page to use Idioma, because the [getting started guide](../README.md#getting-started) covers everything you write. This page is the background, for when you want to know what happens behind it: the fallback order, what the source generator writes, texts with parameters, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
+You don't need to read this page to use Idioma, because the [getting started guide](../README.md#getting-started) covers everything you write. This page is the background, for when you want to know what happens behind it: the fallback order, what the source generator writes, texts with parameters, enums, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
 
 Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), and [performance](performance.md).
 
@@ -57,8 +57,10 @@ public interface IShopLocalization
 
 public static partial class ShopLocalization
 {
-    public static LocalizableText Cart { get; } = ...;     // Its key is "MyApp.Localization.ShopLocalization.Cart"
-    public static LocalizableText Checkout { get; } = ...; // Its key is "MyApp.Localization.ShopLocalization.Checkout"
+    public static LocalizableText Cart { get; } = ...;     // Its key is "Cart"
+    public static LocalizableText Checkout { get; } = ...; // Its key is "Checkout"
+
+    public static LocalizableText GetTextByKey(string key, params ReadOnlySpan<object?> values) => ...;
 }
 ```
 
@@ -66,9 +68,26 @@ Every set lists `ILocalizationSet` and the contract, the default-language set to
 
 Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
 
-Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. It holds only the texts, so a text can take any name except the name of the class itself.
+Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only the method `GetTextByKey`, and `GetTextByValue` in a [set of an enum](#enums). So a text can take any name except those and the name of the class itself (`LOC205`).
 
-Each generated text is a `LocalizableText` with a `Key`. The key is the text's full name, `MyApp.Localization.ShopLocalization.Checkout` here, so every text has a key of its own. The package never reads the key. It's for an app or library that also looks texts up in resource files, such as through `IStringLocalizer`, so a resource file can override a wording without a rebuild ([an example](coming-from-resx.md#keeping-a-resource-file-as-an-override)).
+Each generated text is a `LocalizableText` with two keys:
+
+- Its `Key` is its name, `Checkout` here. Two classes can each have a text with that key. `GetTextByKey` takes it ([Getting a text by its key](#getting-a-text-by-its-key)).
+- Its `FullKey` is its full name, `MyApp.Localization.ShopLocalization.Checkout` here, so every text has a full key of its own.
+
+The package never reads the full key. It's for an app or library that also looks texts up in resource files, such as through `IStringLocalizer`, so a resource file can override a wording without a rebuild ([an example](coming-from-resx.md#keeping-a-resource-file-as-an-override)).
+
+### Getting a text by its key
+
+`GetTextByKey` gives the text with a key ([an example](../README.md#get-a-text-by-its-key)). It's for a key your code only has at run time, such as one from a database. Where you know the text, write `ShopLocalization.Checkout`, which the build checks.
+
+```csharp
+public static LocalizableText GetTextByKey(string key, params ReadOnlySpan<object?> values)
+```
+
+- **The key.** It's the name of the text, in the same letter case. A key no text has throws `KeyNotFoundException`, and so does a full key.
+- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many.
+- **The result.** It's the text, a `LocalizableText`. For a text without parameters, it's the one the class already holds, so a call allocates nothing. Show it for another culture with `ToString(culture)`, as any text.
 
 The generator also writes the code that registers your sets (see [Registration](#registration)). It's a class named after your assembly, `LocalizationRegistrar_MyApp` for `MyApp`, in the namespace `CodeChops.Idioma.Generated`. The class is public in an assembly that has sets, and in an app that declares languages, so an app that references the assembly can register them at startup. It's hidden from autocomplete. A library that keeps a list of its public API still finds it there, next to the contract and the generated class of every public set.
 
@@ -84,11 +103,11 @@ public interface IShopLocalization
 
 public static partial class ShopLocalization
 {
-    public static LocalizableText ItemsInCart(int count, string shop) => ...; // Its key is "MyApp.Localization.ShopLocalization.ItemsInCart"
+    public static LocalizableText ItemsInCart(int count, string shop) => ...; // Its key is "ItemsInCart"
 }
 ```
 
-Each call creates a text that keeps the values as its `Arguments` and words itself with them when it's shown. A call allocates the text and its values, and nothing more until the text is shown. Because it's worded when shown, it follows the user's language like any other text. One created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its full name, without its parameters. Two such texts are equal when they read the same ([Equality](#equality)).
+Each call creates a text that keeps the values as its `Arguments` and words itself with them when it's shown. A call allocates the text and its values, and nothing more until the text is shown. Because it's worded when shown, it follows the user's language like any other text. One created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its name, without its parameters. Two such texts are equal when they read the same ([Equality](#equality)).
 
 Write a text without values as a property, because a method without parameters isn't a text. The build rejects such a method in the default-language set (`LOC300`), unless it's an override such as `ToString()` or implements an interface member. A public method of the default-language set that isn't meant as a text, such as a helper, still becomes one, and every language then has to implement it. Make a helper `private` or `internal`. A `static` method isn't a text either, so a helper that other assemblies call can stay public as a static method. If it has to stay public on the instance, such as an override of a public member of a base class, mark it `[ExcludeFromLocalizationDiscovery]`. That attribute also keeps a public string property from being a text.
 
@@ -121,6 +140,47 @@ What else to know:
 - **A text as a value.** A value that is itself a text shows its wording in the same culture as the text around it.
 - **Inline texts.** An inline text takes a value as you write it and fills it in at once, in every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC302`).
 - **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC502`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in.
+
+## Enums
+
+A set that lists `ILocalizationSet<TEnum>` in place of `ILocalizationSet` holds the texts of an enum ([an example](../README.md#enums)). The generator adds every member of the enum to the contract, as a property named after the member. The generated class gets a text per member, and a method `GetTextByValue` that gives the text of a value:
+
+```csharp
+public interface IOrderStatusLocalization
+{
+    string Pending { get; }
+    string Shipped { get; }
+}
+
+public static partial class OrderStatusLocalization
+{
+    public static LocalizableText Pending { get; } = ...; // Its key is "Pending"
+    public static LocalizableText Shipped { get; } = ...; // Its key is "Shipped"
+
+    public static LocalizableText GetTextByValue(OrderStatus value) => value switch
+    {
+        OrderStatus.Pending => Pending,
+        OrderStatus.Shipped => Shipped,
+        _ => ..., // A text that shows value.ToString()
+    };
+}
+```
+
+The contract takes its members from the enum, and not only from the default-language set. So a member without a text is build error `CS0535` in every language, the default language too. Your IDE's "Implement interface" writes the missing properties.
+
+`GetTextByValue` returns the text the class already holds, so a call allocates nothing. The text follows the user's language like any other text.
+
+What else to know:
+
+- **Other languages.** Only the default-language set needs `ILocalizationSet<TEnum>`, because the contract comes from it. A set of another language may list `ILocalizationSet` instead. The build suggests the generic one for a missing language (`LOC201`).
+- **Other texts.** The set can hold texts that aren't members, such as a caption for the enum. A text that takes values works too, as long as it doesn't have the name of a member.
+- **A member's text is a property.** It takes no values, because `GetTextByValue` has none to give it. A method with the name of a member is build error `LOC300`.
+- **The name `GetTextByValue`.** No text of such a set can be named `GetTextByValue`, because the generated method has that name (`LOC205`).
+- **By name.** `GetTextByKey` takes the name of a member as its key: `OrderStatusLocalization.GetTextByKey("Shipped")`.
+- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart.
+- **A value that isn't a member.** `GetTextByValue` shows it as `ToString()` writes it, in every language. For a combination of flags, that's the names of the flags, as in `Read, Write`. For any other value, it's the number.
+- **Accessibility.** `GetTextByValue` is public for a public enum, and internal for an internal one.
+- **More than one enum.** A set that lists `ILocalizationSet<TEnum>` for two enums holds the texts of both, and gets an `GetTextByValue` for each. Two members with the same name share a text.
 
 ## Registration
 
@@ -170,7 +230,7 @@ string wording = ShopLocalization.Checkout.ToString(dutch, registry);
 
 ## Texts in JSON
 
-A text survives JSON, such as a Blazor component parameter that crosses a render mode. It's written with every wording it can show: its own translations and, for a text of a set, the wording of every language your app declares that has a registered set, regions included. Read back, it shows that wording for every culture without needing the sets, and a text with a key keeps it. It no longer belongs to a contract, so a set registered later doesn't reword it. It equals the text it was written from, because a text compares by its wording ([Equality](#equality)).
+A text survives JSON, such as a Blazor component parameter that crosses a render mode. It's written with every wording it can show: its own translations and, for a text of a set, the wording of every language your app declares that has a registered set, regions included. Read back, it shows that wording for every culture without needing the sets, and a text with a key keeps its full key. That's the one key it has from then on, so its `Key` gives the full key too. It no longer belongs to a contract, so a set registered later doesn't reword it. It equals the text it was written from, because a text compares by its wording ([Equality](#equality)).
 
 ```json
 {"key":"MyApp.Localization.ShopLocalization.Checkout","defaultText":"Checkout","translations":{"en":"Checkout","nl":"Afrekenen"}}
