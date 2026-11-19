@@ -14,14 +14,15 @@ internal sealed class SetTextOrigin<TContract> : TextOrigin
     public override string DefaultLanguage { get; }
 
     // Once per text, as such a text is created once and its name is read on every lookup in a set that derives from
-    // another.
+    // another. Its name is its key among the texts of its class.
+    public override string Key => this._name;
     public override ReadOnlySpan<char> Name => this._name;
     private readonly string _name;
 
     private Func<TContract, string> Selector { get; }
 
     // A constructor body, and not the initializers of a primary constructor: those run before the base constructor, so
-    // the set's LanguageCode would run before the key is checked, and its exception would hide the argument's.
+    // the set's LocalizationLanguageCode would run before the key is checked, and its exception would hide the argument's.
     public SetTextOrigin(string key, Func<TContract, string> selector, ILocalizationSet defaultSet)
         : base(key)
     {
@@ -31,7 +32,7 @@ internal sealed class SetTextOrigin<TContract> : TextOrigin
 
         this.Selector = selector;
         this.DefaultSet = defaultSet;
-        this.DefaultLanguage = defaultSet.LanguageCode;
+        this.DefaultLanguage = defaultSet.LocalizationLanguageCode;
         this._name = key[(key.LastIndexOf('.') + 1)..];
     }
 

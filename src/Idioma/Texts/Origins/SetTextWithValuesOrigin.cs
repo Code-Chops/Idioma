@@ -17,7 +17,11 @@ internal abstract class SetTextWithValuesOrigin : TextOrigin
 
     // Asked of the set only when it's read: such a text is created on every call, and one that finds its wording in
     // the user's language never reads this.
-    public override string? DefaultLanguage => field ??= this.DefaultSet.LanguageCode;
+    public override string? DefaultLanguage => field ??= this.DefaultSet.LocalizationLanguageCode;
+
+    // The name of the text, as a new string on every read: such a text is created on every call, and holds no field
+    // for a key that a text shown to a user never reads.
+    public override string Key => this.Name.ToString();
 
     // The arguments are checked for null here, and the key in the base, because this class isn't generic. Under
     // WebAssembly AOT, each check in the generic code below added about 25 ns to every text that takes values (measured

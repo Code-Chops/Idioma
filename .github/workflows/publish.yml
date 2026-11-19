@@ -28,10 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # 10.0.1xx and no later band of SDK 10, as in CI: only that band has the compiler the generators are built against.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: |
-            10.0.x
+            10.0.1xx
             11.0.x
 
       # NativeAOT links with the toolchain of the platform.
@@ -46,13 +47,13 @@ jobs:
       - name: Run the demos against the package
         run: ./tests/Idioma.Demos/run.sh
 
-  publish:
-    name: Test, pack, and publish
-    needs: aot-smoke
+  # Builds, tests, and packs what the publish job pushes. A job of its own, which can't sign in to nuget.org: it restores
+  # and runs the packages of the tests, and code of theirs must not run where an API key can be had.
+  pack:
+    name: Test and pack
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # lets GitHub issue the token that nuget.org exchanges for a short-lived API key
     steps:
       # A run by hand starts from the branch or tag picked for it, and a branch names no version to hold the package
       # to, so only a version tag publishes.
@@ -86,6 +87,33 @@ jobs:
       # A tag that names another version than the project file would publish something else than it says.
       - name: Check the tag against the version
         run: test -f "artifacts/CodeChops.Idioma.${GITHUB_REF_NAME#v}.nupkg"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          if-no-files-found: error
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+
+  # Pushes the package the pack job made, and does nothing else: no checkout, no restore, and no code of the
+  # repository or of a package runs in the job that can get an API key.
+  publish:
+    name: Publish
+    needs: [aot-smoke, pack]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # lets GitHub issue the token that nuget.org exchanges for a short-lived API key
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: artifacts
+
+      # For `dotnet nuget push` alone.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
 
       - name: Sign in to nuget.org
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0

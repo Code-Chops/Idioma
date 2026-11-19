@@ -146,6 +146,17 @@ Both kinds show the wording for the user's language in markup, in string interpo
 
 Every text is a `LocalizableText`. Use that type when your own code stores or accepts a text, as `Title` above does.
 
+### Keep a text as a text
+
+A `string` made from a text holds the wording of that moment. It doesn't change when the user's language does, and on a server every user gets the language of the first one. So keep the `LocalizableText` in anything that outlives one request, such as a static field, a cache or a view model, and convert it where you show it:
+
+```csharp
+static readonly string Frozen = ShopLocalization.Checkout;         // The first user's language, for every user
+static readonly LocalizableText Label = ShopLocalization.Checkout; // Each user's own language
+```
+
+Two texts are equal when they show the same wording in the user's language, and a text's hash follows that wording. So a `Dictionary` or `HashSet` keyed by texts can't find its texts after a language switch, or when users of different languages share it. Give such a collection `ReferenceEqualityComparer.Instance`, which tells texts apart by object ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#equality)).
+
 ### The user's language
 
 The user's language is `CultureInfo.CurrentUICulture`.
@@ -248,6 +259,61 @@ error LOC301: 'ShopLocalizationNl.ItemsInCart' names this parameter 'aantal', bu
 
 Idioma has no plural rules. Each language writes its own conditions in C#: English and Dutch have two forms, and Polish has more ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#texts-with-parameters)).
 
+### Enums
+
+To translate an enum, write a set that lists `ILocalizationSet<TEnum>` in place of `ILocalizationSet`. Each member of the enum is a text, named after the member:
+
+```csharp
+public enum OrderStatus { Pending, Shipped }
+
+public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+{
+    public string Pending => "Pending";
+    public string Shipped => "Shipped";
+}
+
+public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+{
+    public string Pending => "In behandeling";
+    public string Shipped => "Verzonden";
+}
+```
+
+The generated class gets a method `GetTextByValue`, which gives the text of a value:
+
+```razor
+<span>
+  @OrderStatusLocalization.GetTextByValue(order.Status)
+</span>
+```
+
+Every language needs a text for every member. A member without one is a build error, so a member you add to the enum later can't go untranslated:
+
+```text
+error CS0535: 'OrderStatusLocalizationNl' does not implement interface member 'IOrderStatusLocalization.Shipped'
+```
+
+A text of a member is a text like any other, so `OrderStatusLocalization.Shipped` works too ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#enums)).
+
+### Get a text by its key
+
+When your code only has the name of a text at run time, such as a key from a database, ask the generated class for it with `GetTextByKey`:
+
+```csharp
+LocalizableText cart = ShopLocalization.GetTextByKey("Cart");
+string dutch = cart.ToString(CultureInfo.GetCultureInfo("nl"));
+```
+
+The key is the name of the text. `GetTextByKey` returns the text, the same one as `ShopLocalization.Cart`.
+
+A text with parameters takes its values after the key:
+
+```csharp
+LocalizableText greeting = ShopLocalization.GetTextByKey("Greeting", customer.Name);
+```
+
+The build can't check a key, so a key that no text has throws `KeyNotFoundException`. Where you know the text, write `ShopLocalization.Cart` instead ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#getting-a-text-by-its-key)).
+
 ### Regional variants, such as British English
 
 `ShopLocalizationEn` serves every English culture, `en-US` and `en-GB` alike. For the texts that differ in Britain:
@@ -334,7 +400,7 @@ Each subject has a page of its own:
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, moving a resource file, and keeping a resource file as an override.
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes to show next to `IStringLocalizer`, on .NET and in Blazor WebAssembly, and what Idioma adds to a download.
 - [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): two complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
-- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
+- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, enums, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
 
 ## License
 

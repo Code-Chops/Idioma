@@ -33,7 +33,15 @@ internal static class GeneratorTestHelper
     /// </summary>
     internal static GeneratorDriverRunResult RunOverFiles(IIncrementalGenerator generator, params string[] sources)
     {
-        return CreateDriver(generator).RunGenerators(CreateCompilation([], sources)).GetRunResult();
+        return RunOverFiles(generator, [], sources);
+    }
+
+    /// <summary>
+    /// Runs one generator over several files of one project, compiled against further references.
+    /// </summary>
+    internal static GeneratorDriverRunResult RunOverFiles(IIncrementalGenerator generator, MetadataReference[] references, params string[] sources)
+    {
+        return CreateDriver(generator).RunGenerators(CreateCompilation(references, sources)).GetRunResult();
     }
 
     /// <summary>

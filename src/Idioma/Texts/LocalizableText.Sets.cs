@@ -6,23 +6,45 @@ namespace CodeChops.Idioma;
 public sealed partial class LocalizableText
 {
     /// <summary>
-    /// The name of this text in a resource file, such as <c>MyApp.Localization.ShopLocalization.Checkout</c>, or
+    /// The key of this text among the texts of its generated class, such as <c>Checkout</c> for
+    /// <c>ShopLocalization.Checkout</c>, or <see langword="null"/> for a text without a key, such as an inline text.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The key of a text of a set is its name. It's what the generated class takes to look the text up at run time:
+    /// <c>ShopLocalization.GetTextByKey("Checkout")</c>. It's also the name of the text's entry in a resource file of its own
+    /// class, as an <c>IStringLocalizer&lt;Shop&gt;</c> reads it. Two classes can each have a text with this key. For
+    /// a key that no other text has, read <see cref="FullKey"/>.
+    /// </para>
+    /// <para>
+    /// A text created with <see cref="Keyed"/> has one key, so this is the key it was given, the same as its
+    /// <see cref="FullKey"/>. So is the key of a text of a set that was read from JSON, which travels with its full
+    /// key.
+    /// </para>
+    /// <para>
+    /// For a text with parameters, each read gives a new string, because the text doesn't keep it.
+    /// </para>
+    /// </remarks>
+    public string? Key => this.Origin?.Key;
+
+    /// <summary>
+    /// The key that is this text's alone, such as <c>MyApp.Localization.ShopLocalization.Checkout</c>, or
     /// <see langword="null"/> for a text without a key, such as an inline text.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Every text of a set has a key, which is its full name. That's the namespace of its set, the generated class, and the
-    /// text's name. <c>Checkout</c> of <c>ShopLocalizationEn</c> in the namespace <c>MyApp.Localization</c> gives
-    /// <c>MyApp.Localization.ShopLocalization.Checkout</c>. So sets of one name in two namespaces have keys of their
-    /// own. A set in the global namespace gives <c>ShopLocalization.Checkout</c>.
+    /// The full key of a text of a set is its full name. That's the namespace of its set, the generated class, and the
+    /// text's <see cref="Key"/>. <c>Checkout</c> of <c>ShopLocalizationEn</c> in the namespace
+    /// <c>MyApp.Localization</c> gives <c>MyApp.Localization.ShopLocalization.Checkout</c>. So sets of one name in two
+    /// namespaces have full keys of their own. A set in the global namespace gives <c>ShopLocalization.Checkout</c>.
     /// </para>
     /// <para>
-    /// The key is for an app or library that looks texts up in resource files itself, such as through an
-    /// <c>IStringLocalizer</c>. A resource file can then provide or override a text's wording under its key, without a
-    /// rebuild. This package never reads the key.
+    /// The full key is for an app or library that looks texts up in one place itself, such as a shared resource file
+    /// or a database. That place can then provide or override a text's wording under its full key, without a
+    /// rebuild. This package never reads it.
     /// </para>
     /// </remarks>
-    public string? Key => this.Origin?.Key;
+    public string? FullKey => this.Origin?.FullKey;
 
     /// <summary>
     /// The <see cref="ILocalizationSet"/> contract this text belongs to, such as <c>IShopLocalization</c>, or
@@ -47,7 +69,7 @@ public sealed partial class LocalizableText
     /// </summary>
     /// <remarks>
     /// Every set words the text with these values. An app or library that looks the text up in a resource file by its
-    /// <see cref="Key"/> can fill the wording it finds there with them. Each read gives a new array. A value such as a
+    /// <see cref="FullKey"/> can fill the wording it finds there with them. Each read gives a new array. A value such as a
     /// number is boxed then, because the text keeps each value as its own type.
     /// </remarks>
     public ImmutableArray<object?> Arguments => (this.Origin as SetTextWithValuesOrigin)?.ToArguments() ?? [];
@@ -83,7 +105,10 @@ public sealed partial class LocalizableText
     /// LocalizableText name = LocalizableText.Keyed("Customer.Name", customer.Name);
     /// </code>
     /// </example>
-    /// <param name="key">The name of the text in a resource file, such as <c>Customer.Name</c>.</param>
+    /// <param name="key">
+    /// The name of the text in a resource file, such as <c>Customer.Name</c>. It's the text's <see cref="Key"/> and
+    /// its <see cref="FullKey"/>.
+    /// </param>
     /// <param name="defaultText">The wording shown when nothing resolves the key.</param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="key"/> is empty or white-space. Pass the name the text has in the resource file.
@@ -102,7 +127,7 @@ public sealed partial class LocalizableText
 
     /// <summary>
     /// This text in the wording of a given set, whatever the current UI culture.
-    /// <c>ShopLocalization.Checkout.GetTranslation(new ShopLocalizationNl())</c> gives <c>"Afrekenen"</c>.
+    /// <c>ShopLocalization.Checkout.GetWording(new ShopLocalizationNl())</c> gives <c>"Afrekenen"</c>.
     /// </summary>
     /// <remarks>
     /// For a text that takes values, a text among them shows in the set's language too. The other values stay
@@ -118,7 +143,7 @@ public sealed partial class LocalizableText
     /// When this text takes values and <paramref name="set"/> has no language code, because its name doesn't end in
     /// one. The build warns about such a set with <c>LOC400</c>.
     /// </exception>
-    public string? GetTranslation(ILocalizationSet set)
+    public string? GetWording(ILocalizationSet set)
     {
         ArgumentNullException.ThrowIfNull(set);
 
@@ -128,7 +153,7 @@ public sealed partial class LocalizableText
         // A text the wording shows follows the set's language: a text among the values, or a text a property shows. It's
         // looked up in the sets of the whole app, where no text being worded gives others. A text that takes values
         // needs the language, so its set must have one. A text without values does without it where the set has none.
-        var language = this.TakesValues ? set.LanguageCode : FindLanguageCode(set);
+        var language = this.TakesValues ? set.LocalizationLanguageCode : FindLanguageCode(set);
         using var scope = this.EnterLanguageUnlessServed(language, LocalizationRegistry.Current);
 
         var text = this.Select(set);
@@ -175,7 +200,7 @@ public sealed partial class LocalizableText
     }
 
     /// <summary>
-    /// The name of this text, the last part of its <see cref="Key"/>, or empty for a text without a key.
+    /// The name of this text, the last part of its <see cref="FullKey"/>, or empty for a text without a key.
     /// </summary>
     internal ReadOnlySpan<char> Name => this.Origin is { } origin ? origin.Name : default;
 
@@ -210,7 +235,7 @@ public sealed partial class LocalizableText
     {
         try
         {
-            return set.LanguageCode;
+            return set.LocalizationLanguageCode;
         }
         catch (InvalidOperationException)
         {
@@ -242,7 +267,7 @@ public sealed partial class LocalizableText
             return null;
 
         // A text among the values shows in the default language too, where the user reads another. A text without
-        // values enters no scope on this path, for the reason GetTranslation gives.
+        // values enters no scope on this path, for the reason GetWording gives.
         using var scope = this.TakesValues ? this.EnterLanguageUnlessServed(defaultLanguage, registry) : default;
 
         // From the language code, through its culture only where this machine has one: under invariant globalization (a

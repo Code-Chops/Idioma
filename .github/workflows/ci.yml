@@ -10,9 +10,15 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # On Windows and macOS too, where most users of the package write their code. A test that only passes with the paths
+  # or the line endings of Linux fails there.
   build-test-pack:
-    name: Build, test, and pack
-    runs-on: ubuntu-latest
+    name: Build, test, and pack (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -38,7 +44,9 @@ jobs:
       - name: Pack
         run: dotnet pack src/Idioma/Idioma.csproj -c Release --no-build -o artifacts -warnaserror
 
+      # Once: the package is the same on every platform.
       - uses: actions/upload-artifact@v7
+        if: matrix.os == 'ubuntu-latest'
         with:
           name: packages
           path: |
@@ -54,10 +62,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # 10.0.1xx and no later band of SDK 10: only that band has the compiler the generators are built against
+      # (Roslyn 5.0), and the app's global.json takes no other. SDK 11 packs the package.
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
-            10.0.x
+            10.0.1xx
             11.0.x
 
       # NativeAOT links with the toolchain of the platform.
@@ -71,3 +81,25 @@ jobs:
       # version is out. This shows that the demos run with the package as it is packed here.
       - name: Run the demos against the package
         run: ./tests/Idioma.Demos/run.sh
+
+  # The benchmarks are no part of the solution, so a change of the API would break them unnoticed. They are built
+  # here, and each approach is checked to show the expected wording, which takes no timing. The numbers of
+  # docs/performance.md come from benchmarks/run.sh on one machine, and not from here.
+  benchmarks:
+    name: Build the benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Build
+        run: |
+          dotnet build benchmarks/Idioma.Benchmarks -c Release -warnaserror
+          dotnet build benchmarks/Idioma.Benchmarks.Wasm -c Release -warnaserror
+          dotnet build benchmarks/Idioma.Benchmarks.Size -c Release -warnaserror
+
+      - name: Check that every approach shows the expected wording
+        run: dotnet benchmarks/Idioma.Benchmarks/bin/Release/net11.0/Idioma.Benchmarks.dll check

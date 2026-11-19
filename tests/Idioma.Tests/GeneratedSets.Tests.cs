@@ -93,6 +93,39 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
+    /// The state of an order: an enum whose members each have a text. Two of its members share a value.
+    /// </summary>
+    [Flags]
+    public enum OrderStatus
+    {
+        Pending = 1,
+        Shipped = 2,
+        Delivered = 4,
+        Arrived = Delivered,
+    }
+
+    /// <summary>
+    /// The texts of an enum: one per member, and one that is no member.
+    /// </summary>
+    public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+    {
+        public virtual string Pending => "Pending";
+        public virtual string Shipped => "Shipped";
+        public virtual string Delivered => "Delivered";
+        public virtual string Arrived => "Arrived";
+        public virtual string Caption => "Order status";
+    }
+
+    public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+    {
+        public string Pending => "In behandeling";
+        public string Shipped => "Verzonden";
+        public string Delivered => "Bezorgd";
+        public string Arrived => "Aangekomen";
+        public string Caption => "Bestelstatus";
+    }
+
+    /// <summary>
     /// A helper next to the generated texts: the generated class is partial.
     /// </summary>
     public static partial class GeneratedLocalization
@@ -266,8 +299,9 @@ namespace CodeChops.Idioma.Tests
             // Arrange & Act
             var text = GeneratedLocalization.ItemsInCart(3, "Idioma");
 
-            // Assert: the key is the full name of the method, without its parameters.
-            text.Key.ShouldBe("CodeChops.Idioma.Tests.GeneratedSets.GeneratedLocalization.ItemsInCart");
+            // Assert: the key is the name of the method, and the full key its full name, without its parameters.
+            text.Key.ShouldBe("ItemsInCart");
+            text.FullKey.ShouldBe("CodeChops.Idioma.Tests.GeneratedSets.GeneratedLocalization.ItemsInCart");
             text.Contract.ShouldBe(typeof(IGeneratedLocalization));
             text.DefaultLanguage.ShouldBe("en");
             text.DefaultText.ShouldBe("3 items in your cart at Idioma");
@@ -504,6 +538,146 @@ namespace CodeChops.Idioma.Tests
             GC.KeepAlive(sink);
 
             return least;
+        }
+
+        [Test]
+        public void GeneratedGetTextByKey_ShouldGiveTextWithThatKey()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: the key is what the text itself gives as its key. English is reworded by a set of its own.
+            GeneratedLocalization.GetTextByKey("Greeting").ToString().ShouldBe("Hallo!");
+            GeneratedLocalization.GetTextByKey(GeneratedLocalization.Greeting.Key!).ToString().ShouldBe("Hallo!");
+            GeneratedLocalization.GetTextByKey("Greeting").ShouldBeSameAs(GeneratedLocalization.Greeting);
+            GeneratedLocalization.GetTextByKey("Greeting").ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("Hello!");
+            GeneratedLocalization.GetTextByKey("Checkout").ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("Pay");
+            GeneratedLocalization.GetTextByKey("Checkout").ToString(CultureInfo.GetCultureInfo("fr-FR")).ShouldBe("Pay");
+        }
+
+        [Test]
+        public void GeneratedGetTextByKey_ShouldWordTextThatTakesValuesWithTheValuesPassed()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+            object?[] values = [3, "Idioma"];
+
+            // Act & Assert: one value, two values, values as an array, an enum, and a value that is a text itself.
+            GeneratedLocalization.GetTextByKey("Welcome", "Max").ToString().ShouldBe("Welkom, Max!");
+            GeneratedLocalization.GetTextByKey("ItemsInCart", 1, "Idioma").ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("1 item in your cart at Idioma");
+            GeneratedLocalization.GetTextByKey("ItemsInCart", values).ToString().ShouldBe("3 artikelen in je winkelwagen bij Idioma");
+            GeneratedLocalization.GetTextByKey("Dear", Salutation.Madam).ToString().ShouldBe("Geachte mevrouw");
+            GeneratedLocalization.GetTextByKey("Removed", GeneratedLocalization.Greeting).ToString().ShouldBe("Hallo! verwijderd");
+        }
+
+        [Test]
+        [Arguments("Chekout")]
+        [Arguments("checkout")]
+        [Arguments("CodeChops.Idioma.Tests.GeneratedSets.GeneratedLocalization.Checkout")]
+        [Arguments("")]
+        public void GeneratedGetTextByKey_ShouldThrowForKeyNoTextHas(string key)
+        {
+            // Arrange & Act: a mistyped key, another letter case, and the full key.
+            var exception = Should.Throw<KeyNotFoundException>(() => GeneratedLocalization.GetTextByKey(key));
+
+            // Assert
+            exception.Message.ShouldStartWith($"'GeneratedLocalization' has no text with the key '{key}'.");
+            Should.Throw<ArgumentNullException>(() => GeneratedLocalization.GetTextByKey(null!));
+        }
+
+        [Test]
+        public void GeneratedGetTextByKey_ShouldThrowForValuesTheTextDoesNotTake()
+        {
+            // Arrange & Act & Assert: a value for a text that takes none, too few, too many, and another type.
+            Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("Checkout", "Max")).Message.ShouldContain("takes no values, but 1 was passed");
+            Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("Welcome")).Message.ShouldContain("takes 1 value, but 0 were passed");
+            Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("ItemsInCart", 1, "Idioma", 2)).Message.ShouldContain("takes 2 values, but 3 were passed");
+            Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("ItemsInCart", 1L, "Idioma")).Message.ShouldContain("takes a value of type 'System.Int32' for 'count', but a value of type 'System.Int64' was passed");
+        }
+
+        [Test]
+        public void GeneratedGetTextByKey_ShouldKnowTextOfEveryEnumMember()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: by the name of the member, as ToString writes it.
+            OrderStatusLocalization.GetTextByKey(nameof(OrderStatus.Shipped)).ToString().ShouldBe("Verzonden");
+            OrderStatusLocalization.GetTextByKey(OrderStatus.Pending.ToString()).ToString().ShouldBe("In behandeling");
+            OrderStatusLocalization.GetTextByKey("Caption").ToString().ShouldBe("Bestelstatus");
+        }
+
+        [Test]
+        public void InlineText_ShouldHaveNoKey()
+        {
+            // Arrange & Act
+            var text = InlineTexts.Orders;
+
+            // Assert
+            text.Key.ShouldBeNull();
+            text.FullKey.ShouldBeNull();
+        }
+
+        [Test]
+        public void GeneratedTextOfEnumValue_ShouldBeTheTextNamedAfterItsMember()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act
+            var text = OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped);
+
+            // Assert: the text the class holds for the member, with the member's name as its key.
+            text.ShouldBeSameAs(OrderStatusLocalization.Shipped);
+            text.Key.ShouldBe("Shipped");
+            text.FullKey.ShouldBe("CodeChops.Idioma.Tests.GeneratedSets.OrderStatusLocalization.Shipped");
+            text.ToString().ShouldBe("Verzonden");
+            text.ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("Shipped");
+        }
+
+        [Test]
+        public void GeneratedTextOfEnumValue_ShouldCoverEveryMemberAndKeepOtherTexts()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: every value, and the text that is no member of the enum.
+            OrderStatusLocalization.GetTextByValue(OrderStatus.Pending).ToString().ShouldBe("In behandeling");
+            OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped).ToString().ShouldBe("Verzonden");
+            OrderStatusLocalization.GetTextByValue(OrderStatus.Delivered).ToString().ShouldBe("Bezorgd");
+            OrderStatusLocalization.Caption.ToString().ShouldBe("Bestelstatus");
+        }
+
+        [Test]
+        public void GeneratedTextOfEnumValue_OfMembersWithOneValue_ShouldBeTheTextOfTheFirst()
+        {
+            // Arrange
+            using var _ = new UICultureScope("en-US");
+
+            // Act & Assert: both members have a text, and the value gives the first one.
+            OrderStatusLocalization.Arrived.ToString().ShouldBe("Arrived");
+            OrderStatusLocalization.GetTextByValue(OrderStatus.Arrived).ShouldBeSameAs(OrderStatusLocalization.Delivered);
+        }
+
+        [Test]
+        public void GeneratedTextOfEnumValue_ThatIsNoMember_ShouldShowAsToStringWritesIt()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: a combination of flags, and a number no member has.
+            OrderStatusLocalization.GetTextByValue(OrderStatus.Pending | OrderStatus.Shipped).ToString().ShouldBe("Pending, Shipped");
+            OrderStatusLocalization.GetTextByValue((OrderStatus)64).ToString().ShouldBe("64");
+        }
+
+        [Test]
+        public void GeneratedTextOfEnumValue_ShouldAllocateNothing()
+        {
+            // Arrange & Act: per 10,000 calls.
+            var allocated = Allocated(static () => OrderStatusLocalization.GetTextByValue(OrderStatus.Delivered)) / 10_000;
+
+            // Assert
+            allocated.ShouldBe(0);
         }
 
         [Test]

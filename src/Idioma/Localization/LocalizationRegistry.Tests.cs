@@ -79,7 +79,7 @@ public sealed partial class LocalizationRegistryTests
     /// </summary>
     private sealed class RegistryConfiguredLocalization(string language) : ILocalizationSet
     {
-        public string LanguageCode { get; } = language;
+        public string LocalizationLanguageCode { get; } = language;
     }
 
     /// <summary>

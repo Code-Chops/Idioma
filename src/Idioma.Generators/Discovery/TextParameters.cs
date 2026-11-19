@@ -112,7 +112,7 @@ internal static class TextParameters
     public static string? FindProblem(IMethodSymbol method)
     {
         if (method.IsGenericMethod)
-            return "it is generic";
+            return "it's generic";
 
         // The generated class creates the text through an overload per number of values (GeneratedCode), which keeps
         // each value as its own type.
@@ -125,7 +125,7 @@ internal static class TextParameters
         foreach (var parameter in method.Parameters)
         {
             if (parameter.RefKind is not RefKind.None)
-                return $"its parameter '{parameter.Name}' is passed by reference, and a text keeps its values until it is shown";
+                return $"its parameter '{parameter.Name}' is passed by reference, and a text keeps its values until it's shown";
 
             if (parameter.IsParams)
                 return $"its parameter '{parameter.Name}' is a params parameter";
@@ -134,7 +134,7 @@ internal static class TextParameters
                 return $"its parameter '{parameter.Name}' has a default value, which another language's set could give another value";
 
             if (parameter.Type is { IsRefLikeType: true } or IPointerTypeSymbol or IFunctionPointerTypeSymbol)
-                return $"its parameter '{parameter.Name}' is of a type a text can't keep until it is shown: a pointer, or a ref struct such as a span";
+                return $"its parameter '{parameter.Name}' is of a type a text can't keep until it's shown: a pointer, or a ref struct such as a span";
 
             if (parameter.Type.TypeKind is TypeKind.Dynamic)
                 return $"its parameter '{parameter.Name}' is dynamic";
@@ -360,7 +360,7 @@ internal static class TextParameters
     /// A type as generated code can write it, in parts: each part starts at a type that lies in a namespace, and holds
     /// what follows it up to the next such type.
     /// </summary>
-    private static EquatableArray<TypeNamePart> ReadType(ITypeSymbol type)
+    internal static EquatableArray<TypeNamePart> ReadType(ITypeSymbol type)
     {
         var parts = new List<(string? Namespace, StringBuilder Text)>();
         Write(type, parts);

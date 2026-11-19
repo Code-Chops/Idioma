@@ -24,7 +24,7 @@ namespace CodeChops.Idioma.Internals;
 /// the text is written.</item>
 /// </list>
 /// <para>
-/// A text with a key keeps its <see cref="LocalizableText.Key"/>:
+/// A text with a key keeps its <see cref="LocalizableText.FullKey"/>:
 /// <c>{"key":"MyApp.Localization.ShopLocalization.Checkout","defaultText":"Checkout",
 /// "translations":{"en":"Checkout","nl":"Afrekenen"}}</c>.
 /// A text that takes values leaves its key out. It's read back without its <see cref="LocalizableText.Arguments"/>,
@@ -75,7 +75,7 @@ public sealed class LocalizableTextJsonConverter : JsonConverter<LocalizableText
 
         // A text that takes values is written with them filled in, and reads back without them. A resource file entry
         // found by its key would then show its placeholders as written, so the text travels without a key.
-        var key = text.TakesValues ? null : text.Key;
+        var key = text.TakesValues ? null : text.FullKey;
 
         // A text with one wording and no key is that wording, as it reads back from a string: a customer's name
         // travels as the name alone. The wording the registry gives it, as in the object below: a set it registers may

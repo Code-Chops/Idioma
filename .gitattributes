@@ -1,0 +1,8 @@
+# Text files are stored with LF, and checked out with the line endings of the platform.
+* text=auto
+
+# Verify compares a snapshot with LF line endings, and fails the test on any other.
+*.verified.txt text eol=lf
+
+# A shell script with CRLF line endings doesn't run.
+*.sh text eol=lf

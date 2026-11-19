@@ -22,7 +22,7 @@ public sealed partial class LocalizableText
     /// serves only British English. This wording wins over a registered <see cref="ILocalizationSet">set</see>.
     /// </remarks>
     // Internal: empty for every text of a set, it would read as "no wording" for most texts an app shows. A caller
-    // outside asks ToString(culture) for what a user sees, or GetTranslation(set) for the wording of one set.
+    // outside asks ToString(culture) for what a user sees, or GetWording(set) for the wording of one set.
     internal ImmutableDictionary<string, string> TranslationsByLanguage
     {
         // Built when first asked for. Two threads asking at once each build one with the same content, and one stays.
@@ -91,7 +91,7 @@ public sealed partial class LocalizableText
     /// <param name="culture">The culture to find a translation for.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
     // Internal for the reason TranslationsByLanguage is.
-    internal string? GetTranslation(CultureInfo culture)
+    internal string? GetWording(CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(culture);
 

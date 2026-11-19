@@ -4,7 +4,7 @@
 /// What a text of a set is worded for: a culture, the sets to look in, and the app's languages. The default has no
 /// culture, for a thread that words no such text.
 /// </summary>
-// Not readonly: a scope that only follows a culture writes Followed alone, in place.
+// Not readonly: a scope that only follows a culture writes Followed, FollowedCulture and FollowedValues alone, in place.
 internal struct WordingContext(CultureInfo culture, LocalizationRegistry? registry, ImmutableArray<string> appLanguages)
 {
     public CultureInfo? Culture { get; } = culture;
@@ -18,6 +18,14 @@ internal struct WordingContext(CultureInfo culture, LocalizationRegistry? regist
     /// a scope here, so that its set's method runs in the culture it words.
     /// </summary>
     public LocalizationRegistry.CultureLookup? Followed { get; set; }
+
+    /// <summary>
+    /// The culture that is followed, as it was given, or <see langword="null"/> where none is followed.
+    /// </summary>
+    // Not the culture of Followed. A registry keeps one lookup per culture name, with the first culture of that name it
+    // saw. A culture of the same name can format differently, such as a clone with its own number format. A text among
+    // the values has to format them as the culture asked for does.
+    public CultureInfo? FollowedCulture { get; set; }
 
     /// <summary>
     /// Which format a text that takes values gives them where a culture is only followed.
@@ -36,7 +44,7 @@ internal struct WordingContext(CultureInfo culture, LocalizationRegistry? regist
         {
             // As for a text shown for a culture asked for: that culture, unless the thread follows it already and
             // formats the values as the user does.
-            FollowedValues.OfCulture => provided is null && followed.Equals(CultureInfo.CurrentUICulture) ? null : followed,
+            FollowedValues.OfCulture => provided is null && ReferenceEquals(followed, CultureInfo.CurrentUICulture) ? null : followed,
             FollowedValues.OfReader => provided,
             _ => null,
         };

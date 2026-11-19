@@ -178,7 +178,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void SetDerivedFromSetOfProjectReferencedAsCompilation_RegistersAsOverride()
     {
         // Arrange: an IDE hands a generator a project of the same solution as its compilation, where a build hands over
-        // the assembly. The LanguageCode the library's set implements then has syntax, in a tree of that other
+        // the assembly. The LocalizationLanguageCode the library's set implements then has syntax, in a tree of that other
         // compilation, which this one has no semantic model for.
         var library = GeneratorTestHelper.CompileProjectWithGenerators("RegionalLibrary", """
             using CodeChops.Idioma;
@@ -199,7 +199,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public class GridLocalizationEnGb : GridLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "en-GB";
+                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
                 public override string Colour => "Colour";
             }
@@ -795,7 +795,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void SetDerivingFromAnother_RecordsTheTextsItsOwnClassWords()
     {
         // Arrange & Act: a regional set overriding a property and a method, an app's rewording implementing a text
-        // explicitly, and a British set implementing its own LanguageCode, which the build records no language for.
+        // explicitly, and a British set implementing its own LocalizationLanguageCode, which the build records no language for.
         var text = GeneratedText(Run("""
             using CodeChops.Idioma;
 
@@ -830,7 +830,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public sealed class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "en-GB";
+                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
                 public override string Cart => "Basket";
             }
@@ -873,7 +873,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     }
 
     [Test]
-    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LanguageCode => \"nl-BE\";", null)]
+    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";", null)]
     [Arguments("[assembly: SupportedLanguages(\"en\", \"nl\")]", "", "ShopLocalizationNlBe>(\"be\");")]
     public void SetWhoseNameGivesNoDeclaredLongCode_RecordsWhatTheBuildReads(string attribute, string languageCode, string? recorded)
     {
@@ -944,8 +944,8 @@ public sealed class LocalizationRegistrationGeneratorTests
     }
 
     [Test]
-    [Arguments("public string LanguageCode => \"de\";")]
-    [Arguments("string ILocalizationSet.LanguageCode => \"de\";")]
+    [Arguments("public string LocalizationLanguageCode => \"de\";")]
+    [Arguments("string ILocalizationSet.LocalizationLanguageCode => \"de\";")]
     public void SetImplementingLanguageCode_NeedsNoLanguageInItsName(string languageCode)
     {
         // Arrange & Act
@@ -968,7 +968,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     [Test]
     public void LanguageCodeOfDerivedSetNotListingInterface_ReportsLOC401()
     {
-        // Arrange & Act: the set inherits the mapping of ILocalizationSet from its base, so its own LanguageCode is
+        // Arrange & Act: the set inherits the mapping of ILocalizationSet from its base, so its own LocalizationLanguageCode is
         // never read, and it registers under the last two letters of its name: uk, which is Ukrainian.
         var result = Run($$"""
             {{ShopContract}}
@@ -980,7 +980,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public sealed class ShopLocalizationUk : ShopLocalizationEn
             {
-                public string LanguageCode => "en-GB";
+                public string LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -988,7 +988,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.UnmappedLanguageCodeDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldContain("'ShopLocalizationUk' inherits ILocalizationSet without listing it, so its LanguageCode implements nothing");
+        diagnostic.GetMessage().ShouldContain("'ShopLocalizationUk' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing");
         diagnostic.GetMessage().ShouldContain("'class ShopLocalizationUk : ShopLocalizationEn, ILocalizationSet'");
     }
 
@@ -1007,7 +1007,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public sealed class ShopLocalizationBe : ShopLocalizationNl
             {
-                public string LanguageCode => "nl-BE";
+                public string LocalizationLanguageCode => "nl-BE";
             }
             """);
 
@@ -1017,9 +1017,9 @@ public sealed class LocalizationRegistrationGeneratorTests
     }
 
     [Test]
-    [Arguments("ShopLocalizationEn, ILocalizationSet", "public string LanguageCode => \"en-GB\";")]
-    [Arguments("ShopLocalizationEn, ILocalizationSet", "string ILocalizationSet.LanguageCode => \"en-GB\";")]
-    [Arguments("ShopLocalizationEn, IShopLocalization", "public string LanguageCode => \"en-GB\";")]
+    [Arguments("ShopLocalizationEn, ILocalizationSet", "public string LocalizationLanguageCode => \"en-GB\";")]
+    [Arguments("ShopLocalizationEn, ILocalizationSet", "string ILocalizationSet.LocalizationLanguageCode => \"en-GB\";")]
+    [Arguments("ShopLocalizationEn, IShopLocalization", "public string LocalizationLanguageCode => \"en-GB\";")]
     public void LanguageCodeOfDerivedSetListingInterface_ReportsNothing(string baseList, string languageCode)
     {
         // Arrange & Act
@@ -1052,13 +1052,13 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
             {
-                public virtual string LanguageCode => "en";
+                public virtual string LocalizationLanguageCode => "en";
                 public virtual string Checkout => "Checkout";
             }
 
             public sealed class ShopLocalizationBritish : ShopLocalizationEn
             {
-                public override string LanguageCode => "en-GB";
+                public override string LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -1070,7 +1070,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void LanguageCodeImplementingNothingOnSetWithoutLanguageInName_ReportsLOC401AndLOC400()
     {
         // Arrange & Act: the name gives no language either, so registering it would throw while the assembly loads. It
-        // used to be registered, as its property seemed to implement LanguageCode.
+        // used to be registered, as its property seemed to implement LocalizationLanguageCode.
         var result = Run($$"""
             {{ShopContract}}
 
@@ -1081,7 +1081,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public sealed class ShopLocalizationBritish2 : ShopLocalizationEn
             {
-                public string LanguageCode => "en-GB";
+                public string LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -1748,7 +1748,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     [NotInParallel(nameof(LocalizationRegistry))]
     public void SetNamedAfterDeclaredLongCode_ShouldServeItAtRunTime()
     {
-        // Arrange: neither set implements LanguageCode; the rewording's name gives no language of its own.
+        // Arrange: neither set implements LocalizationLanguageCode; the rewording's name gives no language of its own.
         var image = GeneratorTestHelper.EmitLibraryWithGenerators("RegionalNameLibrary", """
             using CodeChops.Idioma;
 
@@ -1785,8 +1785,8 @@ public sealed class LocalizationRegistrationGeneratorTests
         // Assert: both serve nl-BE, not be; the rewording wins over its base, and keeps the base's other texts.
         var belgian = (ILocalizationSet)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopLocalizationNlBe")!)!;
         var rewording = (ILocalizationSet)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopRewording")!)!;
-        belgian.LanguageCode.ShouldBe("nl-BE");
-        rewording.LanguageCode.ShouldBe("nl-BE");
+        belgian.LocalizationLanguageCode.ShouldBe("nl-BE");
+        rewording.LocalizationLanguageCode.ShouldBe("nl-BE");
 
         var texts = assembly.GetType("RegionalNameLibrary.ShopLocalization")!;
         var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
@@ -1857,9 +1857,9 @@ public sealed class LocalizationRegistrationGeneratorTests
     }
 
     [Test]
-    [Arguments("public string LanguageCode => \"en_GB\";", "en_GB")]
-    [Arguments("string ILocalizationSet.LanguageCode => \"\";", "")]
-    [Arguments("public string LanguageCode => \"english\" + \" \";", "english ")]
+    [Arguments("public string LocalizationLanguageCode => \"en_GB\";", "en_GB")]
+    [Arguments("string ILocalizationSet.LocalizationLanguageCode => \"\";", "")]
+    [Arguments("public string LocalizationLanguageCode => \"english\" + \" \";", "english ")]
     public void SetWithLanguageCodeThatIsNoCultureName_ReportsLOC402(string languageCode, string expectedCode)
     {
         // Arrange & Act: in an assembly without [assembly: SupportedLanguages], where no language check looks at the
@@ -1879,15 +1879,15 @@ public sealed class LocalizationRegistrationGeneratorTests
         diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.InvalidLanguageCodeDiagnosticId);
         diagnostic.Id.ShouldBe("LOC402");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldStartWith($"'ShopLocalizationBritish' gives \"{expectedCode}\" as its LanguageCode, which isn't a culture name");
-        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("LanguageCode");
+        diagnostic.GetMessage().ShouldStartWith($"'ShopLocalizationBritish' gives \"{expectedCode}\" as its LocalizationLanguageCode, which isn't a culture name");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("LocalizationLanguageCode");
     }
 
     [Test]
-    [Arguments("public string LanguageCode => \"en-GB\";")]
-    [Arguments("public string LanguageCode => \"EN\";")]
-    [Arguments("public string LanguageCode => \"zh-Hans-CN\";")]
-    [Arguments("public string LanguageCode => System.Globalization.CultureInfo.CurrentUICulture.Name;")]
+    [Arguments("public string LocalizationLanguageCode => \"en-GB\";")]
+    [Arguments("public string LocalizationLanguageCode => \"EN\";")]
+    [Arguments("public string LocalizationLanguageCode => \"zh-Hans-CN\";")]
+    [Arguments("public string LocalizationLanguageCode => System.Globalization.CultureInfo.CurrentUICulture.Name;")]
     public void SetWithLanguageCodeThatIsCultureNameOrNoConstant_ReportsNothing(string languageCode)
     {
         // Arrange & Act
@@ -1914,7 +1914,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public abstract class BritishWording : ILocalizationSet, IShopLocalization
             {
-                public string LanguageCode => "en_GB";
+                public string LocalizationLanguageCode => "en_GB";
                 public virtual string Checkout => "Checkout";
             }
 
@@ -1929,7 +1929,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe("LOC402");
-        diagnostic.GetMessage().ShouldStartWith("'BritishWording' gives \"en_GB\" as its LanguageCode");
+        diagnostic.GetMessage().ShouldStartWith("'BritishWording' gives \"en_GB\" as its LocalizationLanguageCode");
     }
 
     [Test]
@@ -1942,7 +1942,7 @@ public sealed class LocalizationRegistrationGeneratorTests
             [ExcludeFromLocalizationDiscovery]
             public sealed class ShopWording(string checkout) : ILocalizationSet, IShopLocalization
             {
-                public string LanguageCode => "en_GB";
+                public string LocalizationLanguageCode => "en_GB";
                 public string Checkout => checkout;
             }
             """);
@@ -1966,7 +1966,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LanguageCode => "en_GB";
+                string ILocalizationSet.LocalizationLanguageCode => "en_GB";
             }
             """);
 
@@ -1977,7 +1977,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     [Test]
     public void LanguageCodeImplementingNothing_IsReportedOnceAtTheClassDeclaringIt()
     {
-        // Arrange & Act: the two sets deriving from the class carry its LanguageCode, and have nothing to fix.
+        // Arrange & Act: the two sets deriving from the class carry its LocalizationLanguageCode, and have nothing to fix.
         var result = Run($$"""
             {{ShopContract}}
 
@@ -1988,7 +1988,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public class ShopLocalizationUk : ShopLocalizationEn
             {
-                public string LanguageCode => "en-GB";
+                public string LocalizationLanguageCode => "en-GB";
             }
 
             public class GiftLocalizationUk : ShopLocalizationUk;
@@ -1999,7 +1999,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe("LOC401");
-        diagnostic.GetMessage().ShouldContain("'ShopLocalizationUk' inherits ILocalizationSet without listing it, so its LanguageCode implements nothing");
+        diagnostic.GetMessage().ShouldContain("'ShopLocalizationUk' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopLocalizationUk");
     }
 
@@ -2017,7 +2017,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
             public abstract class BritishWording : ShopLocalizationEn
             {
-                public string LanguageCode => "en-GB";
+                public string LocalizationLanguageCode => "en-GB";
             }
 
             public sealed class ShopLocalizationUk : BritishWording;

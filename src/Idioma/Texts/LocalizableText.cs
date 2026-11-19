@@ -56,7 +56,7 @@ namespace CodeChops.Idioma;
 /// <c>text == LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. See <see cref="Equals(LocalizableText)"/>.
 /// </para>
 /// <para>
-/// A text of a set also has a <see cref="Key"/>, its full name, for an app that looks texts up in resource files
+/// A text of a set also has a <see cref="FullKey"/>, its full name, for an app that looks texts up in resource files
 /// itself. To give a text of your own a key, create it with <see cref="Keyed"/>.
 /// </para>
 /// <para>
@@ -110,13 +110,13 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
         // Shown by a property of a set that is worded for a culture asked for: this text shows for that culture too.
         // The thread's cultures aren't that culture there. A text that takes values sets them, because its set's method
         // runs in the culture it words.
-        if (wording.Followed is { } followed)
+        if (wording.Followed is { } followed && wording.FollowedCulture is { } followedCulture)
         {
             var followedRegistry = followed.Registry;
 
             return this.TakesValues
-                ? this.ShowWithValues(followed.Culture, followedRegistry, followedRegistry.AppLanguages, wording.FindValuesCulture(followed.Culture))
-                : this.FindText(followed.Culture, followedRegistry, followedRegistry.AppLanguages);
+                ? this.ShowWithValues(followedCulture, followedRegistry, followedRegistry.AppLanguages, wording.FindValuesCulture(followedCulture))
+                : this.FindText(followedCulture, followedRegistry, followedRegistry.AppLanguages);
         }
 
         if (wording.Culture is { } wordingCulture)
@@ -206,7 +206,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
                 return this.FindText(culture, registry, appLanguages);
 
             var lookup = registry.Resolve(culture);
-            using var followed = WordingScope.Follow(lookup);
+            using var followed = WordingScope.Follow(lookup, culture);
 
             return this.FindText(culture, registry, appLanguages, lookup);
         }
@@ -282,6 +282,12 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
     /// The wording for the current UI culture, so a text goes wherever a <see cref="string"/> is expected:
     /// <c>string label = ShopTexts.Checkout;</c>. A <see langword="null"/> text gives <see langword="null"/>.
     /// </summary>
+    /// <remarks>
+    /// The string holds the wording of the moment it's made, so it doesn't follow a later change of language. Keep the
+    /// <see cref="LocalizableText"/> in anything that outlives one request, such as a static field, a cache or a view
+    /// model, and convert it where you show it. On a server, a string kept in a static field shows every user the
+    /// language of the first one.
+    /// </remarks>
     [return: NotNullIfNotNull(nameof(text))]
     public static implicit operator string?(LocalizableText? text) => text?.ToString();
 
@@ -433,7 +439,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
 
             using var reader = this.EnterLanguage(language, registry);
 
-            if (this.GetTranslation(language, registry) is { } wording)
+            if (this.GetWording(language, registry) is { } wording)
                 builder[language] = wording;
         }
 
@@ -524,7 +530,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
 
         var text = (showsCulture ? this.FindOwnTranslation(culture, lookup) : null)
                ?? (showsCulture && lookup is not null ? this.FindTranslation(registry!, lookup) : null)
-               ?? (appDefaultLanguage is null ? null : this.GetTranslation(appDefaultLanguage, registry))
+               ?? (appDefaultLanguage is null ? null : this.GetWording(appDefaultLanguage, registry))
                ?? (registry is null ? null : this.FindDefaultTranslation(registry))
                ?? this.DefaultText;
 
@@ -533,12 +539,12 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
 
     /// <summary>
     /// The text's own wording for a culture or a culture above it, along the names a registry kept for it where there
-    /// is one (see <see cref="GetTranslation(CultureInfo)"/>).
+    /// is one (see <see cref="GetWording(CultureInfo)"/>).
     /// </summary>
     private string? FindOwnTranslation(CultureInfo culture, LocalizationRegistry.FallbackLookup? lookup)
     {
         if (lookup is null)
-            return this.GetTranslation(culture);
+            return this.GetWording(culture);
 
         // A text of a set has none, so it skips the names.
         if (this._translationPairs.Length is 0)
@@ -555,7 +561,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
     /// The wording for a language code. That's the text's own translation for it or a language above it, else the
     /// wording of the set registered for it or a language above it (see <see cref="FindTranslation"/>).
     /// </summary>
-    private string? GetTranslation(string language, LocalizationRegistry? registry)
+    private string? GetWording(string language, LocalizationRegistry? registry)
     {
         // Through the culture of the language where there is one, so that a text falling back to a language shows what
         // a user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh)
@@ -614,7 +620,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (wording is null)
             throw new InvalidOperationException(
-                $"{set.GetType()} gives null for the text '{this.Key}', so the text has no wording in '{language}', its default language. "
+                $"{set.GetType()} gives null for the text '{this.FullKey}', so the text has no wording in '{language}', its default language. "
                 + "Return a string, such as an empty one where a value is missing.");
 
         return wording;

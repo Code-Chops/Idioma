@@ -86,7 +86,7 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// Removes a modifier from every part of the class that carries it, because each part of a partial class may repeat
-    /// it. An abstract class stays as it is when a member of it is abstract, which a concrete class can't hold.
+    /// it. An abstract class stays as it is when a member of it's abstract, which a concrete class can't hold.
     /// </summary>
     private static async Task<Solution> RemoveModifierAsync(Document document, TypeDeclarationSyntax declaration, SyntaxKind modifier, CancellationToken cancellationToken)
     {

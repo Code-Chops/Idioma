@@ -34,7 +34,7 @@ namespace CodeChops.Idioma;
 /// such as a test double, isn't one. A set that derives from another set implements this interface through it.
 /// </para>
 /// <para>
-/// A set takes its language from the end of its name. See <see cref="LanguageCode"/>. A user sees the set for their UI
+/// A set takes its language from the end of its name. See <see cref="LocalizationLanguageCode"/>. A user sees the set for their UI
 /// culture, or else a fallback. See <see cref="LocalizableText"/>.
 /// </para>
 /// <para>
@@ -93,6 +93,18 @@ namespace CodeChops.Idioma;
 /// <para>
 /// Mark a public member that isn't a text, such as a helper another class calls, with
 /// <see cref="ExcludeFromLocalizationDiscoveryAttribute">[ExcludeFromLocalizationDiscovery]</see>.
+/// </para>
+/// <para>
+/// <b>Texts by key.</b> The generated class also gets the method <c>GetTextByKey</c>, for a text your code only knows by its
+/// name at run time: <c>ShopLocalization.GetTextByKey("Checkout")</c>. The key is the text's
+/// <see cref="LocalizableText.Key"/>. <c>GetTextByKey</c> returns the text, the same one as
+/// <c>ShopLocalization.Checkout</c>. A text with parameters takes its values after the key, as in
+/// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c>. A key no text has throws
+/// <see cref="KeyNotFoundException"/>. No text can be named <c>GetTextByKey</c> (<c>LOC205</c>).
+/// </para>
+/// <para>
+/// <b>Enums.</b> To translate an enum, list <see cref="ILocalizationSet{TEnum}"/> in place of this interface. Every
+/// member of the enum then needs a text in every language.
 /// </para>
 /// </remarks>
 /// <example>
@@ -162,7 +174,7 @@ public interface ILocalizationSet
     /// </para>
     /// <para>
     /// Implement this property in two cases: for such a code in an assembly that doesn't list it, or for a set whose
-    /// name doesn't end in its language. For example: <c>string ILocalizationSet.LanguageCode => "en-GB";</c>. A set
+    /// name doesn't end in its language. For example: <c>string ILocalizationSet.LocalizationLanguageCode => "en-GB";</c>. A set
     /// that derives from another set lists <see cref="ILocalizationSet"/> again for that, as in the example below.
     /// Without it, the property implements nothing, and the build reports <c>LOC401</c>.
     /// </para>
@@ -173,7 +185,7 @@ public interface ILocalizationSet
     /// // Cart is virtual in ShopLocalizationEn, so that this set can override it.
     /// public class ShopLocalizationEnGb : ShopLocalizationEn, ILocalizationSet
     /// {
-    ///     string ILocalizationSet.LanguageCode => "en-GB";
+    ///     string ILocalizationSet.LocalizationLanguageCode => "en-GB";
     ///
     ///     public override string Cart => "Basket";
     /// }
@@ -184,14 +196,14 @@ public interface ILocalizationSet
     /// digit. The build warns about such a set with <c>LOC400</c>. Name the set after its language
     /// (<c>ShopLocalizationDe</c>), or implement this property.
     /// </exception>
-    string LanguageCode => GetLanguageCode(this.GetType());
+    string LocalizationLanguageCode => GetLanguageCode(this.GetType());
 
     /// <summary>
     /// The language a set's name gives it, such as <c>de</c> for <c>ShopLocalizationDe</c>. This is what
-    /// <see cref="LanguageCode"/> returns for a set that doesn't implement it.
+    /// <see cref="LocalizationLanguageCode"/> returns for a set that doesn't implement it.
     /// </summary>
     /// <remarks>
-    /// To get the language a set actually serves, read <see cref="LanguageCode"/> on the set. Its docs also explain how
+    /// To get the language a set actually serves, read <see cref="LocalizationLanguageCode"/> on the set. Its docs also explain how
     /// a name gives a language.
     /// </remarks>
     /// <param name="setType">The type of the set.</param>
@@ -200,7 +212,7 @@ public interface ILocalizationSet
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When the name doesn't end in a language. Name the set after its language, or implement
-    /// <see cref="LanguageCode"/>.
+    /// <see cref="LocalizationLanguageCode"/>.
     /// </exception>
     static string GetLanguageCode(Type setType)
     {
@@ -220,9 +232,69 @@ public interface ILocalizationSet
             throw new InvalidOperationException(
                 $"'{setType}' has no language, because its name doesn't end in a language code that starts with a capital. End its name in one, such as "
                 + "ShopLocalizationDe for German, or ShopLocalizationEnGb when its assembly declares en-GB. You can also implement "
-                + $"{nameof(ILocalizationSet)}.{nameof(LanguageCode)}.");
+                + $"{nameof(ILocalizationSet)}.{nameof(LocalizationLanguageCode)}.");
 
         var languageCode = name[^2..].ToLowerInvariant();
         return languageCode;
     }
 }
+
+/// <summary>
+/// A set that holds the text of every member of an enum, in one language. Each text is a string property named after
+/// its member. For example, <c>OrderStatusLocalizationNl</c> holds the Dutch wording of <c>OrderStatus.Pending</c>
+/// and <c>OrderStatus.Shipped</c>. The build makes sure every set has a text for every member.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Write the set as any other set (see <see cref="ILocalizationSet"/>), and list this interface in place of
+/// <see cref="ILocalizationSet"/>: <c>public class OrderStatusLocalizationEn : ILocalizationSet&lt;OrderStatus&gt;,
+/// IOrderStatusLocalization</c>. The source generator then adds every member of the enum to the contract. So a set
+/// without a text for a member is build error <c>CS0535</c>, in every language. A member you add to the enum later
+/// doesn't build until every language has its text.
+/// </para>
+/// <para>
+/// The generated class holds a text per member, such as <c>OrderStatusLocalization.Shipped</c>. Its key is the name
+/// of the member. The class also gets the method <c>GetTextByValue</c>, which gives the text of
+/// a value: <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>.
+/// </para>
+/// <para>
+/// The rules for these texts:
+/// </para>
+/// <list type="bullet">
+/// <item>The text of a member is a property, because it takes no values. A method with the name of a member is build
+/// error <c>LOC300</c>.</item>
+/// <item>No text can be named <c>GetTextByValue</c>, because the generated method has that name (<c>LOC205</c>).</item>
+/// <item>Two members with the same value, such as <c>Default = 0</c> next to <c>None = 0</c>, each need a text.
+/// <c>GetTextByValue</c> gives the text of the first one.</item>
+/// <item><c>GetTextByValue</c> shows a value that isn't a member, such as a combination of flags, as
+/// <see cref="Enum.ToString()"/> writes it.</item>
+/// <item>The set can hold other texts too, such as a caption for the enum itself.</item>
+/// </list>
+/// <para>
+/// Only the default-language set needs this interface, because the contract comes from it. A set of another language
+/// may list <see cref="ILocalizationSet"/> instead.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// public enum OrderStatus { Pending, Shipped }
+///
+/// public class OrderStatusLocalizationEn : ILocalizationSet&lt;OrderStatus&gt;, IOrderStatusLocalization
+/// {
+///     public string Pending => "Pending";
+///     public string Shipped => "Shipped";
+/// }
+///
+/// public class OrderStatusLocalizationNl : ILocalizationSet&lt;OrderStatus&gt;, IOrderStatusLocalization
+/// {
+///     public string Pending => "In behandeling";
+///     public string Shipped => "Verzonden";
+/// }
+///
+/// // For a user whose UI culture is nl-NL: "Verzonden".
+/// string status = OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped);
+/// </code>
+/// </example>
+/// <typeparam name="TEnum">The enum whose members the set has a text for.</typeparam>
+public interface ILocalizationSet<TEnum> : ILocalizationSet
+    where TEnum : struct, Enum;

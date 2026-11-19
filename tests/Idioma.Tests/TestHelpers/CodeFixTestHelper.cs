@@ -31,13 +31,39 @@ internal static class CodeFixTestHelper
     internal static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources, ImmutableArray<(string Path, string Text)> Added)>> FixWithAddedFilesAsync(
         CodeFixProvider provider, IIncrementalGenerator generator, params string[] sources)
     {
-        var result = FixAsync(provider, compilation => Task.FromResult(CSharpGeneratorDriver
+        return FixWithAddedFilesAsync(provider, generator, [], sources);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="generator"/> as <see cref="FixWithAddedFilesAsync(CodeFixProvider, IIncrementalGenerator, string[])"/>
+    /// does, over files compiled against further references, such as a library whose contract lacks a language.
+    /// </summary>
+    internal static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources, ImmutableArray<(string Path, string Text)> Added)>> FixWithAddedFilesAsync(
+        CodeFixProvider provider, IIncrementalGenerator generator, MetadataReference[] references, params string[] sources)
+    {
+        var result = FixAsync(provider, Generate(generator), sources, references);
+        return result;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="generator"/> over <paramref name="sources"/>, and applies the fix of
+    /// <paramref name="provider"/> to every diagnostic of the solution at once, as "Fix all in solution" does in an IDE.
+    /// Returns the files as the fix leaves them, in the order given, and each file it adds, by its path and with its
+    /// text.
+    /// </summary>
+    internal static Task<(ImmutableArray<string> Sources, ImmutableArray<(string Path, string Text)> Added)> FixAllWithAddedFilesAsync(
+        CodeFixProvider provider, IIncrementalGenerator generator, MetadataReference[] references, params string[] sources)
+    {
+        return FixAllAsync(provider, Generate(generator), references, sources);
+    }
+
+    private static Func<Compilation, Task<ImmutableArray<Diagnostic>>> Generate(IIncrementalGenerator generator)
+    {
+        return compilation => Task.FromResult(CSharpGeneratorDriver
             .Create(generators: [generator.AsSourceGenerator()], parseOptions: GeneratorTestHelper.ParseOptions)
             .RunGenerators(compilation)
             .GetRunResult()
-            .Diagnostics), sources);
-
-        return result;
+            .Diagnostics);
     }
 
     /// <summary>
@@ -79,20 +105,32 @@ internal static class CodeFixTestHelper
     /// <summary>
     /// Runs every generator, then <paramref name="analyzer"/>, over <paramref name="sources"/>, and applies the fix of
     /// <paramref name="provider"/> to every diagnostic of the solution at once, as "Fix all in solution" does in an IDE.
-    /// Returns the files as the fix leaves them, in the order given.
+    /// The workspace the fix sees holds the generated code too, as an IDE's does. Returns the files as the fix leaves
+    /// them, in the order given.
     /// </summary>
     internal static async Task<ImmutableArray<string>> FixAllAfterGeneratorsAsync(CodeFixProvider provider, DiagnosticAnalyzer analyzer, params string[] sources)
     {
-        using var workspace = new AdhocWorkspace();
-        var (project, documentIds) = CreateProject(workspace, sources, []);
+        var (fixedSources, _) = await FixAllAsync(provider, AnalyzeAfterGenerators(analyzer), [], sources);
+        return fixedSources;
+    }
 
-        var diagnostics = (await AnalyzeAfterGenerators(analyzer)((await project.GetCompilationAsync())!))
+    private static async Task<(ImmutableArray<string> Sources, ImmutableArray<(string Path, string Text)> Added)> FixAllAsync(
+        CodeFixProvider provider, Func<Compilation, Task<ImmutableArray<Diagnostic>>> diagnose, MetadataReference[] references, string[] sources)
+    {
+        using var workspace = new AdhocWorkspace();
+        var (project, documentIds) = CreateProject(workspace, sources, references);
+        var compilation = (await project.GetCompilationAsync())!;
+
+        var diagnostics = (await diagnose(compilation))
             .Where(diagnostic => provider.FixableDiagnosticIds.Contains(diagnostic.Id, StringComparer.Ordinal))
             .ToImmutableArray();
 
+        project = AddGeneratedCode(project, compilation);
+        var before = project.DocumentIds.ToHashSet();
+
         // The fix all applies is the one with the key of the first fix offered, as in an IDE.
         var first = diagnostics.First();
-        var document = project.GetDocument(first.Location.SourceTree)!;
+        var document = FindDocument(project, first);
         var actions = new List<CodeAction>();
         await provider.RegisterCodeFixesAsync(new CodeFixContext(document, first.Location.SourceSpan, [first], (action, _) => actions.Add(action), CancellationToken.None));
 
@@ -107,7 +145,34 @@ internal static class CodeFixTestHelper
         foreach (var documentId in documentIds)
             texts.Add((await solution.GetDocument(documentId)!.GetTextAsync()).ToString());
 
-        return texts.ToImmutable();
+        var added = ImmutableArray.CreateBuilder<(string, string)>();
+        foreach (var addedDocument in solution.GetProject(project.Id)!.Documents.Where(document => !before.Contains(document.Id)))
+            added.Add((addedDocument.FilePath ?? addedDocument.Name, (await addedDocument.GetTextAsync()).ToString()));
+
+        return (texts.ToImmutable(), added.ToImmutable());
+    }
+
+    /// <summary>
+    /// The project with what the generators write for it as files of its own. An IDE's workspace holds the generated
+    /// code, so a fix there reads the generated contract of a set.
+    /// </summary>
+    private static Project AddGeneratedCode(Project project, Compilation compilation)
+    {
+        GeneratorTestHelper.CreateFullDriver(GeneratorTestHelper.ParseOptions).RunGeneratorsAndUpdateCompilation(compilation, out var updated, out _);
+
+        foreach (var tree in updated.SyntaxTrees.Where(tree => !compilation.ContainsSyntaxTree(tree)))
+            project = project.AddDocument(Path.GetFileName(tree.FilePath), tree.GetText(), filePath: tree.FilePath).Project;
+
+        return project;
+    }
+
+    /// <summary>
+    /// The document a diagnostic lies in, found by its path, as an IDE finds it.
+    /// </summary>
+    private static Document FindDocument(Project project, Diagnostic diagnostic)
+    {
+        var path = diagnostic.Location.GetLineSpan().Path;
+        return project.Documents.Single(document => String.Equals(document.FilePath, path, StringComparison.Ordinal));
     }
 
     private static Func<Compilation, Task<ImmutableArray<Diagnostic>>> AnalyzeAfterGenerators(DiagnosticAnalyzer analyzer)

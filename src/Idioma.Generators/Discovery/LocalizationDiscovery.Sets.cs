@@ -34,8 +34,8 @@ internal static partial class LocalizationDiscovery
         if (mayRegister && IsOverride(type))
         {
             var problem = type.ContainingType is { } container
-                ? $"it is nested in '{container.Name}', where generated code can't reach it"
-                : "it is file-local, so generated code in another file can't name it";
+                ? $"it's nested in '{container.Name}', where generated code can't reach it"
+                : "it's file-local, so generated code in another file can't name it";
 
             unnameableOverride = new UnregistrableLocalization(type.ToDisplayString(), problem, DiagnosticLocation.From(type.Locations[0]));
         }
@@ -95,10 +95,10 @@ internal static partial class LocalizationDiscovery
     {
         var shape = type switch
         {
-            { ContainingType: { } container } => $"it is nested in '{container.Name}'",
-            { IsFileLocal: true } => "it is file-local",
-            { IsGenericType: true } => "it is generic",
-            _ => "it is abstract",
+            { ContainingType: { } container } => $"it's nested in '{container.Name}'",
+            { IsFileLocal: true } => "it's file-local",
+            { IsGenericType: true } => "it's generic",
+            _ => "it's abstract",
         };
 
         return shape;
@@ -136,8 +136,9 @@ internal static partial class LocalizationDiscovery
         var readsContract = discoveredTexts is DiscoveredTexts.OfContract;
         var unsupportedTexts = ImmutableArray<UnsupportedText>.Empty;
         var usings = default(RepeatedUsings);
+        var enums = listsLocalizationSet && readsContract ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
         var texts = listsLocalizationSet && readsContract
-            ? GetTextMembers(type, reader, cancellationToken, out unsupportedTexts, out usings)
+            ? GetTextMembers(type, enums, reader, cancellationToken, out unsupportedTexts, out usings)
             : ImmutableArray<LocalizationMember>.Empty;
 
         var set = new DiscoveredLocalization(
@@ -153,7 +154,7 @@ internal static partial class LocalizationDiscovery
             IsExcluded: IsExcluded(type),
             Location: location,
             Language: language,
-            // Not for a LanguageCode the build can't read: such a set has a language, which only the run time knows.
+            // Not for a LocalizationLanguageCode the build can't read: such a set has a language, which only the run time knows.
             NameGivesNoLanguage: language is null && invalidLanguageCode is null && !DeclaresLanguageCode(type) && MapLanguageCode(type).Unmapped is null,
             InvalidLanguageCode: invalidLanguageCode,
             RecordedLanguageCode: DeclaresLanguageCode(type) ? null : FindRecordedLanguageCode(type, ancestors) ?? GetNameLanguage(type.Name),
@@ -184,9 +185,81 @@ internal static partial class LocalizationDiscovery
             Wordings: new EquatableArray<TextWording>(readsContract ? GetWordings(type, reader, cancellationToken) : ImmutableArray<TextWording>.Empty),
             Texts: new EquatableArray<LocalizationMember>(texts),
             UnsupportedTexts: new EquatableArray<UnsupportedText>(unsupportedTexts),
-            Usings: usings);
+            Usings: usings,
+            Enums: new EquatableArray<LocalizedEnum>(enums),
+            TypeNamedLikeTexts: readsContract && language is not null ? FindTypeNamedLikeTexts(type, language) : null,
+            ReservedTexts: new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)));
 
         return set;
+    }
+
+    /// <summary>
+    /// The type that has the name the generated class of a default-language set would get, as a message names it
+    /// (<c>the enum 'OrderStatus'</c>), or <see langword="null"/> when the name is free. <c>OrderStatusEn</c> next to
+    /// the enum <c>OrderStatus</c> is such a set: the generated class would be a second <c>OrderStatus</c>
+    /// (<c>CS0101</c>).
+    /// </summary>
+    // A static partial class of that name is the generated class itself, where a helper sits next to the texts. A type
+    // with type parameters is another type, and so is one of another assembly, which the namespace of this class
+    // doesn't hold.
+    private static string? FindTypeNamedLikeTexts(INamedTypeSymbol type, string language)
+    {
+        if (DeriveBaseName(type.Name, language) is not { } textsName)
+            return null;
+
+        foreach (var other in type.ContainingNamespace.GetTypeMembers(textsName, arity: 0))
+        {
+            var isPartOfGeneratedClass = other is { TypeKind: TypeKind.Class, IsStatic: true }
+                && other.DeclaringSyntaxReferences.All(static reference => reference.GetSyntax() is TypeDeclarationSyntax part && part.Modifiers.Any(SyntaxKind.PartialKeyword));
+
+            if (isPartOfGeneratedClass)
+                continue;
+
+            var kind = other switch
+            {
+                { TypeKind: TypeKind.Enum } => "enum",
+                { TypeKind: TypeKind.Interface } => "interface",
+                { TypeKind: TypeKind.Delegate } => "delegate",
+                { IsRecord: true } => "record",
+                { TypeKind: TypeKind.Struct } => "struct",
+                _ => "class",
+            };
+
+            return $"the {kind} '{other.Name}'";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The texts of a set with a name its generated class can't give them (<c>LOC205</c>), each with where it's
+    /// written: the member of the set, or the member of the enum for a text the set doesn't declare. A member outside
+    /// this compilation has no place in it, so the set stands in.
+    /// </summary>
+    private static ImmutableArray<ReservedText> GetReservedTexts(INamedTypeSymbol type, string language, ImmutableArray<LocalizationMember> texts,
+        bool hasEnums)
+    {
+        if (DeriveBaseName(type.Name, language) is not { } textsName)
+            return ImmutableArray<ReservedText>.Empty;
+
+        var reserved = ImmutableArray.CreateBuilder<ReservedText>();
+
+        foreach (var text in texts)
+        {
+            if (!LocalizationSetsAnalysis.IsReservedTextName(text.Name, textsName, hasLookup: hasEnums))
+                continue;
+
+            var declared = type.GetMembers(text.Name).FirstOrDefault(static member => member is IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary })
+                           ?? type.AllInterfaces
+                               .Where(PackageNames.IsLocalizationSetOfEnum)
+                               .SelectMany(setOfEnum => setOfEnum.TypeArguments[0].GetMembers(text.Name))
+                               .FirstOrDefault(static member => member is IFieldSymbol);
+
+            var location = declared?.Locations.FirstOrDefault(static location => location.IsInSource) ?? type.Locations[0];
+            reserved.Add(new ReservedText(text.Name, DiagnosticLocation.From(location)));
+        }
+
+        return reserved.ToImmutable();
     }
 
     private static bool ImplementsLocalizationSet(ITypeSymbol type)
@@ -219,7 +292,7 @@ internal static partial class LocalizationDiscovery
 
     private static bool IsLocalizationSetInterface(INamedTypeSymbol @interface)
     {
-        var isSet = PackageNames.IsLocalizationSet(@interface);
+        var isSet = PackageNames.IsLocalizationSet(@interface) || PackageNames.IsLocalizationSetOfEnum(@interface);
         return isSet;
     }
 
@@ -369,7 +442,7 @@ internal static partial class LocalizationDiscovery
 
         // At run time this would throw while the assembly loads, where the cause is hard to see.
         if (!EndsInTwoLetterSuffix(type.Name) && !DeclaresLanguageCode(type) && FindRecordedLanguageCode(type, ancestors) is null)
-            return "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LanguageCode";
+            return "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LocalizationLanguageCode";
 
         return null;
     }

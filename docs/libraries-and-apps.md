@@ -37,7 +37,7 @@ If an app supports a language that a library doesn't have, the build names the s
 error LOC600: No set serves 'Shop.IShopLocalization' in 'de', which this assembly supports. Add 'class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization'.
 ```
 
-Write that set in the app, as a class implementing the library's contract. It's registered automatically, like the app's own sets:
+Write that set in the app, as a class implementing the library's contract. Your IDE offers a fix that adds the class without texts. It's registered automatically, like the app's own sets:
 
 ```csharp
 public class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization

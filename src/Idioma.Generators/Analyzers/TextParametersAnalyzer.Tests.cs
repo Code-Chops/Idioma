@@ -307,7 +307,7 @@ public sealed class TextParametersAnalyzerTests
     [Test]
     public async Task SetWhoseLanguageTheBuildCannotRead_ShouldReportLOC302WithoutNamingIt()
     {
-        // Arrange & Act: the German set's LanguageCode is no constant, so only the running app knows its language.
+        // Arrange & Act: the German set's LocalizationLanguageCode is no constant, so only the running app knows its language.
         var diagnostics = await AnalyzeAsync("""
             using ShopLibrary;
 
@@ -315,7 +315,7 @@ public sealed class TextParametersAnalyzerTests
 
             public sealed class GermanShopLocalization : CodeChops.Idioma.ILocalizationSet, IShopLocalization
             {
-                string CodeChops.Idioma.ILocalizationSet.LanguageCode => System.Environment.GetEnvironmentVariable("SHOP_LANGUAGE") ?? "de";
+                string CodeChops.Idioma.ILocalizationSet.LocalizationLanguageCode => System.Environment.GetEnvironmentVariable("SHOP_LANGUAGE") ?? "de";
 
                 public string Invited(string host, string guest) => $"{host} hat jemanden eingeladen";
             }

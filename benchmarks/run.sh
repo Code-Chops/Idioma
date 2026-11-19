@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Runs every benchmark that docs/performance.md reports, and writes their tables to obj/results in this folder:
+# Runs every benchmark that docs/performance.md reports. It writes their tables to results in this folder, which the
+# repository keeps, and their logs to obj/results:
 #
 #   1. Showing a text on .NET, with BenchmarkDotNet.
 #   2. The same in Blazor WebAssembly in a headless Chrome, on the Mono runtime with its interpreter.
@@ -62,4 +63,11 @@ if $aot; then
   dotnet "$runner" sizes obj/size/one-language-aot/wwwroot obj/size/two-languages-aot/wwwroot "with AOT" >> "$results/4-download-sizes.md"
 fi
 
-echo "The tables are in $results."
+# The tables alone go to a folder the repository keeps, next to the logs it doesn't. Commit them with the numbers of
+# docs/performance.md, so that each number there can be traced to the run it comes from.
+kept="$here/results"
+mkdir -p "$kept"
+rm -f "$kept"/*.md
+cp "$results"/[1-4]-*.md "$kept"
+
+echo "The tables are in $kept, and the logs in $results."

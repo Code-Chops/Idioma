@@ -31,17 +31,17 @@ You can move one resource file at a time, because the two work side by side:
 
 ## Keeping a resource file as an override
 
-Each text of a set carries a key, which is its full name: `MyApp.Localization.ShopLocalization.Checkout` for `ShopLocalization.Checkout` in the namespace `MyApp.Localization`. The package itself never reads it. An app can still let a resource file or a database override a wording through `IStringLocalizer`. An extension method on the localizer asks it for the key first, and shows the text where there's no entry:
+Each text of a set carries a full key, which is its full name: `MyApp.Localization.ShopLocalization.Checkout` for `ShopLocalization.Checkout` in the namespace `MyApp.Localization`. The package itself never reads it. An app can still let a resource file or a database override a wording through `IStringLocalizer`. Use this when a wording has to change without a rebuild, such as when translators edit a resource file. An extension method on the localizer asks it for the key first, and shows the text where there's no entry:
 
 ```csharp
 public static class LocalizerExtensions
 {
     public static string Show(this IStringLocalizer localizer, LocalizableText text)
     {
-        if (text.Key is null)
+        if (text.FullKey is null)
             return text;
 
-        var found = localizer[text.Key];
+        var found = localizer[text.FullKey];
 
         return found.ResourceNotFound ? text : found.Value;
     }
@@ -51,6 +51,8 @@ public static class LocalizerExtensions
 An inline text has no key, so `Show` gives its wording. To give a value of your own a key, create it with `LocalizableText.Keyed("Customer.Name", customer.Name)`. It shows `customer.Name` where no resource file has the entry.
 
 `localizer.Show(ShopLocalization.Checkout)` gives the wording of the entry `MyApp.Localization.ShopLocalization.Checkout` where a resource file has one, and the text's own wording where none has.
+
+A text also has a `Key`, which is its name alone: `Checkout`. Use it in place of `FullKey` where each class has a resource file of its own, as with `IStringLocalizer<Shop>`, whose entries are named `Checkout` and `Cart`. Two classes can each have a text with that key, so it doesn't suit a file they share.
 
 Call `Show` wherever a resource file may override a wording, also in Razor markup: `@localizer.Show(ShopLocalization.Checkout)`. A component gets the localizer with `@inject IStringLocalizer<Shop> localizer`. Markup such as `@ShopLocalization.Checkout` and string interpolation show a text through `ToString()`, which doesn't ask the localizer. So a wording shown that way ignores the resource file.
 

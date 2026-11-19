@@ -20,7 +20,7 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// What the source generator recorded about the sets it found, per type: the language the build read from its name,
     /// and, for a set deriving from another, the texts its own class words. Lock-free to read, because every
-    /// LanguageCode a set doesn't implement reads it, and so does every lookup in a set that derives from another.
+    /// LocalizationLanguageCode a set doesn't implement reads it, and so does every lookup in a set that derives from another.
     /// </summary>
     // The language, so that a set keeps it when its type is renamed after the build, and a set named after a longer
     // code its assembly declares, such as ShopLocalizationEnGb for en-GB, isn't read by its last two letters. The texts,
@@ -52,7 +52,7 @@ public sealed partial class LocalizationRegistry
     /// <typeparam name="TSet">The set.</typeparam>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LanguageCode"/> return a culture name such
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
     public static void Register<TSet>()
@@ -81,7 +81,7 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LanguageCode"/> return a culture name such
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
     public static void Register(params ReadOnlySpan<ILocalizationSet> sets)
@@ -104,7 +104,7 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LanguageCode"/> return a culture name such
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -133,7 +133,7 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// Records what the build read about a set, for <see cref="Internals.GeneratedCode.RecordSet"/>: its language, or
-    /// <see langword="null"/> for a set that implements <see cref="ILocalizationSet.LanguageCode"/>, and the texts its
+    /// <see langword="null"/> for a set that implements <see cref="ILocalizationSet.LocalizationLanguageCode"/>, and the texts its
     /// own class words. A set has one code. Recording the same code again changes nothing, and another code is refused.
     /// </summary>
     internal static void RecordSet<TSet>(string? languageCode, string[] ownTexts)

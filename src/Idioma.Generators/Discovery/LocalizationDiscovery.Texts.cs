@@ -199,16 +199,30 @@ internal static partial class LocalizationDiscovery
     /// The texts: the public, instance, non-indexer <see cref="string"/> properties with a public getter declared by
     /// the class itself, and its methods of the shape of a text that takes values
     /// (<see cref="TextParameters.IsTextMethod"/>), in the order they're written, by file and then by position (an inherited member belongs to the base's
-    /// own contract). <c>LanguageCode</c> (the <c>ILocalizationSet</c> member, which a set may override) and explicit
+    /// own contract). <c>LocalizationLanguageCode</c> (the <c>ILocalizationSet</c> member, which a set may override) and explicit
     /// interface implementations are not texts, and neither is a member marked
     /// <c>[ExcludeFromLocalizationDiscovery]</c>. A method of that shape that can't be a text
     /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC300</c>). So is
     /// a text written as a method without parameters (<see cref="TextParameters.IsTextWithoutParameters"/>). With
     /// them come the using directives the contract repeats (<see cref="RepeatedUsings"/>).
     /// </summary>
-    private static ImmutableArray<LocalizationMember> GetTextMembers(INamedTypeSymbol type, WordingReader reader,
+    /// <remarks>
+    /// A set of the texts of an enum (<see cref="GetLocalizedEnums"/>) has a text for every member of that enum, as a
+    /// property named after the member. A member the class declares no such text for gets one all the same, after the
+    /// texts that are written, in the order of the enum. The contract then asks every set for it, the
+    /// default-language set too (<c>CS0535</c>). A method with the name of a member can't be its text, and is handed
+    /// back to be reported (<c>LOC300</c>).
+    /// </remarks>
+    private static ImmutableArray<LocalizationMember> GetTextMembers(INamedTypeSymbol type, ImmutableArray<LocalizedEnum> enums, WordingReader reader,
         CancellationToken cancellationToken, out ImmutableArray<UnsupportedText> unsupported, out RepeatedUsings usings)
     {
+        // Each member of an enum by its name, with the enum it's of.
+        var enumMembers = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var @enum in enums)
+            foreach (var enumMember in @enum.Members)
+                if (!enumMembers.ContainsKey(enumMember.Name))
+                    enumMembers.Add(enumMember.Name, @enum.Name);
+
         var members = ImmutableArray.CreateBuilder<(Location Location, LocalizationMember Member)>();
         var unsupportedTexts = ImmutableArray.CreateBuilder<UnsupportedText>();
         var usingsOfFile = ImmutableArray.CreateBuilder<string>();
@@ -235,6 +249,17 @@ internal static partial class LocalizationDiscovery
             }
             else if (TextParameters.IsTextMethod(member, out var method))
             {
+                // The text of an enum member takes no values, so that the text of a value can be looked up.
+                if (enumMembers.TryGetValue(method.Name, out var enumName))
+                {
+                    unsupportedTexts.Add(new UnsupportedText(
+                        method.Name,
+                        $"it has the name of '{enumName}.{method.Name}', and the text of an enum member is a property, because it takes no values",
+                        DiagnosticLocation.From(method.Locations[0])));
+
+                    continue;
+                }
+
                 if (TextParameters.FindProblem(method) is { } problem)
                 {
                     unsupportedTexts.Add(new UnsupportedText(method.Name, problem, DiagnosticLocation.From(method.Locations[0])));
@@ -283,7 +308,71 @@ internal static partial class LocalizationDiscovery
             .Select(static item => item.Member)
             .ToImmutableArray();
 
+        if (enumMembers.Count is 0)
+            return ordered;
+
+        // After the texts that are written: a text for each member of an enum that the class declares none for.
+        var texts = ordered.ToBuilder();
+        var names = new HashSet<string>(ordered.Select(static member => member.Name), StringComparer.Ordinal);
+
+        foreach (var @enum in enums)
+            foreach (var enumMember in @enum.Members)
+                if (names.Add(enumMember.Name))
+                    texts.Add(new LocalizationMember(Name: enumMember.Name, HasDocComment: false, DefaultText: null, Parameters: default));
+
+        return texts.ToImmutable();
+    }
+
+    /// <summary>
+    /// The enums whose members a set has a text for: the type argument of each <c>ILocalizationSet&lt;TEnum&gt;</c> it
+    /// implements, in the order of their full names. An argument that binds to no enum, as one another generator
+    /// writes, is left out.
+    /// </summary>
+    private static ImmutableArray<LocalizedEnum> GetLocalizedEnums(INamedTypeSymbol type)
+    {
+        var enums = ImmutableArray.CreateBuilder<LocalizedEnum>();
+        var found = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var @interface in type.AllInterfaces)
+        {
+            if (!PackageNames.IsLocalizationSetOfEnum(@interface)
+                || @interface.TypeArguments[0] is not INamedTypeSymbol { TypeKind: TypeKind.Enum } @enum)
+            {
+                continue;
+            }
+
+            var fullyQualifiedName = @enum.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (!found.Add(fullyQualifiedName))
+                continue;
+
+            var members = ImmutableArray.CreateBuilder<LocalizedEnumMember>();
+            var values = new HashSet<object>();
+
+            foreach (var member in @enum.GetMembers())
+                if (member is IFieldSymbol { HasConstantValue: true, ConstantValue: { } value })
+                    members.Add(new LocalizedEnumMember(member.Name, IsFirstOfItsValue: values.Add(value)));
+
+            enums.Add(new LocalizedEnum(
+                Type: TextParameters.ReadType(@enum),
+                FullyQualifiedName: fullyQualifiedName,
+                Name: @enum.ToDisplayString(CrefNameFormat),
+                Namespace: GetNamespaceName(@enum.ContainingNamespace),
+                IsPublic: IsPublic(@enum),
+                Members: new EquatableArray<LocalizedEnumMember>(members.ToImmutable())));
+        }
+
+        var ordered = enums.OrderBy(static @enum => @enum.FullyQualifiedName, StringComparer.Ordinal).ToImmutableArray();
         return ordered;
+
+        // Whether code outside the assembly can name the enum: it's public, and so is every type that holds it.
+        static bool IsPublic(INamedTypeSymbol @enum)
+        {
+            for (var current = @enum; current is not null; current = current.ContainingType)
+                if (current.DeclaredAccessibility is not Accessibility.Public)
+                    return false;
+
+            return true;
+        }
     }
 
     /// <summary>

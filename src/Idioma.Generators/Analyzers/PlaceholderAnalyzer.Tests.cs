@@ -263,7 +263,7 @@ public sealed class PlaceholderAnalyzerTests
             $$"""
             {{DutchGreeting}}
             public string Old => "Oud";
-            public string LanguageCode => "nl";
+            public string LocalizationLanguageCode => "nl";
             public string Template => "{0}";
             public string Helper(string value) => string.Format("{0}?", value);
             """));

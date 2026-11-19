@@ -304,10 +304,10 @@ public sealed class LocalizableTextTests
         // Assert
         extended.TranslationsByLanguage.Count.ShouldBe(2);
         extended.TranslationsByLanguage["nl"].ShouldBe("Volledige naam");
-        extended.GetTranslation(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Volledige naam");
-        extended.GetTranslation(CultureInfo.GetCultureInfo("de-DE")).ShouldBe("Name (de)");
-        text.GetTranslation(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Naam");
-        text.GetTranslation(CultureInfo.GetCultureInfo("de-DE")).ShouldBeNull();
+        extended.GetWording(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Volledige naam");
+        extended.GetWording(CultureInfo.GetCultureInfo("de-DE")).ShouldBe("Name (de)");
+        text.GetWording(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Naam");
+        text.GetWording(CultureInfo.GetCultureInfo("de-DE")).ShouldBeNull();
     }
 
     [Test]
@@ -371,13 +371,13 @@ public sealed class LocalizableTextTests
 
         // Act & Assert: the specific culture wins where present, a sibling culture falls back to the neutral entry, an
         // uncovered culture yields nothing, and a text without translations yields nothing.
-        text.GetTranslation(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Naam (BE)");
-        text.GetTranslation(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Naam");
-        text.GetTranslation(CultureInfo.GetCultureInfo("nl")).ShouldBe("Naam");
-        text.GetTranslation(CultureInfo.GetCultureInfo("de-DE")).ShouldBeNull();
-        text.GetTranslation(CultureInfo.InvariantCulture).ShouldBeNull();
-        new LocalizableText("Name").GetTranslation(CultureInfo.GetCultureInfo("nl")).ShouldBeNull();
-        Should.Throw<ArgumentNullException>(() => text.GetTranslation((CultureInfo)null!));
+        text.GetWording(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Naam (BE)");
+        text.GetWording(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Naam");
+        text.GetWording(CultureInfo.GetCultureInfo("nl")).ShouldBe("Naam");
+        text.GetWording(CultureInfo.GetCultureInfo("de-DE")).ShouldBeNull();
+        text.GetWording(CultureInfo.InvariantCulture).ShouldBeNull();
+        new LocalizableText("Name").GetWording(CultureInfo.GetCultureInfo("nl")).ShouldBeNull();
+        Should.Throw<ArgumentNullException>(() => text.GetWording((CultureInfo)null!));
     }
 
     [Test]
@@ -391,7 +391,7 @@ public sealed class LocalizableTextTests
         var declared = LocalizableText.Create<ITextLocalization>("Text.Greeting", t => t.Greeting, new TextLocalizationEn());
 
         // Act & Assert
-        inline.GetTranslation(belgian).ShouldBe("Bestellingen");
+        inline.GetWording(belgian).ShouldBe("Bestellingen");
         inline.ToString(belgian, registry, appLanguages: ["en", "nl"]).ShouldBe("Bestellingen");
         declared.ToString(belgian, registry, appLanguages: ["en", "nl"]).ShouldBe("Hallo");
     }

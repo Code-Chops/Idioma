@@ -1,5 +1,4 @@
 using System.Composition;
-using System.Globalization;
 using System.Text;
 using CodeChops.Idioma.Generators;
 using Microsoft.CodeAnalysis.CodeActions;
@@ -17,8 +16,9 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <para>
 /// A property takes the parameters of the contract's method by its name, when the contract has one. Otherwise it takes
 /// one parameter per placeholder number, <c>arg0</c> for <c>{0}</c>, of type <c>object?</c>, as
-/// <see cref="string.Format(string, object?)"/> does. So "Fix all" gives every language the same parameters, also in a
-/// wording that has its placeholders in another order.
+/// <see cref="string.Format(string, object?)"/> does. It counts the numbers in every language's wording of the text,
+/// so each language gets the same parameters, whichever is fixed first. That holds for a wording that has its
+/// placeholders in another order, and for one that shows fewer of them.
 /// </para>
 /// <para>
 /// There's no fix for:
@@ -142,7 +142,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
         var property = (PropertyDeclarationSyntax)text;
         if (semanticModel.GetDeclaredSymbol(property, cancellationToken) is not { } symbol
-            || ReadParameters(property, symbol, wordings, semanticModel) is not { } parameterList)
+            || ReadParameters(property, symbol, wordings, semanticModel, cancellationToken) is not { } parameterList)
         {
             return null;
         }
@@ -160,11 +160,11 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// The parameters a property takes as a method: those of the contract's method by its name, or one per placeholder
-    /// number. <see langword="null"/> when the property implements a text of another assembly's contract, or overrides
-    /// another assembly's property, because neither changes with it.
+    /// number of the text in any language. <see langword="null"/> when the property implements a text of another
+    /// assembly's contract, or overrides another assembly's property, because neither changes with it.
     /// </summary>
     private static ParameterListSyntax? ReadParameters(PropertyDeclarationSyntax property, IPropertySymbol symbol,
-        ImmutableArray<ExpressionSyntax> wordings, SemanticModel semanticModel)
+        ImmutableArray<ExpressionSyntax> wordings, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         if (symbol.OverriddenProperty is { } overridden && !IsInSource(overridden))
             return null;
@@ -186,10 +186,21 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             }
         }
 
-        // One parameter per number up to the highest, also for a number no wording of this language shows.
+        // One parameter per number up to the highest in any language, also for a number no wording of this language
+        // shows. Dutch that shows {0} alone then takes what English takes for {0} and {1}.
         var count = 0;
         foreach (var wording in wordings)
             FillIn(wording, Count);
+
+        foreach (var other in FindOtherLanguages(symbol, semanticModel.Compilation, cancellationToken))
+        {
+            // A raw string gets no fix, and so no say in the count.
+            if (FindWordings(other) is not { } otherWordings)
+                continue;
+
+            foreach (var wording in otherWordings)
+                FillIn(wording, Count);
+        }
 
         return count is > 0 and <= MaxValues
             ? ParameterList(Enumerable.Range(0, count).Select(number => (annotationsEnabled ? "object?" : "object", $"arg{number}")))
@@ -203,6 +214,50 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     private static bool IsInSource(ISymbol symbol) => symbol.Locations.Any(static location => location.IsInSource);
+
+    /// <summary>
+    /// The same text as the other sets of this assembly word it: each property by the name of <paramref name="text"/>
+    /// in a class that implements a contract of <paramref name="text"/>'s class which has a property of that name.
+    /// </summary>
+    private static IEnumerable<PropertyDeclarationSyntax> FindOtherLanguages(IPropertySymbol text, Compilation compilation, CancellationToken cancellationToken)
+    {
+        var contracts = text.ContainingType.AllInterfaces
+            .Where(contract => PackageNames.IsContract(contract) && contract.GetMembers(text.Name).OfType<IPropertySymbol>().Any())
+            .ToImmutableArray();
+
+        if (contracts.IsEmpty)
+            yield break;
+
+        foreach (var set in GetClasses(compilation.Assembly.GlobalNamespace))
+        {
+            if (!set.AllInterfaces.Any(contract => contracts.Contains(contract, SymbolEqualityComparer.Default)))
+                continue;
+
+            foreach (var other in set.GetMembers(text.Name).OfType<IPropertySymbol>())
+            {
+                if (SymbolEqualityComparer.Default.Equals(other, text))
+                    continue;
+
+                foreach (var reference in other.DeclaringSyntaxReferences)
+                    if (reference.GetSyntax(cancellationToken) is PropertyDeclarationSyntax declaration)
+                        yield return declaration;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The top-level classes of a namespace and of the namespaces inside it. A set is a top-level class.
+    /// </summary>
+    private static IEnumerable<INamedTypeSymbol> GetClasses(INamespaceSymbol @namespace)
+    {
+        foreach (var type in @namespace.GetTypeMembers())
+            if (type.TypeKind is TypeKind.Class)
+                yield return type;
+
+        foreach (var inner in @namespace.GetNamespaceMembers())
+            foreach (var type in GetClasses(inner))
+                yield return type;
+    }
 
     private static string Type(ITypeSymbol type, SyntaxNode at, SemanticModel semanticModel, bool annotationsEnabled)
     {
@@ -325,7 +380,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// The written text of a string, or of the text of an interpolated string, with an interpolation in place of each
-    /// placeholder, as <see cref="Placeholder.Find"/> reads them, and every other brace written twice.
+    /// placeholder, as <see cref="Placeholder.Read"/> reads them, and every other brace written twice.
     /// </summary>
     /// <param name="written">The text as the source writes it, without its quotes.</param>
     /// <param name="bracesWrittenTwice">
@@ -348,7 +403,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
                 continue;
             }
 
-            if (character is '{' && ReadPlaceholder(written, i, width) is var (number, alignmentAndFormat, end))
+            if (character is '{' && Placeholder.Read(written, i, width) is var (number, alignmentAndFormat, end))
             {
                 if (name(number) is not { } parameter)
                     return null;
@@ -364,37 +419,6 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         }
 
         return filled.ToString();
-    }
-
-    /// <summary>
-    /// The placeholder that starts at <paramref name="start"/>: its number, its alignment and format as written (as in
-    /// <c>,8</c> or <c>:N2</c>), and where it ends. <see langword="null"/> when none starts there.
-    /// </summary>
-    private static (int Number, string AlignmentAndFormat, int End)? ReadPlaceholder(string written, int start, int width)
-    {
-        if (!IsRun(written, start, '{', width))
-            return null;
-
-        var digits = start + width;
-        var end = digits;
-
-        while (end < written.Length && written[end] is >= '0' and <= '9')
-            end++;
-
-        if (end == digits || !Int32.TryParse(written.Substring(digits, end - digits), NumberStyles.None, CultureInfo.InvariantCulture, out var number))
-            return null;
-
-        // An alignment or a format follows the number, and holds no brace itself.
-        var close = end;
-        if (close < written.Length && written[close] is ',' or ':')
-        {
-            while (close < written.Length && written[close] is not ('{' or '}'))
-                close++;
-        }
-
-        return IsRun(written, close, '}', width)
-            ? (number, written.Substring(end, close - end), close + width)
-            : null;
     }
 
     private static bool IsRun(string written, int start, char character, int width)

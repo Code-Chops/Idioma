@@ -25,18 +25,18 @@ You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and
   }
   ```
 
-- Leave it out, `("en", "nl")`, and implement `LanguageCode` in the set. Your other sets and your inline texts then show their English in Britain.
+- Leave it out, `("en", "nl")`, and implement `LocalizationLanguageCode` in the set. Your other sets and your inline texts then show their English in Britain.
 
   ```csharp
   public class ShopLocalizationEnGb : ShopLocalizationEn, ILocalizationSet
   {
-      string ILocalizationSet.LanguageCode => "en-GB";
+      string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
       public override string Cart => "Basket";
   }
   ```
 
-A set that derives from another set lists `ILocalizationSet` again to implement `LanguageCode`, as in the second example. Without it, its `LanguageCode` implements nothing (`LOC401`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC402`.
+A set that derives from another set lists `ILocalizationSet` again to implement `LocalizationLanguageCode`, as in the second example. Without it, its `LocalizationLanguageCode` implements nothing (`LOC401`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC402`.
 
 Separate `en-US` and `en-GB` sets without an `en` set work too, with two drawbacks:
 

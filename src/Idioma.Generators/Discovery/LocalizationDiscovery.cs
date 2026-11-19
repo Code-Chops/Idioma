@@ -29,7 +29,7 @@ internal static partial class LocalizationDiscovery
     /// </summary>
     internal const string TrackingName = "Discovery";
 
-    private const string LanguageCodeMemberName = "LanguageCode";
+    private const string LanguageCodeMemberName = "LocalizationLanguageCode";
 
     /// <summary>
     /// Per file of a compilation, whether a base type written in a scope of that file leads to a set
@@ -333,7 +333,7 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// Whether a set derives from a concrete set that implements <c>ILocalizationSet</c> in the input compilation.
-    /// Listing <c>ILocalizationSet</c> again is then how it implements <c>LanguageCode</c> (<c>en-GB</c> on <c>en</c>),
+    /// Listing <c>ILocalizationSet</c> again is then how it implements <c>LocalizationLanguageCode</c> (<c>en-GB</c> on <c>en</c>),
     /// not how it starts a contract.
     /// </summary>
     public static bool RewordsSet(DiscoveredLocalization set)

@@ -1,17 +1,17 @@
 namespace CodeChops.Idioma.Generators;
 
 // The part of LocalizationDiscovery that reads the language of a set: from the end of its name, from a code its
-// assembly declares, or from its LanguageCode. A plain comment: the compiler merges the XML docs of every partial
+// assembly declares, or from its LocalizationLanguageCode. A plain comment: the compiler merges the XML docs of every partial
 // declaration, and the type's summary lives in LocalizationDiscovery.cs.
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
-    /// The language the set serves, as <c>ILocalizationSet.LanguageCode</c> will at run time: its own constant when it
+    /// The language the set serves, as <c>ILocalizationSet.LocalizationLanguageCode</c> will at run time: its own constant when it
     /// implements the property, else the code the build records for it or a set it derives from
     /// (<see cref="FindRecordedLanguageCode"/>), else the last two letters of its name (<see cref="GetNameLanguage"/>).
     /// <see langword="null"/> when that
     /// can't be known here: the property is no constant, comes from another assembly, or holds a constant that is no
-    /// culture name. A <c>LanguageCode</c> that implements nothing counts as meant (<c>LOC401</c> reports it), so the
+    /// culture name. A <c>LocalizationLanguageCode</c> that implements nothing counts as meant (<c>LOC401</c> reports it), so the
     /// language checks add no errors of their own about it.
     /// </summary>
     /// <param name="type">The set.</param>
@@ -37,7 +37,7 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The language the set serves (see the overload without <paramref name="invalidLanguageCode"/>), and the constant
-    /// its <c>LanguageCode</c> holds when that is no culture name: what <c>LOC402</c> reports.
+    /// its <c>LocalizationLanguageCode</c> holds when that is no culture name: what <c>LOC402</c> reports.
     /// </summary>
     // Every language the checks and the generated code work with comes through here, so it is a culture name or nothing:
     // a constant such as "" or "en_GB" is in no language, and is held to none, like one that could not be read.
@@ -55,7 +55,7 @@ internal static partial class LocalizationDiscovery
             if (code is null || SupportedLanguages.IsCultureName(code))
                 return code;
 
-            // Not for a LanguageCode that implements nothing: nothing reads it at run time, and LOC401 reports it.
+            // Not for a LocalizationLanguageCode that implements nothing: nothing reads it at run time, and LOC401 reports it.
             if (mapping.Unmapped is null)
                 invalidLanguageCode = new InvalidLanguageCode(property.ContainingType.Name, code, DiagnosticLocation.From(property.Locations[0]));
 
@@ -132,12 +132,12 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Which <c>LanguageCode</c> of the set's classes implements <c>ILocalizationSet.LanguageCode</c> at run time
+    /// Which <c>LocalizationLanguageCode</c> of the set's classes implements <c>ILocalizationSet.LocalizationLanguageCode</c> at run time
     /// (<see langword="null"/>: the default, from the type's name), and the most derived one that implements nothing.
     /// </summary>
     // A class maps the interface where it lists it (ILocalizationSet, a contract, or a contract generated here, which binds
     // to nothing yet), looking up from there. A class deriving from it without listing the interface again inherits that
-    // mapping, so a LanguageCode it declares implements nothing unless it overrides the implementation; an explicit one
+    // mapping, so a LocalizationLanguageCode it declares implements nothing unless it overrides the implementation; an explicit one
     // does not compile there (CS0540).
     private static LanguageCodeMapping MapLanguageCode(INamedTypeSymbol type)
     {
@@ -186,7 +186,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// A contract's own implementation of <c>LanguageCode</c> (<c>string ILocalizationSet.LanguageCode =&gt; "nl";</c>
+    /// A contract's own implementation of <c>LocalizationLanguageCode</c> (<c>string ILocalizationSet.LocalizationLanguageCode =&gt; "nl";</c>
     /// in an interface), which applies when no class of the set implements it.
     /// </summary>
     private static IPropertySymbol? FindInterfaceLanguageCode(INamedTypeSymbol type)
@@ -199,9 +199,9 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The <c>LanguageCode</c> a type declares itself: a public instance <see cref="string"/> property of that name,
-    /// or an explicit implementation of <c>ILocalizationSet.LanguageCode</c>. A property that implements the
-    /// <c>LanguageCode</c> of another interface explicitly, or one of another type, is not it, because the set does not
+    /// The <c>LocalizationLanguageCode</c> a type declares itself: a public instance <see cref="string"/> property of that name,
+    /// or an explicit implementation of <c>ILocalizationSet.LocalizationLanguageCode</c>. A property that implements the
+    /// <c>LocalizationLanguageCode</c> of another interface explicitly, or one of another type, is not it, because the set does not
     /// serve what that returns.
     /// </summary>
     private static IPropertySymbol? FindDeclaredLanguageCode(INamedTypeSymbol type)

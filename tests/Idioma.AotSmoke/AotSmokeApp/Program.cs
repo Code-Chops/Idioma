@@ -21,8 +21,8 @@ Expect("languages", string.Join(",", LocalizationRegistry.SupportedLanguages), "
 // the code its assembly declares.
 var british = LocalizationRegistry.Current.Find<IShopLocalization>(CultureInfo.GetCultureInfo("en-GB"));
 Expect("set for en-GB", british?.GetType().Name, nameof(ShopLocalizationEnGb));
-Expect("language code of the set for en-GB", (british as ILocalizationSet)?.LanguageCode, "en-GB");
-Expect("language code of the set for nl", (LocalizationRegistry.Current.Find<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LanguageCode, "nl");
+Expect("language code of the set for en-GB", (british as ILocalizationSet)?.LocalizationLanguageCode, "en-GB");
+Expect("language code of the set for nl", (LocalizationRegistry.Current.Find<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
 
 var orders = LocalizableText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
 
