@@ -13,7 +13,8 @@ namespace CodeChops.Idioma.Generators;
 /// parameters is a text that takes values: the contract repeats it, and the class holds a method of its name and
 /// parameters that creates the <c>LocalizableText</c> with the values it is called with. A set that lists
 /// <c>ILocalizationSet&lt;TEnum&gt;</c> holds the texts of an enum: the contract gets a member for every member of
-/// the enum, and the class a method <c>GetTextByValue</c> that gives the text of a value. Each
+/// the enum, and the class a method <c>GetTextByValue</c> that gives the text of a value, with an extension method
+/// <c>GetText</c> that gives a value its text itself, as in <c>order.Status.GetText()</c>. Each
 /// generated member inherits the property's doc comment through <c>&lt;inheritdoc cref/&gt;</c>, or else is documented
 /// with its default-language wording, and links to its wording in every language, which it shows next to the link.
 /// </summary>
@@ -121,14 +122,14 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Nothing outside a library can add a language to its inline texts. A library that wants to be translatable writes its texts in sets.",
+        description: "Nothing outside a library can add a language to its inline texts, which are those it writes with LocalizableText.Inline and with [Localized] on a member. A library that wants to be translatable writes its texts in sets.",
         helpLinkUri: PackageNames.HelpLink(LibraryCannotBeTranslatedDiagnosticId));
 
     private static readonly DiagnosticDescriptor ReservedTextNameRule = Error(
         ReservedTextNameDiagnosticId,
         "Text named like the generated class or its method",
         "'{0}' has a text named '{1}', like {2}. Rename the text.",
-        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey either, because the generated class gets a method of that name, which gives a text by its key. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value.");
+        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey either, because the generated class gets a method of that name, which gives a text by its key. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value, and for GetText, the extension method that gives a value its text.");
 
     private static readonly DiagnosticDescriptor UnsupportedTextRule = Error(
         UnsupportedTextDiagnosticId,
@@ -506,6 +507,8 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// Writes the method that gives the text of a value of an enum, for a set of the texts of that enum:
     /// <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>. Each member of the enum gives the text named after it, and a
     /// value that is no member, such as a combination of flags, gives a text that shows it as <c>ToString()</c> does.
+    /// Next to it, the extension method that gives a value its text itself, <c>order.Status.GetText()</c>, so that
+    /// markup need not name the generated class.
     /// </summary>
     // Of two members of one value, the first gives its text: a switch takes a value once. A member whose text the
     // class doesn't hold, because of its name (LOC205), has no arm, and shows as a value that is no member.
@@ -522,6 +525,11 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             ? $", such as <see cref=\"{EscapeIdentifier(members[0].Name)}\"/> for <c>{EscapeXml(@enum.Name)}.{members[0].Name}</c>"
             : "";
 
+        // The method by its parameter, because a set of two enums has two of that name.
+        var lookupLink = type.Contains("<")
+            ? $"<c>{LocalizationSetsAnalysis.LookupName}</c>"
+            : $"<see cref=\"{LocalizationSetsAnalysis.LookupName}({type})\"/>";
+
         // The switch stands in a class outside the generated one (TextsByValue), which is named with a type argument:
         // a name with a type argument is not looked for among the texts.
         sb.AppendLine();
@@ -533,6 +541,18 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                 /// </remarks>
                 {{(@enum.IsPublic ? "public" : "internal")}} static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
+
+                /// <param name="value">The value to give the text of.</param>
+                extension({{type}} value)
+                {
+                    /// <summary>
+                    /// The text of this value of {{enumLink}}, as in <c>status.{{LocalizationSetsAnalysis.ExtensionName}}()</c>. It's the text {{lookupLink}} gives.
+                    /// </summary>
+                    /// <remarks>
+                    /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
+                    /// </remarks>
+                    {{(@enum.IsPublic ? "public" : "internal")}} {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
+                }
             """);
 
         if (lookups.Length > 0)
@@ -943,7 +963,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// control character or half of a surrogate pair, as the escape C# writes it with (<c>\u0001</c>). Such a character
     /// would make the comment invalid (<c>CS1570</c>), also when written as an entity.
     /// </summary>
-    private static string EscapeXml(string text)
+    internal static string EscapeXml(string text)
     {
         var escaped = new StringBuilder(text.Length);
 

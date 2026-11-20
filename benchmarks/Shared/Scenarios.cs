@@ -1,10 +1,11 @@
 using System.Globalization;
+using CodeChops.Idioma;
 using Microsoft.Extensions.Localization;
 
 namespace Benchmarks;
 
 /// <summary>
-/// The work each benchmark times: one text shown once, as a render shows it, by each of four approaches.
+/// The work each benchmark times: one text shown once, as a render shows it, by each of five approaches.
 /// </summary>
 internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
 {
@@ -18,17 +19,20 @@ internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
     public static IReadOnlyList<string> Cultures { get; } = ["en", "nl", "en-GB", "de"];
 
     // IStringLocalizer comes first, because Microsoft recommends it, so every other approach is compared with it. An
-    // inline text comes twice: kept in a field, and written in markup, which calls it on every render.
+    // inline text comes twice: kept in a field, and written in markup, which calls it on every render. A text written as
+    // an attribute is found by its member first, and has no text with a value.
 
     public string LocalizerCheckout() => localizer["Checkout"].Value;
     public string IdiomaSetCheckout() => ShopLocalization.Checkout.ToString();
     public string IdiomaInlineInFieldCheckout() => InlineTextsInField.Checkout.ToString();
     public string IdiomaInlineInMarkupCheckout() => InlineTextsInMarkup.Checkout.ToString();
+    public string IdiomaAttributeCheckout() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))!.ToString();
 
     public string LocalizerCart() => localizer["Cart"].Value;
     public string IdiomaSetCart() => ShopLocalization.Cart.ToString();
     public string IdiomaInlineInFieldCart() => InlineTextsInField.Cart.ToString();
     public string IdiomaInlineInMarkupCart() => InlineTextsInMarkup.Cart.ToString();
+    public string IdiomaAttributeCart() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Cart))!.ToString();
 
     public string LocalizerGreeting() => localizer["Greeting", this.name].Value;
     public string IdiomaSetGreeting() => ShopLocalization.Greeting(this.name).ToString();
@@ -44,10 +48,12 @@ internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
         new("Checkout", "Idioma set", this.IdiomaSetCheckout),
         new("Checkout", "Idioma inline, in a field", this.IdiomaInlineInFieldCheckout),
         new("Checkout", "Idioma inline, in markup", this.IdiomaInlineInMarkupCheckout),
+        new("Checkout", "Idioma attribute", this.IdiomaAttributeCheckout),
         new("Cart", "IStringLocalizer", this.LocalizerCart),
         new("Cart", "Idioma set", this.IdiomaSetCart),
         new("Cart", "Idioma inline, in a field", this.IdiomaInlineInFieldCart),
         new("Cart", "Idioma inline, in markup", this.IdiomaInlineInMarkupCart),
+        new("Cart", "Idioma attribute", this.IdiomaAttributeCart),
         new("Greeting(name)", "IStringLocalizer", this.LocalizerGreeting),
         new("Greeting(name)", "Idioma set", this.IdiomaSetGreeting),
         new("Greeting(name)", "Idioma inline, in a field", this.IdiomaInlineInFieldGreeting),

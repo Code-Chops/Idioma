@@ -33,7 +33,7 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["CreateText", "CreateSetText", "CreateUndefinedEnumText", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet"],
+            ["CreateText", "CreateSetText", "CreateUndefinedEnumText", "CreateMemberText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet"],
             ignoreOrder: true);
     }
 

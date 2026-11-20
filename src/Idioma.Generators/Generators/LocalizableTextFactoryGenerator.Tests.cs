@@ -9,7 +9,8 @@ namespace CodeChops.Idioma.Tests;
 /// <summary>
 /// Tests for <see cref="LocalizableTextFactoryGenerator"/>: <c>LocalizableText.Inline</c> gets one required parameter
 /// per language of <c>[assembly: SupportedLanguages]</c>, so leaving one out does not compile, and an invalid language
-/// gets <c>LOC101</c>; an assembly calling it is marked <c>[assembly: InlineTexts]</c>.
+/// gets <c>LOC101</c>; an assembly calling it is marked <c>[assembly: InlineTexts]</c>. The attribute
+/// <c>[Localized]</c> gets the same parameters.
 /// </summary>
 public sealed class LocalizableTextFactoryGeneratorTests
 {
@@ -55,6 +56,34 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         return run.GeneratedSources.SingleOrDefault(source => source.HintName is "LocalizableText.Factory.g.cs").SourceText?.ToString();
     }
+
+    /// <summary>
+    /// The attribute that puts a text on a member, or <see langword="null"/> when none is emitted.
+    /// </summary>
+    private static string? LocalizedAttribute(GeneratorDriverRunResult result)
+    {
+        var run = result.Results.ShouldHaveSingleItem();
+        run.Exception.ShouldBeNull();
+
+        return run.GeneratedSources.SingleOrDefault(source => source.HintName is "LocalizedAttribute.g.cs").SourceText?.ToString();
+    }
+
+    /// <summary>
+    /// A class with a member marked by the given attribute.
+    /// </summary>
+    private static string Member(string languages, string attribute) => $$"""
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages({{languages}})]
+
+        namespace TestApp;
+
+        public class Address
+        {
+            {{attribute}}
+            public string City { get; } = "";
+        }
+        """;
     #endregion
 
     [Test]
@@ -489,6 +518,162 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // Assert
         InlineTextsMarker(result).ShouldBeNull();
+    }
+
+    [Test]
+    public Task Languages_ShouldBecomeRequiredParametersOfLocalizedInOrder()
+    {
+        // Arrange & Act
+        var text = LocalizedAttribute(Run(Source("\"en\", \"nl\", \"en-GB\"")))!;
+
+        // Assert: one parameter per language, as the factory has.
+        return Verify(text);
+    }
+
+    [Test]
+    public void LocalizedOfLanguageThatIsNoIdentifier_ShouldTakeTheParametersOfTheFactory()
+    {
+        // Arrange & Act: a hyphen can't be in a parameter name, and "is" (Icelandic) is a keyword.
+        var text = LocalizedAttribute(Run(Source("\"en\", \"zh-Hans\", \"is\"")))!;
+
+        // Assert
+        text.ShouldContain("public LocalizedAttribute(string en, string zhHans, string @is)");
+        text.ShouldContain("<param name=\"is\">The wording in <c>is</c>.</param>");
+        text.ShouldContain("[Microsoft.CodeAnalysis.EmbeddedAttribute]");
+    }
+
+    [Test]
+    public void NoAttribute_ShouldEmitNoLocalized()
+    {
+        // Arrange & Act
+        var result = Run("namespace TestApp;");
+
+        // Assert
+        LocalizedAttribute(result).ShouldBeNull();
+    }
+
+    [Test]
+    public void LocalizedOnEveryKindOfMember_ShouldCompileWithoutWarningsAndWithResolvedCrefs()
+    {
+        // Arrange: a property, a field, a member of an enum, and each kind of type.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "zh-Hans", "is")]
+
+            namespace TestApp;
+
+            [Localized(en: "Address", zhHans: "地址", @is: "Heimilisfang")]
+            public class Address
+            {
+                [Localized(en: "City", zhHans: "城市", @is: "Borg")]
+                public string City { get; } = "";
+
+                [Localized(en: "Note", zhHans: "备注", @is: "Athugasemd")]
+                public string Note = "";
+            }
+
+            [Localized(en: "Status", zhHans: "状态", @is: "Staða")]
+            public enum Status
+            {
+                [Localized(en: "Open", zhHans: "打开", @is: "Opið")]
+                Open,
+            }
+
+            [Localized(en: "Money", zhHans: "金额", @is: "Fé")]
+            public struct Money;
+
+            [Localized(en: "Named", zhHans: "命名", @is: "Nefnt")]
+            public interface INamed;
+
+            [Localized(en: "Line", zhHans: "行", @is: "Lína")]
+            public record Line([property: Localized(en: "Quantity", zhHans: "数量", @is: "Magn")] int Quantity);
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LanguageLeftOutOfLocalized_ShouldNotCompile()
+    {
+        // Arrange & Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(Member("\"en\", \"nl\"", """[Localized(en: "City")]"""));
+
+        // Assert: the error names the language.
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("CS7036");
+        error.GetMessage().ShouldContain("'nl'");
+    }
+
+    [Test]
+    public void LocalizedOnAMethod_ShouldNotCompile()
+    {
+        // Arrange & Act: a text is on a property, a field, a member of an enum, or a type.
+        var errors = GeneratorTestHelper.CompileWithGenerators(Source("\"en\", \"nl\"", """[Localized(en: "Save", nl: "Opslaan")] public static void Save() { }"""));
+
+        // Assert
+        errors.ShouldHaveSingleItem().Id.ShouldBe("CS0592");
+    }
+
+    [Test]
+    public void Localized_ShouldStayOutOfTheCompiledAssembly()
+    {
+        // Arrange & Act
+        var assembly = Load(GeneratorTestHelper.EmitLibraryWithGenerators("ConditionalLocalized", Member("\"en\", \"nl\"", """[Localized(en: "City", nl: "Plaats")]""")));
+        var property = assembly.GetType("TestApp.Address")!.GetProperty("City")!;
+
+        // Assert: the build reads the wording and writes it as code, so the attribute on the member would only store
+        // the wording a second time.
+        property.GetCustomAttributesData().ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LibraryWithInternalsVisibleToApp_ShouldNotMakeLocalizedAmbiguous()
+    {
+        // Arrange: both assemblies generate the attribute and the class that records their members' texts, and the app
+        // sees the library's internals.
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators("ShopLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TestAssembly")]
+
+            namespace ShopLibrary;
+
+            public class Product
+            {
+                [Localized(en: "Name", nl: "Naam")]
+                public string Name { get; } = "";
+            }
+            """);
+        var source = Member("\"en\", \"nl\"", """[Localized(en: "City", nl: "Plaats")]""");
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source, library);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source, library);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void MemberMarkedLocalized_ShouldLeaveTheMarkToTheFileOfItsText()
+    {
+        // Arrange & Act: this generator marks an assembly for LocalizableText.Inline alone. The file that holds the
+        // texts of members marks it for those, so that this generator need not look for them.
+        var marker = InlineTextsMarker(Run(Member("\"en\", \"nl\"", """[Localized(en: "City", nl: "Plaats")]""")));
+
+        // Assert
+        marker.ShouldBeNull();
     }
 
     [Test]

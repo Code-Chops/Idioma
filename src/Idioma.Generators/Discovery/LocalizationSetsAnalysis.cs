@@ -24,6 +24,12 @@ internal sealed record LocalizationSetsAnalysis(
     public const string LookupName = "GetTextByValue";
 
     /// <summary>
+    /// The name of the extension method the generated class of a set of the texts of an enum gets, which gives a value
+    /// its text: <c>order.Status.GetText()</c>.
+    /// </summary>
+    public const string ExtensionName = "GetText";
+
+    /// <summary>
     /// The name of the method every generated class gets, which gives a text by its key:
     /// <c>ShopLocalization.GetTextByKey("Checkout")</c>.
     /// </summary>
@@ -32,17 +38,19 @@ internal sealed record LocalizationSetsAnalysis(
     /// <summary>
     /// Whether a text can't become a member of the generated texts class (<c>LOC205</c>). It carries the class's own
     /// name, which C# allows no member, the name of the method that gives a text by its key
-    /// (<see cref="GetName"/>), or the name of the method that gives the text of an enum value
-    /// (<see cref="LookupName"/>). The class declares no other member of its own, so that no other name is taken.
+    /// (<see cref="GetName"/>), or the name of a method that gives the text of an enum value
+    /// (<see cref="LookupName"/>, and <see cref="ExtensionName"/> on the value itself). The class declares no other
+    /// member of its own, so that no other name is taken.
     /// </summary>
     /// <param name="name">The name of the text.</param>
     /// <param name="textsName">The name of the generated class.</param>
-    /// <param name="hasLookup">Whether the class gets the method, as that of a set of the texts of an enum does.</param>
+    /// <param name="hasLookup">Whether the class gets those two methods, as that of a set of the texts of an enum does.</param>
     public static bool IsReservedTextName(string name, string textsName, bool hasLookup)
     {
         var isReserved = String.Equals(name, textsName, StringComparison.Ordinal)
                          || String.Equals(name, GetName, StringComparison.Ordinal)
-                         || (hasLookup && String.Equals(name, LookupName, StringComparison.Ordinal));
+                         || (hasLookup && String.Equals(name, LookupName, StringComparison.Ordinal))
+                         || (hasLookup && String.Equals(name, ExtensionName, StringComparison.Ordinal));
 
         return isReserved;
     }
@@ -361,6 +369,7 @@ internal sealed record LocalizationSetsAnalysis(
                     _ when String.Equals(member.Name, baseName, StringComparison.Ordinal)
                         => $"the generated class '{baseName}', which can't hold a member of its own name. '{baseName}.{member.Name}' isn't generated",
                     GetName => $"the generated method '{baseName}.{GetName}', which gives a text by its key. The text '{baseName}.{member.Name}' isn't generated",
+                    ExtensionName => $"the generated extension method '{ExtensionName}', which gives an enum value its text. The text '{baseName}.{member.Name}' isn't generated",
                     _ => $"the generated method '{baseName}.{LookupName}', which gives the text of an enum value. The text '{baseName}.{member.Name}' isn't generated",
                 };
 
@@ -985,7 +994,7 @@ internal enum LocalizationSetsRule
 
     /// <summary>
     /// <c>LOC205</c>: a text of a default-language set is named like the generated texts class, or like a method of
-    /// that class: the one that gives a text by its key, or the one that gives the text of an enum
+    /// that class: the one that gives a text by its key, or one of the two that give the text of an enum
     /// value.
     /// </summary>
     ReservedTextName,

@@ -8,10 +8,14 @@ Translations for any .NET app, written in C# and checked at compile time:
 - Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing. A text with parameters takes longer for a user whose language your app doesn't support, but that's an edge case.
 - An AI coding assistant can translate your texts, and the build tells it which are missing ([details](#translating-your-texts)).
 
-Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and write each text in one of two ways:
-in a set per language, for texts you reuse, or inline, where you use it once.
+Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and write each text in one of three ways:
+
+- **In a set** per language, for texts you reuse.
+- **Inline**, where you use a text once.
+- **As an attribute**, for the label of a property or an enum member.
 
 ```csharp
+// A set per language
 public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
 {
     public string Cart => "Cart";
@@ -23,9 +27,16 @@ public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
     public string Cart => "Winkelwagen";
     public string Checkout => "Afrekenen";
 }
+
+// An attribute on the member it names
+public class Address
+{
+    [Localized(en: "City", nl: "Plaats")]
+    public string City { get; set; } = "";
+}
 ```
 
-From the English set, the source generator writes the contract `IShopLocalization`, which every set implements, and the class `ShopLocalization`, which shows each text in the user's language:
+From the English set, the source generator writes the contract `IShopLocalization`, which every set implements, and the class `ShopLocalization`. Each text then shows in the user's language:
 
 ```razor
 @* A text of a set *@
@@ -37,6 +48,11 @@ From the English set, the source generator writes the contract `IShopLocalizatio
 <button>
   @LocalizableText.Inline(en: "Cancel", nl: "Annuleren")
 </button>
+
+@* A text written as an attribute *@
+<label>
+  @(LocalizableText.GetTextByMember<Address>(nameof(Address.City)))
+</label>
 ```
 
 [Formosa](https://github.com/Code-Chops/Formosa), which generates Blazor forms from your C# models, writes its texts with Idioma too.
@@ -71,7 +87,7 @@ If your texts are in a library, declare your languages in the app's project too.
 
 ### Write your texts
 
-Write a text in one of two ways, and mix them as you like.
+Write a text in one of three ways, and mix them as you like.
 
 #### Write a set
 
@@ -128,6 +144,26 @@ public LocalizableText Title { get; } = LocalizableText.Inline(en: "Orders", nl:
 
 To include a value, write it into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC302`).
 
+#### Write an attribute
+
+An attribute puts a text on the member it names: a property, a field, an enum member, or a type. It suits a label, such as the name of a property of a model, which a form, a table or an export shows:
+
+```csharp
+[Localized(en: "Address", nl: "Adres")]
+public class Address
+{
+    [Localized(en: "City", nl: "Plaats")]
+    public string City { get; set; } = "";
+
+    [Localized(en: "Postal code", nl: "Postcode")]
+    public string PostalCode { get; set; } = "";
+}
+```
+
+`[Localized]` takes one argument per language you declared, as `Inline` does, so leaving out a translation doesn't compile.
+
+Its wording is a constant, so it can't include a value. Write a text with a value in a set or inline.
+
 ### Show a text
 
 Show a text of a set by its name, wherever you need it:
@@ -142,7 +178,19 @@ In your IDE, hovering over `ShopLocalization.Cart` shows its wording in every la
 
 An inline text shows where you write it.
 
-Both kinds show the wording for the user's language in markup, in string interpolation, or as a `string`, as in `string label = ShopLocalization.Checkout;`.
+Ask for a text written as an attribute by the type and the name of its member, or for the text of the type itself. Both give `null` where there's no `[Localized]`:
+
+```razor
+<h2>
+  @(LocalizableText.GetTextOfType<Address>())
+</h2>
+
+<label>
+  @(LocalizableText.GetTextByMember<Address>(nameof(Address.City)))
+</label>
+```
+
+All three show the wording for the user's language in markup, in string interpolation, or as a `string`, as in `string label = ShopLocalization.Checkout;`.
 
 Every text is a `LocalizableText`. Use that type when your own code stores or accepts a text, as `Title` above does.
 
@@ -261,7 +309,22 @@ Idioma has no plural rules. Each language writes its own conditions in C#: Engli
 
 ### Enums
 
-To translate an enum, write a set that lists `ILocalizationSet<TEnum>` in place of `ILocalizationSet`. Each member of the enum is a text, named after the member:
+Give an enum its texts in one of two ways:
+
+- **A set of the enum** makes a member without a text a build error.
+- **An attribute on each member** keeps the wording next to the member, and a member without one is a build warning.
+
+Either way, a value of the enum gives its text itself, with `GetText()`:
+
+```razor
+<span>
+  @order.Status.GetText()
+</span>
+```
+
+#### A set of the enum
+
+Write a set that lists `ILocalizationSet<TEnum>` in place of `ILocalizationSet`. Each member of the enum is a text, named after the member:
 
 ```csharp
 public enum OrderStatus { Pending, Shipped }
@@ -279,21 +342,54 @@ public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderSt
 }
 ```
 
-The generated class gets a method `GetTextByValue`, which gives the text of a value:
-
-```razor
-<span>
-  @OrderStatusLocalization.GetTextByValue(order.Status)
-</span>
-```
-
 Every language needs a text for every member. A member without one is a build error, so a member you add to the enum later can't go untranslated:
 
 ```text
 error CS0535: 'OrderStatusLocalizationNl' does not implement interface member 'IOrderStatusLocalization.Shipped'
 ```
 
+The source generator writes `GetText()` next to the generated class, so it's in reach wherever the namespace of your set is. It calls `OrderStatusLocalization.GetTextByValue(order.Status)`, which you can write yourself too.
+
 A text of a member is a text like any other, so `OrderStatusLocalization.Shipped` works too ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#enums)).
+
+#### An attribute on each member
+
+Mark each member of the enum `[Localized]`:
+
+```csharp
+[Localized(en: "Parcel status", nl: "Pakketstatus")]
+public enum ParcelStatus
+{
+    [Localized(en: "Picked", nl: "Gepickt")]
+    Picked,
+
+    [Localized(en: "Delivered", nl: "Bezorgd")]
+    Delivered,
+}
+```
+
+A member without `[Localized]` shows its name. The build warns about it when other members of the enum are marked (`LOC503`), so a member you add later doesn't go unnoticed.
+
+The attribute on the enum itself gives the enum a text of its own, which `LocalizableText.GetTextOfType<ParcelStatus>()` shows.
+
+### Labels in a form, a table or an export
+
+Code that shows any model, such as a form or an export, holds a property or a type, and not its name. Ask for the text written as an attribute by what the code holds:
+
+```csharp
+// By a property, such as the one a form field shows. A property without [Localized] shows its name here.
+LocalizableText label = LocalizableText.GetTextByMember(property) ?? property.Name;
+
+// By a type and the name of its member
+LocalizableText? city = LocalizableText.GetTextByMember(type, "City");
+
+// The text of a type itself
+LocalizableText? caption = LocalizableText.GetTextOfType(type);
+```
+
+A class without a text for a member gets that of its nearest base class. So an override without `[Localized]` keeps the text of the property it overrides.
+
+The source generator reads each `[Localized]` as your project builds, and writes its text as code. So nothing reads the attribute at run time, and the attribute isn't part of your assembly ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#attributes-on-members)).
 
 ### Get a text by its key
 
@@ -343,6 +439,7 @@ Once you list `en-GB`, the build asks for British wording everywhere, so that no
 
 - Every contract gets a British set. One with nothing British about it is a single line: `public class GridLocalizationEnGb : GridLocalizationEn;`.
 - Every inline text takes a British wording: `LocalizableText.Inline(en: "Color", nl: "Kleur", enGb: "Colour")`.
+- Every attribute takes one too: `[Localized(en: "Color", nl: "Kleur", enGb: "Colour")]`.
 
 To add British wording in one place only, see [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md#regional-variants).
 
@@ -381,13 +478,15 @@ Each language has a set of its own, so the diff of `ShopLocalizationNl.cs` shows
 *LocalizationNl.cs  @my-org/dutch-translators
 ```
 
+An inline text and an attribute hold every language in one place. So their Dutch has no file of its own, and is reviewed in the pull request that changes that line.
+
 Review a translation as code too, because a set is C#. A change to a set can run any code when its text is shown. So next to the translator, have a developer approve it.
 
 ## Where Idioma doesn't fit
 
 - When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can let a resource file override it ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
 - When your translators work in a translation tool, which reads files such as XLIFF.
-- When an attribute such as `[Required]` or `[Display]` has to take a text directly. An attribute takes only constants, so it reads your texts through a small class of `string` properties ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)).
+- When an attribute of .NET such as `[Required]` or `[Display]` has to take a text directly. An attribute takes only constants, so it reads your texts through a small class of `string` properties ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)). Those attributes don't read a label you write with `[Localized]`.
 - When you use an older version of .NET than 10 or C# 14.
 
 ## Documentation
@@ -401,7 +500,7 @@ Each subject has a page of its own:
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, moving a resource file, and keeping a resource file as an override.
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes to show next to `IStringLocalizer`, on .NET and in Blazor WebAssembly, and what Idioma adds to a download.
 - [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): two complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
-- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, enums, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
+- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, enums, attributes on members, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
 
 ## License
 

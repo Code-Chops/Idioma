@@ -6,7 +6,7 @@ A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name only wh
 
 Only the capital that starts the code counts. After it, the code matches in any letter case, so `ShopLocalizationEN` and `ShopLocalizationEnGB` work too. Without that capital, a name has no code. So `LocalizationSet` doesn't serve Estonian (`et`), and gets build warning `LOC400`.
 
-An inline text takes the same codes as parameter names, in camelCase: `nl:` where a set's name ends in `Nl`, and `enGb:`, `zhHans:`, and `fil:` for the sets above.
+An inline text and an attribute take the same codes as parameter names, in camelCase: `nl:` where a set's name ends in `Nl`, and `enGb:`, `zhHans:`, and `fil:` for the sets above.
 
 When a longer code isn't listed, only the last two letters count. A name alone can't tell `ShopLocalizationEnGb` (British English) from `AdminUiNl` (Dutch). So an unlisted `ShopLocalizationEnGb` serves `gb`, which isn't a language (build error `LOC202`).
 
@@ -16,7 +16,7 @@ Other subjects have a page of their own: [libraries that use Idioma](libraries-a
 
 You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. There are two ways to add one:
 
-- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`, and the name is enough. The build then treats British English as a language of its own. Every contract needs a British set (`LOC201`), which can derive from the English one and add nothing, and every inline text takes a British wording (`enGb:`).
+- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`, and the name is enough. The build then treats British English as a language of its own. Every contract needs a British set (`LOC201`), which can derive from the English one and add nothing, and every inline text and attribute takes a British wording (`enGb:`).
 
   ```csharp
   public class ShopLocalizationEnGb : ShopLocalizationEn
@@ -25,7 +25,7 @@ You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and
   }
   ```
 
-- Leave it out, `("en", "nl")`, and implement `LocalizationLanguageCode` in the set. Your other sets and your inline texts then show their English in Britain.
+- Leave it out, `("en", "nl")`, and implement `LocalizationLanguageCode` in the set. Your other sets, your inline texts and your attributes then show their English in Britain.
 
   ```csharp
   public class ShopLocalizationEnGb : ShopLocalizationEn, ILocalizationSet

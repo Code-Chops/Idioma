@@ -7,8 +7,9 @@
 #   2. The same in Blazor WebAssembly in a headless Chrome, on the Mono runtime with its interpreter.
 #   3. The same with Mono's AOT, when the wasm-tools workload is installed (dotnet workload install wasm-tools).
 #   4. The download sizes of a language of 100 texts, from Idioma.Benchmarks.Size, with Mono's interpreter and AOT.
+#   5. Finding a label on .NET, with BenchmarkDotNet, in the run of step 1.
 #
-# Takes about 20 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
+# Takes about 25 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
 
 set -euo pipefail
 
@@ -26,9 +27,10 @@ runner=Idioma.Benchmarks/bin/Release/net11.0/Idioma.Benchmarks.dll
 dotnet build Idioma.Benchmarks -c Release > "$results/build.log"
 dotnet "$runner" check
 
-echo "1/4 Showing a text on .NET (BenchmarkDotNet)"
+echo "1/4 Showing a text and finding a label on .NET (BenchmarkDotNet)"
 dotnet run -c Release --project Idioma.Benchmarks -- --filter '*' --artifacts "$results/benchmarkdotnet" > "$results/benchmarkdotnet.log"
 cp "$results/benchmarkdotnet/results/Benchmarks.TextLookup-report-github.md" "$results/1-showing-a-text.md"
+cp "$results/benchmarkdotnet/results/Benchmarks.LabelLookup-report-github.md" "$results/5-finding-a-label.md"
 
 echo "2/4 Blazor WebAssembly, Mono interpreter"
 dotnet publish Idioma.Benchmarks.Wasm -c Release -o obj/wasm-interpreter > "$results/publish-wasm-interpreter.log"
@@ -68,6 +70,6 @@ fi
 kept="$here/results"
 mkdir -p "$kept"
 rm -f "$kept"/*.md
-cp "$results"/[1-4]-*.md "$kept"
+cp "$results"/[1-5]-*.md "$kept"
 
 echo "The tables are in $kept, and the logs in $results."

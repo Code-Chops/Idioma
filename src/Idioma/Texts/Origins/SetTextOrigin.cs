@@ -15,9 +15,8 @@ internal sealed class SetTextOrigin<TContract> : TextOrigin
 
     // Once per text, as such a text is created once and its name is read on every lookup in a set that derives from
     // another. Its name is its key among the texts of its class.
-    public override string Key => this._name;
-    public override ReadOnlySpan<char> Name => this._name;
-    private readonly string _name;
+    public override string Key { get; }
+    public override ReadOnlySpan<char> Name => this.Key;
 
     private Func<TContract, string> Selector { get; }
 
@@ -33,7 +32,7 @@ internal sealed class SetTextOrigin<TContract> : TextOrigin
         this.Selector = selector;
         this.DefaultSet = defaultSet;
         this.DefaultLanguage = defaultSet.LocalizationLanguageCode;
-        this._name = key[(key.LastIndexOf('.') + 1)..];
+        this.Key = key[(key.LastIndexOf('.') + 1)..];
     }
 
     public override string Select(ILocalizationSet set)

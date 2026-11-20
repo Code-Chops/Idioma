@@ -53,6 +53,8 @@ Each property converts its text when the attribute reads it, so the label and th
 
 A message can show the field's label as `{0}`, as in `"Enter {0}"`, because the attribute fills it in. In a set, that wording gets warning `LOC502`. Turn it off around the text with `#pragma warning disable LOC502`.
 
+Code of your own that shows a property's label needs no such class. Mark the property `[Localized(en: "Name", nl: "Naam")]`, and read the label with `LocalizableText.GetTextByMember` ([Write an attribute](../README.md#write-an-attribute)). `[Display]` and the validation attributes don't read that label.
+
 ## Keeping a resource file as an override
 
 Each text of a set carries a full key, which is its full name: `MyApp.Localization.ShopLocalization.Checkout` for `ShopLocalization.Checkout` in the namespace `MyApp.Localization`. The package itself never reads it. An app can still let a resource file or a database override a wording through `IStringLocalizer`. Use this when a wording has to change without a rebuild, such as when translators edit a resource file. An extension method on the localizer asks it for the key first, and shows the text where there's no entry:

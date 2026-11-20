@@ -7,7 +7,8 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="UnnamedLanguageCodeFixProvider"/>: a call of <c>LocalizableText.Inline</c> with a language
-/// argument without its name (<c>LOC501</c>) gets each such argument named after its language.
+/// argument without its name (<c>LOC501</c>) gets each such argument named after its language, and so does
+/// <c>[Localized]</c> on a member.
 /// </summary>
 public sealed class UnnamedLanguageCodeFixProviderTests
 {
@@ -48,6 +49,41 @@ public sealed class UnnamedLanguageCodeFixProviderTests
 
         var source = fix.Sources.ShouldHaveSingleItem();
         source.ShouldBe(Source(languages, expectedText));
+        (await GeneratorTestHelper.AnalyzeAsync(source)).ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("\"en\", \"nl\"", """[Localized("City", "Plaats")]""", """[Localized(en: "City", nl: "Plaats")]""")]
+    [Arguments("\"en\", \"nl\"", """[Localized("City", nl: "Plaats")]""", """[Localized(en: "City", nl: "Plaats")]""")]
+    [Arguments("\"en\", \"nl\"", """[Localized(en: "City", "Plaats")]""", """[Localized(en: "City", nl: "Plaats")]""")]
+    [Arguments("\"en\", \"nl\", \"en-GB\"", """[Localized("Color", "Kleur", "Colour")]""", """[Localized(en: "Color", nl: "Kleur", enGb: "Colour")]""")]
+    [Arguments("\"en\", \"is\"", """[Localized("City", "Borg")]""", """[Localized(en: "City", @is: "Borg")]""")]
+    public async Task UnnamedLanguageOfLocalized_ShouldGetTheNameOfItsLanguage(string languages, string attribute, string expectedAttribute)
+    {
+        // Arrange
+        static string Member(string languages, string attribute) => $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages({{languages}})]
+
+            namespace TestApp;
+
+            public class Address
+            {
+                {{attribute}}
+                public string City { get; } = "";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(Member(languages, attribute));
+
+        // Assert: every argument without a name gets the one of its position, and the attribute then passes.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Title.ShouldBe("Name each language");
+
+        var source = fix.Sources.ShouldHaveSingleItem();
+        source.ShouldBe(Member(languages, expectedAttribute));
         (await GeneratorTestHelper.AnalyzeAsync(source)).ShouldBeEmpty();
     }
 

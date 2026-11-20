@@ -13,7 +13,8 @@ internal static class PackageNames
     public const string InternalsNamespace = Namespace + ".Internals";
 
     public const string LocalizationSet = Namespace + ".ILocalizationSet";
-    public const string LocalizableText = Namespace + ".LocalizableText";
+    public const string LocalizableTextName = "LocalizableText";
+    public const string LocalizableText = Namespace + "." + LocalizableTextName;
     public const string LocalizationRegistry = Namespace + ".LocalizationRegistry";
     public const string SupportedLanguagesAttribute = Namespace + ".SupportedLanguagesAttribute";
     public const string ExcludeFromLocalizationDiscoveryAttribute = Namespace + ".ExcludeFromLocalizationDiscoveryAttribute";

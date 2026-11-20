@@ -86,9 +86,10 @@ public sealed partial class LocalizationRegistryTests
         var changing = new RegistryChangingLocalization();
         LocalizationRegistry.Register(changing);
 
-        // Act: the next registration builds the registry again, and reads every set's code.
+        // Act: the next registration builds the registry again, and reads every set's code. Not a set of the class
+        // the test above counts, which would be counted there when this test runs first.
         changing.LocalizationLanguageCode = "not a culture";
-        LocalizationRegistry.Register(new RegistryRepeatedLocalization("it"));
+        LocalizationRegistry.Register(new RegistryConfiguredLocalization("it"));
 
         // Assert: the set stays under the language it registered with, so no text fails.
         var current = Should.NotThrow(static () => LocalizationRegistry.Current);
