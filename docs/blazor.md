@@ -82,12 +82,15 @@ app.MapGet("/culture/set", (string culture, string? returnUrl, HttpContext http)
     if (LocalizationRegistry.SupportedLanguages.Contains(culture, StringComparer.OrdinalIgnoreCase))
         http.Response.Cookies.Append(
             CookieRequestCultureProvider.DefaultCookieName,
-            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture)));
+            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture)),
+            new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // Without an expiry, the cookie ends with the browser session
 
     // LocalRedirect refuses a URL to another site.
     return returnUrl is null ? Results.NoContent() : Results.LocalRedirect(returnUrl);
 });
 ```
+
+The cookie gets an expiry, so it lasts as long as the choice in local storage does. A cookie without one is gone when the browser closes. The server would then render the next visit in the browser's language, and the page would switch to the stored language once WebAssembly takes over.
 
 The languages come from your app's `[assembly: SupportedLanguages]`, so the server lists them nowhere else. The server project takes them from its client project, so it needs no declaration of its own ([details](libraries-and-apps.md#the-apps-languages)).
 
@@ -130,6 +133,32 @@ if (name is not null && LocalizationRegistry.SupportedLanguages.Contains(name, S
 
 await host.RunAsync();
 ```
+
+This also needs all globalization data, because the app can start in a culture other than the browser's (see [Dates and numbers](#dates-and-numbers)).
+
+## A browser language the app doesn't have
+
+When none of your app's languages serves the browser's language, make the default language the UI culture. A German visitor of an app in English and Dutch sees English texts either way. But with English as the UI culture, a text with parameters shows faster. Its set's method runs in the language it words. With German as the UI culture, Idioma switches the UI culture to English each time such a text is shown.
+
+Add this to the `Program.cs` of the WebAssembly project, with usings for `System.Globalization` and `CodeChops.Idioma`. Put it right before the host runs: before `await host.RunAsync();` with the code of [Remembering the choice](#remembering-the-choice), or before `await builder.Build().RunAsync();` without it.
+
+```csharp
+// The stored language, else the browser's. Where none of the app's languages serves it, texts show the default
+// language, so make that the UI culture too.
+if (!IsServed(CultureInfo.CurrentUICulture))
+    CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo(LocalizationRegistry.DefaultLanguage!);
+
+// Whether one of the app's languages is the culture, or a culture it falls back to, as en-GB falls back to en.
+static bool IsServed(CultureInfo culture) => culture.Name.Length > 0 &&
+    (LocalizationRegistry.SupportedLanguages.Contains(culture.Name, StringComparer.OrdinalIgnoreCase) || IsServed(culture.Parent));
+```
+
+What changes for such a user:
+
+- Only the UI culture changes. Dates and numbers keep the format of the browser's language, so a German visitor still reads a date as 20.11.2026.
+- Anything else that follows the UI culture shows the default language too, such as the resx messages of another library.
+
+A server needs nothing of this. Its request localization already gives such a user the default language, for dates and numbers too.
 
 This also needs all globalization data, because the app can start in a culture other than the browser's (see [Dates and numbers](#dates-and-numbers)).
 

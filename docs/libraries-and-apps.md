@@ -71,7 +71,7 @@ Such a rewording:
 - Reaches the library's regional sets. Rewording `ShopLocalizationEn` also changes a text for British users, unless `ShopLocalizationEnGb` has its own wording for that text.
 - Adds up with other rewordings. When a shared library of yours rewords some texts and your app rewords others of the same set, both show. When both reword the same text, the set registered last wins.
 
-A library allows this by leaving its sets unsealed and its texts `virtual`, as in `public virtual string Checkout => "Checkout";`. Where a library's set is sealed, or the text isn't virtual, implement the library's contract in full, in the same language. That doesn't reach the library's regional sets, because none can derive from a sealed set. Reword each of those the same way.
+A library allows this by leaving its sets unsealed and its texts `virtual`, as in `public virtual string Checkout => "Checkout";`. Where a library's set is sealed, or the text isn't virtual, implement the library's contract in full, in the same language. A sealed set has no regional sets to reach, because none can derive from it. Where the library's set isn't sealed, your wording also shows for its regional sets, for every text such a set leaves alone. Reword a text that a regional set changes the same way.
 
 ## An assembly without languages
 

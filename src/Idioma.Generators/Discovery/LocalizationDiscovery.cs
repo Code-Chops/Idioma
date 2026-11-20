@@ -229,19 +229,11 @@ internal static partial class LocalizationDiscovery
             return generatedContracts.Contains(fullName) ? fullName : null;
         }
 
-        string? found = null;
+        if (!generatedContracts.TryFindBySimpleName(baseType.Name, out var found))
+            return null;
 
-        foreach (var contract in generatedContracts.Names)
-        {
-            if (!String.Equals(GetSimpleName(contract), baseType.Name, StringComparison.Ordinal))
-                continue;
-
-            // A contract the compiler bound it to, as long as the compilation still generates it.
-            if (found is not null)
-                return generatedContracts.FindBinding(baseType.Location) is { } bound && generatedContracts.Contains(bound) ? bound : null;
-
-            found = contract;
-        }
+        // Two share the name: the contract the compiler bound it to, as long as the compilation still generates it.
+        found ??= generatedContracts.FindBinding(baseType.Location) is { } bound && generatedContracts.Contains(bound) ? bound : null;
 
         return found;
     }

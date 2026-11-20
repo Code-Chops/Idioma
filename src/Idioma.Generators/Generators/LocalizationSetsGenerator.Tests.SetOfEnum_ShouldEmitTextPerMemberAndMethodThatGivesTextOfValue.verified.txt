@@ -3,6 +3,8 @@
 #pragma warning disable CS0612, CS0618 // Only generated code calls GeneratedCode.
 
 using static CodeChops.Idioma.Internals.GeneratedCode;
+using Namespace_System = System;
+using Namespace_System_Collections_Generic = System.Collections.Generic;
 
 namespace TestApp;
 
@@ -79,22 +81,17 @@ public static partial class OrderStatusLocalization
     /// <remarks>
     /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText GetTextByValue(OrderStatus value) => value switch
-    {
-        global::TestApp.OrderStatus.Pending => Pending,
-        global::TestApp.OrderStatus.Shipped => Shipped,
-        _ => CreateUndefinedEnumText<global::TestApp.OrderStatus>(value),
-    };
+    public static CodeChops.Idioma.LocalizableText GetTextByValue(OrderStatus value) => TextsByValue<IOrderStatusLocalization>.Get(value);
 
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Pending"</c>.
     /// </summary>
     /// <param name="key">The <see cref="CodeChops.Idioma.LocalizableText.Key"/> of the text: its name, in the same letter case.</param>
     /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-    /// <exception cref="global::System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
-    /// <exception cref="global::System.Collections.Generic.KeyNotFoundException">When no text has the key.</exception>
-    /// <exception cref="global::System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params global::System.ReadOnlySpan<object?> values) => key switch
+    /// <exception cref="Namespace_System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
+    /// <exception cref="Namespace_System_Collections_Generic.KeyNotFoundException">When no text has the key.</exception>
+    /// <exception cref="Namespace_System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
+    public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params Namespace_System.ReadOnlySpan<object?> values) => key switch
     {
         "Pending" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
         "Shipped" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
@@ -106,6 +103,16 @@ file static class DefaultSet<TSet>
     where TSet : new()
 {
     internal static TSet Instance { get; } = new();
+}
+
+file static class TextsByValue<TContract>
+{
+    internal static CodeChops.Idioma.LocalizableText Get(OrderStatus value) => value switch
+    {
+        OrderStatus.Pending => OrderStatusLocalization.Pending,
+        OrderStatus.Shipped => OrderStatusLocalization.Shipped,
+        _ => CreateUndefinedEnumText<OrderStatus>(value),
+    };
 }
 #pragma warning restore CS0612, CS0618
 #nullable restore

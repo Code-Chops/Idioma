@@ -83,6 +83,22 @@ public sealed partial class LocalizationRegistryTests
     }
 
     /// <summary>
+    /// A set whose language code can change after it registered, which a set's shouldn't.
+    /// </summary>
+    private sealed class RegistryChangingLocalization : ILocalizationSet
+    {
+        public string LocalizationLanguageCode { get; set; } = "fr";
+    }
+
+    /// <summary>
+    /// A second type whose language is a constructor argument, which no other test registers.
+    /// </summary>
+    private sealed class RegistryRepeatedLocalization(string language) : ILocalizationSet
+    {
+        public string LocalizationLanguageCode { get; } = language;
+    }
+
+    /// <summary>
     /// A name no language code can be derived from.
     /// </summary>
     private sealed class RegistryInvalidLocalization1 : ILocalizationSet;

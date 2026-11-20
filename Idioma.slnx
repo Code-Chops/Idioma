@@ -16,12 +16,17 @@
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
+    <File Path=".gitattributes" />
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/publish.yml" />
+    <File Path=".gitignore" />
+    <File Path="CLAUDE.md" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Build.targets" />
     <File Path="Directory.Packages.props" />
     <File Path="global.json" />
+    <File Path="icon.png" />
+    <File Path="Idioma.sln.DotSettings" />
     <File Path="LICENSE" />
     <File Path="nuget.config" />
   </Folder>

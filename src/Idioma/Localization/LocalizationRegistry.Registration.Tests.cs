@@ -62,6 +62,43 @@ public sealed partial class LocalizationRegistryTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
+    public void Register_TypeAndLanguageTwiceInOneCall_ShouldKeepTheLastOnce()
+    {
+        // Arrange
+        var first = new RegistryRepeatedLocalization("de");
+        var french = new RegistryRepeatedLocalization("fr");
+        var last = new RegistryRepeatedLocalization("DE");
+
+        // Act: also registered again afterwards, as a second service provider does.
+        LocalizationRegistry.Register(first, french, last);
+        LocalizationRegistry.Register(french);
+
+        // Assert: one per language, whatever the letter case of its code, in the order of the last registrations.
+        var sets = LocalizationRegistry.Current.Sets.OfType<RegistryRepeatedLocalization>().ToArray();
+        sets.ShouldBe([last, french]);
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void Register_AfterTheLanguageCodeOfARegisteredSetTurnedInvalid_ShouldKeepEveryTextWorking()
+    {
+        // Arrange
+        var changing = new RegistryChangingLocalization();
+        LocalizationRegistry.Register(changing);
+
+        // Act: the next registration builds the registry again, and reads every set's code.
+        changing.LocalizationLanguageCode = "not a culture";
+        LocalizationRegistry.Register(new RegistryRepeatedLocalization("it"));
+
+        // Assert: the set stays under the language it registered with, so no text fails.
+        var current = Should.NotThrow(static () => LocalizationRegistry.Current);
+        current.Sets.ShouldContain(changing);
+
+        changing.LocalizationLanguageCode = "fr";
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void Register_WithTypeArgument_ShouldCreateAndRegisterSet()
     {
         // Arrange & Act

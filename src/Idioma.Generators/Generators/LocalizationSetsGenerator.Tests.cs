@@ -307,6 +307,38 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    public void TextWithParametersNamedLikeContextualKeywords_ShouldCompile()
+    {
+        // Arrange: scoped is a keyword only in front of a parameter, where the generated code lists parameters by name.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public class ScopeLocalizationEn : ILocalizationSet, IScopeLocalization
+            {
+                public string Scope(string scoped) => $"Scope: {scoped}";
+                public string Pair(string scoped, int var) => $"{scoped} {var}";
+            }
+
+            public static class Usage
+            {
+                public static LocalizableText Text { get; } = ScopeLocalization.Scope(scoped: "all");
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
     public void UnresolvedCref_ShouldBeNoticed()
     {
         // Arrange & Act: what makes the test above worth anything.
@@ -3031,13 +3063,14 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
-    public void SetsInOneNamespace_ShouldGetNoAlias()
+    public void SetsInOneNamespace_ShouldGetNoAliasButThoseOfTheFramework()
     {
         // Arrange & Act
         var text = ContractText(Run(ShopSets));
+        var aliases = text.Split('\n').Where(static line => line.StartsWith("using Namespace_", StringComparison.Ordinal)).Select(static line => line.TrimEnd()).ToArray();
 
-        // Assert
-        text.ShouldNotContain("Namespace_");
+        // Assert: the namespaces of what the method that gives a text by its key names, and none for the sets.
+        aliases.ShouldBe(["using Namespace_System = System;", "using Namespace_System_Collections_Generic = System.Collections.Generic;"]);
     }
 
     [Test]
@@ -4938,8 +4971,8 @@ public sealed class LocalizationSetsGeneratorTests
         // Assert: a switch takes a value once.
         errors.ShouldBeEmpty();
         text.ShouldContain("    string Waiting { get; }");
-        text.ShouldContain("        global::TestApp.OrderStatus.Pending => Pending,");
-        text.ShouldNotContain("global::TestApp.OrderStatus.Waiting");
+        text.ShouldContain("        OrderStatus.Pending => OrderStatusLocalization.Pending,");
+        text.ShouldNotContain("OrderStatus.Waiting =>");
     }
 
     [Test]
@@ -4976,6 +5009,8 @@ public sealed class LocalizationSetsGeneratorTests
                     public string OrderStatus => "Order status";
                     public string value => "Value";
                     public string CreateUndefinedEnumText => "Unknown";
+                    public string TextsByValue => "Texts by value";
+                    public string System => "System";
                 }
 
                 public sealed class SpeedLocalizationEn : ILocalizationSet<Shipping.Speed>, ISpeedLocalization
@@ -5002,7 +5037,7 @@ public sealed class LocalizationSetsGeneratorTests
         errors.ShouldBeEmpty();
         warnings.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
-        contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_Domain_Orders.OrderStatus value_)"));
+        contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_Domain_Orders.OrderStatus value)"));
         contracts.ShouldContain(static contract => contract.Contains("internal static CodeChops.Idioma.LocalizableText GetTextByValue(Shipping.Speed value)"));
     }
 
@@ -5211,10 +5246,12 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         errors.ShouldBeEmpty();
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Colour value) => value switch");
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Size value) => value switch");
-        text.ShouldContain("        global::TestApp.Colour.Unknown => Unknown,");
-        text.ShouldContain("        global::TestApp.Size.Unknown => Unknown,");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Colour value) => TextsByValue<IOptionLocalization>.Get(value);");
+        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Colour value) => value switch");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Size value) => TextsByValue<IOptionLocalization>.Get(value);");
+        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Size value) => value switch");
+        text.ShouldContain("        Colour.Unknown => OptionLocalization.Unknown,");
+        text.ShouldContain("        Size.Unknown => OptionLocalization.Unknown,");
         text.Split("    string Unknown { get; }").Length.ShouldBe(2);
     }
 
@@ -5244,9 +5281,10 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         errors.ShouldBeEmpty();
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_System.MidpointRounding value) => value switch");
-        text.ShouldContain("        global::System.MidpointRounding.ToEven => ToEven,");
-        text.ShouldContain("        _ => CreateUndefinedEnumText<global::System.MidpointRounding>(value),");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_System.MidpointRounding value) => TextsByValue<IMidpointRoundingLocalization>.Get(value);");
+        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Namespace_System.MidpointRounding value) => value switch");
+        text.ShouldContain("        Namespace_System.MidpointRounding.ToEven => MidpointRoundingLocalization.ToEven,");
+        text.ShouldContain("        _ => CreateUndefinedEnumText<Namespace_System.MidpointRounding>(value),");
     }
     #endregion
 
@@ -5258,7 +5296,7 @@ public sealed class LocalizationSetsGeneratorTests
         var text = ContractText(Run(GreetingSets));
 
         // Assert: an arm per text, by its name. A text that takes values takes each from the values passed.
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params global::System.ReadOnlySpan<object?> values) => key switch");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params Namespace_System.ReadOnlySpan<object?> values) => key switch");
         text.ShouldContain("        \"Checkout\" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),");
         text.ShouldContain("        \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\"), GetKeyedValue<string>(key, values, 1, 2, \"shop\")),");
         text.ShouldContain("        _ => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");

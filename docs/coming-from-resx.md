@@ -13,6 +13,7 @@ Other subjects have a page of their own: [language codes](language-codes.md), [l
 | An entry, `<data name="Checkout">`                                 | A property, `public string Checkout => "Checkout";`                             |
 | `localizer["Checkout"]`, or `Shop.Checkout` of the generated class | `ShopLocalization.Checkout`                                                     |
 | `localizer["Greeting", customer.Name]`, with a `{0}` placeholder   | `ShopLocalization.Greeting(customer.Name)`, a method with a parameter per value |
+| `ResourceType = typeof(Shop)` in a validation or display attribute | A class of `string` properties that reads your texts                            |
 | `AddLocalization()` and an injected `IStringLocalizer<Shop>`       | Nothing to register or inject                                                   |
 | A mistyped key shows as the key itself                             | A mistyped name doesn't compile                                                 |
 | An entry missing from `Shop.nl.resx` falls back to the default     | A text missing from `ShopLocalizationNl` doesn't compile                        |
@@ -28,6 +29,29 @@ You can move one resource file at a time, because the two work side by side:
 2. Write the default-language set from the default resource file, with a property per entry. A key that isn't a valid C# name, such as `checkout-button`, needs a new name. An entry with placeholders becomes a method with a parameter per value ([Texts with parameters](../README.md#texts-with-parameters)).
 3. Write a set for each other language from its resource file. The build names every text a set lacks.
 4. Replace each lookup with the text, and delete the resource files. Once the injected localizer or the class resx generated is gone, the compiler points at every lookup that's left.
+
+## Validation and display attributes
+
+Name your texts in an attribute such as `[Required]` or `[Display]` through a class of static `string` properties. An attribute takes only constants, so `[Required(ErrorMessage = ShopLocalization.NameRequired)]` doesn't compile. These attributes do read a static `string` property by its name, as they read the class resx generates:
+
+```csharp
+public static class FormTexts
+{
+    public static string Name => ShopLocalization.Name;
+    public static string NameRequired => ShopLocalization.NameRequired;
+}
+
+public class Customer
+{
+    [Display(Name = nameof(FormTexts.Name), ResourceType = typeof(FormTexts))]
+    [Required(ErrorMessageResourceName = nameof(FormTexts.NameRequired), ErrorMessageResourceType = typeof(FormTexts))]
+    public string? Name { get; set; }
+}
+```
+
+Each property converts its text when the attribute reads it, so the label and the message follow the user's language. The attribute can't name `ShopLocalization` itself, because its texts are `LocalizableText` and the attribute asks for a `string`.
+
+A message can show the field's label as `{0}`, as in `"Enter {0}"`, because the attribute fills it in. In a set, that wording gets warning `LOC502`. Turn it off around the text with `#pragma warning disable LOC502`.
 
 ## Keeping a resource file as an override
 

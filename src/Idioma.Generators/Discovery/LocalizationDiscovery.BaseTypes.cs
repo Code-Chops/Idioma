@@ -163,7 +163,7 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// The name of a type without its namespace: <c>IShopLocalization</c> for <c>Shop.IShopLocalization</c>.
     /// </summary>
-    private static string GetSimpleName(string fullName)
+    internal static string GetSimpleName(string fullName)
     {
         var simpleName = fullName.Substring(fullName.LastIndexOf('.') + 1);
         return simpleName;

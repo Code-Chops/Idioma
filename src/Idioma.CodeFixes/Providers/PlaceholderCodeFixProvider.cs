@@ -10,22 +10,27 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <summary>
 /// Fixes a text of a set whose wording holds a placeholder of a format string (<c>LOC502</c>). It writes a parameter in
 /// place of each placeholder, so that the wording shows the value. A property becomes a method that takes the values,
-/// and a method uses its own parameters, the first for <c>{0}</c>.
+/// in every language of this assembly at once, and a method uses its own parameters, the first for <c>{0}</c>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A property takes the parameters of the contract's method by its name, when the contract has one. Otherwise it takes
 /// one parameter per placeholder number, <c>arg0</c> for <c>{0}</c>, of type <c>object?</c>, as
 /// <see cref="string.Format(string, object?)"/> does. It counts the numbers in every language's wording of the text,
-/// so each language gets the same parameters, whichever is fixed first. That holds for a wording that has its
+/// so each language gets the same parameters, whichever is fixed. That holds for a wording that has its
 /// placeholders in another order, and for one that shows fewer of them.
+/// </para>
+/// <para>
+/// The same property of every other set of this assembly becomes a method with it, also one without a placeholder, so
+/// that each set still implements the contract. Such a set then leaves the value out, which the build reports
+/// (<c>LOC302</c>). A wording in a raw string keeps its placeholder, and its warning.
 /// </para>
 /// <para>
 /// There's no fix for:
 /// </para>
 /// <list type="bullet">
 /// <item>An inline text, because its wording has no parameter to take the value.</item>
-/// <item>A wording in a raw string.</item>
+/// <item>A wording in a raw string, unless the fix of another language makes its property a method.</item>
 /// <item>A text of another assembly's contract that takes no values, because a set can't change it.</item>
 /// <item>A placeholder whose number has no parameter, or a ninth value, which a text can't take.</item>
 /// </list>
@@ -48,10 +53,15 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [PlaceholderAnalyzer.PlaceholderDiagnosticId];
 
     /// <summary>
-    /// Changes each text once, however many of its wordings hold a placeholder, because each such wording has a
-    /// diagnostic of its own.
+    /// Changes each text once, however many of its wordings and languages hold a placeholder, because each such wording
+    /// has a diagnostic of its own.
     /// </summary>
-    public override FixAllProvider GetFixAllProvider() => FixAllProvider.Create(FixAllAsync);
+    private static readonly FixAllProvider FixAll = new ReplaceNodesFixAllProvider<MemberDeclarationSyntax>(
+        "Replace the placeholders with parameters",
+        EquivalenceKey,
+        static (root, semanticModel, diagnostic, cancellationToken) => FindText(root, diagnostic) is { } text ? Fix(text, semanticModel, cancellationToken) : null);
+
+    public override FixAllProvider GetFixAllProvider() => FixAll;
 
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
@@ -64,7 +74,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            if (FindText(root, diagnostic) is not { } text || Fix(text, semanticModel, context.CancellationToken) is not { } fixedText)
+            if (FindText(root, diagnostic) is not { } text || Fix(text, semanticModel, context.CancellationToken) is not { } fixedTexts)
                 continue;
 
             var title = text is PropertyDeclarationSyntax property
@@ -74,31 +84,10 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title,
-                    createChangedDocument: _ => Task.FromResult(document.WithSyntaxRoot(root.ReplaceNode(text, fixedText))),
+                    createChangedSolution: cancellationToken => CodeFixSupport.ReplaceNodesAsync(document.Project.Solution, fixedTexts.Keys, changed => fixedTexts[changed], cancellationToken),
                     equivalenceKey: EquivalenceKey),
                 diagnostic);
         }
-    }
-
-    private static async Task<Document?> FixAllAsync(FixAllContext context, Document document, ImmutableArray<Diagnostic> diagnostics)
-    {
-        var root = await document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-        var semanticModel = await document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
-
-        if (root is null || semanticModel is null)
-            return document;
-
-        var fixedTexts = new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>();
-
-        foreach (var diagnostic in diagnostics)
-        {
-            if (FindText(root, diagnostic) is { } text && !fixedTexts.ContainsKey(text) && Fix(text, semanticModel, context.CancellationToken) is { } fixedText)
-                fixedTexts.Add(text, fixedText);
-        }
-
-        return fixedTexts.Count is 0
-            ? document
-            : document.WithSyntaxRoot(root.ReplaceNodes(fixedTexts.Keys, (original, _) => fixedTexts[original]));
     }
 
     /// <summary>
@@ -127,9 +116,10 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// The text with a parameter in place of each placeholder, or <see langword="null"/> when there's no fix (see the
-    /// remarks of this class).
+    /// remarks of this class). For a property, also the same property of every other set of this assembly, each as
+    /// the method it becomes.
     /// </summary>
-    private static MemberDeclarationSyntax? Fix(MemberDeclarationSyntax text, SemanticModel semanticModel, CancellationToken cancellationToken)
+    private static Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? Fix(MemberDeclarationSyntax text, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         if (FindWordings(text) is not { IsEmpty: false } wordings)
             return null;
@@ -137,23 +127,58 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         if (text is MethodDeclarationSyntax method)
         {
             var parameters = method.ParameterList.Parameters;
-            return FillIn(text, wordings, number => number < parameters.Count ? parameters[number].Identifier.ValueText : null);
+
+            return FillIn(text, wordings, number => number < parameters.Count ? parameters[number].Identifier.ValueText : null) is { } filled
+                ? new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax> { [text] = filled }
+                : null;
         }
 
         var property = (PropertyDeclarationSyntax)text;
         if (semanticModel.GetDeclaredSymbol(property, cancellationToken) is not { } symbol
-            || ReadParameters(property, symbol, wordings, semanticModel, cancellationToken) is not { } parameterList)
+            || ToMethod(property, symbol, wordings, semanticModel, cancellationToken) is not { } fixedText)
         {
             return null;
         }
 
+        var fixedTexts = new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax> { [text] = fixedText };
+
+        // The same text in the other languages, also where the wording holds no placeholder: a set that kept the
+        // property would no longer implement the contract, or override the text.
+        foreach (var other in FindOtherLanguages(symbol, semanticModel.Compilation, cancellationToken))
+        {
+            if (fixedTexts.ContainsKey(other))
+                continue;
+
+            var otherModel = semanticModel.Compilation.GetSemanticModel(other.SyntaxTree);
+
+            // A raw string keeps its placeholders, and a wording without any has none to fill in.
+            if (otherModel.GetDeclaredSymbol(other, cancellationToken) is { } otherSymbol
+                && ToMethod(other, otherSymbol, FindWordings(other) ?? [], otherModel, cancellationToken) is { } otherMethod)
+            {
+                fixedTexts.Add(other, otherMethod);
+            }
+        }
+
+        return fixedTexts;
+    }
+
+    /// <summary>
+    /// A property as the method that takes its values, with a parameter in place of each placeholder of
+    /// <paramref name="wordings"/>. <see langword="null"/> when the property can't become one.
+    /// </summary>
+    private static MethodDeclarationSyntax? ToMethod(PropertyDeclarationSyntax property, IPropertySymbol symbol,
+        ImmutableArray<ExpressionSyntax> wordings, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        if (ReadParameters(property, symbol, wordings, semanticModel, cancellationToken) is not { } parameterList)
+            return null;
+
         var names = parameterList.Parameters.Select(static parameter => parameter.Identifier.ValueText).ToArray();
 
         // A name the text already uses, such as a field of the set, would then mean the parameter.
-        if (text.DescendantNodes().OfType<IdentifierNameSyntax>().Any(identifier => names.Contains(identifier.Identifier.ValueText, StringComparer.Ordinal)))
+        if (property.DescendantNodes().OfType<IdentifierNameSyntax>().Any(identifier => names.Contains(identifier.Identifier.ValueText, StringComparer.Ordinal)))
             return null;
 
-        return FillIn(text, wordings, number => number < names.Length ? names[number] : null) is PropertyDeclarationSyntax filled
+        return FillIn(property, wordings, number => number < names.Length ? names[number] : null) is PropertyDeclarationSyntax filled
             ? ToMethod(filled, parameterList)
             : null;
     }
@@ -228,7 +253,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         if (contracts.IsEmpty)
             yield break;
 
-        foreach (var set in GetClasses(compilation.Assembly.GlobalNamespace))
+        foreach (var set in CodeFixSupport.GetClasses(compilation.Assembly.GlobalNamespace))
         {
             if (!set.AllInterfaces.Any(contract => contracts.Contains(contract, SymbolEqualityComparer.Default)))
                 continue;
@@ -243,20 +268,6 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
                         yield return declaration;
             }
         }
-    }
-
-    /// <summary>
-    /// The top-level classes of a namespace and of the namespaces inside it. A set is a top-level class.
-    /// </summary>
-    private static IEnumerable<INamedTypeSymbol> GetClasses(INamespaceSymbol @namespace)
-    {
-        foreach (var type in @namespace.GetTypeMembers())
-            if (type.TypeKind is TypeKind.Class)
-                yield return type;
-
-        foreach (var inner in @namespace.GetNamespaceMembers())
-            foreach (var type in GetClasses(inner))
-                yield return type;
     }
 
     private static string Type(ITypeSymbol type, SyntaxNode at, SemanticModel semanticModel, bool annotationsEnabled)

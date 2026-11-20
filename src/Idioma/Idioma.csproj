@@ -21,7 +21,7 @@
     <IsPackable>true</IsPackable>
     <!-- The version is in Directory.Build.props, for the generator and the code fixes too. -->
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>A text takes a value as a method of its set. Write Greeting(string name) in each language and call ShopLocalization.Greeting(customer.Name). LocalizableText.Format is gone, and nothing fills in a placeholder such as {0} any more, so a wording that holds one shows its braces (LOC502, with an IDE fix that writes the method). Each language writes its own plurals in C#, because a wording can depend on its values.
+    <PackageReleaseNotes>A text takes a value as a method of its set. Write Greeting(string name) in each language and call ShopLocalization.Greeting(customer.Name). LocalizableText.Format is gone, and nothing fills in a placeholder such as {0} any more, so a wording that holds one shows its braces (LOC502, with an IDE fix that writes the method). A text passed to a string parameter of such a method is a build warning (LOC303, with an IDE fix that makes the parameter a LocalizableText), because it keeps the wording of the language in use at the call. A text follows a culture passed as a format provider, as in string.Create(culture, ...) and string.Format(culture, ...). Each language writes its own plurals in C#, because a wording can depend on its values.
 
 A set can hold the texts of an enum. List ILocalizationSet&lt;OrderStatus&gt; in place of ILocalizationSet, and every member of the enum needs a text in every language (CS0535). OrderStatusLocalization.GetTextByValue(order.Status) gives the text of a value.
 

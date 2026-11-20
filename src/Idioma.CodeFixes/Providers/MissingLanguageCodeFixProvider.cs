@@ -236,7 +236,7 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
 
                 foreach (var diagnostic in diagnostics)
                 {
-                    if (FindDocument(project, diagnostic) is { } document
+                    if (CodeFixSupport.FindDocument(project, diagnostic) is { } document
                         && await NewSet.ReadAsync(document, compilation, diagnostic, cancellationToken).ConfigureAwait(false) is { } set)
                     {
                         sets.Add(set);
@@ -247,19 +247,6 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
             return sets.Count is 0
                 ? null
                 : CodeAction.Create("Add the missing sets", token => AddAsync(fixAllContext.Solution, sets, token), EquivalenceKey);
-        }
-
-        /// <summary>
-        /// The document a diagnostic is in: by its tree, and else by its path, for a diagnostic of an earlier
-        /// compilation.
-        /// </summary>
-        private static Document? FindDocument(Project project, Diagnostic diagnostic)
-        {
-            if (diagnostic.Location.SourceTree is not { } tree)
-                return null;
-
-            return project.GetDocument(tree)
-                   ?? project.Documents.FirstOrDefault(document => document.FilePath is not null && String.Equals(document.FilePath, tree.FilePath, StringComparison.Ordinal));
         }
     }
 }

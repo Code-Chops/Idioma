@@ -7,6 +7,9 @@ artifacts/
 *.binlog
 TestResults/
 
+# BenchmarkDotNet builds each run in a .bdn folder next to the project, and leaves it behind when a run stops early
+.bdn/
+
 # IDE and user-specific files
 .idea/
 .vs/

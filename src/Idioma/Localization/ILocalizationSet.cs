@@ -87,6 +87,9 @@ namespace CodeChops.Idioma;
 /// (<c>LOC301</c>).</item>
 /// <item>Every language uses every value the default wording shows (<c>LOC302</c>).</item>
 /// <item>A method the generated class can't repeat, such as a generic one, is build error <c>LOC300</c>.</item>
+/// <item>A text passed to a <see cref="string"/> parameter is build warning <c>LOC303</c>, because it keeps the wording
+/// of the language in use at the call. A parameter that takes a text is a <see cref="LocalizableText"/>, and your IDE
+/// changes its type in every set.</item>
 /// <item>A placeholder such as <c>{0}</c> in a wording is build warning <c>LOC502</c>, because nothing fills it in.
 /// Your IDE turns such a text into a method that takes the value.</item>
 /// </list>

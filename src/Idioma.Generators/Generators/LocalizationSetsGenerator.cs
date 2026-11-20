@@ -37,6 +37,10 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     public const string ReservedTextNameDiagnosticId = "LOC205";
     public const string UnsupportedTextDiagnosticId = "LOC300";
 
+    // The namespaces of what the method that gives a text by its key names (AppendGet).
+    private const string SystemNamespace = "System";
+    private const string CollectionsNamespace = "System.Collections.Generic";
+
     /// <summary>
     /// The property of a diagnostic that holds the name that resolves it, for its code fix to apply: the name the class
     /// should carry (<c>LOC200</c>, when a rename resolves it), the contract to add next to <c>ILocalizationSet</c>
@@ -141,11 +145,12 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         var analysis = discovery
             .Combine(languages)
             .Combine(bindings)
-            .Select(static (data, _) => LocalizationSetsAnalysis.Analyze(
+            .Select(static (data, cancellationToken) => LocalizationSetsAnalysis.Analyze(
                 data.Left.Left.Sets,
                 data.Left.Left.UnextendableSets,
                 data.Left.Right,
-                data.Right));
+                data.Right,
+                cancellationToken));
 
         // Separate outputs, so that an edit in the file of a set, which renews its location, reports its diagnostics
         // anew without rewriting the generated code: the contracts and the recorded sets hold no location.
@@ -462,8 +467,10 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
         // and for every set, the method that gives a text by its key.
+        var lookups = new StringBuilder();
+
         foreach (var @enum in contract.Enums)
-            AppendLookup(sb, contract, aliases, texts, @enum);
+            AppendLookup(sb, lookups, contract, aliases, name, textsName, texts, @enum);
 
         AppendGet(sb, contract, aliases, name, textsName, texts);
 
@@ -480,6 +487,19 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 internal static TSet Instance { get; } = new();
             }
             """);
+
+        // The text of each member of an enum, outside the generated class: there a text named like the enum, or like
+        // what its name starts with, would stand before it in a pattern. File-local and generic, as DefaultSet is.
+        if (lookups.Length > 0)
+        {
+            sb.AppendLine($$"""
+
+                file static class TextsByValue<TContract>
+                {
+                """);
+            sb.Append(lookups);
+            sb.AppendLine("}");
+        }
     }
 
     /// <summary>
@@ -489,17 +509,12 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// </summary>
     // Of two members of one value, the first gives its text: a switch takes a value once. A member whose text the
     // class doesn't hold, because of its name (LOC205), has no arm, and shows as a value that is no member.
-    private static void AppendLookup(StringBuilder sb, LocalizationContract contract, SortedDictionary<string, string> aliases,
-        LocalizationMember[] texts, LocalizedEnum @enum)
+    private static void AppendLookup(StringBuilder sb, StringBuilder lookups, LocalizationContract contract, SortedDictionary<string, string> aliases,
+        string name, string textsName, LocalizationMember[] texts, LocalizedEnum @enum)
     {
         var type = RenderType(@enum.Type, contract.Namespace, aliases);
         var properties = new HashSet<string>(texts.Where(static text => !text.IsMethod).Select(static text => text.Name), StringComparer.Ordinal);
         var members = @enum.Members.Where(member => member.IsFirstOfItsValue && properties.Contains(member.Name)).ToArray();
-
-        // Apart from every text: inside the method its parameter stands before a text of its name.
-        var value = "value";
-        while (texts.Any(text => String.Equals(text.Name, value, StringComparison.Ordinal)))
-            value += "_";
 
         // A type with type arguments, as an enum inside a generic class has, is no name a cref can hold.
         var enumLink = type.Contains("<") ? $"<c>{EscapeXml(type)}</c>" : $"<see cref=\"{type}\"/>";
@@ -507,6 +522,8 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             ? $", such as <see cref=\"{EscapeIdentifier(members[0].Name)}\"/> for <c>{EscapeXml(@enum.Name)}.{members[0].Name}</c>"
             : "";
 
+        // The switch stands in a class outside the generated one (TextsByValue), which is named with a type argument:
+        // a name with a type argument is not looked for among the texts.
         sb.AppendLine();
         sb.AppendLine($$"""
                 /// <summary>
@@ -515,17 +532,23 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 /// <remarks>
                 /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                 /// </remarks>
-                {{(@enum.IsPublic ? "public" : "internal")}} static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.LookupName}}({{type}} {{value}}) => {{value}} switch
+                {{(@enum.IsPublic ? "public" : "internal")}} static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
+            """);
+
+        if (lookups.Length > 0)
+            lookups.AppendLine();
+
+        lookups.AppendLine($$"""
+                internal static {{PackageNames.LocalizableText}} Get({{type}} value) => value switch
                 {
             """);
 
-        // The enum by its full name from the global namespace on: in a pattern, a text of the enum's name would stand
-        // before it. What creates the text of any other value is called with its type argument, which no text has.
+        // Each text by the name of its class in front, as it stands outside that class.
         foreach (var member in members)
-            sb.AppendLine($"        {@enum.FullyQualifiedName}.{EscapeIdentifier(member.Name)} => {EscapeIdentifier(member.Name)},");
+            lookups.AppendLine($"        {type}.{EscapeIdentifier(member.Name)} => {textsName}.{EscapeIdentifier(member.Name)},");
 
-        sb.AppendLine($$"""
-                    _ => CreateUndefinedEnumText<{{@enum.FullyQualifiedName}}>({{value}}),
+        lookups.AppendLine($$"""
+                    _ => CreateUndefinedEnumText<{{type}}>(value),
                 };
             """);
     }
@@ -538,7 +561,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// </summary>
     // Each text by the name of its class in front, because the parameters of the method stand before a text named
     // key or values. What checks the values is called with a type argument, which no text has, and the types
-    // of the parameters are named from the global namespace on.
+    // of the parameters and of the exceptions are named through the alias of their namespace.
     private static void AppendGet(StringBuilder sb, LocalizationContract contract, SortedDictionary<string, string> aliases,
         string name, string textsName, LocalizationMember[] texts)
     {
@@ -551,10 +574,10 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 /// </summary>
                 /// <param name="key">The <see cref="{{PackageNames.LocalizableText}}.Key"/> of the text: its name, in the same letter case.</param>
                 /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-                /// <exception cref="global::System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
-                /// <exception cref="global::System.Collections.Generic.KeyNotFoundException">When no text has the key.</exception>
-                /// <exception cref="global::System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-                public static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.GetName}}(string key, params global::System.ReadOnlySpan<object?> values) => key switch
+                /// <exception cref="{{GetCrefType(contract.Namespace, aliases, SystemNamespace, "ArgumentNullException")}}">When <paramref name="key"/> is <see langword="null"/>.</exception>
+                /// <exception cref="{{GetCrefType(contract.Namespace, aliases, CollectionsNamespace, "KeyNotFoundException")}}">When no text has the key.</exception>
+                /// <exception cref="{{GetCrefType(contract.Namespace, aliases, SystemNamespace, "ArgumentException")}}">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
+                public static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.GetName}}(string key, params {{GetCrefType(contract.Namespace, aliases, SystemNamespace, "ReadOnlySpan")}}<object?> values) => key switch
                 {
             """);
 
@@ -616,6 +639,13 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             foreach (var part in @enum.Type)
                 if (part.Namespace is { } enumNamespace)
                     Add(enumNamespace);
+
+        // What the method that gives a text by its key names (AppendGet).
+        if (contract.HasTexts)
+        {
+            Add(SystemNamespace);
+            Add(CollectionsNamespace);
+        }
 
         return aliases;
 
@@ -941,9 +971,11 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     /// <summary>
     /// A name as code can write it: a keyword gets an <c>@</c>, as for a text declared as <c>@event</c>.
     /// </summary>
+    // So does scoped, which is a keyword only in front of a parameter: the function that picks the set of a text
+    // lists its parameters by name alone, and (set, scoped) reads there as a modifier without a parameter (CS1001).
     internal static string EscapeIdentifier(string name)
     {
-        var escapeIdentifier = SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
+        var escapeIdentifier = SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None && name is not "scoped" ? name : $"@{name}";
         return escapeIdentifier;
     }
 

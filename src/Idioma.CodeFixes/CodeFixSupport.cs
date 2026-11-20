@@ -19,6 +19,32 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
+    /// The document a diagnostic is in: by its tree, and else by its path, for a diagnostic of an earlier compilation.
+    /// </summary>
+    public static Document? FindDocument(Project project, Diagnostic diagnostic)
+    {
+        if (diagnostic.Location.SourceTree is not { } tree)
+            return null;
+
+        return project.GetDocument(tree)
+               ?? project.Documents.FirstOrDefault(document => document.FilePath is not null && String.Equals(document.FilePath, tree.FilePath, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The top-level classes of a namespace and of the namespaces inside it. A set is a top-level class.
+    /// </summary>
+    public static IEnumerable<INamedTypeSymbol> GetClasses(INamespaceSymbol @namespace)
+    {
+        foreach (var type in @namespace.GetTypeMembers())
+            if (type.TypeKind is TypeKind.Class)
+                yield return type;
+
+        foreach (var inner in @namespace.GetNamespaceMembers())
+            foreach (var type in GetClasses(inner))
+                yield return type;
+    }
+
+    /// <summary>
     /// The class a declaration declares, with the semantic model of the document it lies in, or <see langword="null"/>
     /// when the document has none.
     /// </summary>
