@@ -261,7 +261,7 @@ public sealed partial class LocalizationRegistry
         for (var i = 0; i < sets.Length; i++)
         {
             ArgumentNullException.ThrowIfNull(sets[i], nameof(sets));
-            entries[i] = new Registration(sets[i], ReadLanguageCode(sets[i]));
+            entries[i] = Registration.Of(sets[i]);
         }
 
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
@@ -269,11 +269,99 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// A registered set, with the language it had when it registered.
+    /// Adds sets that the registry creates when it's first read, for
+    /// <see cref="Internals.GeneratedCode.RegisterSets"/>. Each is filed under the language the build recorded for its
+    /// type, or under the one it gives once it's created, for a set that implements
+    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/>.
+    /// </summary>
+    // Not created here, because this runs in a module initializer, before Main. A set whose constructor throws there
+    // takes the app down where nothing can catch it, also an app that never shows the set's texts. Created when the
+    // first text is shown, it throws from there, where the app can log it.
+    internal static void RegisterSets(ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets, bool asDefaults)
+    {
+        var entries = new Registration[sets.Length];
+        for (var i = 0; i < sets.Length; i++)
+        {
+            var (type, create) = sets[i];
+            ArgumentNullException.ThrowIfNull(type, nameof(sets));
+            ArgumentNullException.ThrowIfNull(create, nameof(sets));
+
+            // The type's own record alone. A set that implements LocalizationLanguageCode itself is recorded without a
+            // code, and the code of a set it derives from isn't its own.
+            var language = RecordedSets.TryGetValue(type, out var recorded) ? recorded.LanguageCode : null;
+            entries[i] = Registration.ToCreate(type, create, language);
+        }
+
+        // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
+        ImmutableInterlocked.Update(ref Registered, registered => registered.With(entries, asDefaults));
+    }
+
+    /// <summary>
+    /// A registered set, with the language it had when it registered. A set the registry creates itself is created
+    /// once, when the registry is first read, and its language is read from it then if the build recorded none.
     /// </summary>
     // A class, for the reason ContractSet is one. As a tuple, it left nine methods of ImmutableArray to the JIT at the
     // start of every app.
-    private sealed record Registration(ILocalizationSet Set, string Language);
+    private sealed class Registration
+    {
+        private readonly Lazy<ILocalizationSet> _set;
+
+        private Registration(Type type, Lazy<ILocalizationSet> set, string? language)
+        {
+            this.Type = type;
+            this._set = set;
+            this.Language = language;
+        }
+
+        public Type Type { get; }
+
+        /// <summary>
+        /// The language the set registered with, or <see langword="null"/> for a set the registry has yet to create that
+        /// gives its language itself.
+        /// </summary>
+        public string? Language { get; }
+
+        /// <summary>
+        /// The set, which is created at the first read. A set whose constructor threw throws the same exception on every
+        /// read, so every text says what went wrong, and not only the first.
+        /// </summary>
+        public ILocalizationSet Set => this._set.Value;
+
+        public static Registration Of(ILocalizationSet set)
+        {
+            var registration = new Registration(set.GetType(), new Lazy<ILocalizationSet>(set), ReadLanguageCode(set));
+            return registration;
+        }
+
+        public static Registration ToCreate(Type type, Func<ILocalizationSet> create, string? language)
+        {
+            var registration = new Registration(type, new Lazy<ILocalizationSet>(() => CreateSet(type, create), LazyThreadSafetyMode.ExecutionAndPublication), language);
+            return registration;
+        }
+    }
+
+    /// <summary>
+    /// Creates a set the registry registered by its type, and says which set it was if its constructor throws.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">When the set's constructor throws, with that exception inside.</exception>
+    internal static ILocalizationSet CreateSet(Type type, Func<ILocalizationSet> create)
+    {
+        ILocalizationSet? set;
+
+        try
+        {
+            set = create();
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"'{type}' threw when it was created, so no text can be shown. The registry creates every set when the first text is shown. See the inner exception for why it threw, and make its constructor succeed.",
+                exception);
+        }
+
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract - What creates it is the consumer's.
+        return set ?? throw new InvalidOperationException($"What creates '{type}' gave null instead of a set.");
+    }
 
     /// <summary>
     /// The registered sets and the app's languages, with the registry built from them. It never changes, so a reader
@@ -305,16 +393,18 @@ public sealed partial class LocalizationRegistry
             var sets = ImmutableArray.CreateBuilder<ILocalizationSet>(this.Defaults.Length + this.Overrides.Length);
             var registeredLanguages = new List<string>(this.Defaults.Length + this.Overrides.Length);
 
+            // A set the registry creates is created here, at the first read, and throws from here if its constructor
+            // does. So does one without a recorded language whose code is no culture name.
             foreach (var registration in this.Defaults)
             {
                 sets.Add(registration.Set);
-                registeredLanguages.Add(registration.Language);
+                registeredLanguages.Add(registration.Language ?? ReadLanguageCode(registration.Set));
             }
 
             foreach (var registration in this.Overrides)
             {
                 sets.Add(registration.Set);
-                registeredLanguages.Add(registration.Language);
+                registeredLanguages.Add(registration.Language ?? ReadLanguageCode(registration.Set));
             }
 
             // Building reads the language code of every set, which is consumer code, so nothing is held meanwhile and
@@ -342,7 +432,7 @@ public sealed partial class LocalizationRegistry
 
             foreach (var entry in entries)
             {
-                var type = entry.Set.GetType();
+                var type = entry.Type;
 
                 if (!entriesByType.TryGetValue(type, out var ofType))
                     entriesByType.Add(type, ofType = new List<Registration>(capacity: 1));
@@ -359,12 +449,12 @@ public sealed partial class LocalizationRegistry
             var added = ImmutableArray.CreateBuilder<Registration>(tier.Length + entries.Length);
 
             foreach (var existing in tier)
-                if (!entriesByType.TryGetValue(existing.Set.GetType(), out var ofType) || IndexOfLanguage(ofType, existing.Language) < 0)
+                if (!entriesByType.TryGetValue(existing.Type, out var ofType) || IndexOfLanguage(ofType, existing.Language) < 0)
                     added.Add(existing);
 
             foreach (var entry in entries)
             {
-                var ofType = entriesByType[entry.Set.GetType()];
+                var ofType = entriesByType[entry.Type];
 
                 if (ReferenceEquals(ofType[IndexOfLanguage(ofType, entry.Language)], entry))
                     added.Add(entry);
@@ -379,7 +469,9 @@ public sealed partial class LocalizationRegistry
             return registrations;
         }
 
-        private static int IndexOfLanguage(List<Registration> registrations, string language)
+        // A set the registry has yet to create, and that gives its language itself, has none yet. Registered again, it
+        // takes the place of the earlier registration of its type that has none either.
+        private static int IndexOfLanguage(List<Registration> registrations, string? language)
         {
             for (var index = 0; index < registrations.Count; index++)
                 if (String.Equals(registrations[index].Language, language, StringComparison.OrdinalIgnoreCase))

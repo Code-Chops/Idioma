@@ -239,6 +239,56 @@ public sealed class InlineTextValuesAnalyzerTests
     }
 
     [Test]
+    public async Task ManyInlineTextsInOneMethod_ShouldHoldEachToWhatItsOwnLocalIsAssigned()
+    {
+        // Arrange: one method with many texts, as Razor writes all the markup of a page in one method. The Dutch wording
+        // of each shows a local variable of its own, which gets its value after its declaration in one of three ways:
+        // the name through another local variable, another value, or an argument passed by reference.
+        const int textCount = 90;
+
+        static string Statements(int index) => (index % 3) switch
+        {
+            0 => $$"""
+                string copy{{index}}, held{{index}}; copy{{index}} = name.Trim(); held{{index}} = copy{{index}};
+                Show(LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {held{{index}}}!", enGb: $"Hello, {name}!"));
+                """,
+            1 => $$"""
+                var other{{index}} = "gast"; other{{index}} = count.ToString();
+                Show(LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {other{{index}}}!", enGb: $"Hello, {name}!"));
+                """,
+            _ => $$"""
+                var parsed{{index}} = 0; int.TryParse(name, out parsed{{index}});
+                Show(LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {parsed{{index}}}!", enGb: $"Hello, {name}!"));
+                """,
+        };
+
+        var source = $$"""
+            {{Header}}
+
+            public static class Page
+            {
+                public static void Render(string name, int count)
+                {
+            {{string.Join(Environment.NewLine, Enumerable.Range(0, textCount).Select(Statements))}}
+                }
+
+                private static void Show(LocalizableText text) { }
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: each text is held to what its own local variable is assigned, whatever the method assigns to the
+        // others.
+        diagnostics.Select(static diagnostic => diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan)).ShouldBe(
+            Enumerable.Range(0, textCount).Where(static index => index % 3 is 1).Select(static index => $"nl: $\"Hallo, {{other{index}}}!\""),
+            ignoreOrder: true);
+        diagnostics.Select(static diagnostic => diagnostic.GetMessage()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem()
+            .ShouldBe("The 'nl' wording doesn't use 'name', but the 'en' wording shows it. Use 'name' in every language, or users of 'nl' won't see it.");
+    }
+
+    [Test]
     public async Task InlineTextInAssemblyWithOneLanguage_ShouldReportNothing()
     {
         // Arrange & Act

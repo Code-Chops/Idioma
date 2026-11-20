@@ -20,6 +20,15 @@ internal static class ContractTexts
     /// <param name="localizationSet"><c>ILocalizationSet</c>, which is no contract itself.</param>
     public static bool ImplementsText(ISymbol member, INamedTypeSymbol set, INamedTypeSymbol localizationSet)
     {
+        // The part of a partial member that implements it, which holds the wording, stands for the part that declares
+        // it. The set names that part as the implementation of a text.
+        member = member switch
+        {
+            IMethodSymbol { PartialDefinitionPart: { } method } => method,
+            IPropertySymbol { PartialDefinitionPart: { } property } => property,
+            _ => member,
+        };
+
         var explicitly = member switch
         {
             IPropertySymbol property => property.ExplicitInterfaceImplementations.CastArray<ISymbol>(),

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace CodeChops.Idioma.Generators;
@@ -16,7 +17,8 @@ namespace CodeChops.Idioma.Generators;
 /// </para>
 /// <para>
 /// A value counts as left out when the method does not use it at all, and only where the default wording shows it,
-/// which the generated contract records on the method (<c>[ShownValue]</c>). A value the default wording only
+/// which the generated contract records on the method (<c>[ShownValue]</c>). For a contract written by hand, it's read
+/// from the default-language set that implements it in the same assembly. A value the default wording only
 /// chooses by, such as a form of address, may mean nothing in a language that makes no such distinction. Each method
 /// of a set that implements a text of a contract is checked, whether it implements the text by its name, implements
 /// it explicitly, or overrides the method of a set it derives from, also for a contract of another assembly.
@@ -71,11 +73,15 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         // A package without the attribute records no values to hold a set to.
         var shownValue = context.Compilation.GetTypeByMetadataName(PackageNames.ShownValueAttribute);
 
+        // What the default wording of a text of a contract written by hand shows, read once per text for the compilation.
+        var shownByHand = new ConcurrentDictionary<IMethodSymbol, bool[]?>(SymbolEqualityComparer.Default);
+
         // On the declaration, for its semantic model: whether a method uses a value is read from its body.
-        context.RegisterSyntaxNodeAction(c => AnalyzeMethod(c, localizationSet, shownValue), SyntaxKind.MethodDeclaration);
+        context.RegisterSyntaxNodeAction(c => AnalyzeMethod(c, localizationSet, shownValue, shownByHand), SyntaxKind.MethodDeclaration);
     }
 
-    private static void AnalyzeMethod(SyntaxNodeAnalysisContext context, INamedTypeSymbol localizationSet, INamedTypeSymbol? shownValue)
+    private static void AnalyzeMethod(SyntaxNodeAnalysisContext context, INamedTypeSymbol localizationSet, INamedTypeSymbol? shownValue,
+        ConcurrentDictionary<IMethodSymbol, bool[]?> shownByHand)
     {
         var declaration = (MethodDeclarationSyntax)context.Node;
 
@@ -99,7 +105,12 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         // The language of the set as LOC302 names it: 'nl', or "that language" when the build can't read it.
         string? language = null;
 
-        foreach (var text in FindImplementedTexts(method, set, localizationSet))
+        // A partial method is implemented by the part that holds its body, and the set names the part that declares it
+        // as the implementation of a text. Each part is read for itself: the names where it declares them, and the
+        // values where its body uses them. So LOC301 is reported at the declaring part alone.
+        var declaringPart = method.PartialDefinitionPart;
+
+        foreach (var text in FindImplementedTexts(declaringPart ?? method, set, localizationSet))
         {
             var reported = false;
 
@@ -109,13 +120,13 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
                 var expected = text.Parameters[i];
                 var location = parameter.Locations.FirstOrDefault() ?? method.Locations[0];
 
-                if (!String.Equals(parameter.Name, expected.Name, StringComparison.Ordinal))
+                if (declaringPart is null && !String.Equals(parameter.Name, expected.Name, StringComparison.Ordinal))
                 {
                     reported = true;
                     context.ReportDiagnostic(Diagnostic.Create(ParameterNamesDifferRule, location, set.Name, text.Name, parameter.Name, text.ContainingType.Name, expected.Name));
                 }
 
-                if (shownValue is null || !IsShown(text, expected, shownValue))
+                if (!IsShown(text, expected, shownValue, shownByHand, context.Compilation, context.CancellationToken))
                     continue;
 
                 used ??= FindUsedValues(declaration, context.SemanticModel);
@@ -158,21 +169,34 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether the contract records on a text that its default wording shows the value of a parameter.
+    /// Whether the default wording of a text shows the value of a parameter. A generated contract records it on the
+    /// text (<c>[ShownValue]</c>). For a contract written by hand, it's read from the default-language set that
+    /// implements the text in this compilation, if any (<see cref="TextParameters.FindShownByDefaultSet"/>).
     /// </summary>
-    private static bool IsShown(IMethodSymbol text, IParameterSymbol parameter, INamedTypeSymbol shownValue)
+    private static bool IsShown(IMethodSymbol text, IParameterSymbol parameter, INamedTypeSymbol? shownValue,
+        ConcurrentDictionary<IMethodSymbol, bool[]?> shownByHand, Compilation compilation, CancellationToken cancellationToken)
     {
+        var recorded = false;
+
         foreach (var attribute in text.GetAttributes())
         {
-            if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, shownValue)
-                && attribute.ConstructorArguments is [{ Value: string name }]
-                && String.Equals(name, parameter.Name, StringComparison.Ordinal))
-            {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, shownValue))
+                continue;
+
+            recorded = true;
+
+            if (attribute.ConstructorArguments is [{ Value: string name }] && String.Equals(name, parameter.Name, StringComparison.Ordinal))
                 return true;
-            }
         }
 
-        return false;
+        // A generated contract records every value its default wording shows, so a value it doesn't record isn't shown.
+        if (recorded || PackageNames.IsGeneratedContract(text.ContainingType))
+            return false;
+
+        var shown = shownByHand.GetOrAdd(text, written => TextParameters.FindShownByDefaultSet(written, compilation, cancellationToken));
+
+        var isShown = shown is not null && parameter.Ordinal < shown.Length && shown[parameter.Ordinal];
+        return isShown;
     }
 
     /// <summary>

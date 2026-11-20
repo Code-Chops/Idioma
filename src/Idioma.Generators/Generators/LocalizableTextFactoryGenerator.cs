@@ -36,6 +36,7 @@ namespace CodeChops.Idioma.Generators;
 public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
 {
     public const string InvalidLanguagesDiagnosticId = "LOC101";
+    public const string LanguageVersionTooOldDiagnosticId = "LOC102";
 
     internal const string ClassName = "GeneratedLocalizableText";
     internal const string FactoryName = "Inline";
@@ -64,11 +65,22 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
         description: "Each language must be a culture name and appear once, because it becomes a parameter of LocalizableText.Inline and is matched against the UI culture at run time.",
         helpLinkUri: PackageNames.HelpLink(InvalidLanguagesDiagnosticId));
 
+    private static readonly DiagnosticDescriptor LanguageVersionTooOldRule = new(
+        id: LanguageVersionTooOldDiagnosticId,
+        title: "C# version older than 14",
+        messageFormat: "Idioma needs C# 14 or later, and this project uses C# {0}. Remove <LangVersion> from the project file, or set it to 14 or later.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The code generated for an assembly that declares languages uses extension members, which C# 14 brings, so the generators write none of it for an older version. C# 14 is the default on .NET 10, unless the project sets an older LangVersion.",
+        helpLinkUri: PackageNames.HelpLink(LanguageVersionTooOldDiagnosticId));
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         context.RegisterPostInitializationOutput(static context => context.AddEmbeddedAttributeDefinition());
 
         var languages = SupportedLanguages.Read(context);
+        var compiles = LanguageVersionCheck.Read(context);
 
         // Two outputs: the declaration holds its location, which every edit in the file of the attribute renews, and
         // the factory is written from the languages alone, so such an edit does not write it again.
@@ -81,7 +93,16 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
                 context.ReportDiagnostic(Diagnostic.Create(InvalidLanguagesRule, declared.Location.ToLocation(), problem));
         });
 
-        context.RegisterSourceOutput(languages.Select(static (languages, _) => languages?.Codes ?? default), static (context, codes) =>
+        // Once, at the attribute, for all the generators: none of them writes code for the languages.
+        var version = context.ParseOptionsProvider.Select(static (options, _) => (options as CSharpParseOptions)?.LanguageVersion);
+
+        context.RegisterSourceOutput(languages.Combine(version), static (context, data) =>
+        {
+            if (data is ({ Codes.Length: > 0 } declared, { } languageVersion and < LanguageVersionCheck.Required))
+                context.ReportDiagnostic(Diagnostic.Create(LanguageVersionTooOldRule, declared.Location.ToLocation(), languageVersion.ToDisplayString()));
+        });
+
+        context.RegisterSourceOutput(languages.Select(static (languages, _) => languages?.Codes ?? default).WhereItCompiles(compiles), static (context, codes) =>
         {
             if (codes.Length is 0)
                 return;
@@ -107,7 +128,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
             .Combine(callsInMarkup)
             .Select(static (data, _) => data.Left.Left is { Codes.Length: > 0 } && (data.Left.Right || data.Right));
 
-        context.RegisterSourceOutput(writesInlineTexts, static (context, writesInlineTexts) =>
+        context.RegisterSourceOutput(writesInlineTexts.WhereItCompiles(compiles), static (context, writesInlineTexts) =>
         {
             if (writesInlineTexts)
             {

@@ -74,7 +74,13 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         if (codes.Length < 2)
             return;
 
-        context.RegisterOperationAction(c => AnalyzeInvocation(c, codes), OperationKind.Invocation);
+        // Per block of code, so that the writes of a method are found once for all its inline texts, and not once per
+        // text. Razor writes all the markup of a page in one method, which may hold thousands of them.
+        context.RegisterOperationBlockStartAction(block =>
+        {
+            var writes = new BlockWrites();
+            block.RegisterOperationAction(c => AnalyzeInvocation(c, codes, writes), OperationKind.Invocation);
+        });
     }
 
     /// <summary>
@@ -82,7 +88,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     /// </summary>
     /// <param name="context">The invocation.</param>
     /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>
-    private static void AnalyzeInvocation(OperationAnalysisContext context, ImmutableArray<string> codes)
+    /// <param name="writes">What the block of code the call stands in writes its local variables with.</param>
+    private static void AnalyzeInvocation(OperationAnalysisContext context, ImmutableArray<string> codes, BlockWrites writes)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
@@ -119,7 +126,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
                 continue;
             }
 
-            var reads = new Reads();
+            var reads = new Reads(writes);
             reads.Add(argument.Value, context.CancellationToken);
 
             if (reads.CallsLocalCode || reads.ReadsUnreadableLocal)
@@ -266,7 +273,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// What the wording of a language reads, and whether it calls code that may read more.
     /// </summary>
-    private sealed class Reads
+    /// <param name="blockWrites">What the block of code the call stands in writes its local variables with.</param>
+    private sealed class Reads(BlockWrites blockWrites)
     {
         /// <summary>
         /// The local variables, parameters, fields, and properties read, also those read where a local variable that is
@@ -293,10 +301,9 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         public bool ReadsUnreadableLocal { get; private set; }
 
         /// <summary>
-        /// What the code around the call writes a local variable with, other than where it declares one: its
-        /// assignments, and its arguments passed by reference.
+        /// What the code around the call writes its local variables with, found when the wording first reads one.
         /// </summary>
-        private List<IOperation>? Writes { get; set; }
+        private Writes? Writes { get; set; }
 
         public void Add(IOperation operation, CancellationToken cancellationToken)
         {
@@ -305,39 +312,39 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
                 switch (read)
                 {
                     case ILocalReferenceOperation { Local: var local }:
-                        if (Symbols.Add(local))
+                        if (this.Symbols.Add(local))
                         {
-                            AddDeclaration(local, read.SemanticModel, cancellationToken);
-                            AddWrites(local, read, cancellationToken);
+                            this.AddDeclaration(local, read.SemanticModel, cancellationToken);
+                            this.AddWrites(local, read, cancellationToken);
                         }
 
                         break;
 
                     case IParameterReferenceOperation { Parameter: var parameter }:
-                        Symbols.Add(parameter);
+                        this.Symbols.Add(parameter);
                         break;
 
                     case IFieldReferenceOperation { Field: var field }:
-                        Symbols.Add(field);
+                        this.Symbols.Add(field);
                         break;
 
                     case IPropertyReferenceOperation { Property: var property }:
-                        Symbols.Add(property);
-                        CallsOwnCode |= HasBody(property, cancellationToken);
+                        this.Symbols.Add(property);
+                        this.CallsOwnCode |= HasBody(property, cancellationToken);
                         break;
 
                     case IInvocationOperation { TargetMethod: var method }:
-                        CallsLocalCode |= method.MethodKind is MethodKind.LocalFunction or MethodKind.DelegateInvoke;
-                        CallsOwnCode |= !method.DeclaringSyntaxReferences.IsEmpty;
+                        this.CallsLocalCode |= method.MethodKind is MethodKind.LocalFunction or MethodKind.DelegateInvoke;
+                        this.CallsOwnCode |= !method.DeclaringSyntaxReferences.IsEmpty;
                         break;
 
                     case IObjectCreationOperation { Constructor: { } constructor }:
-                        CallsOwnCode |= !constructor.ContainingType.DeclaringSyntaxReferences.IsEmpty;
+                        this.CallsOwnCode |= !constructor.ContainingType.DeclaringSyntaxReferences.IsEmpty;
                         break;
 
                     // What is bound when the app runs may read anything.
                     case IDynamicInvocationOperation or IDynamicMemberReferenceOperation or IDynamicIndexerAccessOperation or IDynamicObjectCreationOperation:
-                        CallsLocalCode = true;
+                        this.CallsLocalCode = true;
                         break;
                 }
             }
@@ -356,7 +363,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
             {
                 if (reference.GetSyntax(cancellationToken) is not VariableDeclaratorSyntax declarator)
                 {
-                    ReadsUnreadableLocal = true;
+                    this.ReadsUnreadableLocal = true;
                     continue;
                 }
 
@@ -364,7 +371,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
                     && declarator.Initializer?.Value is { } initializer
                     && semanticModel.GetOperation(initializer, cancellationToken) is { } operation)
                 {
-                    Add(operation, cancellationToken);
+                    this.Add(operation, cancellationToken);
                 }
             }
         }
@@ -376,54 +383,12 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         /// </summary>
         private void AddWrites(ILocalSymbol local, IOperation read, CancellationToken cancellationToken)
         {
-            foreach (var write in Writes ??= FindWrites(read, cancellationToken))
-            {
-                switch (write)
-                {
-                    case IAssignmentOperation { Target: ILocalReferenceOperation target } assignment:
-                        if (SymbolEqualityComparer.Default.Equals(target.Local, local))
-                            Add(assignment.Value, cancellationToken);
+            var writes = this.Writes ??= blockWrites.Find(read, cancellationToken);
 
-                        break;
+            foreach (var value in writes.AssignedTo(local))
+                this.Add(value, cancellationToken);
 
-                    case IAssignmentOperation { Target: var target }:
-                        ReadsUnreadableLocal |= Reads(target);
-                        break;
-
-                    case IArgumentOperation { Value: var value }:
-                        ReadsUnreadableLocal |= Reads(value);
-                        break;
-                }
-            }
-
-            bool Reads(IOperation operation)
-            {
-                var reads = operation.DescendantsAndSelf().Any(part => part is ILocalReferenceOperation reference && SymbolEqualityComparer.Default.Equals(reference.Local, local));
-                return reads;
-            }
-        }
-
-        /// <summary>
-        /// The assignments and the arguments passed by reference in the code around an operation: the body of its
-        /// method, or the initializer it stands in.
-        /// </summary>
-        private static List<IOperation> FindWrites(IOperation operation, CancellationToken cancellationToken)
-        {
-            var root = operation;
-            while (root.Parent is { } parent)
-                root = parent;
-
-            var writes = new List<IOperation>();
-
-            foreach (var part in root.DescendantsAndSelf())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (part is IAssignmentOperation or IArgumentOperation { Parameter.RefKind: RefKind.Ref or RefKind.Out })
-                    writes.Add(part);
-            }
-
-            return writes;
+            this.ReadsUnreadableLocal |= writes.IsWrittenUnreadably(local);
         }
 
         /// <summary>
@@ -444,6 +409,122 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
             }
 
             return false;
+        }
+    }
+
+    /// <summary>
+    /// The <see cref="Writes"/> of each operation tree in one operation block, by its root: the body of a method, or an
+    /// initializer.
+    /// </summary>
+    // One per block, so nothing is shared between two blocks or two compilations. The writes of a tree are found when a
+    // wording first reads a local variable in it, so a block without inline texts isn't searched.
+    private sealed class BlockWrites
+    {
+        // By reference, because an operation doesn't override Equals. Nearly every block holds one tree.
+        private Dictionary<IOperation, Writes> ByRoot { get; } = new();
+
+        /// <summary>
+        /// What the code around an operation writes its local variables with.
+        /// </summary>
+        public Writes Find(IOperation operation, CancellationToken cancellationToken)
+        {
+            var root = operation;
+            while (root.Parent is { } parent)
+                root = parent;
+
+            // The lock is for a host that would analyze the operations of one block on two threads.
+            lock (this.ByRoot)
+            {
+                if (!this.ByRoot.TryGetValue(root, out var writes))
+                    this.ByRoot[root] = writes = Writes.Find(root, cancellationToken);
+
+                return writes;
+            }
+        }
+    }
+
+    /// <summary>
+    /// What the code around a call writes its local variables with, other than where it declares them: its assignments,
+    /// and its arguments passed by reference.
+    /// </summary>
+    // Found in one pass over the operation tree, and then looked up by the local variable. So a wording that reads a
+    // local variable costs as little in a method with thousands of inline texts as in a method with one.
+    private sealed class Writes
+    {
+        /// <summary>
+        /// What each local variable is assigned after its declaration, in the order of the code.
+        /// </summary>
+        private Dictionary<ILocalSymbol, List<IOperation>> Assigned { get; } = new(SymbolEqualityComparer.Default);
+
+        /// <summary>
+        /// The local variables written in another way, as by a deconstruction or as an argument passed by reference.
+        /// Every local variable that is read where such a write writes to counts.
+        /// </summary>
+        private HashSet<ILocalSymbol> WrittenUnreadably { get; } = new(SymbolEqualityComparer.Default);
+
+        /// <summary>
+        /// Finds the assignments and the arguments passed by reference under the root of an operation tree: the body of
+        /// a method, or an initializer.
+        /// </summary>
+        public static Writes Find(IOperation root, CancellationToken cancellationToken)
+        {
+            var writes = new Writes();
+
+            foreach (var part in root.DescendantsAndSelf())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                switch (part)
+                {
+                    case IAssignmentOperation { Target: ILocalReferenceOperation target } assignment:
+                        if (!writes.Assigned.TryGetValue(target.Local, out var values))
+                            writes.Assigned[target.Local] = values = [];
+
+                        values.Add(assignment.Value);
+                        break;
+
+                    case IAssignmentOperation { Target: var target }:
+                        writes.AddWrittenUnreadably(target);
+                        break;
+
+                    case IArgumentOperation { Parameter.RefKind: RefKind.Ref or RefKind.Out, Value: var value }:
+                        writes.AddWrittenUnreadably(value);
+                        break;
+                }
+            }
+
+            return writes;
+        }
+
+        /// <summary>
+        /// What a local variable is assigned after its declaration, in the order of the code.
+        /// </summary>
+        public IReadOnlyList<IOperation> AssignedTo(ILocalSymbol local)
+        {
+            if (!this.Assigned.TryGetValue(local, out var values))
+                return [];
+
+            return values;
+        }
+
+        /// <summary>
+        /// Whether a local variable is written in a way the build can't read
+        /// (<see cref="Reads.ReadsUnreadableLocal"/>).
+        /// </summary>
+        public bool IsWrittenUnreadably(ILocalSymbol local)
+        {
+            var isWrittenUnreadably = this.WrittenUnreadably.Contains(local);
+            return isWrittenUnreadably;
+        }
+
+        /// <summary>
+        /// Adds every local variable that is read where a write writes to.
+        /// </summary>
+        private void AddWrittenUnreadably(IOperation target)
+        {
+            foreach (var part in target.DescendantsAndSelf())
+                if (part is ILocalReferenceOperation reference)
+                    this.WrittenUnreadably.Add(reference.Local);
         }
     }
 }

@@ -40,8 +40,11 @@ internal sealed class WordingReader(Compilation compilation, SemanticModel? sema
     /// </summary>
     public string? Read(ISymbol member, CancellationToken cancellationToken)
     {
-        var wording = member.DeclaringSyntaxReferences.Length > 0
-            ? this.Read(member.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken), cancellationToken)
+        // A partial member is read where it's implemented, because the part that declares it has no body.
+        var written = LocalizationDiscovery.GetImplementingPart(member);
+
+        var wording = written.DeclaringSyntaxReferences.Length > 0
+            ? this.Read(written.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken), cancellationToken)
             : null;
 
         return wording;

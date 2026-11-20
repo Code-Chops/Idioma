@@ -19,6 +19,7 @@ The hundreds of a code name its subject. The subjects come in the order of this 
 | **[Languages](#languages)**                         |                                                         |
 | [`LOC100`](#loc100)                                 | A set or inline text in an assembly without languages   |
 | [`LOC101`](#loc101)                                 | An invalid or repeated language                         |
+| [`LOC102`](#loc102)                                 | A C# version older than 14                              |
 | **[Sets](#sets)**                                   |                                                         |
 | [`LOC200`](#loc200) (code fix)                      | A default-language set the generator can't use          |
 | [`LOC201`](#loc201) (code fix)                      | A language without a set                                |
@@ -27,6 +28,8 @@ The hundreds of a code name its subject. The subjects come in the order of this 
 | [`LOC204`](#loc204) (code fix)                      | A set that doesn't list its contract                    |
 | [`LOC205`](#loc205)                                 | A text with a name the generated class can't give it    |
 | [`LOC206`](#loc206) (code fix)                      | A text with a setter                                    |
+| [`LOC207`](#loc207)                                 | A text hidden instead of overridden                     |
+| [`LOC208`](#loc208)                                 | A text the default-language set only inherits           |
 | **[Texts with parameters](#texts-with-parameters)** |                                                         |
 | [`LOC300`](#loc300)                                 | A public method that can't be a text                    |
 | [`LOC301`](#loc301)                                 | A parameter named differently than in the contract      |
@@ -60,6 +63,18 @@ So is a member marked `[Localized]`. The generator writes that attribute with on
 ### LOC101
 
 `[assembly: SupportedLanguages]` lists a language that isn't a culture name, or lists one twice. Both are build errors. List each language once, as a culture name such as `en` or `en-GB`.
+
+### LOC102
+
+The project declares its languages and compiles with a version of C# older than 14. Remove `<LangVersion>` from the project file, or set it to 14 or later. C# 14 is the default on .NET 10.
+
+```text
+error LOC102: Idioma needs C# 14 or later, and this project uses C# 13.0. Remove <LangVersion> from the project file, or set it to 14 or later.
+```
+
+The code generated for your languages uses extension members, which C# 14 brings. So the generators write none of it, and the compiler reports what your code then misses, such as the contract of a set (`CS0246`) or `LocalizableText.Inline` (`CS0117`).
+
+A project that declares no languages builds with an older version, such as one that only references a library that uses Idioma.
 
 ## Sets
 
@@ -151,6 +166,41 @@ Remove the setter. One instance of each set serves every user, so a change of wo
 The IDE fix removes the setter, along with its body. An auto-property can still be assigned in the constructor. Any other assignment stops compiling, which shows you the code that changed the wording.
 
 A member that isn't a text may have a setter, such as a helper marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't catch a getter that returns a field which a method changes.
+
+### LOC207
+
+A set that derives from another hides one of its texts instead of overriding it, so users never see its wording:
+
+```csharp
+public class ShopLocalizationEnGb : ShopLocalizationEn
+{
+    public new string Color => "Colour"; // LOC207: British users still see "Color"
+}
+```
+
+Make the text `virtual` in the set it derives from, and override it. The set implements the contract through the set it derives from, so the contract calls that set's member. A member of the same name only hides it. Without `new`, the compiler warns about the hiding (`CS0108`), and the IDE's fix for that warning adds `new`.
+
+Where the text can't be virtual, such as a text of a library, list the contract again: `class MyShopLocalizationEn : ShopLocalizationEn, IShopLocalization`. The contract then calls the set's own member.
+
+### LOC208
+
+The default-language set inherits a text from a class of its assembly without declaring it, so its contract leaves the text out:
+
+```csharp
+public abstract class ShopBase
+{
+    public string Brand => "Idioma"; // LOC208: no other language has to word it
+}
+
+public class ShopLocalizationEn : ShopBase, ILocalizationSet, IShopLocalization
+{
+    public string Cart => "Cart";
+}
+```
+
+Declare the text in the default-language set, by overriding it or by moving it there. The contract is written from the texts that set declares itself, so a text it only inherits isn't in it. No other language then has to word it, and the generated class has no text for it.
+
+A member of the base that isn't a text needs `[ExcludeFromLocalizationDiscovery]`. A class of another assembly isn't read, so a property such as `Exception.Message` isn't reported.
 
 ## Texts with parameters
 
@@ -299,6 +349,8 @@ public static LocalizableText Brand { get; } = "Idioma";
 
 The attribute covers the initializer alone. What other code assigns to the property is still checked, so a marked component parameter still holds its callers to every language.
 
+A lookup by wording is LOC500 too, as in `texts.Contains("Orders")` or `counts["Orders"]` on a collection of texts. Two texts are equal when they show the same wording for the user ([Equality](how-it-works.md#equality)), so the lookup only finds "Orders" for English users. Look the text up by itself instead: `texts.Contains(ShopLocalization.Orders)`.
+
 LOC500 starts with your second language, because one language has nothing to be translated into. See also [what still converts](#what-still-converts).
 
 ### LOC501
@@ -337,6 +389,18 @@ The IDE fix writes a parameter in place of each placeholder of a set's text. A m
 
 The fix changes the text in every language of your project at once, so every set still implements the contract. It counts the placeholders of every language, so each language gets the same parameters: `arg0`, `arg1` and so on. A Dutch wording that holds `{0}` alone still takes `arg1` when the English one holds `{1}`. A Dutch wording without a placeholder becomes a method too. The build then reports the value Dutch leaves out (`LOC302`).
 
+Fixing Dutch changes the default-language set too. A set that implements the text explicitly changes with it, and so does one that overrides it.
+
+Code that shows the text, as in `ShopLocalization.Greeting`, then has to pass the value, and the compiler points at each place that does.
+
+The fix changes every language or none. There's no fix when:
+
+- a language's text can't become a method, such as one with a setter or one the constructor assigns
+- code of your project uses the text as a property of a set, such as another text that shows it, because that code would no longer compile
+- it's the text of an enum member, in a [set of the enum](how-it-works.md#enums), because the contract takes that text from the enum
+- the contract's text takes no values and the contract is another assembly's or one you wrote by hand, because the fix doesn't change a contract
+- the text overrides a text of another assembly's set
+
 A wording in a raw string keeps its placeholder and its warning, so write its value by hand.
 
 An inline text gets no fix, because its wording has no parameter to take the value. Neither does a label written with `[Localized]`.
@@ -349,7 +413,7 @@ A member of an enum has no `[Localized]`, and another member of that enum has on
 warning LOC503: 'ParcelStatus.Lost' has no text, but other members of 'ParcelStatus' have one, so users would see 'Lost' as written. Mark it [Localized(en: "...", nl: "...")].
 ```
 
-An enum without a marked member gets no warning, also when the enum itself is marked, because its values may never be shown.
+An enum without a marked member gets no warning, also when the enum itself is marked, because its values may never be shown. Neither does a member with the value of a marked member, such as `Default = Active`, because it shows that member's text.
 
 For a member that's never shown, turn the warning off around it: `#pragma warning disable LOC503`.
 
@@ -407,4 +471,10 @@ See [a language the library lacks](libraries-and-apps.md#a-language-the-library-
 
 ### LOC601
 
-A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in the library's default language. The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too.
+A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in your app's default language. Where the library lacks that language too, they see the library's default language. The message names the language they see:
+
+```text
+warning LOC601: 'Shop' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.
+```
+
+The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too.

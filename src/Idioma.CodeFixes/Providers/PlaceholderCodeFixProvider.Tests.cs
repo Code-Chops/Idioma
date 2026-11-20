@@ -40,9 +40,15 @@ public sealed class PlaceholderCodeFixProviderTests
     private const string DutchGreeting = """public string Greeting => "Hallo!";""";
 
     /// <summary>
+    /// <see cref="EnglishGreeting"/> as the fix of the Dutch text leaves it: a method that takes the value, which it
+    /// leaves out.
+    /// </summary>
+    private const string EnglishGreetingTakingValue = """public virtual string Greeting(object? arg0) => "Hello!";""";
+
+    /// <summary>
     /// A library whose texts an app adds German to: one that takes a value, and one that doesn't.
     /// </summary>
-    private static MetadataReference ShopLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("PlaceholderFixShopLibrary", """
+    private const string ShopLibrarySource = """
         using CodeChops.Idioma;
 
         [assembly: SupportedLanguages("en", "nl")]
@@ -60,7 +66,20 @@ public sealed class PlaceholderCodeFixProviderTests
             public virtual string Greeting(string name) => $"Hallo, {name}!";
             public virtual string Total => "Totaal";
         }
-        """);
+        """;
+
+    /// <summary>
+    /// The library as a build references it: by its assembly.
+    /// </summary>
+    private static MetadataReference ShopLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("PlaceholderFixShopLibrary", ShopLibrarySource);
+
+    /// <summary>
+    /// The library as an IDE references a project of the same solution: by its compilation, so its symbols have source
+    /// too.
+    /// </summary>
+    private static MetadataReference ShopLibraryProject { get; } = GeneratorTestHelper.CompileProjectWithGenerators("PlaceholderFixShopProject", ShopLibrarySource);
+
+    private static MetadataReference GetShopLibrary(bool referencedAsProject) => referencedAsProject ? ShopLibraryProject : ShopLibrary;
 
     private static string GermanSet(string members) => $$"""
         using ShopLibrary;
@@ -78,9 +97,22 @@ public sealed class PlaceholderCodeFixProviderTests
     /// </summary>
     private static string Indent(string members) => members.ReplaceLineEndings("\n    ");
 
+    /// <summary>
+    /// Offers the fix as an IDE does, in a workspace that holds the generated contract, through which the fix finds the
+    /// other languages.
+    /// </summary>
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(string source, params MetadataReference[] references)
     {
-        return CodeFixTestHelper.FixAfterGeneratorsAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), references, source);
+        return CodeFixTestHelper.FixWithGeneratedCodeAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), references, source);
+    }
+
+    /// <summary>
+    /// Asserts that a fixed source compiles, and that no wording of it holds a placeholder any more.
+    /// </summary>
+    private static async Task ShouldCompileWithoutPlaceholders(string fixedSource)
+    {
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), fixedSource, [])).ShouldNotContain(diagnostic => diagnostic.Id == "LOC502");
     }
     #endregion
 
@@ -95,33 +127,37 @@ public sealed class PlaceholderCodeFixProviderTests
         // Arrange & Act
         var fixes = await FixAsync(Sets(EnglishGreeting, dutch));
 
-        // Assert: a parameter in place of the placeholder, with the body of the property or of its getter.
+        // Assert: a parameter in place of the placeholder, with the body of the property or of its getter. The default
+        // language takes the value too, also when the Dutch set implements the text explicitly, so the build passes.
         var fix = fixes.ShouldHaveSingleItem();
         fix.Title.ShouldBe("Make 'Greeting' a method");
-        fix.Sources.ShouldHaveSingleItem().ShouldBe(Sets(EnglishGreeting, expected));
+        var fixedSource = fix.Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets(EnglishGreetingTakingValue, expected));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
     private const string Method = """public string Greeting(object? arg0) => $"Hallo, {arg0}!";""";
 
     [Test]
-    [Arguments("\"Hey, {0}! You have {1:N0} items\"", "(object? arg0, object? arg1) => $\"Hey, {arg0}! You have {arg1:N0} items\"")]
-    [Arguments("\"{1} invited {0}\"", "(object? arg0, object? arg1) => $\"{arg1} invited {arg0}\"")]
-    [Arguments("\"Only {1}\"", "(object? arg0, object? arg1) => $\"Only {arg1}\"")]
-    [Arguments("\"Total: {0,8}\"", "(object? arg0) => $\"Total: {arg0,8}\"")]
-    [Arguments("\"Hey {ac}, {0}\"", "(object? arg0) => $\"Hey {{ac}}, {arg0}\"")]
-    [Arguments("@\"Say \"\"{0}\"\"\"", "(object? arg0) => $@\"Say \"\"{arg0}\"\"\"")]
-    [Arguments("$\"{1 + 1} items: {{0}}\"", "(object? arg0) => $\"{1 + 1} items: {arg0}\"")]
-    [Arguments("1 > 0 ? \"Morning, {0}\" : \"Evening, {0}\"", "(object? arg0) => 1 > 0 ? $\"Morning, {arg0}\" : $\"Evening, {arg0}\"")]
-    public async Task Placeholders_ShouldBecomeOneParameterPerNumber(string wording, string expected)
+    [Arguments("\"Hey, {0}! You have {1:N0} items\"", "(object? arg0, object? arg1)", "$\"Hey, {arg0}! You have {arg1:N0} items\"")]
+    [Arguments("\"{1} invited {0}\"", "(object? arg0, object? arg1)", "$\"{arg1} invited {arg0}\"")]
+    [Arguments("\"Only {1}\"", "(object? arg0, object? arg1)", "$\"Only {arg1}\"")]
+    [Arguments("\"Total: {0,8}\"", "(object? arg0)", "$\"Total: {arg0,8}\"")]
+    [Arguments("\"Hey {ac}, {0}\"", "(object? arg0)", "$\"Hey {{ac}}, {arg0}\"")]
+    [Arguments("@\"Say \"\"{0}\"\"\"", "(object? arg0)", "$@\"Say \"\"{arg0}\"\"\"")]
+    [Arguments("$\"{1 + 1} items: {{0}}\"", "(object? arg0)", "$\"{1 + 1} items: {arg0}\"")]
+    [Arguments("1 > 0 ? \"Morning, {0}\" : \"Evening, {0}\"", "(object? arg0)", "1 > 0 ? $\"Morning, {arg0}\" : $\"Evening, {arg0}\"")]
+    public async Task Placeholders_ShouldBecomeOneParameterPerNumber(string wording, string parameters, string expected)
     {
         // Arrange & Act
         var fixes = await FixAsync(Sets($"public virtual string Greeting => {wording};", DutchGreeting));
 
         // Assert: arg0 for {0}, in any order and up to the highest number, with its alignment and format. A brace
         // that's text is written twice, and a string without a placeholder stays as it is. Each string with one has a
-        // diagnostic, and the fix of each changes the whole text.
-        fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem()
-            .ShouldBe(Sets($"public virtual string Greeting{expected};", DutchGreeting));
+        // diagnostic, and the fix of each changes the whole text. Dutch takes the same values.
+        var fixedSource = fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets($"public virtual string Greeting{parameters} => {expected};", $"public string Greeting{parameters} => \"Hallo!\";"));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
     [Test]
@@ -150,7 +186,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(Sets(EnglishGreeting, dutch));
 
         // Assert: the block is formatted, which writes the line endings of the platform, so those don't count here.
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ReplaceLineEndings().ShouldBe(Sets(EnglishGreeting, expected).ReplaceLineEndings());
+        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ReplaceLineEndings().ShouldBe(Sets(EnglishGreetingTakingValue, expected).ReplaceLineEndings());
     }
 
     [Test]
@@ -162,8 +198,10 @@ public sealed class PlaceholderCodeFixProviderTests
             public string Greeting => "Hallo, {0}!";
             """));
 
-        // Assert: object? would be warning CS8632 there.
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldContain("""public string Greeting(object arg0) => $"Hallo, {arg0}!";""");
+        // Assert: object? would be warning CS8632 there. English, where they're on, takes object?.
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldContain("""public string Greeting(object arg0) => $"Hallo, {arg0}!";""");
+        fixedSource.ShouldContain(EnglishGreetingTakingValue);
     }
 
     [Test]
@@ -227,6 +265,212 @@ public sealed class PlaceholderCodeFixProviderTests
         fixes.ShouldBeEmpty();
     }
 
+    private const string EnglishGreetingWithPlaceholder = """public virtual string Greeting => "Hello, {0}!";""";
+
+    [Test]
+    [Arguments("""public string Greeting { get; init; } = "Hallo!";""")]
+    [Arguments("""
+        public string Greeting { get; }
+        public ShopLocalizationNl() => Greeting = "Hallo!";
+        """)]
+    [Arguments("""
+        private readonly string arg0 = "Hallo!";
+        public string Greeting => arg0;
+        """)]
+    public async Task LanguageThatCantBecomeMethod_ShouldGetNoFixInAnyLanguage(string dutch)
+    {
+        // Arrange: English holds the placeholder, and the Dutch property can't become a method. It has an init
+        // accessor, a wording the constructor assigns, or a field by the name of the parameter.
+        var source = Sets(EnglishGreetingWithPlaceholder, dutch);
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: a method in English alone would leave Dutch without the text of the contract (CS0535).
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC502");
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("""public string Greeting => "Hallo!"; public string Welcome => $"{Greeting} Welkom!";""", """public virtual string Welcome => "Welcome!";""")]
+    [Arguments("""public string Greeting => "Hallo!"; public string Welcome => this.Greeting + " Welkom!";""", """public virtual string Welcome => "Welcome!";""")]
+    [Arguments("""public string Greeting => "Hallo!"; public string Welcome => "Welkom!";""", """public virtual string Welcome => "Welcome!"; public static string Read() => new ShopLocalizationNl().Greeting;""")]
+    public async Task TextThatCodeUsesAsProperty_ShouldGetNoFix(string dutch, string englishMore)
+    {
+        // Arrange: another text shows it, or code reads it from a set. As a method, the property is gone, and that code
+        // would no longer compile.
+        var source = Sets($"{EnglishGreetingWithPlaceholder} {englishMore}", dutch);
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task TextThatCodeReadsThroughGeneratedClass_ShouldStillGetFix()
+    {
+        // Arrange: that code reads another member, which becomes a method that takes the value. The compiler then points
+        // at it, which is what the fix is for.
+        var source = Sets(EnglishGreetingWithPlaceholder, """public string Greeting => "Hallo!";""") + """
+
+            public static class Page
+            {
+                public static string Title => ShopLocalization.Greeting;
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldContain("public virtual string Greeting(object? arg0) => $\"Hello, {arg0}!\";");
+    }
+
+    [Test]
+    public async Task ExplicitImplementationInAnotherLanguage_ShouldBecomeMethodToo()
+    {
+        // Arrange: Dutch implements the text explicitly, so its property has another name.
+        var source = Sets(EnglishGreetingWithPlaceholder, """string IShopLocalization.Greeting => "Hallo!";""");
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets(
+            """public virtual string Greeting(object? arg0) => $"Hello, {arg0}!";""",
+            """string IShopLocalization.Greeting(object? arg0) => "Hallo!";"""));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
+    }
+
+    [Test]
+    public async Task AbstractPropertyOfBaseSet_ShouldBecomeAbstractMethod()
+    {
+        // Arrange: Dutch and German derive from a base that leaves the text to them.
+        const string source = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Greeting => "Hello, {0}!";
+            }
+
+            public abstract class ShopLocalizationBase : ILocalizationSet, IShopLocalization
+            {
+                public abstract string Greeting { get; }
+            }
+
+            public sealed class ShopLocalizationNl : ShopLocalizationBase
+            {
+                public override string Greeting => "Hallo!";
+            }
+
+            public sealed class ShopLocalizationDe : ShopLocalizationBase
+            {
+                public override string Greeting => "Hallo, {0}!";
+            }
+            """;
+
+        // Act: English and German each have a fix.
+        var fixes = await FixAsync(source);
+
+        // Assert: the base takes the value too, so each override still overrides it.
+        var fixedSource = fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem();
+        fixedSource.ShouldBe(source
+            .Replace("""Greeting => "Hello, {0}!";""", """Greeting(object? arg0) => $"Hello, {arg0}!";""", StringComparison.Ordinal)
+            .Replace("public abstract string Greeting { get; }", "public abstract string Greeting(object? arg0);", StringComparison.Ordinal)
+            .Replace("""Greeting => "Hallo!";""", """Greeting(object? arg0) => "Hallo!";""", StringComparison.Ordinal)
+            .Replace("""Greeting => "Hallo, {0}!";""", """Greeting(object? arg0) => $"Hallo, {arg0}!";""", StringComparison.Ordinal));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
+    }
+
+    [Test]
+    public async Task TextOfEnumMember_ShouldGetNoFix()
+    {
+        // Arrange: a set of an enum, with a text of a member and a text of its own. Only the default-language set lists
+        // ILocalizationSet<OrderStatus>, and both languages hold a placeholder in the text of the member.
+        const string source = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending, Shipped }
+
+            public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Shipped => "Shipped on {0}";
+                public string Updated => "Updated on {0}";
+            }
+
+            public class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+                public string Shipped => "Verzonden op {0}";
+                public string Updated => "Bijgewerkt";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: the contract takes the text of a member from the enum, so 'Shipped' stays a property in each
+        // language. The text of the set's own still gets the fix.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Title.ShouldBe("Make 'Updated' a method");
+        var fixedSource = fix.Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(source
+            .Replace("""Updated => "Updated on {0}";""", """Updated(object? arg0) => $"Updated on {arg0}";""", StringComparison.Ordinal)
+            .Replace("""Updated => "Bijgewerkt";""", """Updated(object? arg0) => "Bijgewerkt";""", StringComparison.Ordinal));
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task TextOfContractWrittenByHand_ShouldGetNoFix()
+    {
+        // Arrange
+        const string source = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public interface IGridLocalization : ILocalizationSet
+            {
+                string First { get; }
+            }
+
+            public sealed class GridLocalizationEn : ILocalizationSet, IGridLocalization
+            {
+                public string First => "First of {0}";
+            }
+
+            public sealed class GridLocalizationNl : ILocalizationSet, IGridLocalization
+            {
+                public string First => "Eerste";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: the fix doesn't change the contract, which would then no longer match the sets (CS0535).
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        fixes.ShouldBeEmpty();
+    }
+
     [Test]
     public async Task WordingNextToStringPassedToMethod_ShouldBeFilledInAlone()
     {
@@ -243,19 +487,48 @@ public sealed class PlaceholderCodeFixProviderTests
     }
 
     [Test]
-    public async Task TextOfContractOfAnotherAssemblyThatTakesNoValue_ShouldGetNoFix()
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task TextOfContractOfAnotherAssemblyThatTakesNoValue_ShouldGetNoFix(bool referencedAsProject)
     {
-        // Arrange: a method would no longer implement the library's property.
+        // Arrange: a method would no longer implement the library's property. A project reference has source too.
+        var library = GetShopLibrary(referencedAsProject);
         var source = GermanSet("""
             public string Greeting(string name) => $"Hallo, {name}!";
             public string Total => "Summe: {0}";
             """);
 
         // Act
-        var fixes = await FixAsync(source, ShopLibrary);
+        var fixes = await FixAsync(source, library);
 
         // Assert
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [ShopLibrary])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [library])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task PropertyOverridingSetOfAnotherAssembly_ShouldGetNoFix(bool referencedAsProject)
+    {
+        // Arrange: a British set rewords the library's English text. A method would override nothing.
+        var library = GetShopLibrary(referencedAsProject);
+        const string source = """
+            using ShopLibrary;
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEnGb : ShopLocalizationEn
+            {
+                public override string Total => "Total: {0}";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source, library);
+
+        // Assert
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [library])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
         fixes.ShouldBeEmpty();
     }
 

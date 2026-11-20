@@ -35,8 +35,8 @@ file static class OwnLocalizationSets
     internal static void Register()
     {
         CodeChops.Idioma.Internals.GeneratedCode.RecordSet<TestApp.ShopLocalizationDe>("de");
-        CodeChops.Idioma.LocalizationRegistry.RegisterDefaults(
-            new TestApp.ShopLocalizationDe());
+        CodeChops.Idioma.Internals.GeneratedCode.RegisterSets(asDefaults: true,
+            (typeof(TestApp.ShopLocalizationDe), static () => new TestApp.ShopLocalizationDe()));
     }
 }
 #pragma warning restore CS0612, CS0618

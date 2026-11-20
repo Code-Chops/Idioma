@@ -36,6 +36,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     public const string LibraryMissingLanguageDiagnosticId = "LOC600";
     public const string LibraryCannotBeTranslatedDiagnosticId = "LOC601";
     public const string ReservedTextNameDiagnosticId = "LOC205";
+    public const string UndeclaredTextDiagnosticId = "LOC208";
     public const string UnsupportedTextDiagnosticId = "LOC300";
 
     // The namespaces of what the method that gives a text by its key names (AppendGet).
@@ -118,7 +119,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor LibraryCannotBeTranslatedRule = new(
         id: LibraryCannotBeTranslatedDiagnosticId,
         title: "Referenced library's inline texts can't be translated",
-        messageFormat: "'{0}' has inline texts without '{1}', which this assembly supports. No set added here can translate them, so users of '{1}' will see them in the default language of '{0}'.",
+        messageFormat: "'{0}' has inline texts without '{1}', which this assembly supports. No set added here can translate them, so users of '{1}' will see them in '{2}'.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
@@ -131,6 +132,12 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         "'{0}' has a text named '{1}', like {2}. Rename the text.",
         "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey either, because the generated class gets a method of that name, which gives a text by its key. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value, and for GetText, the extension method that gives a value its text.");
 
+    private static readonly DiagnosticDescriptor UndeclaredTextRule = Error(
+        UndeclaredTextDiagnosticId,
+        "Text the default-language set inherits without declaring it",
+        "'{0}' inherits the text '{1}' from '{2}', so its contract leaves '{1}' out, and no other language has to word it. Declare '{1}' in '{0}', or mark it [ExcludeFromLocalizationDiscovery] in '{2}' if it isn't a text.",
+        "The contract is written from the texts the default-language set declares itself. A public string property or a method of the shape of a text that it only inherits from a class of its assembly isn't part of the contract, so no other language has to word it, and the generated class has no text for it. Declare the text in the set, by overriding it or by moving it there. Mark a member that isn't a text [ExcludeFromLocalizationDiscovery].");
+
     private static readonly DiagnosticDescriptor UnsupportedTextRule = Error(
         UnsupportedTextDiagnosticId,
         "Method that can't be a text",
@@ -142,6 +149,9 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         var languages = SupportedLanguages.Read(context);
         var discovery = LocalizationDiscovery.Read(context, DiscoveredTexts.OfContract);
         var bindings = LocalizationDiscovery.BindContracts(context, discovery, languages);
+
+        // No code below C# 14, which LOC102 reports. What is found about the sets is reported all the same.
+        var compiles = LanguageVersionCheck.Read(context);
 
         var analysis = discovery
             .Combine(languages)
@@ -158,12 +168,12 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(analysis.Select(static (analysis, _) => analysis.Findings), Report);
 
         // Each contract under a hint name of its own, which the analysis gives it (LocalizationContract.HintName).
-        context.RegisterSourceOutput(analysis.SelectMany(static (analysis, _) => analysis.Contracts.AsImmutableArray()), static (context, contract) =>
+        context.RegisterSourceOutput(analysis.SelectMany(static (analysis, _) => analysis.Contracts.AsImmutableArray()).WhereItCompiles(compiles), static (context, contract) =>
             context.AddSource($"{contract.HintName}.Localization.g.cs", GenerateContract(contract)));
 
         var providedSets = analysis.Select(static (analysis, _) => analysis.ProvidedSets);
 
-        context.RegisterSourceOutput(providedSets, static (context, sets) =>
+        context.RegisterSourceOutput(providedSets.WhereItCompiles(compiles), static (context, sets) =>
         {
             if (sets.Length > 0)
                 context.AddSource("LocalizationSets.g.cs", GenerateProvidedSets(sets));
@@ -203,6 +213,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 LocalizationSetsRule.LibraryCannotBeTranslated => LibraryCannotBeTranslatedRule,
                 LocalizationSetsRule.UnsupportedText => UnsupportedTextRule,
                 LocalizationSetsRule.ReservedTextName => ReservedTextNameRule,
+                LocalizationSetsRule.UndeclaredText => UndeclaredTextRule,
                 // A rule added without a descriptor here. The generator fails with CS8785, and a test of the new rule
                 // shows it, where reporting it under another code would go unnoticed.
                 _ => throw new ArgumentOutOfRangeException(nameof(findings), finding.Rule, "A rule without a descriptor."),

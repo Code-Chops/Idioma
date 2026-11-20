@@ -51,6 +51,8 @@ string line = string.Create(dutch, $"{ShopLocalization.Total}: {amount:N2}");
 - `CultureInfo.CurrentCulture` formats for the current user, whose wording goes by the UI culture.
 - A provider that isn't a culture, such as a `NumberFormatInfo`, names no language.
 
+The current culture is told by the object, so a culture you pass that is the current culture gives the user's wording too, however you got it. Where code sets the current culture to someone else's, such as an email's recipient's, and leaves the UI culture, call `ToString(culture)` on the text: `$"{ShopLocalization.Total.ToString(dutch)}: {amount:N2}"`.
+
 `CultureInfo.InvariantCulture` has no wording, so it gives the wording of your app's default language.
 
 ## What the source generator writes
@@ -81,6 +83,8 @@ public static partial class ShopLocalization
 Every set lists `ILocalizationSet` and the contract, the default-language set too: `class ShopLocalizationNl : ILocalizationSet, IShopLocalization`. The contract doesn't derive from `ILocalizationSet`, so neither entry is redundant. The build rejects a set without its contract (`LOC204`), and your IDE adds it.
 
 A text always has wording, so the contract declares it as `string`. A set that returns `string?` for a text gets compiler warning `CS8766`, because it doesn't match the contract. Return a `string`.
+
+The contract takes the texts the default-language set declares itself, overrides included. A text it only inherits from a class of its assembly would be left out, so that's build error `LOC208`.
 
 Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
 
@@ -137,7 +141,7 @@ The build rejects what the generated class can't repeat or keep (`LOC300`), beca
 
 Every language names the parameters as the default-language set does (`LOC301`). The compiler checks their types and order, but not their names. Without this check, a set could swap two parameters of the same type and word each value as the other.
 
-Every language also uses the values the default wording shows (`LOC302`). A Dutch `Greeting(string name) => "Hallo!"` next to an English `$"Hello, {name}!"` is a build error, because Dutch users wouldn't see the name. A value the default wording only chooses by, such as `salutation` in a `switch`, may go unused in a language that doesn't make that distinction. The contract records which values the default wording shows, so the check also holds for a set that an app adds to a library's contract.
+Every language also uses the values the default wording shows (`LOC302`). A Dutch `Greeting(string name) => "Hallo!"` next to an English `$"Hello, {name}!"` is a build error, because Dutch users wouldn't see the name. A value the default wording only chooses by, such as `salutation` in a `switch`, may go unused in a language that doesn't make that distinction. A variable that a pattern declares for the whole value, such as `n` in `count switch { 1 => "1 item", var n => $"{n} items" }`, shows the value where it's worded. The contract records which values the default wording shows, so the check also holds for a set that an app adds to a library's contract. For a contract you wrote by hand, the build reads them from the default-language set in the same assembly.
 
 What else to know:
 
@@ -278,6 +282,8 @@ What else to know:
 ## Registration
 
 Every set is registered automatically. When an app starts, it registers the sets of every assembly it references, whether it uses that assembly or not. An assembly the app loads later, such as one a Blazor WebAssembly app loads lazily, registers its sets when its code first runs. Loading it alone doesn't.
+
+A set is registered by its type, and created when the first text is shown. So a set whose constructor throws doesn't stop your app from starting. The first text shown throws an `InvalidOperationException` that names the set, with the set's own exception inside, and so does every text after it.
 
 The texts of members marked `[Localized]` are recorded the same way, by the same generated code ([Attributes on members](#attributes-on-members)).
 

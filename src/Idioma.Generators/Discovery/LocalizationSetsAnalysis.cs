@@ -76,14 +76,22 @@ internal sealed record LocalizationSetsAnalysis(
         // A set whose language the build can't read (its LocalizationLanguageCode is no constant, or comes from another assembly)
         // may be the set of any language. So a contract it implements is not said to miss one, here or in an assembly
         // referencing this one: that would ask for a set that exists.
-        var unreadable = sets.Concat(excludedSets).Where(static set => set.Language is null).ToImmutableArray();
+        // A set whose name gives no language, and that has no LocalizationLanguageCode, serves none. It gets LOC400, and
+        // its contract is held to every language as if it weren't there: taken for a set of any language, a Dutch set
+        // renamed ShopLocalizationDutch would hide every missing language of its contract behind that one warning.
+        var unreadable = sets.Concat(excludedSets).Where(static set => set is { Language: null, NameGivesNoLanguage: false }).ToImmutableArray();
         var findings = ImmutableArray.CreateBuilder<LocalizationSetsFinding>();
         var contracts = ImmutableArray.CreateBuilder<LocalizationContract>();
         var provided = ImmutableArray.CreateBuilder<ProvidedLocalizationSet>();
 
         foreach (var set in sets.Concat(excludedSets))
+        {
+            if (set.NameGivesNoLanguage)
+                continue;
+
             foreach (var contract in set.ContractNames)
                 provided.Add(new ProvidedLocalizationSet(contract, set.Language ?? ProvidedLocalizationSet.UnreadableLanguage));
+        }
 
         if (languages is not { } declared)
         {
@@ -209,6 +217,11 @@ internal sealed record LocalizationSetsAnalysis(
             if (!reference.HasInlineTexts || reference.Languages.Length is 0)
                 continue;
 
+            // Such a text falls back as any text does: to this assembly's default language where the library has it, and
+            // else to the library's own default language.
+            var appDefault = declared.Codes[0];
+            var shown = reference.Languages.Any(language => SupportedLanguages.Serves(language, appDefault)) ? appDefault : reference.Languages[0];
+
             foreach (var code in declared.Codes)
             {
                 if (reference.Languages.Any(language => SupportedLanguages.Serves(language, code)))
@@ -217,7 +230,7 @@ internal sealed record LocalizationSetsAnalysis(
                 findings.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.LibraryCannotBeTranslated,
                     declared.Location,
-                    new EquatableArray<string>([reference.AssemblyName, code])));
+                    new EquatableArray<string>([reference.AssemblyName, code, shown])));
             }
         }
 
@@ -383,6 +396,11 @@ internal sealed record LocalizationSetsAnalysis(
             // At the method, which is what to change, and not at the set.
             foreach (var method in set.UnsupportedTexts)
                 findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UnsupportedText, method.Location, new EquatableArray<string>([set.Name, method.Name, method.Problem])));
+
+            // At the text that's left out, which says where it's written. Its contract would lack it, and so every other
+            // language would too, without a word.
+            foreach (var text in set.UndeclaredTexts)
+                findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UndeclaredText, text.Location, new EquatableArray<string>([set.Name, text.Name, text.DeclaringType])));
 
             var implementers = setImplementers.Of(set, contractFullName).Where(static other => other.Language is not null).ToArray();
             var excludedImplementers = excludedSetImplementers.Of(set, contractFullName);
@@ -1003,4 +1021,10 @@ internal enum LocalizationSetsRule
     /// <c>LOC300</c>: a method of a default-language set has the shape of a text that takes values, but can't be one.
     /// </summary>
     UnsupportedText,
+
+    /// <summary>
+    /// <c>LOC208</c>: a default-language set inherits a text from a class of its assembly without declaring it, so its
+    /// contract leaves the text out.
+    /// </summary>
+    UndeclaredText,
 }
