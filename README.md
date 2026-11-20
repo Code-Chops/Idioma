@@ -461,7 +461,7 @@ For a text that isn't virtual, or a library that lacks one of your languages, se
 
 ## Translating your texts
 
-Your texts are C# in your repository, so an AI coding assistant (that already knowns the context) can translate them, and the build tells it what's missing:
+Your texts are C# in your repository, so an AI coding assistant (that already knows the context) can translate them, and the build tells it what's missing:
 
 - Add a language to the list, and the build names each set that is missing.
 - Add a text, and the build names it for each language that lacks it.
@@ -499,7 +499,7 @@ Each subject has a page of its own:
 - [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning by its code, what still converts to a text, and what the build misses.
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, moving a resource file, and keeping a resource file as an override.
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes to show next to `IStringLocalizer`, on .NET and in Blazor WebAssembly, and what Idioma adds to a download.
-- [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): two complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
+- [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): three complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
 - [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, enums, attributes on members, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
 
 ## License

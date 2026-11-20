@@ -1,17 +1,18 @@
 # Run a demo
 
-This folder has two demos of [Idioma](../README.md). Each is a complete app in one file, which `dotnet run` runs without a project:
+This folder has three demos of [Idioma](../README.md). Each is a complete app in one file, which `dotnet run` runs without a project:
 
 - [`SetDemo.cs`](SetDemo.cs) writes its texts in a set per language.
 - [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline.
+- [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class, its properties and the members of an enum.
 
-Both support English, Dutch, and British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English, and print their texts in each.
+All three support English, Dutch, and British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English, and print their texts in each.
 
 ## In your browser
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Code-Chops/Idioma?quickstart=1)
 
-The codespace opens both demos and runs them. After an edit, run one again in its terminal:
+The codespace opens the demos and runs them. After an edit, run one again in its terminal:
 
 ```shell
 cd demos
@@ -30,4 +31,4 @@ dotnet run SetDemo.cs
 
 A demo runs with .NET 10 or later. Its first line fetches the latest version of the package.
 
-Remove a Dutch wording from either file, or the parameter of the Dutch `Greeting` in `SetDemo.cs`, and it no longer builds.
+Remove a Dutch wording from any of the files, or the parameter of the Dutch `Greeting` in `SetDemo.cs`, and it no longer builds.
