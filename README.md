@@ -12,7 +12,7 @@ Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and w
 
 - **In a set** per language, for texts you reuse.
 - **Inline**, where you use a text once.
-- **As an attribute**, for the label of a property or an enum member.
+- **As an attribute**, for the label of a type, a property or an enum member.
 
 ```csharp
 // A set per language

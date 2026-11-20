@@ -43,7 +43,7 @@ The codes of the build's messages are grouped by subject, from LOC100 to LOC601.
 
 The details have a page per subject under docs/, which the README links to. New is a page on performance, with measurements next to IStringLocalizer.</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
-    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, or inline texts. A missing translation, or one that never uses a value the original shows, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
+    <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, inline texts, or an attribute on a type or its members. A missing translation, or one that never uses a value the original shows, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>
     <PackageProjectUrl>https://github.com/Code-Chops/Idioma</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Code-Chops/Idioma</RepositoryUrl>

@@ -14,8 +14,9 @@ namespace CodeChops.Idioma;
 /// <list type="bullet">
 /// <item>Inline: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
 /// <item>In one class per language, for a library or a larger group of texts (see <see cref="ILocalizationSet"/>).</item>
-/// <item>As an attribute on the member it names, for the label of a property or an enum member:
-/// <c>[Localized(en: "City", nl: "Plaats")]</c>. <see cref="GetTextByMember{T}(string)"/> gives that text.</item>
+/// <item>As an attribute on the type or the member it names, for the label of a type, a property or an enum member:
+/// <c>[Localized(en: "City", nl: "Plaats")]</c>. <see cref="GetTextByMember{T}(string)"/> gives the text of a
+/// member, and <see cref="GetTextOfType{T}()"/> that of a type.</item>
 /// </list>
 /// <para>
 /// For wording that differs in a region, list the region next to its language:
