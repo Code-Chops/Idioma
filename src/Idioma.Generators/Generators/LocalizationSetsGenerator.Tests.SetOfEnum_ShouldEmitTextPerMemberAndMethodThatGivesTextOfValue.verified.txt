@@ -83,6 +83,18 @@ public static partial class OrderStatusLocalization
     /// </remarks>
     public static CodeChops.Idioma.LocalizableText GetTextByValue(OrderStatus value) => TextsByValue<IOrderStatusLocalization>.Get(value);
 
+    /// <param name="value">The value to give the text of.</param>
+    extension(OrderStatus value)
+    {
+        /// <summary>
+        /// The text of this value of <see cref="OrderStatus"/>, as in <c>status.GetText()</c>. It's the text <see cref="GetTextByValue(OrderStatus)"/> gives.
+        /// </summary>
+        /// <remarks>
+        /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
+        /// </remarks>
+        public CodeChops.Idioma.LocalizableText GetText() => TextsByValue<IOrderStatusLocalization>.Get(value);
+    }
+
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Pending"</c>.
     /// </summary>

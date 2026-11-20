@@ -7,7 +7,8 @@ public sealed partial class LocalizableText
 {
     /// <summary>
     /// The key of this text among the texts of its generated class, such as <c>Checkout</c> for
-    /// <c>ShopLocalization.Checkout</c>, or <see langword="null"/> for a text without a key, such as an inline text.
+    /// <c>ShopLocalization.Checkout</c>, or <see langword="null"/> for a text without a key, such as one written with
+    /// <c>LocalizableText.Inline</c>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -15,6 +16,10 @@ public sealed partial class LocalizableText
     /// <c>ShopLocalization.GetTextByKey("Checkout")</c>. It's also the name of the text's entry in a resource file of its own
     /// class, as an <c>IStringLocalizer&lt;Shop&gt;</c> reads it. Two classes can each have a text with this key. For
     /// a key that no other text has, read <see cref="FullKey"/>.
+    /// </para>
+    /// <para>
+    /// The key of a text on a member, written with <c>[Localized]</c>, is the member's name, such as <c>City</c>, or
+    /// the type's name for a type's own text.
     /// </para>
     /// <para>
     /// A text created with <see cref="Keyed"/> has one key, so this is the key it was given, the same as its
@@ -29,7 +34,7 @@ public sealed partial class LocalizableText
 
     /// <summary>
     /// The key that is this text's alone, such as <c>MyApp.Localization.ShopLocalization.Checkout</c>, or
-    /// <see langword="null"/> for a text without a key, such as an inline text.
+    /// <see langword="null"/> for a text without a key, such as one written with <c>LocalizableText.Inline</c>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -37,6 +42,12 @@ public sealed partial class LocalizableText
     /// text's <see cref="Key"/>. <c>Checkout</c> of <c>ShopLocalizationEn</c> in the namespace
     /// <c>MyApp.Localization</c> gives <c>MyApp.Localization.ShopLocalization.Checkout</c>. So sets of one name in two
     /// namespaces have full keys of their own. A set in the global namespace gives <c>ShopLocalization.Checkout</c>.
+    /// </para>
+    /// <para>
+    /// The full key of a text on a member, written with <c>[Localized]</c>, is the member's full name, such as
+    /// <c>Shop.Domain.Address.City</c>, or the type's full name for a type's own text. A type inside another is
+    /// written with dots, and a type with type parameters keeps its arity, as in <c>Shop.Domain.Page`1.Items</c>. An
+    /// inherited text keeps the key of the member it's written on.
     /// </para>
     /// <para>
     /// The full key is for an app or library that looks texts up in one place itself, such as a shared resource file

@@ -681,6 +681,42 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        public void GeneratedExtensionOfEnumValue_ShouldGiveTheTextOfTheValue()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act
+            var text = OrderStatus.Shipped.GetText();
+
+            // Assert: the text the class holds for the member, in the user's language and in another.
+            text.ShouldBeSameAs(OrderStatusLocalization.Shipped);
+            text.ToString().ShouldBe("Verzonden");
+            text.ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe("Shipped");
+        }
+
+        [Test]
+        public void GeneratedExtensionOfEnumValue_ThatIsNoMember_ShouldShowAsToStringWritesIt()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: a combination of flags, and a number no member has.
+            (OrderStatus.Pending | OrderStatus.Shipped).GetText().ToString().ShouldBe("Pending, Shipped");
+            ((OrderStatus)64).GetText().ToString().ShouldBe("64");
+        }
+
+        [Test]
+        public void GeneratedExtensionOfEnumValue_ShouldAllocateNothing()
+        {
+            // Arrange & Act: per 10,000 calls.
+            var allocated = Allocated(static () => OrderStatus.Delivered.GetText()) / 10_000;
+
+            // Assert
+            allocated.ShouldBe(0);
+        }
+
+        [Test]
         public void GeneratedFactory_ShouldHoldEveryLanguage()
         {
             // Arrange & Act

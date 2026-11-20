@@ -11,7 +11,8 @@ namespace CodeChops.Idioma.Generators;
 /// the run time never reads a set's name. A renamed type, as an obfuscator leaves it, keeps its language. So does a set
 /// named after a longer code, such as <c>ShopLocalizationEnGb</c>, whose last two letters alone would give <c>gb</c>.
 /// For a set deriving from another, it's also the texts its own class words, so that the registry knows which texts
-/// the set rewords without calling it.
+/// the set rewords without calling it. It also writes the texts of the assembly's members marked <c>[Localized]</c>
+/// (<see cref="LocalizedMembersSource"/>), which the registrar records.
 /// </summary>
 /// <remarks>
 /// An assembly that nothing uses never loads, so its module initializer never runs, while its sets already count for
@@ -163,13 +164,22 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
             .Combine(isAndroidApplication)
             .Select(static (data, _) => data.Right ? data.Left with { IsApplication = true } : data.Left);
 
+        // The texts of members marked [Localized]. Read here alone, and not by a generator of their own, because
+        // every attribute of that name is bound again on each edit.
+        var members = LocalizedMembers.ReadModel(context);
+
+        // The class that records those texts, where the assembly has one. Its name alone, so that an edit of a wording
+        // rewrites no registrar.
+        var memberTexts = members.Select(static (model, _) => model.HasTexts ? model.RecorderName : null);
+
         var registrar = registrations
             .Combine(records)
             .Combine(assembly)
             .Combine(languages)
+            .Combine(memberTexts)
             .Select(static (data, _) =>
             {
-                var (((sets, records), assembly), languages) = data;
+                var ((((sets, records), assembly), languages), memberTexts) = data;
                 var forwards = sets.Length > 0 || assembly.IsApplication || languages is { Codes.Length: > 0 };
                 // Not without a default language (LOC101): the first valid language must not become the app's default.
                 var appLanguages = assembly.IsApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
@@ -179,7 +189,8 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                     Sets: sets,
                     ReferencedRegistrars: forwards ? assembly.ReferencedRegistrars : default,
                     Languages: appLanguages,
-                    Records: records);
+                    Records: records,
+                    MemberTexts: memberTexts);
             });
 
         // Once per class that declares the property, where the fix is, however many sets derive from it.
@@ -211,6 +222,12 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                 context.ReportDiagnostic(Diagnostic.Create(CannotRegisterRule, set.Location.ToLocation(), set.MetadataName, set.Problem));
         });
 
+        context.RegisterSourceOutput(members, static (context, model) =>
+        {
+            if (model.HasTexts)
+                context.AddSource(LocalizedMembersSource.HintName, LocalizedMembersSource.Generate(model));
+        });
+
         context.RegisterSourceOutput(unmapped, static (context, sets) =>
         {
             foreach (var set in sets.AsImmutableArray())
@@ -226,8 +243,11 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(registrar, static (context, registrar) =>
         {
             // Nothing of its own to register or record, and nothing referenced to register first.
-            if (registrar.Sets.Length is 0 && registrar.ReferencedRegistrars.Length is 0 && registrar.Languages.Length is 0 && registrar.Records.Length is 0)
+            if (registrar.Sets.Length is 0 && registrar.ReferencedRegistrars.Length is 0 && registrar.Languages.Length is 0 && registrar.Records.Length is 0
+                && registrar.MemberTexts is null)
+            {
                 return;
+            }
 
             context.AddSource("LocalizationRegistrar.g.cs", GenerateSource(registrar));
         });
@@ -301,10 +321,11 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
 
     private static string GenerateSource(Registrar registrar)
     {
-        // Public only with something another assembly must register before it starts: sets of its own, or the languages
-        // of an application, which a host referencing it (a Blazor Web App's server references its client) would
-        // otherwise not have until the application's own code first runs.
-        var accessibility = registrar.Sets.Length > 0 || registrar.Languages.Length > 0 ? "public" : "internal";
+        // Public only with something another assembly must register before it starts: sets of its own, the texts of
+        // its members, or the languages of an application, which a host referencing it (a Blazor Web App's server
+        // references its client) would otherwise not have until the application's own code first runs. A member's
+        // text is asked for by its type, which an app can hold before any code of the type's assembly ran.
+        var accessibility = registrar.Sets.Length > 0 || registrar.Languages.Length > 0 || registrar.MemberTexts is not null ? "public" : "internal";
         var hasOwnSets = registrar.Sets.Length > 0 || registrar.Records.Length > 0;
 
         // The pragma also covers a set marked [Obsolete], which registers for as long as it exists. The warning about
@@ -324,6 +345,9 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
 
         if (registrar.Languages.Length > 0)
             sb.AppendLine("    /// Registers the app's languages first.");
+
+        if (registrar.MemberTexts is not null)
+            sb.AppendLine("    /// Records the texts of this assembly's members marked <c>[Localized]</c> too.");
 
         sb.AppendLine($$"""
                 /// </summary>
@@ -356,6 +380,11 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         // there, and one that fails inside its try when the assembly can't load after all.
         foreach (var referenced in registrar.ReferencedRegistrars)
             sb.AppendLine($"            RegisterReferenced({SymbolDisplay.FormatLiteral(referenced.AssemblyName, quote: true)}, static () => {RegistrarNamespace}.{referenced.RegistrarName}.Register());");
+
+        // The texts of this assembly's own members. Their order among the registrations doesn't matter, because a
+        // member belongs to one assembly.
+        if (registrar.MemberTexts is { } memberTexts)
+            sb.AppendLine($"            {memberTexts}.Register();");
 
         // Last, after the sets of the assemblies it references: a set of this assembly rewording one of theirs wins.
         if (hasOwnSets)
@@ -483,14 +512,16 @@ internal readonly record struct UnmappedLanguageCode(
 
 /// <summary>
 /// The registrar to write: its name, the sets it registers, the referenced registrars it calls first, the languages of
-/// an application that declares them, the default first, and what it records about the sets.
+/// an application that declares them, the default first, what it records about the sets, and the class that records
+/// the texts of members marked <c>[Localized]</c>, or <see langword="null"/> for an assembly without such a text.
 /// </summary>
 internal readonly record struct Registrar(
     string Name,
     EquatableArray<RegisteredLocalization> Sets,
     EquatableArray<ReferencedRegistrar> ReferencedRegistrars,
     EquatableArray<string> Languages,
-    EquatableArray<SetRecord> Records);
+    EquatableArray<SetRecord> Records,
+    string? MemberTexts);
 
 /// <summary>
 /// What the registrar records about a set before it registers: the language that comes from its name, or from the name

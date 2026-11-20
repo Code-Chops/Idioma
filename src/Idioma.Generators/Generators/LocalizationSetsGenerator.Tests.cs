@@ -2953,6 +2953,40 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    public void LibraryWithTextsOnMembersMissingLanguage_ShouldWarnWithLOC601()
+    {
+        // Arrange: a library whose only texts are on its members. They carry their wording themselves, as an inline
+        // text does, so no set of the app can add German to them.
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators("MemberLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace MemberLibrary;
+
+            public class Address
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Act
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace TestApp;
+            """, library);
+
+        // Assert
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.LibraryCannotBeTranslatedDiagnosticId);
+        diagnostic.Id.ShouldBe("LOC601");
+        diagnostic.GetMessage().ShouldContain("'MemberLibrary' has inline texts without 'de'");
+    }
+
+    [Test]
     public void LibraryWithSetsAndInlineTextsMissingLanguage_ShouldReportBoth()
     {
         // Arrange: the app can add German to the contract (LOC600), but not to the inline text (LOC601).
@@ -5023,6 +5057,8 @@ public sealed class LocalizationSetsGeneratorTests
                 {
                     public static LocalizableText Status { get; } = OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped);
                     internal static LocalizableText Speed { get; } = SpeedLocalization.GetTextByValue(Shipping.Speed.@default);
+                    public static LocalizableText StatusOfValue { get; } = OrderStatus.Shipped.GetText();
+                    internal static LocalizableText SpeedOfValue { get; } = Shipping.Speed.@default.GetText();
                 }
             }
             """;
@@ -5033,12 +5069,14 @@ public sealed class LocalizationSetsGeneratorTests
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
         var contracts = Run(source).Results.ShouldHaveSingleItem().GeneratedSources.Select(static generated => generated.SourceText.ToString()).ToArray();
 
-        // Assert: the method is as accessible as its enum.
+        // Assert: the method is as accessible as its enum, and so is the extension method on a value.
         errors.ShouldBeEmpty();
         warnings.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
         contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_Domain_Orders.OrderStatus value)"));
         contracts.ShouldContain(static contract => contract.Contains("internal static CodeChops.Idioma.LocalizableText GetTextByValue(Shipping.Speed value)"));
+        contracts.ShouldContain(static contract => contract.Contains("extension(Namespace_Domain_Orders.OrderStatus value)") && contract.Contains("        public CodeChops.Idioma.LocalizableText GetText() =>"));
+        contracts.ShouldContain(static contract => contract.Contains("extension(Shipping.Speed value)") && contract.Contains("        internal CodeChops.Idioma.LocalizableText GetText() =>"));
     }
 
     [Test]
@@ -5123,6 +5161,59 @@ public sealed class LocalizationSetsGeneratorTests
         // Assert
         errors.ShouldBeEmpty();
         ContractText(Run(source)).ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue { get; }");
+    }
+
+    [Test]
+    public void TextNamedGetTextInSetOfEnum_ShouldReportLOC205AndCompileOtherwise()
+    {
+        // Arrange & Act: the generated class gets an extension method of that name, which is a method of the class.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            {{Header}}
+
+            public enum OrderStatus { Pending }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string GetText => "Get";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+                public string GetText => "Haal op";
+            }
+            """);
+
+        // Assert
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC205");
+        error.GetMessage().ShouldBe("'OrderStatusLocalizationEn' has a text named 'GetText', like the generated extension method 'GetText', which gives an enum value its text. The text 'OrderStatusLocalization.GetText' isn't generated. Rename the text.");
+        error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe("GetText");
+    }
+
+    [Test]
+    public void TextNamedGetTextInSetWithoutEnum_ShouldBeATextLikeAnyOther()
+    {
+        // Arrange & Act
+        var source = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string GetText => "Get";
+            }
+            """;
+
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        ContractText(Run(source)).ShouldContain("public static CodeChops.Idioma.LocalizableText GetText { get; }");
     }
 
     [Test]
@@ -5237,6 +5328,8 @@ public sealed class LocalizationSetsGeneratorTests
             {
                 public static LocalizableText Size { get; } = OptionLocalization.GetTextByValue(TestApp.Size.Unknown);
                 public static LocalizableText Colour { get; } = OptionLocalization.GetTextByValue(TestApp.Colour.Unknown);
+                public static LocalizableText SizeOfValue { get; } = TestApp.Size.Unknown.GetText();
+                public static LocalizableText ColourOfValue { get; } = TestApp.Colour.Unknown.GetText();
             }
             """;
 
@@ -5249,6 +5342,8 @@ public sealed class LocalizationSetsGeneratorTests
         text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Colour value) => TextsByValue<IOptionLocalization>.Get(value);");
         text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Colour value) => value switch");
         text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Size value) => TextsByValue<IOptionLocalization>.Get(value);");
+        text.ShouldContain("    extension(Colour value)");
+        text.ShouldContain("    extension(Size value)");
         text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Size value) => value switch");
         text.ShouldContain("        Colour.Unknown => OptionLocalization.Unknown,");
         text.ShouldContain("        Size.Unknown => OptionLocalization.Unknown,");

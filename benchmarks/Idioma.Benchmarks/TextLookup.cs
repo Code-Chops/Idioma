@@ -46,6 +46,9 @@ public class TextLookup
     [Benchmark, BenchmarkCategory(Checkout)]
     public string IdiomaInlineInMarkup_Checkout() => this.scenarios.IdiomaInlineInMarkupCheckout();
 
+    [Benchmark, BenchmarkCategory(Checkout)]
+    public string IdiomaAttribute_Checkout() => this.scenarios.IdiomaAttributeCheckout();
+
     [Benchmark(Baseline = true), BenchmarkCategory(Cart)]
     public string Localizer_Cart() => this.scenarios.LocalizerCart();
 
@@ -57,6 +60,9 @@ public class TextLookup
 
     [Benchmark, BenchmarkCategory(Cart)]
     public string IdiomaInlineInMarkup_Cart() => this.scenarios.IdiomaInlineInMarkupCart();
+
+    [Benchmark, BenchmarkCategory(Cart)]
+    public string IdiomaAttribute_Cart() => this.scenarios.IdiomaAttributeCart();
 
     [Benchmark(Baseline = true), BenchmarkCategory(Greeting)]
     public string Localizer_Greeting() => this.scenarios.LocalizerGreeting();

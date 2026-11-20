@@ -5,7 +5,8 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reports a wording that holds a placeholder of a format string, such as <c>{0}</c> (<c>LOC502</c>): in a text of a
-/// set, in any language, and in a language of <c>LocalizableText.Inline</c>.
+/// set, in any language, in a language of <c>LocalizableText.Inline</c>, and in a language of <c>[Localized]</c> on a
+/// member.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,6 +34,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
 
     private const string SetAdvice = "Write the text as a method that takes the value, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'";
     private const string InlineAdvice = "Write the value into the wording of every language, as in '$\"Hello, {name}!\"'";
+    private const string MemberAdvice = "A text on a member can't take a value, so write a text with a value as a method of a set, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'";
 
     private static readonly DiagnosticDescriptor PlaceholderRule = new(
         id: PlaceholderDiagnosticId,
@@ -41,7 +43,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A text shows its wording as written, so a format-string placeholder such as {0} reaches the user with its braces. In a set, write a text with a value as a method, which every language implements with the same parameters. In an inline text, write the value into the wording of every language.",
+        description: "A text shows its wording as written, so a format-string placeholder such as {0} reaches the user with its braces. In a set, write a text with a value as a method, which every language implements with the same parameters. In an inline text, write the value into the wording of every language. A text on a member, written with [Localized], can't take a value.",
         helpLinkUri: PackageNames.HelpLink(PlaceholderDiagnosticId));
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [PlaceholderRule];
@@ -65,7 +67,57 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
         var codes = SupportedLanguages.ReadCodes(context.Compilation.Assembly);
 
         context.RegisterOperationAction(c => AnalyzeInvocation(c, codes), OperationKind.Invocation);
+        context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, codes), SyntaxKind.Attribute);
         context.RegisterSyntaxNodeAction(c => AnalyzeMember(c, localizationSet), SyntaxKind.PropertyDeclaration, SyntaxKind.MethodDeclaration);
+    }
+
+    /// <summary>
+    /// Reads the wording of each language of <c>[Localized]</c> on a member.
+    /// </summary>
+    /// <param name="context">The attribute.</param>
+    /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>
+    private static void AnalyzeLocalized(SyntaxNodeAnalysisContext context, ImmutableArray<string> codes)
+    {
+        var attribute = (AttributeSyntax)context.Node;
+
+        // By its name first, which binds nothing: nearly every attribute is another one.
+        if (!LocalizedMembers.IsNamedLocalized(attribute)
+            || attribute.ArgumentList is not { Arguments: var arguments }
+            || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree)
+            || context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is not IMethodSymbol constructor
+            || !LocalizedMembers.IsGeneratedAttribute(constructor.ContainingType, context.Compilation.Assembly))
+        {
+            return;
+        }
+
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+
+            // An argument without a name takes the parameter of its place.
+            var parameter = argument.NameColon?.Name.Identifier.ValueText
+                            ?? (argument.NameEquals is null && i < constructor.Parameters.Length ? constructor.Parameters[i].Name : null);
+
+            if (parameter is null)
+                continue;
+
+            var subject = $"The '{SupportedLanguages.FindLanguageOfParameter(parameter, codes)}' wording";
+            var reported = false;
+
+            foreach (var (location, placeholder) in FindWrittenPlaceholders(WrittenWording.FindStrings(argument.Expression)))
+            {
+                reported = true;
+                context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, MemberAdvice));
+            }
+
+            // A constant the argument names, which is written elsewhere.
+            if (!reported
+                && context.SemanticModel.GetConstantValue(argument.Expression, context.CancellationToken) is { HasValue: true, Value: string constant }
+                && Placeholder.Find(constant) is { } found)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, argument.GetLocation(), subject, found, MemberAdvice));
+            }
+        }
     }
 
     /// <summary>

@@ -9,11 +9,13 @@ namespace CodeChops.Idioma;
 /// <para>
 /// Start by declaring your languages, the default one first:
 /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>. A text that lacks one of
-/// them doesn't build. Write each text in one of two ways:
+/// them doesn't build. Write each text in one of three ways:
 /// </para>
 /// <list type="bullet">
 /// <item>Inline: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
 /// <item>In one class per language, for a library or a larger group of texts (see <see cref="ILocalizationSet"/>).</item>
+/// <item>As an attribute on the member it names, for the label of a property or an enum member:
+/// <c>[Localized(en: "City", nl: "Plaats")]</c>. <see cref="GetTextByMember{T}(string)"/> gives that text.</item>
 /// </list>
 /// <para>
 /// For wording that differs in a region, list the region next to its language:
@@ -57,7 +59,7 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// A text of a set also has a <see cref="FullKey"/>, its full name, for an app that looks texts up in resource files
-/// itself. To give a text of your own a key, create it with <see cref="Keyed"/>.
+/// itself. So does a text on a member. To give a text of your own a key, create it with <see cref="Keyed"/>.
 /// </para>
 /// <para>
 /// A text survives JSON, such as a Blazor component parameter that crosses a render mode. It carries every wording it

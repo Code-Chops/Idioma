@@ -285,6 +285,32 @@ public sealed class PlaceholderCodeFixProviderTests
     }
 
     [Test]
+    public async Task TextOnAMember_ShouldGetNoFix()
+    {
+        // Arrange: the placeholder is in the attribute of a property, which is no text of a set.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class Address
+            {
+                [Localized(en: "Enter {0}", nl: "Vul in")]
+                public string City { get; } = "";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: the property isn't turned into a method.
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task FixAll_ShouldGiveEveryLanguageTheSameParameters()
     {
         // Arrange: Dutch has the values in another order, and the British set overrides the English text.

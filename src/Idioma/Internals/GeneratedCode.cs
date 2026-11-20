@@ -341,6 +341,59 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
+    /// Creates the text of a member marked <c>[Localized]</c>, such as a property or a member of an enum. The
+    /// generated code holds the text, so this is called once per member.
+    /// </para>
+    /// </summary>
+    /// <param name="fullKey">
+    /// The full name of the member, such as <c>Shop.Domain.Address.City</c>. It's the text's
+    /// <see cref="LocalizableText.FullKey"/>.
+    /// </param>
+    /// <param name="key">The name of the member, such as <c>City</c>. It's the text's <see cref="LocalizableText.Key"/>.</param>
+    /// <param name="wordings">
+    /// The wording per language, the default language first. Each is a language (a culture name such as <c>en</c> or
+    /// <c>en-GB</c>) and its wording.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// When <paramref name="fullKey"/> is empty or white-space, or <paramref name="wordings"/> is empty.
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="fullKey"/>, <paramref name="key"/>, a language, or the wording of a language is
+    /// <see langword="null"/>.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LocalizableText CreateMemberText(string fullKey, string key, params ReadOnlySpan<(string Language, string Text)> wordings)
+    {
+        var text = LocalizableText.CreateMemberText(fullKey, key, wordings);
+        return text;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// Records the function that finds the texts of an assembly's members marked <c>[Localized]</c>, so that
+    /// <c>LocalizableText.GetTextByMember</c> finds them. The assembly's generated registrar calls this once.
+    /// </para>
+    /// </summary>
+    /// <param name="find">
+    /// Gives the text of a member by the type that declares it and the member's name, or the type's own text for a
+    /// name that is <see langword="null"/>. It gives <see langword="null"/> for what has no text. A type with type
+    /// parameters is passed as its definition.
+    /// </param>
+    /// <exception cref="ArgumentNullException">When <paramref name="find"/> is <see langword="null"/>.</exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void RecordMemberTexts(Func<Type, string?, LocalizableText?> find)
+    {
+        LocalizableText.RecordMemberTexts(find);
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
     /// Checks that no values were passed for a text without parameters, and returns the text. The method <c>GetTextByKey</c> of
     /// a generated class calls this for such a text: <c>ShopLocalization.GetTextByKey("Checkout")</c>.
     /// </para>

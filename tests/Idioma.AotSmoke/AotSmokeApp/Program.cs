@@ -86,6 +86,37 @@ foreach (var (culture, cart, _, order, _, itemsInCart, _) in cases.Where(static 
     Expect($"{culture}: text that takes values read back from json", panel?.Items.ToString(), itemsInCart);
 }
 
+// A text on a member, of the library and of the app. The build wrote each as code, and the app's registrar recorded
+// those of the library when the app started, so nothing reads an attribute here. An enum's value gives its text
+// itself: by the attribute of its member, or from a set of the enum.
+(string Culture, string City, string Picked, string Status, string Surname, string Shipped)[] memberCases =
+[
+    ("en", "City", "Picked", "Parcel status", "Surname", "Shipped"),
+    ("en-GB", "City", "Picked", "Parcel status", "Family name", "Dispatched"),
+    ("nl", "Plaats", "Gepickt", "Pakketstatus", "Achternaam", "Verzonden"),
+    ("de-DE", "City", "Picked", "Parcel status", "Surname", "Shipped"),
+];
+
+foreach (var (culture, city, picked, status, surname, shipped) in memberCases)
+{
+    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
+
+    Expect($"{culture}: text of a property of the library", LocalizableText.GetTextByMember<Address>(nameof(Address.City))?.ToString(), city);
+    Expect($"{culture}: text of a property by a type held at run time", LocalizableText.GetTextByMember(typeof(Address), "City")?.ToString(), city);
+    Expect($"{culture}: text of a property the app holds", LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!)?.ToString(), city);
+    Expect($"{culture}: text of an override without one of its own", LocalizableText.GetTextByMember<BusinessAddress>(nameof(Address.City))?.ToString(), city);
+    Expect($"{culture}: text of an enum's value", ParcelStatus.Picked.GetText().ToString(), picked);
+    Expect($"{culture}: text of an enum's member by its name", LocalizableText.GetTextByMember(typeof(ParcelStatus), ParcelStatus.Picked.ToString())?.ToString(), picked);
+    Expect($"{culture}: text of an enum itself", LocalizableText.GetTextOfType<ParcelStatus>()?.ToString(), status);
+    Expect($"{culture}: text of a property of the app", LocalizableText.GetTextByMember<Customer>(nameof(Customer.Surname))?.ToString(), surname);
+    Expect($"{culture}: text of a value of an enum with a set", OrderStatus.Shipped.GetText().ToString(), shipped);
+}
+
+Expect("text of a member that isn't marked", LocalizableText.GetTextByMember<Address>(nameof(Address.Unmarked))?.ToString() ?? "none", "none");
+Expect("text of an enum's value that isn't marked", ParcelStatus.Lost.GetText().ToString(), "Lost");
+Expect("key of a text on a member", LocalizableText.GetTextByMember<Address>(nameof(Address.City))?.FullKey, "AotSmokeLibrary.Address.City");
+Expect("text of a member asked for twice", ReferenceEquals(ParcelStatus.Picked.GetText(), LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked))) ? "the same text" : "another text", "the same text");
+
 if (failures.Count > 0)
 {
     foreach (var failure in failures)
@@ -124,6 +155,37 @@ public class ShopLocalizationEnGb : ShopLocalizationEn
     public override string ItemsInCart(int count, string shop) => count is 1
         ? $"1 item in your basket at {shop}"
         : $"{count} items in your basket at {shop}";
+}
+
+public class Customer
+{
+    [Localized(en: "Surname", nl: "Achternaam", enGb: "Family name")]
+    public string Surname { get; set; } = "";
+}
+
+// An override without a text of its own, so it keeps that of the library's property.
+public sealed class BusinessAddress : Address
+{
+    public override string City { get; set; } = "";
+}
+
+public enum OrderStatus { Pending, Shipped }
+
+public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+{
+    public virtual string Pending => "Pending";
+    public virtual string Shipped => "Shipped";
+}
+
+public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+{
+    public virtual string Pending => "In behandeling";
+    public virtual string Shipped => "Verzonden";
+}
+
+public class OrderStatusLocalizationEnGb : OrderStatusLocalizationEn
+{
+    public override string Shipped => "Dispatched";
 }
 
 public sealed record Panel(LocalizableText Title, LocalizableText Cart, LocalizableText Items);

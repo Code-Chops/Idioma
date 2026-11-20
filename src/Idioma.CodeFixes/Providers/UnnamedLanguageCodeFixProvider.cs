@@ -8,7 +8,8 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <summary>
 /// Fixes a call of <c>LocalizableText.Inline</c> with an argument that has no language name (<c>LOC501</c>). It names
 /// every such argument after the language it stands for: <c>LocalizableText.Inline("Orders", "Bestellingen")</c>
-/// becomes <c>LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</c>.
+/// becomes <c>LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</c>. It does the same for
+/// <c>[Localized("City", "Plaats")]</c>.
 /// </summary>
 /// <remarks>
 /// The diagnostic carries the language of each argument (<see cref="OneLanguageTextAnalyzer.ParameterNamesProperty"/>),
@@ -26,9 +27,16 @@ public sealed class UnnamedLanguageCodeFixProvider : CodeFixProvider
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
 
-        // The diagnostic sits on the first argument without a name.
-        if (root?.FindNode(context.Span, getInnermostNodeForTie: true).FirstAncestorOrSelf<ArgumentSyntax>()?.Parent is not ArgumentListSyntax arguments)
+        // The diagnostic sits on the first argument without a name: of a call, or of an attribute.
+        var node = root?.FindNode(context.Span, getInnermostNodeForTie: true);
+
+        SyntaxNode? arguments = node?.FirstAncestorOrSelf<ArgumentSyntax>()?.Parent as ArgumentListSyntax;
+        arguments ??= node?.FirstAncestorOrSelf<AttributeArgumentSyntax>()?.Parent as AttributeArgumentListSyntax;
+
+        if (root is null || arguments is null)
             return;
+
+        var count = arguments is ArgumentListSyntax call ? call.Arguments.Count : ((AttributeArgumentListSyntax)arguments).Arguments.Count;
 
         foreach (var diagnostic in context.Diagnostics)
         {
@@ -38,16 +46,31 @@ public sealed class UnnamedLanguageCodeFixProvider : CodeFixProvider
             var names = value.Split(',');
 
             // The call changed since the diagnostic was reported.
-            if (names.Length != arguments.Arguments.Count)
+            if (names.Length != count)
                 continue;
+
+            var named = arguments is ArgumentListSyntax list ? (SyntaxNode)Name(list, names) : Name((AttributeArgumentListSyntax)arguments, names);
 
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: "Name each language",
-                    createChangedDocument: _ => Task.FromResult(context.Document.WithSyntaxRoot(root.ReplaceNode(arguments, Name(arguments, names)))),
+                    createChangedDocument: _ => Task.FromResult(context.Document.WithSyntaxRoot(root.ReplaceNode(arguments, named))),
                     equivalenceKey: "NameLanguages"),
                 diagnostic);
         }
+    }
+
+    /// <summary>
+    /// The arguments of an attribute with a name before each one that has none: the language it stands for.
+    /// </summary>
+    private static AttributeArgumentListSyntax Name(AttributeArgumentListSyntax arguments, string[] names)
+    {
+        var named = arguments.Arguments.Select((argument, i) => argument is { NameColon: null, NameEquals: null }
+            ? argument.WithoutLeadingTrivia().WithNameColon(CreateName(names[i], argument.GetLeadingTrivia()))
+            : argument);
+
+        var result = arguments.WithArguments(SyntaxFactory.SeparatedList(named, arguments.Arguments.GetSeparators()));
+        return result;
     }
 
     /// <summary>
@@ -67,14 +90,22 @@ public sealed class UnnamedLanguageCodeFixProvider : CodeFixProvider
     /// </summary>
     private static ArgumentSyntax Name(ArgumentSyntax argument, string name)
     {
+        var namedArgument = argument.WithoutLeadingTrivia().WithNameColon(CreateName(name, argument.GetLeadingTrivia()));
+        return namedArgument;
+    }
+
+    /// <summary>
+    /// The name of a language before its argument, a keyword escaped, with what stood before the argument.
+    /// </summary>
+    private static NameColonSyntax CreateName(string name, SyntaxTriviaList leadingTrivia)
+    {
         var identifier = SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : $"@{name}";
 
         var nameColon = SyntaxFactory.NameColon(
                 SyntaxFactory.IdentifierName(identifier),
                 SyntaxFactory.Token(SyntaxKind.ColonToken).WithTrailingTrivia(SyntaxFactory.Space))
-            .WithLeadingTrivia(argument.GetLeadingTrivia());
+            .WithLeadingTrivia(leadingTrivia);
 
-        var namedArgument = argument.WithoutLeadingTrivia().WithNameColon(nameColon);
-        return namedArgument;
+        return nameColon;
     }
 }

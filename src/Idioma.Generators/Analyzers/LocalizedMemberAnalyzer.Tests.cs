@@ -1,0 +1,399 @@
+using System.Collections.Immutable;
+using CodeChops.Idioma.Generators;
+using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis;
+
+namespace CodeChops.Idioma.Tests;
+
+/// <summary>
+/// Tests for <see cref="LocalizedMemberAnalyzer"/>: a member marked <c>[Localized]</c> that gets no text is reported
+/// (<c>LOC400</c>), and so is a member of an enum without <c>[Localized]</c> next to members that have it
+/// (<c>LOC503</c>).
+/// </summary>
+public sealed class LocalizedMemberAnalyzerTests
+{
+    #region Fixture
+    private const string Header = """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en", "nl")]
+
+        namespace Shop.Domain;
+        """;
+
+    private static Task<ImmutableArray<Diagnostic>> AnalyzeAsync(string source, params (string Path, string Text)[] files)
+    {
+        return GeneratorTestHelper.AnalyzeAsync(new LocalizedMemberAnalyzer(), source, [], files);
+    }
+
+    private static string At(Diagnostic diagnostic)
+    {
+        return diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan);
+    }
+
+    /// <summary>
+    /// The one <c>LOC400</c> for a source, which is a warning.
+    /// </summary>
+    private static async Task<Diagnostic> SingleCannotRegisterAsync(string source, params (string Path, string Text)[] files)
+    {
+        var diagnostic = (await AnalyzeAsync(source, files)).ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(LocalizedMemberAnalyzer.CannotRegisterDiagnosticId);
+        diagnostic.Id.ShouldBe("LOC400");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
+
+        return diagnostic;
+    }
+    #endregion
+
+    [Test]
+    public async Task MarkedMembersThatGetTheirText_ShouldReportNothing()
+    {
+        // Arrange & Act: a property, a field, a type, the property of a record's parameter, and an enum whose
+        // members are all marked.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            [Localized(en: "Address", nl: "Adres")]
+            public class Address
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+
+                [Localized(en: "Note", nl: "Notitie")]
+                public string Note = "";
+
+                public string Unmarked { get; } = "";
+            }
+
+            public record Line([property: Localized(en: "Quantity", nl: "Aantal")] int Quantity);
+
+            public enum Status
+            {
+                [Localized(en: "Open", nl: "Open")]
+                Open,
+
+                [Localized(en: "Closed", nl: "Gesloten")]
+                Closed,
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("private", "private")]
+    [Arguments("protected", "protected")]
+    [Arguments("private protected", "private protected")]
+    public async Task MemberOfTypeGeneratedCodeCannotName_ShouldReportLOC400(string accessibility, string kind)
+    {
+        // Arrange & Act
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            public class Order
+            {
+                {{accessibility}} class Hidden
+                {
+                    [Localized(en: "Article", nl: "Artikel")]
+                    public string Article { get; } = "";
+                }
+            }
+            """);
+
+        // Assert: at the attribute, with what to do about it.
+        diagnostic.GetMessage().ShouldBe($"The text of 'Hidden.Article' can't be registered because generated code can't name 'Hidden', which is {kind}, so it won't be found. Make 'Hidden' internal or public.");
+        At(diagnostic).ShouldBe("Localized(en: \"Article\", nl: \"Artikel\")");
+    }
+
+    [Test]
+    public async Task MarkedTypeInsideAPrivateType_ShouldReportTheTypeThatIsInTheWay()
+    {
+        // Arrange & Act: the marked type is public, and the type around it is not.
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            public class Order
+            {
+                private class Hidden
+                {
+                    [Localized(en: "Line", nl: "Regel")]
+                    public class Line;
+                }
+            }
+            """);
+
+        // Assert
+        diagnostic.GetMessage().ShouldBe("The text of 'Line' can't be registered because generated code can't name 'Hidden', which is private, so it won't be found. Make 'Hidden' internal or public.");
+    }
+
+    [Test]
+    public async Task MemberOfFileLocalType_ShouldReportLOC400()
+    {
+        // Arrange & Act
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            file class Hidden
+            {
+                [Localized(en: "Article", nl: "Artikel")]
+                public string Article { get; } = "";
+            }
+            """);
+
+        // Assert
+        diagnostic.GetMessage().ShouldBe("The text of 'Hidden.Article' can't be registered because generated code can't name 'Hidden', which is file-local, so it won't be found. Remove 'file' from 'Hidden'.");
+    }
+
+    [Test]
+    [Arguments("""en: "City", nl: null!""", "nl")]
+    [Arguments("""en: null!, nl: "Plaats" """, "en")]
+    [Arguments(""" "City", null!""", "nl")]
+    public async Task WordingThatIsNull_ShouldReportLOC400WithItsLanguage(string arguments, string language)
+    {
+        // Arrange & Act
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            public class Address
+            {
+                [Localized({{arguments}})]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert: the language is named, also for an argument without a name.
+        diagnostic.GetMessage().ShouldBe($"The text of 'Address.City' can't be registered because its wording for '{language}' is null, so it won't be found. Write a wording for '{language}'.");
+    }
+
+    [Test]
+    [Arguments("Page_razor.g.cs")]
+    [Arguments("Pages/Index_cshtml.g.cs")]
+    public async Task MemberMarkedInRazorOutput_ShouldReportLOC400(string outputPath)
+    {
+        // Arrange: what Razor writes for a class in the @code of a component. The attribute compiles there, and the
+        // source generator that writes the texts never saw it, because no generator sees what another writes.
+        const string razorOutput = """
+            // <auto-generated/>
+            namespace Shop.Domain;
+
+            public partial class Page
+            {
+                public class Model
+                {
+                    [Localized(en: "City", nl: "Plaats")]
+                    public string City { get; set; } = "";
+                }
+            }
+            """;
+
+        // Act
+        var diagnostic = await SingleCannotRegisterAsync(Header, (outputPath, razorOutput));
+
+        // Assert: at the attribute, with where to move the class.
+        diagnostic.GetMessage().ShouldBe("The text of 'Model.City' can't be registered because it's written in markup, which the source generator can't read, so it won't be found. Move 'Model' to a C# file.");
+        At(diagnostic).ShouldBe("Localized(en: \"City\", nl: \"Plaats\")");
+    }
+
+    [Test]
+    public async Task MemberMarkedInOtherGeneratedCode_ShouldReportNothing()
+    {
+        // Arrange: whoever generated this is the only one who could fix it.
+        const string generated = """
+            // <auto-generated/>
+            namespace Shop.Domain;
+
+            public class Generated
+            {
+                [Localized(en: "City", nl: null!)]
+                public string City { get; set; } = "";
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(Header, ("Generated.g.cs", generated));
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task MarkedIndexer_ShouldReportLOC400()
+    {
+        // Arrange & Act: the compiler takes the attribute on an indexer, which is a property to it.
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            public class Lines
+            {
+                [Localized(en: "Line", nl: "Regel")]
+                public string this[int index] => "";
+            }
+            """);
+
+        // Assert
+        diagnostic.GetMessage().ShouldBe("The text of 'this[]' can't be registered because an indexer has no name to find it by, so it won't be found. Remove the attribute.");
+    }
+
+    [Test]
+    [Arguments("""[field: Localized(en: "City", nl: "Plaats")] public string City { get; } = "";""", "Write the attribute without 'field:'")]
+    public async Task AttributeOnTheFieldBehindAProperty_ShouldReportLOC400(string member, string advice)
+    {
+        // Arrange & Act: 'field:' puts the attribute on the field the compiler keeps the property's value in.
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            public class Address
+            {
+                {{member}}
+            }
+            """);
+
+        // Assert
+        diagnostic.GetMessage().ShouldBe($"The text of 'City' can't be registered because the attribute is on the field behind the property, so it won't be found. {advice}.");
+    }
+
+    [Test]
+    public async Task EnumWithMarkedAndUnmarkedMembers_ShouldReportLOC503ForEachUnmarkedOne()
+    {
+        // Arrange & Act: two members added later, without a text.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Assigned", nl: "Toegewezen")]
+                Assigned,
+
+                Lost,
+
+                [Localized(en: "Picked", nl: "Gepickt")]
+                Picked,
+
+                Returned = 9,
+            }
+            """);
+
+        // Assert: at the name of each, as a warning, with the attribute to write.
+        diagnostics.Length.ShouldBe(2);
+        diagnostics.ShouldAllBe(static diagnostic => diagnostic.Id == "LOC503" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        diagnostics.Select(At).ShouldBe(["Lost", "Returned"]);
+        diagnostics[0].GetMessage().ShouldBe("'ParcelStatus.Lost' has no text, but other members of 'ParcelStatus' have one, so users would see 'Lost' as written. Mark it [Localized(en: \"...\", nl: \"...\")].");
+    }
+
+    [Test]
+    public async Task EnumMemberWhoseAttributeDoesNotCompile_ShouldCountAsMarked()
+    {
+        // Arrange & Act: an attribute that leaves a language out, which the compiler reports (CS7036).
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Assigned", nl: "Toegewezen")]
+                Assigned,
+
+                [Localized(en: "Picked")]
+                Picked,
+            }
+            """);
+
+        // Assert: no second message about a member that is marked.
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task EnumWithoutMarkedMember_ShouldReportNothing()
+    {
+        // Arrange & Act: an enum with a text of its own only, whose values may never be shown, and an enum without
+        // any text.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            [Localized(en: "Status", nl: "Status")]
+            public enum PackageStatus
+            {
+                Assigned,
+                Picked,
+            }
+
+            public enum Untranslated
+            {
+                One,
+                Two,
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task UnmarkedMemberWithThePragma_ShouldBeLeftAlone()
+    {
+        // Arrange & Act: a member that is never shown, which its author says so.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Assigned", nl: "Toegewezen")]
+                Assigned,
+
+            #pragma warning disable LOC503
+                Internal,
+            #pragma warning restore LOC503
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task EnumMarkedWithAnAttributeTheCodeBringsItself_ShouldReportNothing()
+    {
+        // Arrange & Act: an attribute named Localized in the code's own namespace, which is not the generated one.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            [System.AttributeUsage(System.AttributeTargets.All)]
+            public sealed class LocalizedAttribute(string en, string nl) : System.Attribute
+            {
+                public string En { get; } = en;
+                public string Nl { get; } = nl;
+            }
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Assigned", nl: null!)]
+                Assigned,
+
+                Lost,
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AssemblyWithoutLanguages_ShouldReportNothing()
+    {
+        // Arrange & Act: without languages there's no attribute, which LOC100 reports.
+        var diagnostics = await AnalyzeAsync("""
+            namespace Shop.Domain;
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Assigned", nl: "Toegewezen")]
+                Assigned,
+
+                Lost,
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+}

@@ -6,8 +6,8 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="PlaceholderAnalyzer"/>: a wording holds no placeholder of a format string, in an inline text
-/// and in a text of a set, also a set of another assembly's contract.
+/// Tests for <see cref="PlaceholderAnalyzer"/>: a wording holds no placeholder of a format string, in an inline text,
+/// in a text on a member, and in a text of a set, also a set of another assembly's contract.
 /// </summary>
 public sealed class PlaceholderAnalyzerTests
 {
@@ -110,6 +110,54 @@ public sealed class PlaceholderAnalyzerTests
         diagnostic.GetMessage().ShouldStartWith(message);
         diagnostic.GetMessage().ShouldEndWith("Write the value into the wording of every language, as in '$\"Hello, {name}!\"'.");
         At(diagnostic).ShouldStartWith(at);
+    }
+
+    [Test]
+    [Arguments("""en: "Enter {0}", nl: "Vul in", enGb: "Enter" """, "\"Enter {0}\"", "The 'en' wording holds the placeholder {0}. Nothing fills it in")]
+    [Arguments("""en: "Total", nl: "Totaal", enGb: "Total: {0:N2}" """, "\"Total: {0:N2}\"", "The 'en-GB' wording holds the placeholder {0:N2}. Nothing fills it in")]
+    [Arguments(""" "Name", "Naam {0}", "Name" """, "\"Naam {0}\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
+    [Arguments("""en: "Hello!", nl: Wording, enGb: "Hello!" """, "nl: Wording", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
+    public async Task WordingOfLocalizedWithPlaceholder_ShouldReportLOC502(string arguments, string at, string message)
+    {
+        // Arrange & Act
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class Address
+            {
+                private const string Wording = "Hallo, {0}!";
+
+                [Localized({{arguments}})]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert: at the string that holds it, also for an argument without a name, and at the argument for a
+        // constant it names. A text on a member can't take the value, so the advice is a method of a set.
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
+        diagnostic.GetMessage().ShouldStartWith(message);
+        diagnostic.GetMessage().ShouldEndWith("A text on a member can't take a value, so write a text with a value as a method of a set, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'.");
+        At(diagnostic).ShouldStartWith(at);
+    }
+
+    [Test]
+    public async Task WordingOfLocalizedWithoutPlaceholder_ShouldReportNothing()
+    {
+        // Arrange & Act: braces that hold no placeholder.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class Address
+            {
+                [Localized(en: "City {name}", nl: "Plaats {}", enGb: "City")]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
     }
 
     [Test]

@@ -33,13 +33,14 @@ The hundreds of a code name its subject. The subjects come in the order of this 
 | [`LOC302`](#loc302)                                 | A value that a translation never uses                   |
 | [`LOC303`](#loc303) (warning, code fix)             | A text passed to a `string` parameter of a text         |
 | **[Registration](#registration)**                   |                                                         |
-| [`LOC400`](#loc400) (warning)                       | A set that can't be registered automatically            |
+| [`LOC400`](#loc400) (warning)                       | A set or a label that can't be registered automatically |
 | [`LOC401`](#loc401) (code fix)                      | A `LocalizationLanguageCode` that implements nothing    |
 | [`LOC402`](#loc402)                                 | A `LocalizationLanguageCode` that isn't a culture name  |
 | **[Wording](#wording)**                             |                                                         |
 | [`LOC500`](#loc500)                                 | Wording written in one language                         |
 | [`LOC501`](#loc501) (code fix)                      | A language argument without its name                    |
 | [`LOC502`](#loc502) (warning, code fix)             | A placeholder such as `{0}` in a wording                |
+| [`LOC503`](#loc503) (warning)                       | An enum member without a label next to members with one |
 | **[Libraries](#libraries)**                         |                                                         |
 | [`LOC600`](#loc600) (code fix)                      | A library without a set for one of your languages       |
 | [`LOC601`](#loc601) (warning)                       | A library whose inline texts lack one of your languages |
@@ -53,6 +54,8 @@ A set lists `ILocalizationSet` next to a contract of its own assembly, but the a
 A set that rewords a library's set, or adds a language to a library's contract, needs no languages.
 
 A call of `LocalizableText.Inline` in such an assembly is LOC100 too. The generator writes `Inline` with one parameter per language, so without languages the method doesn't exist, and the compiler reports `CS0117` next to it.
+
+So is a member marked `[Localized]`. The generator writes that attribute with one parameter per language too, so without languages the compiler reports `CS0246` next to it.
 
 ### LOC101
 
@@ -125,11 +128,12 @@ A set lists `ILocalizationSet` without its contract, so no text reads it. This a
 
 ### LOC205
 
-A text has a name the generated class can't give it, so that text isn't generated. Rename the text. Three names are taken:
+A text has a name the generated class can't give it, so that text isn't generated. Rename the text. Four names are taken:
 
 - The name of the generated class, as in `ShopLocalization.ShopLocalization`. In C#, a member can't have the name of its own class.
 - `GetTextByKey`. The generated class has a method of that name, which gives a [text by its key](how-it-works.md#getting-a-text-by-its-key).
 - `GetTextByValue`, in a [set of an enum](how-it-works.md#enums). The generated class has a method of that name, which gives the text of an enum value.
+- `GetText`, in a set of an enum. The generated class has an extension method of that name, which gives a value its text: `order.Status.GetText()`.
 
 ### LOC206
 
@@ -236,6 +240,20 @@ A set can't be registered automatically, so its texts won't be found. This is a 
 
 Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an instance to `LocalizationRegistry.Register`.
 
+A member marked `[Localized]` gets LOC400 when its text can't be registered, so `LocalizableText.GetTextByMember` won't find it:
+
+- Its type is private or protected inside another type, or file-local. The generated code that holds the text can't name such a type. Make the type internal or public.
+- A wording is `null`. Write a wording for that language.
+- It's written in the `@code` of a `.razor` file. The source generator can't read what Razor generates, so write the type in a C# file.
+- The attribute is on an indexer, which has no name to find a text by. Remove it.
+- The attribute is on the field behind a property, as in `[field: Localized(...)]`. Write it without `field:`.
+
+```text
+warning LOC400: The text of 'Line.Article' can't be registered because generated code can't name 'Line', which is private, so it won't be found. Make 'Line' internal or public.
+```
+
+See [attributes on members](how-it-works.md#attributes-on-members).
+
 ### LOC401
 
 A set derives from another set and declares a `LocalizationLanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LocalizationLanguageCode` then implements nothing, and the set serves the language of its name instead:
@@ -285,7 +303,7 @@ LOC500 starts with your second language, because one language has nothing to be 
 
 ### LOC501
 
-An argument of `LocalizableText.Inline` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`.
+An argument of `LocalizableText.Inline` or of `[Localized]` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or `[Localized(en: "City", nl: "Plaats")]`.
 
 The IDE fix names each argument after the language of its position.
 
@@ -295,6 +313,7 @@ A wording holds a placeholder of a format string, such as `{0}`. This is a warni
 
 - In a set, write the text as a method that takes the value: `public string Greeting(string name) => $"Hello, {name}!";`.
 - In an inline text, write the value into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`.
+- On a member, `[Localized]` takes constants, so its wording can't show a value. Write the text as a method of a set.
 
 The build reads only the strings a text returns:
 
@@ -320,7 +339,21 @@ The fix changes the text in every language of your project at once, so every set
 
 A wording in a raw string keeps its placeholder and its warning, so write its value by hand.
 
-An inline text gets no fix, because its wording has no parameter to take the value.
+An inline text gets no fix, because its wording has no parameter to take the value. Neither does a label written with `[Localized]`.
+
+### LOC503
+
+A member of an enum has no `[Localized]`, and another member of that enum has one. This is a warning. Users would see the member's name as written, in every language. It's usually a member added later, so mark it too:
+
+```text
+warning LOC503: 'ParcelStatus.Lost' has no text, but other members of 'ParcelStatus' have one, so users would see 'Lost' as written. Mark it [Localized(en: "...", nl: "...")].
+```
+
+An enum without a marked member gets no warning, also when the enum itself is marked, because its values may never be shown.
+
+For a member that's never shown, turn the warning off around it: `#pragma warning disable LOC503`.
+
+Where a missing text has to be a build error, write a [set of the enum](how-it-works.md#enums) instead.
 
 ### What still converts
 
@@ -374,4 +407,4 @@ See [a language the library lacks](libraries-and-apps.md#a-language-the-library-
 
 ### LOC601
 
-A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in the library's default language.
+A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in the library's default language. The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too.

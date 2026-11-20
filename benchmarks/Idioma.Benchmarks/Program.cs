@@ -16,6 +16,10 @@ switch (args)
             Console.WriteLine($"{culture}: every approach shows the expected wording.");
         }
 
+        Culture.Use("nl");
+        LabelLookup.Verify();
+        Console.WriteLine("nl: every label shows the expected wording.");
+
         break;
 
     // The scenarios in Blazor WebAssembly, served to a headless Chrome, as tables.

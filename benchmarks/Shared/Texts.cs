@@ -26,6 +26,18 @@ public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
     public string Greeting(string name) => $"Hallo, {name}!";
 }
 
+// Written as an attribute on the member it names, as the label of a property. Found by its type and the member's name
+// and then shown, as a form finds and shows the label of a field on every render. An attribute takes constants, so it
+// has no Greeting, which takes a value.
+public class ShopLabels
+{
+    [Localized(en: "Checkout", nl: "Afrekenen", enGb: "Checkout")]
+    public string Checkout { get; set; } = "";
+
+    [Localized(en: "Cart", nl: "Winkelwagen", enGb: "Basket")]
+    public string Cart { get; set; } = "";
+}
+
 // Created once and kept, as a component can keep an inline text in a field, so that its time is the lookup alone. The
 // value of Greeting is filled in once, so it shows the same name every time.
 public static class InlineTextsInField

@@ -9,14 +9,14 @@ namespace CodeChops.Idioma.Tests;
 public sealed class InlineTextsAttributeTests
 {
     [Test]
-    public void ShouldTargetAssembliesOnce()
+    public void ShouldTargetAssembliesMoreThanOnce()
     {
         // Arrange & Act
         var usage = typeof(InlineTextsAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
 
-        // Assert
+        // Assert: two generated files apply it, one for LocalizableText.Inline and one for [Localized].
         usage.ValidOn.ShouldBe(AttributeTargets.Assembly);
-        usage.AllowMultiple.ShouldBeFalse();
+        usage.AllowMultiple.ShouldBeTrue();
     }
 
     [Test]
