@@ -3,6 +3,8 @@
 #pragma warning disable CS0612, CS0618 // Only generated code calls GeneratedCode.
 
 using static CodeChops.Idioma.Internals.GeneratedCode;
+using Namespace_System = System;
+using Namespace_System_Collections_Generic = System.Collections.Generic;
 
 namespace TestApp;
 
@@ -78,10 +80,10 @@ public static partial class ShopLocalization
     /// </summary>
     /// <param name="key">The <see cref="CodeChops.Idioma.LocalizableText.Key"/> of the text: its name, in the same letter case.</param>
     /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-    /// <exception cref="global::System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
-    /// <exception cref="global::System.Collections.Generic.KeyNotFoundException">When no text has the key.</exception>
-    /// <exception cref="global::System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params global::System.ReadOnlySpan<object?> values) => key switch
+    /// <exception cref="Namespace_System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
+    /// <exception cref="Namespace_System_Collections_Generic.KeyNotFoundException">When no text has the key.</exception>
+    /// <exception cref="Namespace_System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
+    public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params Namespace_System.ReadOnlySpan<object?> values) => key switch
     {
         "Checkout" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),
         "Total" => GetKeyedText<IShopLocalization>(ShopLocalization.Total, key, values),

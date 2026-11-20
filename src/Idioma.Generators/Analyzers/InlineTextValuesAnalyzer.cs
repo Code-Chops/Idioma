@@ -122,7 +122,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
             var reads = new Reads();
             reads.Add(argument.Value, context.CancellationToken);
 
-            if (reads.CallsLocalCode)
+            if (reads.CallsLocalCode || reads.ReadsUnreadableLocal)
                 continue;
 
             foreach (var value in shown)
@@ -286,6 +286,18 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         /// </summary>
         public bool CallsOwnCode { get; private set; }
 
+        /// <summary>
+        /// Whether a local variable is read that gets its value where the build can't read what it holds: one declared
+        /// by a pattern, a deconstruction, <c>out var</c> or <c>foreach</c>, or one passed by reference.
+        /// </summary>
+        public bool ReadsUnreadableLocal { get; private set; }
+
+        /// <summary>
+        /// What the code around the call writes a local variable with, other than where it declares one: its
+        /// assignments, and its arguments passed by reference.
+        /// </summary>
+        private List<IOperation>? Writes { get; set; }
+
         public void Add(IOperation operation, CancellationToken cancellationToken)
         {
             foreach (var read in operation.DescendantsAndSelf())
@@ -294,7 +306,10 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
                 {
                     case ILocalReferenceOperation { Local: var local }:
                         if (Symbols.Add(local))
+                        {
                             AddDeclaration(local, read.SemanticModel, cancellationToken);
+                            AddWrites(local, read, cancellationToken);
+                        }
 
                         break;
 
@@ -329,7 +344,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         }
 
         /// <summary>
-        /// Adds what the declaration of a local variable reads, as in <c>var name = user.Name;</c>.
+        /// Adds what the declaration of a local variable reads, as in <c>var name = user.Name;</c>. A local variable
+        /// declared in another way holds what the build can't read (<see cref="ReadsUnreadableLocal"/>).
         /// </summary>
         private void AddDeclaration(ILocalSymbol local, SemanticModel? semanticModel, CancellationToken cancellationToken)
         {
@@ -338,13 +354,76 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
 
             foreach (var reference in local.DeclaringSyntaxReferences)
             {
+                if (reference.GetSyntax(cancellationToken) is not VariableDeclaratorSyntax declarator)
+                {
+                    ReadsUnreadableLocal = true;
+                    continue;
+                }
+
                 if (reference.SyntaxTree == semanticModel.SyntaxTree
-                    && reference.GetSyntax(cancellationToken) is VariableDeclaratorSyntax { Initializer.Value: { } initializer }
+                    && declarator.Initializer?.Value is { } initializer
                     && semanticModel.GetOperation(initializer, cancellationToken) is { } operation)
                 {
                     Add(operation, cancellationToken);
                 }
             }
+        }
+
+        /// <summary>
+        /// Adds what a local variable is assigned after its declaration, as in <c>upper = name.ToUpperInvariant();</c>
+        /// or <c>list += name;</c>. A local variable written in another way, as by a deconstruction or as an argument
+        /// passed by reference, holds what the build can't read (<see cref="ReadsUnreadableLocal"/>).
+        /// </summary>
+        private void AddWrites(ILocalSymbol local, IOperation read, CancellationToken cancellationToken)
+        {
+            foreach (var write in Writes ??= FindWrites(read, cancellationToken))
+            {
+                switch (write)
+                {
+                    case IAssignmentOperation { Target: ILocalReferenceOperation target } assignment:
+                        if (SymbolEqualityComparer.Default.Equals(target.Local, local))
+                            Add(assignment.Value, cancellationToken);
+
+                        break;
+
+                    case IAssignmentOperation { Target: var target }:
+                        ReadsUnreadableLocal |= Reads(target);
+                        break;
+
+                    case IArgumentOperation { Value: var value }:
+                        ReadsUnreadableLocal |= Reads(value);
+                        break;
+                }
+            }
+
+            bool Reads(IOperation operation)
+            {
+                var reads = operation.DescendantsAndSelf().Any(part => part is ILocalReferenceOperation reference && SymbolEqualityComparer.Default.Equals(reference.Local, local));
+                return reads;
+            }
+        }
+
+        /// <summary>
+        /// The assignments and the arguments passed by reference in the code around an operation: the body of its
+        /// method, or the initializer it stands in.
+        /// </summary>
+        private static List<IOperation> FindWrites(IOperation operation, CancellationToken cancellationToken)
+        {
+            var root = operation;
+            while (root.Parent is { } parent)
+                root = parent;
+
+            var writes = new List<IOperation>();
+
+            foreach (var part in root.DescendantsAndSelf())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (part is IAssignmentOperation or IArgumentOperation { Parameter.RefKind: RefKind.Ref or RefKind.Out })
+                    writes.Add(part);
+            }
+
+            return writes;
         }
 
         /// <summary>

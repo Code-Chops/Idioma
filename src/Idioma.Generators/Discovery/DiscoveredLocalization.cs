@@ -108,7 +108,7 @@ internal readonly record struct DiscoveredLocalization(
 
 /// <summary>
 /// An enum whose members a set has a text for, because the set lists <c>ILocalizationSet&lt;TEnum&gt;</c>: its type as
-/// generated code can write it, its full name behind <c>global::</c>, its name as a message writes it, with the types
+/// generated code can write it, its full name, its name as a message writes it, with the types
 /// that hold it (<c>Order.Status</c>), its namespace (<c>""</c> for the global namespace), whether code outside its
 /// assembly can name it, and its members in the order they're written.
 /// </summary>
@@ -186,16 +186,51 @@ internal readonly record struct ContractBindingQuestion(
 /// The full names of the contracts the current compilation generates, and which of them a base type binds to where
 /// two share its name (<see cref="LocalizationDiscovery.BindContracts"/>).
 /// </summary>
-internal sealed class GeneratedContracts(ImmutableArray<string> names, EquatableArray<ContractBinding> bindings)
+internal sealed class GeneratedContracts
 {
-    public ImmutableArray<string> Names { get; } = names;
+    // Looked up for every base type of every set, so by hash: a scan of the names made the analysis of a project with
+    // hundreds of contracts take seconds on each edit.
+    private HashSet<string> Names { get; }
 
-    private EquatableArray<ContractBinding> Bindings { get; } = bindings;
+    /// <summary>
+    /// The contract of each simple name, or <see langword="null"/> for a name two contracts share.
+    /// </summary>
+    private Dictionary<string, string?> BySimpleName { get; }
+
+    private Dictionary<DiagnosticLocation, string> Bindings { get; }
+
+    public GeneratedContracts(ImmutableArray<string> names, EquatableArray<ContractBinding> bindings)
+    {
+        this.Names = new HashSet<string>(names, StringComparer.Ordinal);
+        this.BySimpleName = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+        foreach (var name in this.Names)
+        {
+            var simpleName = LocalizationDiscovery.GetSimpleName(name);
+            this.BySimpleName[simpleName] = this.BySimpleName.ContainsKey(simpleName) ? null : name;
+        }
+
+        this.Bindings = [];
+
+        foreach (var binding in bindings)
+            if (!this.Bindings.ContainsKey(binding.Location))
+                this.Bindings.Add(binding.Location, binding.Contract);
+    }
 
     public bool Contains(string fullName)
     {
-        var contains = this.Names.Contains(fullName, StringComparer.Ordinal);
+        var contains = this.Names.Contains(fullName);
         return contains;
+    }
+
+    /// <summary>
+    /// Whether a contract has the simple name. <paramref name="contract"/> is that contract, or
+    /// <see langword="null"/> where two share the name.
+    /// </summary>
+    public bool TryFindBySimpleName(string simpleName, out string? contract)
+    {
+        var found = this.BySimpleName.TryGetValue(simpleName, out contract);
+        return found;
     }
 
     /// <summary>
@@ -203,11 +238,8 @@ internal sealed class GeneratedContracts(ImmutableArray<string> names, Equatable
     /// </summary>
     public string? FindBinding(DiagnosticLocation location)
     {
-        foreach (var binding in this.Bindings)
-            if (binding.Location.Equals(location))
-                return binding.Contract;
-
-        return null;
+        var binding = this.Bindings.TryGetValue(location, out var contract) ? contract : null;
+        return binding;
     }
 }
 

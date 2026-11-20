@@ -123,7 +123,7 @@ public sealed partial class LocalizableText
             var (language, translation) = translations[i];
             ArgumentNullException.ThrowIfNull(language, nameof(translations));
             ArgumentNullException.ThrowIfNull(translation, nameof(translations));
-            Debug.Assert(!String.IsNullOrWhiteSpace(language) && IndexOf(pairs.AsSpan(0, i), language) < 0,
+            Debug.Assert(!String.IsNullOrWhiteSpace(language) && IndexOf(pairs.AsSpan(start: 0, length: i), language) < 0,
                 $"The language '{language}' is blank or listed twice.");
 
             pairs[i] = (language, translation);
@@ -142,20 +142,18 @@ public sealed partial class LocalizableText
         ArgumentNullException.ThrowIfNull(defaultText);
 
         // The pair of slots comes from the length and three characters of the default wording. Not a hash of the whole
-        // wording, which would cost about as much as creating the text. Not RuntimeHelpers.GetHashCode either, because a
-        // string with a value is new on every call, and giving it an identity hash cost about 10 ns more on .NET. Written
-        // out here, as is the comparison of the default wording, because a call costs more than either in WebAssembly's
-        // interpreter. With both in methods, a text with a value took about 10% longer there (measured 2026-11-19).
+        // wording, which would cost about as much as creating the text. Not RuntimeHelpers.GetHashCode either, because
+        // a string with a value is new on every call, and giving it an identity hash cost about 10 ns more on .NET.
+        // Written out here, as is the comparison of the default wording, because a call costs more than either in
+        // WebAssembly's interpreter. With both in methods, a text with a value took about 10% longer there.
         var length = defaultText.Length;
         var hash = length is 0 ? 0 : (length * 31) + (defaultText[0] * 7) + (defaultText[length / 2] * 3) + defaultText[length - 1];
         var first = (hash & ((InlineTexts.Length / 2) - 1)) * 2;
         var kept = InlineTexts[first];
-
         if (kept is not null && ReferenceEquals(kept._defaultText, defaultText) && kept.HasTranslations(translations))
             return kept;
 
         var other = InlineTexts[first + 1];
-
         if (other is not null && ReferenceEquals(other._defaultText, defaultText) && other.HasTranslations(translations))
             return other;
 
@@ -181,7 +179,10 @@ public sealed partial class LocalizableText
 
         // An empty slot of the pair first. Else the one the wording picks, so that of three texts that share a pair, two
         // take turns and the third stays.
-        var slot = kept is null ? first : other is null ? first + 1 : first + ((hash >> 9) & 1);
+        var slot = kept is null
+            ? first
+            : other is null ? first + 1 : first + ((hash >> 9) & 1);
+
         InlineTexts[slot] = text;
         return text;
     }

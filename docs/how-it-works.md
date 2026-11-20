@@ -39,6 +39,20 @@ What to know:
 - A [text with parameters](#texts-with-parameters) formats their values for the same culture.
 - `ToString(culture)` still shows the wording for the culture you pass.
 
+A text also follows a culture passed as a format provider, so a string built for another culture is in one language:
+
+```csharp
+// On an English thread: "Totaal: 1.234,50"
+string line = string.Create(dutch, $"{ShopLocalization.Total}: {amount:N2}");
+```
+
+`string.Format(dutch, ...)` does the same. Two providers give the user's own wording instead:
+
+- `CultureInfo.CurrentCulture` formats for the current user, whose wording goes by the UI culture.
+- A provider that isn't a culture, such as a `NumberFormatInfo`, names no language.
+
+`CultureInfo.InvariantCulture` has no wording, so it gives the wording of your app's default language.
+
 ## What the source generator writes
 
 `LocalizableText.Inline` gets one required parameter per declared language, named after it: `enGb` for `en-GB`.
@@ -65,6 +79,8 @@ public static partial class ShopLocalization
 ```
 
 Every set lists `ILocalizationSet` and the contract, the default-language set too: `class ShopLocalizationNl : ILocalizationSet, IShopLocalization`. The contract doesn't derive from `ILocalizationSet`, so neither entry is redundant. The build rejects a set without its contract (`LOC204`), and your IDE adds it.
+
+A text always has wording, so the contract declares it as `string`. A set that returns `string?` for a text gets compiler warning `CS8766`, because it doesn't match the contract. Return a `string`.
 
 Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
 
@@ -137,8 +153,8 @@ What else to know:
   ```
 
 - **Formatting values.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. When you pass `ToString` a culture other than the current UI culture, the text is worded as for a user of that culture. Its values are formatted for that culture too, so a date or a number reads as the recipient of an email writes it.
-- **A text as a value.** A value that is itself a text shows its wording in the same culture as the text around it.
-- **Inline texts.** An inline text takes a value as you write it and fills it in at once, in every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC302`).
+- **A text as a value.** Give a parameter that takes a text the type `LocalizableText`, as in `Greeting(LocalizableText name)`. The value then shows its wording in the same culture as the text around it. A text passed to a `string` parameter becomes a string at the call, so it keeps the wording of the language in use at that moment. `ShopLocalization.Greeting(ShopLocalization.Checkout).ToString(dutch)` then shows "Hallo, Checkout!" on an English thread, so the build warns about such a call (`LOC303`).
+- **Inline texts.** An inline text takes a value as you write it and fills it in at once, in every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC302`). A text among those values is filled in at once too, in the language in use at that moment. For a wording that holds another text and outlives the request, write a text of a set with a `LocalizableText` parameter.
 - **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC502`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in.
 
 ## Enums

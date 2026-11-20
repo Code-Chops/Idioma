@@ -199,7 +199,7 @@ error LOC302: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', bu
 
 A placeholder such as `{0}` gets build warning `LOC502`, because nothing fills it in. Your IDE turns such a text into a method that takes the value.
 
-`ToString` with a culture also formats the values for that culture:
+`ToString` with a culture other than the user's also formats the values for that culture:
 
 ```csharp
 string greeting = ShopLocalization.Greeting(customer.Name).ToString(CultureInfo.GetCultureInfo("nl-NL"));
@@ -387,6 +387,7 @@ Review a translation as code too, because a set is C#. A change to a set can run
 
 - When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can let a resource file override it ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
 - When your translators work in a translation tool, which reads files such as XLIFF.
+- When an attribute such as `[Required]` or `[Display]` has to take a text directly. An attribute takes only constants, so it reads your texts through a small class of `string` properties ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)).
 - When you use an older version of .NET than 10 or C# 14.
 
 ## Documentation

@@ -51,7 +51,8 @@ internal sealed record LocalizationSetsAnalysis(
         EquatableArray<DiscoveredLocalization> discovered,
         EquatableArray<UnextendableSet> unextendable,
         DeclaredLanguages? languages,
-        EquatableArray<ContractBinding> bindings)
+        EquatableArray<ContractBinding> bindings,
+        CancellationToken cancellationToken = default)
     {
         var candidates = Merge(discovered);
         var generatedContracts = LocalizationDiscovery.GetGeneratedContracts(candidates, languages, bindings);
@@ -95,7 +96,7 @@ internal sealed record LocalizationSetsAnalysis(
             // default language then, and the next language does not take its place: that would report every set of the
             // language that was meant, and write no contract for it. The contracts are still written, each from the
             // set that starts it, so that the code using them keeps compiling while the attribute is put right.
-            AnalyzeContracts(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings: null);
+            AnalyzeContracts(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings: null, cancellationToken);
 
             // What needs no language list is still reported, as it is without the attribute.
             foreach (var set in sets)
@@ -104,7 +105,7 @@ internal sealed record LocalizationSetsAnalysis(
         }
         else
         {
-            AnalyzeContracts(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings);
+            AnalyzeContracts(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings, cancellationToken);
             AnalyzeOwnContracts(sets, excluded, unreadable, declared, defaultLanguage, findings);
             AnalyzeSets(sets, declared.Codes, defaultLanguage, generatedContracts, findings);
 
@@ -251,7 +252,8 @@ internal sealed record LocalizationSetsAnalysis(
         GeneratedContracts generatedContracts,
         ImmutableArray<LocalizationContract>.Builder contracts,
         ImmutableArray<ProvidedLocalizationSet>.Builder provided,
-        ImmutableArray<LocalizationSetsFinding>.Builder? findings)
+        ImmutableArray<LocalizationSetsFinding>.Builder? findings,
+        CancellationToken cancellationToken)
     {
         var defaultLanguage = declared.DefaultLanguage;
 
@@ -261,8 +263,20 @@ internal sealed record LocalizationSetsAnalysis(
         // A hint name tells the files of two contracts apart, and the compiler compares it without regard to case.
         var hintNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Asked once for all contracts, and not of every set for each contract: that took seconds on each edit in a
+        // project with hundreds of contracts.
+        var setImplementers = new Implementers(sets, generatedContracts);
+        var excludedSetImplementers = new Implementers(excluded, generatedContracts);
+        var unreadableSetImplementers = new Implementers(unreadable, generatedContracts);
+
+        var misdeclaredSets = sets
+            .Where(other => other.Language is not null && (IsDerivedFromOtherLanguage(other, generatedContracts) || IsMissingContract(other, defaultLanguage)))
+            .ToArray();
+
         foreach (var set in sets)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!LocalizationDiscovery.IsDefaultSet(set, defaultLanguage, generatedContracts))
                 continue;
 
@@ -361,16 +375,14 @@ internal sealed record LocalizationSetsAnalysis(
             foreach (var method in set.UnsupportedTexts)
                 findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UnsupportedText, method.Location, new EquatableArray<string>([set.Name, method.Name, method.Problem])));
 
-            var implementers = sets.Where(other => other.Language is not null && ImplementsGeneratedContract(other, set, contractFullName, generatedContracts)).ToArray();
-            var excludedImplementers = excluded.Where(other => ImplementsGeneratedContract(other, set, contractFullName, generatedContracts)).ToArray();
-            var hasUnreadableImplementer = unreadable.Any(other => ImplementsGeneratedContract(other, set, contractFullName, generatedContracts));
+            var implementers = setImplementers.Of(set, contractFullName).Where(static other => other.Language is not null).ToArray();
+            var excludedImplementers = excludedSetImplementers.Of(set, contractFullName);
+            var hasUnreadableImplementer = unreadableSetImplementers.Of(set, contractFullName).Length > 0;
 
             // A set reported for its base already says what to do about this language.
-            var misdeclared = sets.Where(other => other.Language is not null
-                && !String.Equals(other.MetadataName, set.MetadataName, StringComparison.Ordinal)
+            var misdeclared = misdeclaredSets.Where(other => !String.Equals(other.MetadataName, set.MetadataName, StringComparison.Ordinal)
                 && String.Equals(other.Namespace, set.Namespace, StringComparison.Ordinal)
-                && (IsDerivedFromOtherLanguage(other, generatedContracts) || IsMissingContract(other, defaultLanguage))
-                && String.Equals(LocalizationDiscovery.DeriveBaseName(other.Name, other.Language), baseName, StringComparison.Ordinal)).ToArray();
+                && String.Equals(LocalizationDiscovery.DeriveBaseName(other.Name, other.Language!), baseName, StringComparison.Ordinal)).ToArray();
 
             // Not with a set of a language the build can't read among them: it may be the set of any language.
             if (findings is not null && !hasUnreadableImplementer)
@@ -474,23 +486,71 @@ internal sealed record LocalizationSetsAnalysis(
     }
 
     /// <summary>
-    /// Whether a set, other than the default-language set itself, implements the contract generated from it, whatever
-    /// its language.
+    /// The sets that implement the contract generated from a default-language set, whatever their language and other
+    /// than that set itself.
     /// </summary>
     // The generator's own contract does not exist yet, so a set implementing it lists an unresolved name, itself or
     // through a class it derives from, which names this contract (LocalizationDiscovery.FindGeneratedContract). A set
     // deriving from the default set implements it too.
-    private static bool ImplementsGeneratedContract(
-        DiscoveredLocalization other,
-        DiscoveredLocalization defaultSet,
-        string contractFullName,
-        GeneratedContracts generatedContracts)
+    private sealed class Implementers
     {
-        var implementsGeneratedContract = !String.Equals(other.MetadataName, defaultSet.MetadataName, StringComparison.Ordinal)
-            && (other.AncestorNames.AsImmutableArray().Contains(defaultSet.MetadataName, StringComparer.Ordinal)
-                || other.UnresolvedBaseTypes.Any(baseType => String.Equals(LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts), contractFullName, StringComparison.Ordinal)));
+        private ImmutableArray<DiscoveredLocalization> Sets { get; }
 
-        return implementsGeneratedContract;
+        /// <summary>
+        /// The indexes of the sets that list each contract, in the order of the sets.
+        /// </summary>
+        private Dictionary<string, List<int>> ByContract { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The indexes of the sets that derive from each class, in the order of the sets.
+        /// </summary>
+        private Dictionary<string, List<int>> ByAncestor { get; } = new(StringComparer.Ordinal);
+
+        public Implementers(ImmutableArray<DiscoveredLocalization> sets, GeneratedContracts generatedContracts)
+        {
+            this.Sets = sets;
+
+            for (var index = 0; index < sets.Length; index++)
+            {
+                foreach (var baseType in sets[index].UnresolvedBaseTypes)
+                    if (LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is { } contract)
+                        Add(this.ByContract, contract, index);
+
+                foreach (var ancestor in sets[index].AncestorNames)
+                    Add(this.ByAncestor, ancestor, index);
+            }
+        }
+
+        public DiscoveredLocalization[] Of(DiscoveredLocalization defaultSet, string contractFullName)
+        {
+            this.ByContract.TryGetValue(contractFullName, out var listing);
+            this.ByAncestor.TryGetValue(defaultSet.MetadataName, out var deriving);
+
+            IEnumerable<int> indexes = (listing, deriving) switch
+            {
+                (null, null) => [],
+                (not null, null) => listing,
+                (null, not null) => deriving,
+                _ => listing.Union(deriving).OrderBy(static index => index),
+            };
+
+            var implementers = indexes
+                .Select(index => this.Sets[index])
+                .Where(other => !String.Equals(other.MetadataName, defaultSet.MetadataName, StringComparison.Ordinal))
+                .ToArray();
+
+            return implementers;
+        }
+
+        private static void Add(Dictionary<string, List<int>> indexes, string key, int index)
+        {
+            if (!indexes.TryGetValue(key, out var list))
+                indexes.Add(key, list = []);
+
+            // A set that lists a contract twice, itself and through a class it derives from, counts once.
+            if (list.Count is 0 || list[list.Count - 1] != index)
+                list.Add(index);
+        }
     }
 
     /// <summary>
@@ -746,7 +806,7 @@ internal sealed record LocalizationSetsAnalysis(
         {
             var name = String.Equals(@enum.Namespace, defaultSet.Namespace, StringComparison.Ordinal)
                 ? @enum.Name
-                : @enum.FullyQualifiedName.Substring("global::".Length);
+                : @enum.FullyQualifiedName;
 
             return $"{SupportedLanguages.SetInterface}<{name}>";
         }));

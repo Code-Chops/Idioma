@@ -341,7 +341,7 @@ internal static partial class LocalizationDiscovery
                 continue;
             }
 
-            var fullyQualifiedName = @enum.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var fullyQualifiedName = @enum.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
             if (!found.Add(fullyQualifiedName))
                 continue;
 

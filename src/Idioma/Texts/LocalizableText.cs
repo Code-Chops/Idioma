@@ -82,7 +82,7 @@ namespace CodeChops.Idioma;
 // The converter also keeps a text from JSON's default shape, which drops the translations on reading (their setter is
 // private) and can't write a text of a set at all (its contract is a Type).
 [JsonConverter(typeof(Internals.LocalizableTextJsonConverter))]
-public sealed partial class LocalizableText : IEquatable<LocalizableText>
+public sealed partial class LocalizableText : IEquatable<LocalizableText>, IFormattable
 {
     /// <summary>
     /// The wording for the current UI culture. Markup (<c>@ShopTexts.Checkout</c>) and string interpolation show it.
@@ -186,6 +186,39 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>
 
         // Without a registry there are only the text's own translations, which are the app's: its languages decide.
         var text = this.ToString(culture, registry, registry?.AppLanguages ?? LocalizationRegistry.SupportedLanguages);
+        return text;
+    }
+
+    /// <summary>
+    /// The wording for the culture of a format provider, as <see cref="string.Format(IFormatProvider, string, object)"/>
+    /// and <see cref="string.Create(IFormatProvider, ref System.Runtime.CompilerServices.DefaultInterpolatedStringHandler)"/>
+    /// ask for it. So <c>string.Create(dutch, $"{ShopTexts.Checkout}: {amount}")</c> is Dutch throughout.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A culture gives its wording, as <see cref="ToString(CultureInfo)"/> does. The invariant culture has none, so it
+    /// gives the wording of your app's default language.
+    /// </para>
+    /// <para>
+    /// These give the wording for the current UI culture, as <see cref="ToString()"/> does:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>No provider, as in a plain interpolated string.</item>
+    /// <item><see cref="CultureInfo.CurrentCulture"/>, which formats for the current user. The user's wording goes by
+    /// the UI culture, also where the two differ.</item>
+    /// <item>A provider that is no culture, such as a <see cref="NumberFormatInfo"/>.</item>
+    /// </list>
+    /// </remarks>
+    /// <param name="format">Not used. A text has no formats.</param>
+    /// <param name="formatProvider">The culture to get the wording for.</param>
+    // Explicit: called through the interface alone, and as a public overload it would stand next to
+    // ToString(CultureInfo, LocalizationRegistry) for a call with two nulls.
+    string IFormattable.ToString(string? format, IFormatProvider? formatProvider)
+    {
+        var text = formatProvider is CultureInfo culture && !ReferenceEquals(culture, CultureInfo.CurrentCulture)
+            ? this.ToString(culture)
+            : this.ToString();
+
         return text;
     }
 

@@ -31,6 +31,7 @@ The hundreds of a code name its subject. The subjects come in the order of this 
 | [`LOC300`](#loc300)                                 | A public method that can't be a text                    |
 | [`LOC301`](#loc301)                                 | A parameter named differently than in the contract      |
 | [`LOC302`](#loc302)                                 | A value that a translation never uses                   |
+| [`LOC303`](#loc303) (warning, code fix)             | A text passed to a `string` parameter of a text         |
 | **[Registration](#registration)**                   |                                                         |
 | [`LOC400`](#loc400) (warning)                       | A set that can't be registered automatically            |
 | [`LOC401`](#loc401) (code fix)                      | A `LocalizationLanguageCode` that implements nothing    |
@@ -195,7 +196,32 @@ A value is a local variable, a parameter, or a field or property of your own ass
 
 - a wording that isn't written in the call, such as a variable or the result of a method
 - a wording that calls a local function or a delegate, which may read the value
-- a wording that reads a local variable declared with the value, as in `var name = user.Name;`
+- a wording that reads a local variable declared with the value or assigned it, as in `var name = user.Name;`
+- a wording that reads a local variable the build can't follow, such as one from a pattern, a deconstruction or `out var`
+
+### LOC303
+
+A text is passed to a `string` parameter of a text with parameters. This is a warning:
+
+```csharp
+public string PressToPay(string button) => $"Press {button} to pay"; // In ShopLocalizationEn
+
+ShopLocalization.PressToPay(ShopLocalization.Checkout) // LOC303
+```
+
+Give the parameter the type `LocalizableText` in every set:
+
+```csharp
+public string PressToPay(LocalizableText button) => $"Press {button} to pay";
+```
+
+The text becomes a string at the call, in the language in use at that moment. The text around it is worded when it's shown. So a text kept in a static field, or shown with `ToString(culture)`, mixes two languages: Dutch users see "Druk op Checkout om te betalen". A `LocalizableText` parameter keeps the text, which then shows in the language of the wording around it.
+
+To keep the wording of the moment on purpose, call `ToString()` on the text. The build then reports nothing.
+
+The IDE fix changes the parameter's type in every set of your project at once. A call that passes a string still compiles, because a string converts to a text. A text of a library gets no fix, because your project can't change the library's sets.
+
+An inline text gets no warning for a text in its wording, because it fills its values in at once ([details](how-it-works.md#texts-with-parameters)).
 
 ## Registration
 
@@ -290,7 +316,9 @@ The IDE fix writes a parameter in place of each placeholder of a set's text. A m
 - When the contract's text takes no values yet, as in the default-language set, the method takes an `object?` per placeholder number. So `"Hello, {0}!"` becomes `public string Greeting(object? arg0) => $"Hello, {arg0}!";`. Then give each parameter its name and type.
 - When the contract's text takes values, the method takes the contract's parameters. So fix the default-language set first, and name its parameters before you fix the other languages.
 
-The fix counts the placeholders of every language, so each language gets the same parameters: `arg0`, `arg1` and so on. A Dutch wording that holds `{0}` alone still takes `arg1` when the English one holds `{1}`. The build then reports the value Dutch leaves out (`LOC302`). "Fix all" changes every language at once.
+The fix changes the text in every language of your project at once, so every set still implements the contract. It counts the placeholders of every language, so each language gets the same parameters: `arg0`, `arg1` and so on. A Dutch wording that holds `{0}` alone still takes `arg1` when the English one holds `{1}`. A Dutch wording without a placeholder becomes a method too. The build then reports the value Dutch leaves out (`LOC302`).
+
+A wording in a raw string keeps its placeholder and its warning, so write its value by hand.
 
 An inline text gets no fix, because its wording has no parameter to take the value.
 

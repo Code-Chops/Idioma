@@ -208,6 +208,37 @@ public sealed class InlineTextValuesAnalyzerTests
     }
 
     [Test]
+    [Arguments("string upper; upper = name.ToUpperInvariant();", "upper")]
+    [Arguments("var list = \"\"; list += name;", "list")]
+    [Arguments("var (first, rest) = (name, count);", "first")]
+    [Arguments("string first; int rest; (first, rest) = (name, count);", "first")]
+    [Arguments("object boxed = name; if (boxed is not string text) throw new InvalidOperationException();", "text")]
+    [Arguments("if (user is not { Name: var userName }) throw new InvalidOperationException();", "userName")]
+    [Arguments("int.TryParse(name, out var parsed);", "parsed")]
+    [Arguments("int parsed; int.TryParse(name, out parsed);", "parsed")]
+    public async Task WordingReadingLocalThatGetsTheValueOutsideItsDeclaration_ShouldReportNothing(string statements, string local)
+    {
+        // Arrange & Act: the Dutch wording shows a local variable that holds the name, or may hold it.
+        var diagnostics = await AnalyzeAsync(Inline($$"""en: $"Hello, {name}!", nl: $"Hallo, {{{local}}}!", enGb: $"Hello, {name}!" """, statements));
+
+        // Assert: an assignment is read as a declaration is, and a local variable written in a way the build can't
+        // read may hold the value.
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("string upper; upper = count.ToString();", "upper")]
+    [Arguments("var list = \"\"; list += count;", "list")]
+    public async Task WordingReadingLocalAssignedAnotherValue_ShouldReportLOC302(string statements, string local)
+    {
+        // Arrange & Act
+        var diagnostics = await AnalyzeAsync(Inline($$"""en: $"Hello, {name}!", nl: $"Hallo, {{{local}}}!", enGb: $"Hello, {name}!" """, statements));
+
+        // Assert: what the local variable is assigned doesn't read the name.
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldStartWith("The 'nl' wording doesn't use 'name'");
+    }
+
+    [Test]
     public async Task InlineTextInAssemblyWithOneLanguage_ShouldReportNothing()
     {
         // Arrange & Act

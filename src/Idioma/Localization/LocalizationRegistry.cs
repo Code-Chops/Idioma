@@ -265,19 +265,28 @@ public sealed partial class LocalizationRegistry
     /// When a set has no language code, or one that isn't a culture name.
     /// </exception>
     // Each set's LocalizationLanguageCode is read once, here. It's consumer code, and every lookup afterwards goes by the language
-    // the set is filed under.
-    private static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, ImmutableArray<string> appLanguages)
+    // the set is filed under. The registry of the whole app is built again with every registration, and passes the
+    // language each set registered with. A set whose code is no culture name any more is filed under that language,
+    // because it would otherwise fail every text of the app, far from what changed its code.
+    private static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, ImmutableArray<string> appLanguages, List<string>? registeredLanguages = null)
     {
         ArgumentNullException.ThrowIfNull(sets);
 
         var ordered = sets.ToImmutableArray();
 
         var byLanguage = new Dictionary<string, List<ILocalizationSet>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var set in ordered)
+        for (var index = 0; index < ordered.Length; index++)
         {
+            var set = ordered[index];
             ArgumentNullException.ThrowIfNull(set, nameof(sets));
 
-            var language = CultureName.Normalize(ReadLanguageCode(set));
+            // Read again for a registered set, and not taken from its registration: the code of a set recorded
+            // after it registered (RecordSet) is the recorded one from then on.
+            var languageCode = registeredLanguages is null
+                ? ReadLanguageCode(set)
+                : set.LocalizationLanguageCode is { } current && CultureName.IsValid(current) ? current : registeredLanguages[index];
+
+            var language = CultureName.Normalize(languageCode);
 
             if (!byLanguage.TryGetValue(language, out var list))
                 byLanguage[language] = list = [];

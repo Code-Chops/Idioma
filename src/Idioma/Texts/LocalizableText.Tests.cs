@@ -243,6 +243,47 @@ public sealed class LocalizableTextTests
     }
 
     [Test]
+    public void Formatting_WithCultureAsProvider_ShouldGiveWordingForThatCulture()
+    {
+        // Arrange
+        using var _ = new UICultureScope("en-US");
+        var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+        var dutch = CultureInfo.GetCultureInfo("nl-NL");
+
+        // Act & Assert: the text follows the provider, as the number next to it does.
+        String.Format(dutch, "{0}: {1}", text, 1.5).ShouldBe("Naam: 1,5");
+        String.Create(dutch, $"{text}: {1.5}").ShouldBe("Naam: 1,5");
+        ((IFormattable)text).ToString("N2", dutch).ShouldBe("Naam");
+
+        // The invariant culture has no wording, so it gives the default.
+        FormattableString.Invariant($"{text}: {1.5}").ShouldBe("Name: 1.5");
+    }
+
+    [Test]
+    public void Formatting_WithoutCultureOfItsOwn_ShouldGiveWordingForCurrentUICulture()
+    {
+        // Arrange: a user who reads Dutch and formats numbers the American way.
+        using var _ = new UICultureScope("nl-NL");
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+        try
+        {
+            var text = LocalizableText.FromGeneratedCode("Name", ("nl", "Naam"));
+
+            // Act & Assert: no provider, the current culture, and a provider that is no culture.
+            $"{text}".ShouldBe("Naam");
+            String.Format(CultureInfo.CurrentCulture, "{0}: {1}", text, 1.5).ShouldBe("Naam: 1.5");
+            ((IFormattable)text).ToString(null, NumberFormatInfo.InvariantInfo).ShouldBe("Naam");
+            ((IFormattable)text).ToString(null, null).ShouldBe("Naam");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Test]
     public void ToString_ShouldThrowForNullCulture()
     {
         // Arrange

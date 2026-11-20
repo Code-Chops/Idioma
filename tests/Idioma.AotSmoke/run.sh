@@ -18,7 +18,8 @@ root="$(cd "$here/../.." && pwd)"
 version="$(cd "$root" && dotnet msbuild src/Idioma/Idioma.csproj -getProperty:Version)"
 
 cd "$here"
-rm -rf obj/publish
+# The package restored by an earlier run has the same version as the one packed now, and would stand in for it.
+rm -rf obj/publish obj/packages/codechops.idioma
 dotnet publish AotSmokeApp/AotSmokeApp.csproj -c Release -o obj/publish "-p:IdiomaVersion=$version"
 
 obj/publish/AotSmokeApp

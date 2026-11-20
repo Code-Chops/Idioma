@@ -324,6 +324,110 @@ public sealed class PlaceholderCodeFixProviderTests
         (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), fixedSource, [])).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A text with a placeholder in English alone: Dutch has none, the British set overrides the text without one, and
+    /// German holds one in a raw string.
+    /// </summary>
+    private const string OneLanguageWithPlaceholder = """"
+        #nullable enable
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en", "nl", "en-GB", "de")]
+
+        namespace TestApp;
+
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+        {
+            public virtual string Greeting => "Hello, {0}!";
+        }
+
+        public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+        {
+            public string Greeting => "Hallo!";
+        }
+
+        public class ShopLocalizationEnGb : ShopLocalizationEn
+        {
+            public override string Greeting => "Hi there";
+        }
+
+        public class ShopLocalizationDe : ILocalizationSet, IShopLocalization
+        {
+            public string Greeting => """Hallo, {0}!""";
+        }
+        """";
+
+    private static string OneLanguageWithPlaceholderFixed { get; } = OneLanguageWithPlaceholder
+        .Replace("""Greeting => "Hello, {0}!";""", """Greeting(object? arg0) => $"Hello, {arg0}!";""", StringComparison.Ordinal)
+        .Replace("""Greeting => "Hallo!";""", """Greeting(object? arg0) => "Hallo!";""", StringComparison.Ordinal)
+        .Replace("""Greeting => "Hi there";""", """Greeting(object? arg0) => "Hi there";""", StringComparison.Ordinal)
+        .Replace("Greeting => \"\"\"Hallo, {0}!\"\"\";", "Greeting(object? arg0) => \"\"\"Hallo, {0}!\"\"\";", StringComparison.Ordinal);
+
+    [Test]
+    public async Task PropertyBecomingMethod_ShouldBecomeOneInEveryLanguage()
+    {
+        // Arrange & Act: the workspace holds the generated contract, as an IDE's does.
+        var fixes = await CodeFixTestHelper.FixWithGeneratedCodeAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), OneLanguageWithPlaceholder);
+
+        // Assert: every set still implements the contract, so the build passes. A wording without a placeholder gets
+        // the parameter all the same, and a raw string keeps its placeholder. German alone has no fix of its own.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Title.ShouldBe("Make 'Greeting' a method");
+        fix.Sources.ShouldHaveSingleItem().ShouldBe(OneLanguageWithPlaceholderFixed);
+        GeneratorTestHelper.CompileWithGenerators(OneLanguageWithPlaceholderFixed).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task FixAll_LanguageWithoutPlaceholder_ShouldBecomeMethodToo()
+    {
+        // Arrange & Act
+        var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), OneLanguageWithPlaceholder)).ShouldHaveSingleItem();
+
+        // Assert
+        fixedSource.ShouldBe(OneLanguageWithPlaceholderFixed);
+    }
+
+    [Test]
+    public async Task PropertyBecomingMethod_ShouldChangeTheSetsOfOtherFiles()
+    {
+        // Arrange: each set in a file of its own.
+        const string english = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Greeting => "Hello!";
+            }
+            """;
+
+        const string dutch = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            namespace TestApp;
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Greeting => "Hallo, {0}!";
+            }
+            """;
+
+        // Act
+        var fixes = await CodeFixTestHelper.FixWithGeneratedCodeAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), english, dutch);
+
+        // Assert
+        fixes.ShouldHaveSingleItem().Sources.ShouldBe(
+        [
+            english.Replace("""Greeting => "Hello!";""", """Greeting(object? arg0) => "Hello!";""", StringComparison.Ordinal),
+            dutch.Replace("""Greeting => "Hallo, {0}!";""", """Greeting(object? arg0) => $"Hallo, {arg0}!";""", StringComparison.Ordinal),
+        ]);
+    }
+
     [Test]
     public async Task FixAll_LanguageWithFewerPlaceholders_ShouldGetTheParametersOfTheOthers()
     {

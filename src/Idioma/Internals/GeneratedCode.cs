@@ -27,15 +27,11 @@ public static class GeneratedCode
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A call with the same strings as an earlier one, the same objects as string literals are, gets the text that call
-    /// created, where it's still kept. A text isn't kept when part of its wording is a new string, as wording with a
-    /// value is, because no later call could find it. Wording of 40,000 characters or more isn't kept either. A
+    /// A call with the same strings as an earlier one gets the text that call created, where it's still kept. The same
+    /// means the same string objects, not only the same characters. A string literal is the same object on every call,
+    /// so a call with literals finds its text. A text isn't kept when part of its wording is a new string, as wording
+    /// with a value is, because no later call could find it. Wording of 40,000 characters or more isn't kept either. A
     /// string that outlived a garbage collection before the call is kept like a literal, also when it holds a value.
-    /// </para>
-    /// <para>
-    /// A language isn't checked for being blank or listed twice, because markup creates an inline text with a value on
-    /// every render. The generated <c>LocalizableText.Inline</c> passes each language of
-    /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see> once, and the build checks those.
     /// </para>
     /// </remarks>
     /// <param name="defaultText">
@@ -63,8 +59,10 @@ public static class GeneratedCode
     /// <para>
     /// Declares a text of a localization contract, with its default wording taken from a set. The generated class
     /// declares its texts this way:
-    /// <c>GeneratedCode.CreateSetText&lt;IShopLocalization&gt;("MyApp.Localization.ShopLocalization.Checkout",
-    /// static set => set.Checkout, DefaultSet&lt;ShopLocalizationEn&gt;.Instance)</c>.
+    /// <code>
+    /// GeneratedCode.CreateSetText&lt;IShopLocalization&gt;("MyApp.Localization.ShopLocalization.Checkout",
+    ///     static set => set.Checkout, DefaultSet&lt;ShopLocalizationEn&gt;.Instance)
+    /// </code>
     /// <c>DefaultSet&lt;ShopLocalizationEn&gt;.Instance</c> is one instance of the set, which the generated code
     /// creates once.
     /// </para>

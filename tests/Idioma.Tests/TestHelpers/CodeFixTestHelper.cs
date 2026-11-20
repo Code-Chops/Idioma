@@ -103,6 +103,18 @@ internal static class CodeFixTestHelper
     }
 
     /// <summary>
+    /// Runs every generator, then <paramref name="analyzer"/>, as <see cref="FixAfterGeneratorsAsync(CodeFixProvider, DiagnosticAnalyzer, string[])"/>
+    /// does, but the workspace the fix sees holds the generated code too, as an IDE's does. For a fix that reads the
+    /// generated contract of a set.
+    /// </summary>
+    internal static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixWithGeneratedCodeAsync(CodeFixProvider provider,
+        DiagnosticAnalyzer analyzer, params string[] sources)
+    {
+        var fixes = await FixAsync(provider, AnalyzeAfterGenerators(analyzer), sources, withGeneratedCode: true);
+        return [.. fixes.Select(static fix => (fix.Title, fix.Sources))];
+    }
+
+    /// <summary>
     /// Runs every generator, then <paramref name="analyzer"/>, over <paramref name="sources"/>, and applies the fix of
     /// <paramref name="provider"/> to every diagnostic of the solution at once, as "Fix all in solution" does in an IDE.
     /// The workspace the fix sees holds the generated code too, as an IDE's does. Returns the files as the fix leaves
@@ -128,11 +140,19 @@ internal static class CodeFixTestHelper
         project = AddGeneratedCode(project, compilation);
         var before = project.DocumentIds.ToHashSet();
 
-        // The fix all applies is the one with the key of the first fix offered, as in an IDE.
-        var first = diagnostics.First();
-        var document = FindDocument(project, first);
+        // The fix all applies is the one with the key of the first fix offered, as in an IDE. A diagnostic may have
+        // none, as a placeholder in a raw string has.
+        var document = FindDocument(project, diagnostics.First());
         var actions = new List<CodeAction>();
-        await provider.RegisterCodeFixesAsync(new CodeFixContext(document, first.Location.SourceSpan, [first], (action, _) => actions.Add(action), CancellationToken.None));
+
+        foreach (var diagnostic in diagnostics)
+        {
+            document = FindDocument(project, diagnostic);
+            await provider.RegisterCodeFixesAsync(new CodeFixContext(document, diagnostic.Location.SourceSpan, [diagnostic], (action, _) => actions.Add(action), CancellationToken.None));
+
+            if (actions.Count > 0)
+                break;
+        }
 
         var context = new FixAllContext(document, provider, FixAllScope.Solution, actions[0].EquivalenceKey, provider.FixableDiagnosticIds,
             new FixedDiagnostics(diagnostics), CancellationToken.None);
@@ -186,13 +206,19 @@ internal static class CodeFixTestHelper
     }
 
     private static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources, ImmutableArray<(string Path, string Text)> Added)>> FixAsync(
-        CodeFixProvider provider, Func<Compilation, Task<ImmutableArray<Diagnostic>>> diagnose, string[] sources, MetadataReference[]? references = null)
+        CodeFixProvider provider, Func<Compilation, Task<ImmutableArray<Diagnostic>>> diagnose, string[] sources, MetadataReference[]? references = null,
+        bool withGeneratedCode = false)
     {
         using var workspace = new AdhocWorkspace();
         var (project, documentIds) = CreateProject(workspace, sources, references ?? []);
 
         var compilation = await project.GetCompilationAsync();
         var diagnostics = await diagnose(compilation!);
+
+        if (withGeneratedCode)
+            project = AddGeneratedCode(project, compilation!);
+
+        var before = project.DocumentIds.ToHashSet();
 
         var actions = new List<CodeAction>();
         foreach (var diagnostic in diagnostics.Where(diagnostic => provider.FixableDiagnosticIds.Contains(diagnostic.Id, StringComparer.Ordinal)))
@@ -215,7 +241,7 @@ internal static class CodeFixTestHelper
                 texts.Add((await solution.GetDocument(documentId)!.GetTextAsync()).ToString());
 
             var added = ImmutableArray.CreateBuilder<(string, string)>();
-            foreach (var document in solution.GetProject(project.Id)!.Documents.Where(document => !documentIds.Contains(document.Id)))
+            foreach (var document in solution.GetProject(project.Id)!.Documents.Where(document => !before.Contains(document.Id)))
                 added.Add((document.FilePath ?? document.Name, (await document.GetTextAsync()).ToString()));
 
             fixes.Add((action.Title, texts.ToImmutable(), added.ToImmutable()));
