@@ -282,6 +282,34 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
+    public async Task UnmarkedEnumMemberWithValueOfMarkedOne_ShouldReportNothing()
+    {
+        // Arrange & Act: GetText() finds a text by the value, so Default and Initial show the text of Active. Flags
+        // that are combined have a value of their own, and are reported.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            [System.Flags]
+            public enum Access
+            {
+                Default = Read,
+
+                [Localized(en: "Read", nl: "Lezen")]
+                Read = 1,
+
+                [Localized(en: "Write", nl: "Schrijven")]
+                Write = 2,
+
+                Initial = 1,
+                ReadWrite = Read | Write,
+            }
+            """);
+
+        // Assert
+        diagnostics.Select(At).ShouldBe(["ReadWrite"]);
+    }
+
+    [Test]
     public async Task EnumMemberWhoseAttributeDoesNotCompile_ShouldCountAsMarked()
     {
         // Arrange & Act: an attribute that leaves a language out, which the compiler reports (CS7036).

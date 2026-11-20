@@ -84,12 +84,28 @@ internal static class PackageNames
         if (type.TypeKind is not TypeKind.Interface || IsLocalizationSet(type) || IsLocalizationSetOfEnum(type))
             return false;
 
-        foreach (var attribute in type.GetAttributes())
-            if (attribute.AttributeClass is { } attributeClass && IsLocalizationContractAttribute(attributeClass))
-                return true;
+        if (IsGeneratedContract(type))
+            return true;
 
         foreach (var @interface in type.AllInterfaces)
             if (IsLocalizationSet(@interface))
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a type is a contract the source generator writes, which it marks <c>[LocalizationContract]</c>. The
+    /// generator writes it from the default-language set on every build, so its texts change with that set. A contract
+    /// written by hand doesn't.
+    /// </summary>
+    public static bool IsGeneratedContract(INamedTypeSymbol type)
+    {
+        if (type.TypeKind is not TypeKind.Interface)
+            return false;
+
+        foreach (var attribute in type.GetAttributes())
+            if (attribute.AttributeClass is { } attributeClass && IsLocalizationContractAttribute(attributeClass))
                 return true;
 
         return false;

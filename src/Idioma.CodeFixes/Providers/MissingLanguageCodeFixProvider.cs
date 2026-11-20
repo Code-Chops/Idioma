@@ -223,7 +223,7 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
             var cancellationToken = fixAllContext.CancellationToken;
             var sets = new List<NewSet>();
 
-            IEnumerable<Project> projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
+            var projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
 
             foreach (var project in projects)
             {

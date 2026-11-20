@@ -69,7 +69,7 @@ From the English set, the source generator writes the contract `IShopLocalizatio
 dotnet add package CodeChops.Idioma
 ```
 
-The package needs .NET 10 or later and C# 14. C# 14 is the default on .NET 10, unless your project sets an older `LangVersion`.
+The package needs .NET 10 or later and C# 14. C# 14 is the default on .NET 10, unless your project sets an older `LangVersion`, which is build error `LOC102`.
 
 ### Declare your languages
 

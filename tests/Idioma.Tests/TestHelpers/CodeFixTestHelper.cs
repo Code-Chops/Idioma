@@ -107,10 +107,21 @@ internal static class CodeFixTestHelper
     /// does, but the workspace the fix sees holds the generated code too, as an IDE's does. For a fix that reads the
     /// generated contract of a set.
     /// </summary>
-    internal static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixWithGeneratedCodeAsync(CodeFixProvider provider,
+    internal static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixWithGeneratedCodeAsync(CodeFixProvider provider,
         DiagnosticAnalyzer analyzer, params string[] sources)
     {
-        var fixes = await FixAsync(provider, AnalyzeAfterGenerators(analyzer), sources, withGeneratedCode: true);
+        return FixWithGeneratedCodeAsync(provider, analyzer, [], sources);
+    }
+
+    /// <summary>
+    /// Runs every generator, then <paramref name="analyzer"/>, as <see cref="FixWithGeneratedCodeAsync(CodeFixProvider, DiagnosticAnalyzer, string[])"/>
+    /// does, over files compiled against further references, such as a project of the same solution, which an IDE
+    /// references by its compilation.
+    /// </summary>
+    internal static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixWithGeneratedCodeAsync(CodeFixProvider provider,
+        DiagnosticAnalyzer analyzer, MetadataReference[] references, params string[] sources)
+    {
+        var fixes = await FixAsync(provider, AnalyzeAfterGenerators(analyzer), sources, references, withGeneratedCode: true);
         return [.. fixes.Select(static fix => (fix.Title, fix.Sources))];
     }
 

@@ -149,6 +149,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         if (!OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree))
             return;
 
+        var marked = new List<EnumMemberDeclarationSyntax>();
         var unmarked = new List<EnumMemberDeclarationSyntax>();
 
         foreach (var member in declaration.Members)
@@ -158,18 +159,39 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
                 .SelectMany(static list => list.Attributes)
                 .Any(attribute => IsGeneratedAttribute(attribute, context));
 
-            if (!isMarked)
-                unmarked.Add(member);
+            (isMarked ? marked : unmarked).Add(member);
         }
 
-        if (unmarked.Count is 0 || unmarked.Count == declaration.Members.Count)
+        if (unmarked.Count is 0 || marked.Count is 0)
             return;
+
+        // A member with the value of a marked member, such as Default = Active, shows that member's text, because
+        // GetText() finds a text by the value.
+        var markedValues = new HashSet<object>();
+        foreach (var member in marked)
+            if (FindValue(member, context) is { } value)
+                markedValues.Add(value);
 
         foreach (var member in unmarked)
         {
+            if (FindValue(member, context) is { } value && markedValues.Contains(value))
+                continue;
+
             context.ReportDiagnostic(Diagnostic.Create(UnmarkedEnumMemberRule, member.Identifier.GetLocation(),
                 declaration.Identifier.ValueText, member.Identifier.ValueText, sample));
         }
+    }
+
+    /// <summary>
+    /// The value of a member of an enum, or <see langword="null"/> when it has none, as in code that doesn't compile.
+    /// </summary>
+    private static object? FindValue(EnumMemberDeclarationSyntax member, SyntaxNodeAnalysisContext context)
+    {
+        var value = context.SemanticModel.GetDeclaredSymbol(member, context.CancellationToken) is { HasConstantValue: true } field
+            ? field.ConstantValue
+            : null;
+
+        return value;
     }
 
     /// <summary>

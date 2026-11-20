@@ -183,25 +183,46 @@ internal static class TextParameters
 
         HashSet<string>? redeclared = null;
 
+        // The pattern variables that stand for a parameter, read once, and only where a name may be one of them.
+        Dictionary<ISymbol, int>? patternVariables = null;
+
         foreach (var node in body.DescendantNodesAndSelf())
         {
-            // By its name first, which costs nothing: only a name a parameter carries is read.
-            if (node is not IdentifierNameSyntax identifier
-                || !method.Parameters.Any(parameter => String.Equals(parameter.Name, identifier.Identifier.ValueText, StringComparison.Ordinal)))
-            {
+            // By its name first, which costs nothing: only a name a parameter carries is read, or that of a pattern
+            // variable. What nameof names isn't read as a value.
+            if (node is not IdentifierNameSyntax identifier || IsNameOfArgument(identifier))
                 continue;
-            }
 
-            // Then by where it stands, and by the compiler only where that doesn't say which parameter it is.
-            if (FindParameterBySyntax(identifier, method, body, ref redeclared) is not { } ordinal)
+            int ordinal;
+
+            if (method.Parameters.Any(parameter => String.Equals(parameter.Name, identifier.Identifier.ValueText, StringComparison.Ordinal)))
             {
-                if (semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is not IParameterSymbol parameter
-                    || !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, method))
+                // Then by where it stands, and by the compiler only where that doesn't say which parameter it is.
+                if (FindParameterBySyntax(identifier, method, body, ref redeclared) is { } found)
+                {
+                    ordinal = found;
+                }
+                else if (semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is IParameterSymbol parameter
+                         && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, method))
+                {
+                    ordinal = parameter.Ordinal;
+                }
+                else
                 {
                     continue;
                 }
+            }
+            else
+            {
+                patternVariables ??= FindPatternVariables(method, body, semanticModel, cancellationToken);
 
-                ordinal = parameter.Ordinal;
+                if (patternVariables.Count is 0
+                    || !patternVariables.Keys.Any(variable => String.Equals(variable.Name, identifier.Identifier.ValueText, StringComparison.Ordinal))
+                    || semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is not ILocalSymbol local
+                    || !patternVariables.TryGetValue(local, out ordinal))
+                {
+                    continue;
+                }
             }
 
             if (!shown[ordinal])
@@ -209,6 +230,152 @@ internal static class TextParameters
         }
 
         return shown;
+    }
+
+    /// <summary>
+    /// Which parameters the default wording of a text of a contract written by hand shows, by their position, read
+    /// from the default-language set that implements it in this compilation (<see cref="FindShownParameters"/>).
+    /// <see langword="null"/> where the build can't tell: the contract lies in another assembly, this one declares no
+    /// languages, or no set of its default language here implements the text.
+    /// </summary>
+    // A generated contract records this on the text ([ShownValue]). A contract written by hand records nothing, so its
+    // default-language set is read instead, which the build asks for in the contract's own assembly (LOC201). That set
+    // is found among the classes whose name ends in the default language, as nearly every set's does.
+    public static bool[]? FindShownByDefaultSet(IMethodSymbol text, Compilation compilation, CancellationToken cancellationToken)
+    {
+        if (!SymbolEqualityComparer.Default.Equals(text.ContainingAssembly, compilation.Assembly)
+            || SupportedLanguages.ReadCodes(compilation.Assembly) is not [var defaultLanguage, ..])
+        {
+            return null;
+        }
+
+        var reader = new WordingReader(compilation);
+
+        foreach (var symbol in compilation.GetSymbolsWithName(name => SupportedLanguages.EndsInTypeSuffix(name, defaultLanguage), SymbolFilter.Type, cancellationToken))
+        {
+            if (symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } set
+                || !set.AllInterfaces.Contains(text.ContainingType, SymbolEqualityComparer.Default)
+                || set.FindImplementationForInterfaceMember(text) is not IMethodSymbol implementation
+                || LocalizationDiscovery.GetImplementingPart(implementation) is not IMethodSymbol { DeclaringSyntaxReferences: [var reference, ..] } written
+                || reference.GetSyntax(cancellationToken) is not MethodDeclarationSyntax declaration
+                || reader.FindModel(declaration.SyntaxTree) is not { } model
+                || !String.Equals(LocalizationDiscovery.ReadLanguage(set, compilation, cancellationToken), defaultLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return FindShownParameters(written, declaration, model, cancellationToken);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The pattern variables of a body that stand for a parameter as a whole, with the position of that parameter:
+    /// <c>n</c> in <c>count switch { 1 => "1 item", var n => $"{n} items" }</c>, and in <c>count is int n</c>. Such a
+    /// variable shows the value where it's worded, as the parameter would.
+    /// </summary>
+    // Bound only for a switch or an is-pattern on a parameter whose patterns declare a variable, which few bodies have.
+    private static Dictionary<ISymbol, int> FindPatternVariables(IMethodSymbol method, SyntaxNode body, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        var variables = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
+        HashSet<string>? redeclared = null;
+
+        foreach (var node in body.DescendantNodesAndSelf())
+        {
+            ExpressionSyntax input;
+            IEnumerable<PatternSyntax> patterns;
+
+            switch (node)
+            {
+                case SwitchExpressionSyntax @switch:
+                    input = @switch.GoverningExpression;
+                    patterns = @switch.Arms.Select(static arm => arm.Pattern);
+                    break;
+                case IsPatternExpressionSyntax @is:
+                    input = @is.Expression;
+                    patterns = [@is.Pattern];
+                    break;
+                case SwitchStatementSyntax @switch:
+                    input = @switch.Expression;
+                    patterns = @switch.Sections.SelectMany(static section => section.Labels.OfType<CasePatternSwitchLabelSyntax>()).Select(static label => label.Pattern);
+                    break;
+                default:
+                    continue;
+            }
+
+            if (input is not IdentifierNameSyntax identifier
+                || !method.Parameters.Any(parameter => String.Equals(parameter.Name, identifier.Identifier.ValueText, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            var designations = patterns.SelectMany(FindWholeValueDesignations).ToArray();
+            if (designations.Length is 0)
+                continue;
+
+            var ordinal = FindParameterBySyntax(identifier, method, body, ref redeclared)
+                          ?? (semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is IParameterSymbol parameter
+                              && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, method)
+                              ? parameter.Ordinal
+                              : null);
+
+            if (ordinal is null)
+                continue;
+
+            foreach (var designation in designations)
+                if (semanticModel.GetDeclaredSymbol(designation, cancellationToken) is { } variable)
+                    variables[variable] = ordinal.Value;
+        }
+
+        return variables;
+    }
+
+    /// <summary>
+    /// The variables a pattern declares for the value it matches as a whole: <c>var n</c>, <c>int n</c> and
+    /// <c>{ } n</c>, also inside parentheses or next to another pattern with <see langword="and"/>. A variable of a part
+    /// of the value, such as <c>{ Length: var length }</c>, isn't one.
+    /// </summary>
+    private static IEnumerable<SingleVariableDesignationSyntax> FindWholeValueDesignations(PatternSyntax pattern)
+    {
+        var designation = pattern switch
+        {
+            VarPatternSyntax { Designation: SingleVariableDesignationSyntax variable } => variable,
+            DeclarationPatternSyntax { Designation: SingleVariableDesignationSyntax variable } => variable,
+            RecursivePatternSyntax { Designation: SingleVariableDesignationSyntax variable } => variable,
+            _ => null,
+        };
+
+        if (designation is not null)
+            return [designation];
+
+        var designations = pattern switch
+        {
+            ParenthesizedPatternSyntax parenthesized => FindWholeValueDesignations(parenthesized.Pattern),
+            BinaryPatternSyntax binary when binary.IsKind(SyntaxKind.AndPattern) => FindWholeValueDesignations(binary.Left).Concat(FindWholeValueDesignations(binary.Right)),
+            _ => [],
+        };
+
+        return designations;
+    }
+
+    /// <summary>
+    /// Whether a name stands in what <see langword="nameof"/> names, which reads no value: <c>name</c> in
+    /// <c>nameof(name)</c>.
+    /// </summary>
+    private static bool IsNameOfArgument(IdentifierNameSyntax identifier)
+    {
+        var current = identifier.Parent;
+
+        while (current is MemberAccessExpressionSyntax or QualifiedNameSyntax)
+            current = current.Parent;
+
+        var isNameOfArgument = current is ArgumentSyntax
+        {
+            Parent: ArgumentListSyntax { Parent: InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" } } },
+        };
+
+        return isNameOfArgument;
     }
 
     /// <summary>

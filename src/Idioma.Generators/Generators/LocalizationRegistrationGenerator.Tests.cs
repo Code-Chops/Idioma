@@ -150,9 +150,9 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var text = GeneratedText(result);
-        text.ShouldContain("LocalizationRegistry.Register(");
+        text.ShouldContain("RegisterSets(asDefaults: false,");
         text.ShouldContain("new TestApp.LibraryLocalizationDe()");
-        text.ShouldNotContain("RegisterDefaults");
+        text.ShouldNotContain("RegisterSets(asDefaults: true");
     }
 
     [Test]
@@ -170,8 +170,8 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var text = GeneratedText(result);
-        text.ShouldContain("LocalizationRegistry.Register(");
-        text.ShouldNotContain("RegisterDefaults");
+        text.ShouldContain("RegisterSets(asDefaults: false,");
+        text.ShouldNotContain("RegisterSets(asDefaults: true");
     }
 
     [Test]
@@ -217,9 +217,9 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert: the registrar is written as a build writes it.
         var text = GeneratedText(result);
-        text.ShouldContain("LocalizationRegistry.Register(");
+        text.ShouldContain("RegisterSets(asDefaults: false,");
         text.ShouldContain("new TestApp.MyGridLocalizationEnGb()");
-        text.ShouldNotContain("RegisterDefaults");
+        text.ShouldNotContain("RegisterSets(asDefaults: true");
     }
 
     [Test]
@@ -243,8 +243,8 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var text = GeneratedText(result);
-        text.ShouldNotContain("LocalizationRegistry.Register(");
-        text.IndexOf("RegisterDefaults(", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("new TestApp.ZuluLocalizationEn()", StringComparison.Ordinal));
+        text.ShouldNotContain("RegisterSets(asDefaults: false,");
+        text.IndexOf("RegisterSets(asDefaults: true,", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("new TestApp.ZuluLocalizationEn()", StringComparison.Ordinal));
         text.IndexOf("new TestApp.ZuluLocalizationEn()", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("new TestApp.AlphaLocalizationEn()", StringComparison.Ordinal));
     }
 
@@ -268,8 +268,8 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var text = GeneratedText(result);
-        text.ShouldContain("RegisterDefaults(");
-        text.ShouldNotContain("LocalizationRegistry.Register(");
+        text.ShouldContain("RegisterSets(asDefaults: true,");
+        text.ShouldNotContain("RegisterSets(asDefaults: false,");
         text.ShouldNotContain("ShopLocalizationBase");
     }
 
@@ -347,7 +347,11 @@ public sealed class LocalizationRegistrationGeneratorTests
         var text = GeneratedText(Run(source));
 
         // Assert
-        text.Split('\n').Select(line => line.Trim().TrimEnd(',', ')', ';', '\r')).Where(line => line.StartsWith("new ", StringComparison.Ordinal)).ToArray().ShouldBe(
+        text.Split('\n')
+            .Where(static line => line.Contains("static () => new ", StringComparison.Ordinal))
+            .Select(static line => line[(line.IndexOf("static () => ", StringComparison.Ordinal) + "static () => ".Length)..].TrimEnd(',', ')', ';', '\r'))
+            .ToArray()
+            .ShouldBe(
         [
             "new TestApp.ShopLocalizationDe(",
             "new TestApp.ShopLocalizationNl(",
@@ -387,11 +391,11 @@ public sealed class LocalizationRegistrationGeneratorTests
         var text = GeneratedText(Run(source));
 
         // Assert
-        text.ShouldContain("RegisterDefaults(");
+        text.ShouldContain("RegisterSets(asDefaults: true,");
         text.ShouldContain("new TestApp.ShopLocalizationEn()");
         text.ShouldContain("new TestApp.ShopLocalizationNl()");
         text.ShouldNotContain("ShopLocalizationDe");
-        text.ShouldNotContain("LocalizationRegistry.Register(");
+        text.ShouldNotContain("RegisterSets(asDefaults: false,");
     }
 
     [Test]
@@ -788,7 +792,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         text.ShouldContain("ShopLocalizationZhHans>(\"zh-Hans\");");
         text.ShouldContain("ShopLocalizationEn>(\"en\");");
         text.LastIndexOf("RecordSet<", StringComparison.Ordinal)
-            .ShouldBeLessThan(text.IndexOf("RegisterDefaults(", StringComparison.Ordinal));
+            .ShouldBeLessThan(text.IndexOf("RegisterSets(asDefaults: true,", StringComparison.Ordinal));
     }
 
     [Test]
@@ -1465,7 +1469,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         text.ShouldContain("public static class LocalizationRegistrar_TestAssembly");
-        text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("RegisterDefaults(", StringComparison.Ordinal));
+        text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("RegisterSets(asDefaults: true,", StringComparison.Ordinal));
     }
 
     [Test]
@@ -2331,6 +2335,42 @@ public sealed class LocalizationRegistrationGeneratorTests
             set.DeclaredTexts.ShouldBeEmpty();
             set.InheritedTexts.ShouldBeEmpty();
         }
+    }
+
+    [Test]
+    public void Discovery_ShouldNotRecordATextThatAMemberOnlyHides()
+    {
+        // Arrange & Act: a member that hides a text words nothing, because the contract calls the member it hides
+        // (LOC207). Recorded, it would keep the registry from a rewording of English. A set that lists the contract again
+        // maps the contract to its own member, which then words the text.
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(new LocalizationRegistrationGenerator(), LocalizationDiscovery.TrackingName, """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "en-GB", "en-AU")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Color => "Color";
+                public string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public sealed class ShopLocalizationEnGb : ShopLocalizationEn
+            {
+                public new string Color => "Colour";
+                public new string Greeting(string name) => $"Hiya, {name}!";
+            }
+
+            public sealed class ShopLocalizationEnAu : ShopLocalizationEn, IShopLocalization
+            {
+                public new string Color => "Colour";
+            }
+            """);
+
+        // Assert
+        discovery.Sets.Single(static set => set.Name is "ShopLocalizationEnGb").OwnTexts.ShouldBeEmpty();
+        discovery.Sets.Single(static set => set.Name is "ShopLocalizationEnAu").OwnTexts.ShouldBe(["Color"]);
     }
 
     [Test]

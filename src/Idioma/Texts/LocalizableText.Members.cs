@@ -15,9 +15,13 @@ public sealed partial class LocalizableText
     private static MemberTextSources MemberTexts = new([]);
 
     /// <summary>
-    /// The texts of the type that was asked for last by a <see cref="Type"/>. A form asks for the labels of one
+    /// The texts of the type this thread asked for last by a <see cref="Type"/>. A form asks for the labels of one
     /// model's properties one after another, so most lookups by a type find theirs here.
     /// </summary>
+    // Per thread, because threads of a server render forms of different models at once. Shared by them, every lookup
+    // of another type wrote the field the others read, and a label took 63 to 103 ns where one thread takes 6 to 12 ns
+    // (8 threads, each asking for its own model). A thread keeps the texts of its last type until it asks for another.
+    [ThreadStatic]
     private static TypeTexts? LastTextsByType;
 
     /// <summary>

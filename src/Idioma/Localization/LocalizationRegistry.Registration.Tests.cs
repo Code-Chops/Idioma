@@ -122,6 +122,42 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void RegisterSets_ShouldCreateEachSetOnceWhenTheRegistryIsFirstRead()
+    {
+        // Arrange: the generated registrar runs in a module initializer, before Main, so it creates no set there.
+        var before = RegistryLazyLocalizationNl.Created;
+
+        // Act
+        Internals.GeneratedCode.RegisterSets(asDefaults: true, (typeof(RegistryLazyLocalizationNl), static () => new RegistryLazyLocalizationNl()));
+        var createdAtRegistration = RegistryLazyLocalizationNl.Created - before;
+
+        var found = LocalizationRegistry.Current.Find<IRegistryLazyLocalization>(Culture("nl"));
+        LocalizationRegistry.Register(new RegistryConfiguredLocalization("it"));
+        var foundAgain = LocalizationRegistry.Current.Find<IRegistryLazyLocalization>(Culture("nl"));
+
+        // Assert: created at the first read, under the language of its name, and kept when the registry is built again.
+        createdAtRegistration.ShouldBe(0);
+        found.ShouldBeOfType<RegistryLazyLocalizationNl>();
+        foundAgain.ShouldBeSameAs(found);
+        (RegistryLazyLocalizationNl.Created - before).ShouldBe(1);
+    }
+
+    [Test]
+    public void CreateSet_WhoseConstructorThrows_ShouldSayWhichSetThrew()
+    {
+        // Arrange
+        var thrown = new FormatException("No such setting.");
+
+        // Act
+        var exception = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.CreateSet(typeof(RegistryLazyLocalizationNl), () => throw thrown));
+
+        // Assert
+        exception.Message.ShouldStartWith($"'{typeof(RegistryLazyLocalizationNl)}' threw when it was created, so no text can be shown.");
+        exception.InnerException.ShouldBeSameAs(thrown);
+    }
+
+    [Test]
     public void Register_ShouldThrowForNullSet()
     {
         // Arrange & Act & Assert

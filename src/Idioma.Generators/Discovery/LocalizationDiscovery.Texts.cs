@@ -99,6 +99,11 @@ internal static partial class LocalizationDiscovery
 
         foreach (var member in type.GetMembers())
         {
+            // A member that hides a text words nothing, because the contract calls the member it hides (LOC207).
+            // Recorded, it would keep the registry from the wording a rewording of the language gives that text.
+            if (HidesText(member, type))
+                continue;
+
             if (IsPublicStringProperty(member, out _) || TextParameters.IsTextMethod(member, out _))
             {
                 names.Add(member.Name);
@@ -114,6 +119,128 @@ internal static partial class LocalizationDiscovery
         names.Remove(LanguageCodeMemberName);
 
         return [.. names];
+    }
+
+    /// <summary>
+    /// The texts a set inherits from the classes of its assembly it derives from, without declaring them: public string
+    /// properties, and methods of the shape of a text that takes values. A contract takes only the texts its set
+    /// declares, so it leaves these out, and no other language has to word them (<c>LOC208</c>).
+    /// </summary>
+    /// <remarks>
+    /// A member the set declares again, overrides, or implements explicitly settles its name, and so does one of a
+    /// nearer class. A member marked <c>[ExcludeFromLocalizationDiscovery]</c> is no text. A class of another assembly
+    /// isn't read, because its members weren't written as texts, such as <c>Exception.Message</c>.
+    /// </remarks>
+    private static ImmutableArray<UndeclaredText> GetUndeclaredTexts(INamedTypeSymbol type)
+    {
+        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+
+        foreach (var member in type.GetMembers())
+        {
+            settled.Add(member.Name);
+
+            if (GetExplicitlyImplementedName(member) is { } name)
+                settled.Add(name);
+        }
+
+        var undeclared = ImmutableArray.CreateBuilder<UndeclaredText>();
+
+        for (var current = type.BaseType; current is { SpecialType: not SpecialType.System_Object }; current = current.BaseType)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, type.ContainingAssembly))
+                break;
+
+            // Each name once, from the nearest class that has a member of it.
+            var names = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var member in current.GetMembers())
+            {
+                if (settled.Contains(member.Name))
+                    continue;
+
+                names.Add(member.Name);
+
+                // Once per name, though a method may have overloads.
+                if (!IsExcluded(member)
+                    && (IsPublicStringProperty(member, out _) || TextParameters.IsTextMethod(member, out _))
+                    && !undeclared.Any(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal)))
+                {
+                    undeclared.Add(new UndeclaredText(member.Name, current.Name, DiagnosticLocation.From(member.Locations[0])));
+                }
+            }
+
+            settled.UnionWith(names);
+        }
+
+        return undeclared.ToImmutable();
+    }
+
+    /// <summary>
+    /// The part of a partial property or method that implements it, which holds its body, or the member itself when
+    /// it isn't partial. A class lists a partial member by the part that declares it.
+    /// </summary>
+    internal static ISymbol GetImplementingPart(ISymbol member)
+    {
+        var implementingPart = member switch
+        {
+            IMethodSymbol { PartialImplementationPart: { } method } => method,
+            IPropertySymbol { PartialImplementationPart: { } property } => property,
+            _ => member,
+        };
+
+        return implementingPart;
+    }
+
+    /// <summary>
+    /// Whether a member of a set hides a text of a class it derives from, rather than overriding it:
+    /// <c>public new string Color => "Colour";</c> in a British set deriving from the English one. A contract then calls
+    /// the member it hides, so this member words nothing. It does when the set lists a contract again, because that maps
+    /// the contract to the nearest member of the name: this one.
+    /// </summary>
+    /// <remarks>
+    /// A contract generated here binds to nothing yet, and counts as listed again. So does any interface of the set's
+    /// own base list besides <c>ILocalizationSet</c>, which a set lists again to give its language a code.
+    /// </remarks>
+    internal static bool HidesText(ISymbol member, INamedTypeSymbol type)
+    {
+        if (member is not (IPropertySymbol { IsStatic: false, IsOverride: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public }
+            or IMethodSymbol { IsStatic: false, IsOverride: false, MethodKind: MethodKind.Ordinary, DeclaredAccessibility: Accessibility.Public }))
+        {
+            return false;
+        }
+
+        if (Enumerable.Any(type.Interfaces, static @interface => !IsLocalizationSetInterface(@interface)))
+            return false;
+
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            foreach (var hidden in current.GetMembers(member.Name))
+            {
+                var isHidden = (member, hidden) switch
+                {
+                    (IPropertySymbol, IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public }) => true,
+                    (IMethodSymbol method, IMethodSymbol { IsStatic: false, DeclaredAccessibility: Accessibility.Public } other) => HaveSameParameters(method, other),
+                    _ => false,
+                };
+
+                if (isHidden)
+                    return true;
+            }
+        }
+
+        return false;
+
+        static bool HaveSameParameters(IMethodSymbol method, IMethodSymbol other)
+        {
+            if (method.Parameters.Length != other.Parameters.Length)
+                return false;
+
+            for (var i = 0; i < method.Parameters.Length; i++)
+                if (!SymbolEqualityComparer.Default.Equals(method.Parameters[i].Type, other.Parameters[i].Type) || method.Parameters[i].RefKind != other.Parameters[i].RefKind)
+                    return false;
+
+            return true;
+        }
     }
 
     /// <summary>
@@ -235,8 +362,10 @@ internal static partial class LocalizationDiscovery
             if (String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal) || IsExcluded(member))
                 continue;
 
-            var declaration = member.DeclaringSyntaxReferences.Length > 0
-                ? member.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) as MemberDeclarationSyntax
+            // A partial member is read where it's implemented, because the part that declares it has no body.
+            var implementingPart = GetImplementingPart(member);
+            var declaration = implementingPart.DeclaringSyntaxReferences.Length > 0
+                ? implementingPart.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) as MemberDeclarationSyntax
                 : null;
 
             if (IsPublicStringProperty(member, out var property))
@@ -280,7 +409,7 @@ internal static partial class LocalizationDiscovery
                     HasDocComment: declaration is not null && HasDocComment(declaration),
                     DefaultText: declaration is MethodDeclarationSyntax ? reader.Read(declaration, cancellationToken) : null,
                     Parameters: TextParameters.Read(
-                        method,
+                        (IMethodSymbol)implementingPart,  // The part whose body is read, as its parameters are what the body names.
                         declaration as MethodDeclarationSyntax,
                         // Only in a tree of this compilation, as for the wording (WordingReader.FindModel).
                         declaration is null ? null : reader.FindModel(declaration.SyntaxTree),

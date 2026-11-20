@@ -360,4 +360,32 @@ public sealed class PlaceholderAnalyzerTests
         // Assert
         diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC502");
     }
+
+    [Test]
+    public async Task PartialPropertyWithPlaceholder_ShouldReportLOC502()
+    {
+        // Arrange & Act: the set names the part that declares the property as the text's implementation, and the part
+        // that implements it holds the wording.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Note => "See the terms";
+            }
+
+            public partial class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public partial string Note { get; }
+                public partial string Note { get => "Zie {0}"; }
+            }
+
+            public class ShopLocalizationEnGb : ShopLocalizationEn;
+            """);
+
+        // Assert
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationNl.Note' holds the placeholder {0}");
+    }
 }

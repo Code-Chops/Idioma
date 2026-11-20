@@ -1,8 +1,10 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Runtime.Loader;
 using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -84,7 +86,117 @@ public sealed class LocalizableTextFactoryGeneratorTests
             public string City { get; } = "";
         }
         """;
+
+    /// <summary>
+    /// Runs every generator over a source parsed as a version of C#, and gives the generators' diagnostics, the errors
+    /// in generated files, and the names of the generated files.
+    /// </summary>
+    private static (ImmutableArray<Diagnostic> Diagnostics, Diagnostic[] GeneratedErrors, string[] HintNames) RunAsVersion(
+        LanguageVersion version, string source)
+    {
+        var options = new CSharpParseOptions(version);
+        var tree = CSharpSyntaxTree.ParseText(source, options);
+        var compilation = CSharpCompilation.Create(
+            assemblyName: "VersionApp",
+            syntaxTrees: [tree],
+            references: GeneratorTestHelper.References,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = GeneratorTestHelper
+            .CreateFullDriver(options)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics);
+
+        var generatedErrors = updated.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity is DiagnosticSeverity.Error && diagnostic.Location.SourceTree is { } at && at != tree)
+            .ToArray();
+
+        var hintNames = driver.GetRunResult().Results
+            .SelectMany(static result => result.GeneratedSources).Select(static source => source.HintName).ToArray();
+
+        return (diagnostics, generatedErrors, hintNames);
+    }
     #endregion
+
+    [Test]
+    public void ProjectBelowCSharp14_ShouldReportLOC102AndWriteNoCodeForItsLanguages()
+    {
+        // Arrange & Act: a set, an inline text and a text on a member, each of which needs code written with C# 14.
+        var (diagnostics, generatedErrors, hintNames) = RunAsVersion(LanguageVersion.CSharp13, """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+
+            public class Address
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+
+                public LocalizableText Title { get; } = LocalizableText.Inline(en: "Address", nl: "Adres");
+            }
+            """);
+
+        // Assert: one error that says why at the attribute, and none in generated files, as only the attribute that
+        // marks embedded types is written.
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC102");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().ShouldBe("Idioma needs C# 14 or later, and this project uses C# 13.0. Remove <LangVersion> from the project file, or set it to 14 or later.");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.ShouldBe(2);
+        generatedErrors.ShouldBeEmpty();
+        hintNames.ShouldBe(["Microsoft.CodeAnalysis.EmbeddedAttribute.cs"]);
+    }
+
+    [Test]
+    public void ProjectBelowCSharp14WithoutLanguages_ShouldBuild()
+    {
+        // Arrange & Act: a project that only references a library using the package declares no languages, and its
+        // registrar needs no C# 14.
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators("VersionLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace VersionLibrary;
+
+            public class GridLocalizationEn : ILocalizationSet, IGridLocalization
+            {
+                public virtual string First => "First";
+            }
+
+            public class GridLocalizationNl : ILocalizationSet, IGridLocalization
+            {
+                public string First => "Eerste";
+            }
+            """);
+
+        var options = new CSharpParseOptions(LanguageVersion.CSharp12);
+        var tree = CSharpSyntaxTree.ParseText("""
+            public static class Program
+            {
+                public static void Main() { }
+            }
+            """, options);
+        var compilation = CSharpCompilation.Create("OldApp", [tree], [.. GeneratorTestHelper.References, library], new CSharpCompilationOptions(OutputKind.ConsoleApplication));
+
+        GeneratorTestHelper.CreateFullDriver(options).RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+        updated.GetDiagnostics().Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error).ShouldBeEmpty();
+        updated.SyntaxTrees.Count().ShouldBeGreaterThan(1);
+    }
 
     [Test]
     public Task Languages_ShouldBecomeRequiredParametersInOrder()

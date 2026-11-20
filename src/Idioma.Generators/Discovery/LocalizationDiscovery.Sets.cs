@@ -133,7 +133,8 @@ internal static partial class LocalizationDiscovery
         var language = GetLanguage(type, ancestors, reader, cancellationToken, out var invalidLanguageCode);
         var location = DiagnosticLocation.From(type.Locations[0]);
         var depth = GetDepth(type, ancestors);
-        var readsContract = discoveredTexts is DiscoveredTexts.OfContract;
+        var readsContract = discoveredTexts is DiscoveredTexts.OfContract or DiscoveredTexts.OfBoth;
+        var readsRecord = discoveredTexts is DiscoveredTexts.OfRecord or DiscoveredTexts.OfBoth;
         var unsupportedTexts = ImmutableArray<UnsupportedText>.Empty;
         var usings = default(RepeatedUsings);
         var enums = listsLocalizationSet && readsContract ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
@@ -160,7 +161,7 @@ internal static partial class LocalizationDiscovery
             RecordedLanguageCode: DeclaresLanguageCode(type) ? null : FindRecordedLanguageCode(type, ancestors) ?? GetNameLanguage(type.Name),
             // Only for a set deriving from another: the registry asks it of such a set alone, and a set deriving from
             // none would list every text, in every language, in the generated code.
-            OwnTexts: new EquatableArray<string>(depth > 0 && !readsContract ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
+            OwnTexts: new EquatableArray<string>(depth > 0 && readsRecord ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
             ListsLocalizationSet: listsLocalizationSet,
             ContractNames: new EquatableArray<string>(GetPublicContractNames(type)),
             OwnContractNames: new EquatableArray<string>(GetOwnContractNames(type)),
@@ -187,8 +188,9 @@ internal static partial class LocalizationDiscovery
             UnsupportedTexts: new EquatableArray<UnsupportedText>(unsupportedTexts),
             Usings: usings,
             Enums: new EquatableArray<LocalizedEnum>(enums),
-            TypeNamedLikeTexts: readsContract && language is not null ? FindTypeNamedLikeTexts(type, language) : null,
-            ReservedTexts: new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)));
+            TypeNamedLikeTexts: readsContract && language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
+            ReservedTexts: new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
+            UndeclaredTexts: new EquatableArray<UndeclaredText>(listsLocalizationSet && readsContract ? GetUndeclaredTexts(type) : ImmutableArray<UndeclaredText>.Empty));
 
         return set;
     }
@@ -202,7 +204,7 @@ internal static partial class LocalizationDiscovery
     // A static partial class of that name is the generated class itself, where a helper sits next to the texts. A type
     // with type parameters is another type, and so is one of another assembly, which the namespace of this class
     // doesn't hold.
-    private static string? FindTypeNamedLikeTexts(INamedTypeSymbol type, string language)
+    private static string? FindTypeNamedLikeTexts(INamedTypeSymbol type, string language, CancellationToken cancellationToken)
     {
         if (DeriveBaseName(type.Name, language) is not { } textsName)
             return null;
@@ -210,7 +212,7 @@ internal static partial class LocalizationDiscovery
         foreach (var other in type.ContainingNamespace.GetTypeMembers(textsName, arity: 0))
         {
             var isPartOfGeneratedClass = other is { TypeKind: TypeKind.Class, IsStatic: true }
-                && other.DeclaringSyntaxReferences.All(static reference => reference.GetSyntax() is TypeDeclarationSyntax part && part.Modifiers.Any(SyntaxKind.PartialKeyword));
+                && other.DeclaringSyntaxReferences.All(reference => reference.GetSyntax(cancellationToken) is TypeDeclarationSyntax part && part.Modifiers.Any(SyntaxKind.PartialKeyword));
 
             if (isPartOfGeneratedClass)
                 continue;

@@ -222,7 +222,10 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                 context.ReportDiagnostic(Diagnostic.Create(CannotRegisterRule, set.Location.ToLocation(), set.MetadataName, set.Problem));
         });
 
-        context.RegisterSourceOutput(members, static (context, model) =>
+        // No code below C# 14, which LOC102 reports. What is found about the sets is reported all the same.
+        var compiles = LanguageVersionCheck.Read(context);
+
+        context.RegisterSourceOutput(members.WhereItCompiles(compiles), static (context, model) =>
         {
             if (model.HasTexts)
                 context.AddSource(LocalizedMembersSource.HintName, LocalizedMembersSource.Generate(model));
@@ -240,7 +243,7 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                 context.ReportDiagnostic(Diagnostic.Create(InvalidLanguageCodeRule, code.Location.ToLocation(), code.DeclaringType, code.Code));
         });
 
-        context.RegisterSourceOutput(registrar, static (context, registrar) =>
+        context.RegisterSourceOutput(registrar.WhereItCompiles(compiles), static (context, registrar) =>
         {
             // Nothing of its own to register or record, and nothing referenced to register first.
             if (registrar.Sets.Length is 0 && registrar.ReferencedRegistrars.Length is 0 && registrar.Languages.Length is 0 && registrar.Records.Length is 0
@@ -455,8 +458,8 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                 sb.AppendLine($"        {PackageNames.GeneratedCode}.RecordSet<{recorded.FullyQualifiedName}>({arguments});");
             }
 
-            AppendRegistration(sb, "RegisterDefaults", registrar.Sets.AsImmutableArray().Where(static set => !set.IsOverride));
-            AppendRegistration(sb, "Register", registrar.Sets.AsImmutableArray().Where(static set => set.IsOverride));
+            AppendRegistration(sb, asDefaults: true, registrar.Sets.AsImmutableArray().Where(static set => !set.IsOverride));
+            AppendRegistration(sb, asDefaults: false, registrar.Sets.AsImmutableArray().Where(static set => set.IsOverride));
 
             sb.AppendLine("""
                     }
@@ -470,17 +473,22 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         return sb.ToString();
     }
 
-    private static void AppendRegistration(StringBuilder sb, string method, IEnumerable<RegisteredLocalization> sets)
+    /// <summary>
+    /// Registers sets by their types, with what creates each. The registry creates them when the first text is shown,
+    /// and not here, in the module initializer, where a constructor that throws would take the app down before Main.
+    /// </summary>
+    private static void AppendRegistration(StringBuilder sb, bool asDefaults, IEnumerable<RegisteredLocalization> sets)
     {
-        var creations = sets.Select(static set => $"new {set.FullyQualifiedName}()").ToArray();
+        var registrations = sets.Select(
+            static set => $"(typeof({set.FullyQualifiedName}), static () => new {set.FullyQualifiedName}())").ToArray();
 
-        if (creations.Length is 0)
+        if (registrations.Length is 0)
             return;
 
-        sb.AppendLine($"        {PackageNames.LocalizationRegistry}.{method}(");
+        sb.AppendLine($"        {PackageNames.GeneratedCode}.RegisterSets(asDefaults: {(asDefaults ? "true" : "false")},");
 
-        for (var i = 0; i < creations.Length; i++)
-            sb.AppendLine($"            {creations[i]}{(i < creations.Length - 1 ? "," : ");")}");
+        for (var i = 0; i < registrations.Length; i++)
+            sb.AppendLine($"            {registrations[i]}{(i < registrations.Length - 1 ? "," : ");")}");
     }
 }
 

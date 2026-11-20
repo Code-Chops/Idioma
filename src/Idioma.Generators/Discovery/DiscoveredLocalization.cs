@@ -62,6 +62,8 @@ namespace CodeChops.Idioma.Generators;
 /// get, as a message names it (<c>the enum 'OrderStatus'</c>), if any.</item>
 /// <item><see cref="ReservedTexts"/> are its texts with a name its generated class can't give them, with where each is
 /// written. Most sets have none.</item>
+/// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
+/// which its contract leaves out (<c>LOC208</c>). Most sets have none.</item>
 /// <item>These are read only for the generator that writes the contracts
 /// (<see cref="DiscoveredTexts.OfContract"/>).</item>
 /// </list>
@@ -104,7 +106,17 @@ internal readonly record struct DiscoveredLocalization(
     RepeatedUsings Usings,
     EquatableArray<LocalizedEnum> Enums,
     string? TypeNamedLikeTexts,
-    EquatableArray<ReservedText> ReservedTexts);
+    EquatableArray<ReservedText> ReservedTexts,
+    EquatableArray<UndeclaredText> UndeclaredTexts);
+
+/// <summary>
+/// A text a set inherits from a class of its assembly without declaring it: its name, the class that declares it, and
+/// where it's written. A contract takes only the texts its set declares, so it leaves such a text out.
+/// </summary>
+internal readonly record struct UndeclaredText(
+    string Name,
+    string DeclaringType,
+    DiagnosticLocation Location);
 
 /// <summary>
 /// An enum whose members a set has a text for, because the set lists <c>ILocalizationSet&lt;TEnum&gt;</c>: its type as
@@ -356,6 +368,12 @@ internal enum DiscoveredTexts
     /// read, and the texts a contract is written from stay empty.
     /// </summary>
     OfRecord,
+
+    /// <summary>
+    /// What both generators read, as discovery reads a class once for the two of them. Each gets its own part of it
+    /// (<see cref="LocalizationDiscovery.ForGenerator"/>), so neither sees what changes only for the other.
+    /// </summary>
+    OfBoth,
 }
 
 /// <summary>

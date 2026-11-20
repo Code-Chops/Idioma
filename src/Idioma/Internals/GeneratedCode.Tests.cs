@@ -33,7 +33,7 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["CreateText", "CreateSetText", "CreateUndefinedEnumText", "CreateMemberText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet"],
+            ["CreateText", "CreateSetText", "CreateUndefinedEnumText", "CreateMemberText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
             ignoreOrder: true);
     }
 
@@ -41,7 +41,7 @@ public sealed class GeneratedCodeTests
     public void GetKeyedText_ShouldGiveTheTextUnlessValuesWerePassed()
     {
         // Arrange
-        LocalizableText text = LocalizableText.Keyed("Checkout", "Checkout");
+        var text = LocalizableText.Keyed("Checkout", "Checkout");
 
         // Act
         var given = GeneratedCode.GetKeyedText<IGeneratedCodeLocalization>(text, "Checkout", []);

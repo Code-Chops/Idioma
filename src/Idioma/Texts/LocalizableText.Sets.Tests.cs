@@ -204,12 +204,14 @@ public sealed class LocalizableTextSetsTests
     /// <summary>
     /// A French set whose texts can't be worded.
     /// </summary>
+#pragma warning disable LOC302 // It words no value on purpose, because it throws.
     private sealed class SetCountedLocalizationFr : ISetCountedLocalization
     {
         public string Items(int count) => throw new InvalidOperationException("No wording.");
         public string Total(decimal amount) => throw new InvalidOperationException("No wording.");
         public string Removed(LocalizableText what) => throw new InvalidOperationException("No wording.");
     }
+#pragma warning restore LOC302
 
     /// <summary>
     /// A contract whose text shows the UI culture its method runs in, after the text among its values.

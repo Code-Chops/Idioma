@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
 namespace CodeChops.Idioma.Generators;
@@ -41,6 +42,15 @@ internal static partial class LocalizationDiscovery
     // Held by the semantic model, which is made anew for every file of every compilation: nothing outlives the
     // compilation it was read from, and nothing is shared between two of them.
     private static readonly ConditionalWeakTable<SemanticModel, Dictionary<(SyntaxNode Scope, string Name), bool>> BaseTypesLeadingToSet = new();
+
+    /// <summary>
+    /// Per file of a compilation, what discovery found in each class, for both generators.
+    /// </summary>
+    // Both generators read every class with a base list on every edit, and the driver gives them the same semantic model
+    // of each file. So the first to come to a class reads what both use, and the second finds it here. Without this,
+    // every set was read twice on every edit, which cost a project with hundreds of sets more than all else discovery
+    // does. Held by the semantic model, as the base types above are: nothing outlives the compilation it was read from.
+    private static readonly ConditionalWeakTable<SemanticModel, ConcurrentDictionary<SyntaxNode, DiscoveryResult?>> ReadOnce = new();
 
     private static SymbolDisplayFormat FullyQualifiedFormat { get; } = new(
         globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
@@ -362,9 +372,57 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Resolves a candidate to what discovery finds in it, or <see langword="null"/> when it holds nothing of interest.
+    /// Resolves a candidate to what discovery finds in it for one generator, or <see langword="null"/> when it holds
+    /// nothing of interest. The class is read once for both generators (<see cref="ReadClass"/>).
     /// </summary>
     private static DiscoveryResult? Discover(GeneratorSyntaxContext context, DiscoveredTexts texts, CancellationToken cancellationToken)
+    {
+        var read = ReadOnce.GetOrCreateValue(context.SemanticModel);
+
+        if (!read.TryGetValue(context.Node, out var result))
+        {
+            result = ReadClass(context, cancellationToken);
+            read.TryAdd(context.Node, result);
+        }
+
+        var forGenerator = result?.Set is { } set ? result with { Set = ForGenerator(set, texts) } : result;
+        return forGenerator;
+    }
+
+    /// <summary>
+    /// The part of a set that one generator reads, as <see cref="DiscoverSet"/> gives it for <paramref name="texts"/>
+    /// alone: the texts a contract is written from, or the names the registrar records. So an edit that changes only
+    /// the other part leaves the generator's pipeline as it was.
+    /// </summary>
+    internal static DiscoveredLocalization ForGenerator(DiscoveredLocalization set, DiscoveredTexts texts)
+    {
+        var forGenerator = texts switch
+        {
+            DiscoveredTexts.OfContract => set with { OwnTexts = new EquatableArray<string>(ImmutableArray<string>.Empty) },
+            DiscoveredTexts.OfRecord => set with
+            {
+                DeclaredTexts = new EquatableArray<string>(ImmutableArray<string>.Empty),
+                InheritedTexts = new EquatableArray<InheritedText>(ImmutableArray<InheritedText>.Empty),
+                Wordings = new EquatableArray<TextWording>(ImmutableArray<TextWording>.Empty),
+                Texts = new EquatableArray<LocalizationMember>(ImmutableArray<LocalizationMember>.Empty),
+                UnsupportedTexts = new EquatableArray<UnsupportedText>(ImmutableArray<UnsupportedText>.Empty),
+                Usings = default,
+                Enums = new EquatableArray<LocalizedEnum>(ImmutableArray<LocalizedEnum>.Empty),
+                TypeNamedLikeTexts = null,
+                ReservedTexts = new EquatableArray<ReservedText>(ImmutableArray<ReservedText>.Empty),
+                UndeclaredTexts = new EquatableArray<UndeclaredText>(ImmutableArray<UndeclaredText>.Empty),
+            },
+            _ => set,
+        };
+
+        return forGenerator;
+    }
+
+    /// <summary>
+    /// Resolves a candidate to what discovery finds in it for both generators, or <see langword="null"/> when it holds
+    /// nothing of interest.
+    /// </summary>
+    private static DiscoveryResult? ReadClass(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
         var declaration = (TypeDeclarationSyntax)context.Node;
 
@@ -386,7 +444,7 @@ internal static partial class LocalizationDiscovery
             return null;
 
         var result = new DiscoveryResult(
-            DiscoverSet(type, declaration, context.SemanticModel, texts, cancellationToken),
+            DiscoverSet(type, declaration, context.SemanticModel, DiscoveredTexts.OfBoth, cancellationToken),
             UnnameableOverride: null,
             UnextendableSet: null);
 

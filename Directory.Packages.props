@@ -3,6 +3,8 @@
     <!-- Code analysis and analyzers -->
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.318" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
+    <!-- Pins the public API of the runtime package (see Idioma.csproj). -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <!-- The tests compile against this version; the generator pins its own, older one (see Idioma.Generators.csproj). -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />

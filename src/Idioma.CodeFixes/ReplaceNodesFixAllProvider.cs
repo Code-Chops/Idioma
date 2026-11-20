@@ -25,7 +25,7 @@ internal sealed class ReplaceNodesFixAllProvider<TNode>(string title, string equ
         var cancellationToken = fixAllContext.CancellationToken;
         var replaced = new Dictionary<TNode, TNode>();
 
-        IEnumerable<Project> projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
+        var projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
 
         foreach (var project in projects)
         {

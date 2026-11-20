@@ -4,7 +4,7 @@ A set's language code is the end of its name, written in PascalCase. A two-lette
 
 A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name only when `[assembly: SupportedLanguages]` lists it. It's written in PascalCase too: `ShopLocalizationEnGb`, `ShopLocalizationZhHans`, `ShopLocalizationFil`. A set deriving from such a set serves the same language.
 
-Only the capital that starts the code counts. After it, the code matches in any letter case, so `ShopLocalizationEN` and `ShopLocalizationEnGB` work too. Without that capital, a name has no code. So `LocalizationSet` doesn't serve Estonian (`et`), and gets build warning `LOC400`.
+Only the capital that starts the code counts. After it, the code matches in any letter case, so `ShopLocalizationEN` and `ShopLocalizationEnGB` work too. Without that capital, a name has no code. So `LocalizationSet` doesn't serve Estonian (`et`), and gets build warning `LOC400`. A set without a code serves no language, so the build still asks for a set of each language its contract lacks (`LOC201`).
 
 An inline text and an attribute take the same codes as parameter names, in camelCase: `nl:` where a set's name ends in `Nl`, and `enGb:`, `zhHans:`, and `fil:` for the sets above.
 

@@ -2949,7 +2949,28 @@ public sealed class LocalizationSetsGeneratorTests
         var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.LibraryCannotBeTranslatedDiagnosticId);
         diagnostic.Id.ShouldBe("LOC601");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
-        diagnostic.GetMessage().ShouldContain("'InlineLibrary' has inline texts without 'de'");
+        diagnostic.GetMessage().ShouldBe("'InlineLibrary' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.");
+    }
+
+    [Test]
+    [Arguments("""("nl", "de")""", "nl")]    // The library has the app's default language, which a text falls back to first
+    [Arguments("""("en-GB", "de")""", "en-GB")] // Its English serves British English
+    [Arguments("""("fr", "de")""", "en")]    // It hasn't, so the text falls back to its own default language
+    public void LibraryWithInlineTextsMissingLanguage_ShouldNameTheLanguageUsersSee(string languages, string shown)
+    {
+        // Arrange & Act
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages{{languages}}]
+
+            namespace TestApp;
+            """, InlineLibrary);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics
+            .Where(static diagnostic => diagnostic.Id is LocalizationSetsGenerator.LibraryCannotBeTranslatedDiagnosticId)
+            .ShouldAllBe(diagnostic => diagnostic.GetMessage().EndsWith($"will see them in '{shown}'.", StringComparison.Ordinal));
     }
 
     [Test]
@@ -3680,6 +3701,91 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    public void SetWhoseNameGivesNoLanguage_ShouldNotHideMissingLanguages()
+    {
+        // Arrange & Act: a Dutch set renamed so that its name gives no language. It serves none (LOC400), and isn't a
+        // set of a language the build can't read, which would leave Dutch and German unreported.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationDutch : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert: Dutch and German, each named.
+        var messages = result.Results.ShouldHaveSingleItem().Diagnostics
+            .Select(static diagnostic => $"{diagnostic.Id}: {diagnostic.GetMessage()}")
+            .ToArray();
+
+        messages.Length.ShouldBe(2);
+        messages.ShouldContain(message => message.StartsWith("LOC201: 'ShopLocalization' has no set for 'nl'", StringComparison.Ordinal));
+        messages.ShouldContain(message => message.StartsWith("LOC201: 'ShopLocalization' has no set for 'de'", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void SetWhoseNameGivesNoLanguage_ShouldNotBeRecordedForOtherAssemblies()
+    {
+        // Arrange & Act
+        var recorded = RecordedSets(Run($$"""
+            {{Header}}
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Afrekenen";
+            }
+
+            public class ShopWording : ShopLocalizationEn
+            {
+                public override string Checkout => "Pay";
+            }
+            """));
+
+        // Assert: it serves no language, so an assembly referencing this one doesn't take it for a set of any.
+        recorded.ShouldNotContain("\"*\"");
+    }
+
+    [Test]
+    public void LibrarySetWhoseNameGivesNoLanguage_ShouldNotHideLanguageMissingInApp()
+    {
+        // Arrange: a library that rewords the grid under a name without a language. That set serves no language, so the
+        // library doesn't record it as one of a language unknown.
+        var rewording = GeneratorTestHelper.CompileLibraryWithGenerators("RewordingLibrary", """
+            namespace RewordingLibrary;
+
+            public class MyGridTexts : GridLibrary.GridLocalizationEn
+            {
+                public override string First => "Mine";
+            }
+            """, GridLibrary);
+
+        // Act
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+            """, GridLibrary, rewording);
+
+        // Assert: German is still missing, as it is without the rewording library.
+        SingleDiagnostic(result, LocalizationSetsGenerator.LibraryMissingLanguageDiagnosticId).GetMessage().ShouldContain("No set serves 'GridLibrary.IGridLocalization' in 'de'");
+    }
+
+    [Test]
     public void SetImplementingLanguageCodeOfAnotherInterface_ShouldServeLanguageOfItsName()
     {
         // Arrange & Act: the explicit implementation is not that of ILocalizationSet.LocalizationLanguageCode, which the set leaves
@@ -3954,6 +4060,62 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    public void ValueShownThroughPatternVariable_ShouldBeRecordedAsShown()
+    {
+        // Arrange & Act: 'n' and 'number' stand for the count as a whole, so the wording shows it. 'length' stands for a
+        // part of the name, and nameof reads no value.
+        var text = ContractText(Run($$"""
+            {{Header}}
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Items(int count) => count switch { 1 => "1 item", var n => $"{n} items" };
+                public string Pieces(int count) => count is > 1 and int number ? $"{number} pieces" : "One piece";
+                public string Initials(string name) => name switch { { Length: var length } => $"{length} letters" };
+                public string Field(string name) => $"The field {nameof(name)}";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Items(int count) => $"{count} artikelen";
+                public string Pieces(int count) => $"{count} stuks";
+                public string Initials(string name) => name;
+                public string Field(string name) => "Het veld";
+            }
+            """));
+
+        // Assert
+        ShownValues(text, "Items").ShouldBe(["count"]);
+        ShownValues(text, "Pieces").ShouldBe(["count"]);
+        ShownValues(text, "Initials").ShouldBeEmpty();
+        ShownValues(text, "Field").ShouldBeEmpty();
+    }
+
+    [Test]
+    public void PartialMethodOfDefaultSet_ShouldBeReadWhereItsImplemented()
+    {
+        // Arrange & Act: the part that declares the method has no body to read the wording from.
+        var text = ContractText(Run($$"""
+            {{Header}}
+
+            public partial class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public partial string Greeting(string name);
+                public partial string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Greeting(string name) => $"Hallo, {name}!";
+            }
+            """));
+
+        // Assert
+        ShownValues(text, "Greeting").ShouldBe(["name"]);
+        text.ShouldContain("<see cref=\"ShopLocalizationEn.Greeting\">en</see>: Hello, {name}!</description>");
+    }
+
+    [Test]
     public void TextThatTakesValues_ShouldBeDocumentedLikeAnyText()
     {
         // Arrange & Act
@@ -3969,10 +4131,77 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    public void TextInheritedByDefaultSet_ShouldReportLOC208AtTheText()
+    {
+        // Arrange & Act: the contract is written from what the English set declares, so Brand and Welcome would be left
+        // out without a word, and Dutch would never word them. Cart is declared again, Note is marked as no text, and
+        // Message comes from another assembly.
+        var result = Run($$"""
+            {{Header}}
+
+            public abstract class ShopBase : System.Exception
+            {
+                public string Brand => "Idioma";
+                public string Welcome(string name) => $"Welcome, {name}!";
+                public string Welcome(int count) => $"Welcome, {count}!";
+                public virtual string Cart => "Cart";
+
+                [ExcludeFromLocalizationDiscovery]
+                public string Note => "";
+            }
+
+            public class ShopLocalizationEn : ShopBase, ILocalizationSet, IShopLocalization
+            {
+                public override string Cart => "Cart";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Cart => "Winkelwagen";
+            }
+            """);
+
+        // Assert: once per name, at the text.
+        var diagnostics = result.Results.ShouldHaveSingleItem().Diagnostics;
+        diagnostics.ShouldAllBe(static diagnostic => diagnostic.Id == "LOC208" && diagnostic.Severity == DiagnosticSeverity.Error);
+        diagnostics.Select(static diagnostic => diagnostic.GetMessage()).ShouldBe(
+        [
+            "'ShopLocalizationEn' inherits the text 'Brand' from 'ShopBase', so its contract leaves 'Brand' out, and no other language has to word it. Declare 'Brand' in 'ShopLocalizationEn', or mark it [ExcludeFromLocalizationDiscovery] in 'ShopBase' if it isn't a text.",
+            "'ShopLocalizationEn' inherits the text 'Welcome' from 'ShopBase', so its contract leaves 'Welcome' out, and no other language has to word it. Declare 'Welcome' in 'ShopLocalizationEn', or mark it [ExcludeFromLocalizationDiscovery] in 'ShopBase' if it isn't a text.",
+        ], ignoreOrder: true);
+        diagnostics.Select(static diagnostic => diagnostic.Location.SourceTree!.ToString()[diagnostic.Location.SourceSpan.Start..][..7]).ShouldBe(["Brand =", "Welcome"], ignoreOrder: true);
+    }
+
+    [Test]
+    public void TextInheritedBySetOfOtherLanguage_ShouldReportNothing()
+    {
+        // Arrange & Act: only the default-language set gives the contract. A Dutch set that takes a text from a base
+        // implements the contract with it, as any set may.
+        var result = Run($$"""
+            {{Header}}
+
+            public abstract class DutchBase
+            {
+                public string Cart => "Winkelwagen";
+            }
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Cart => "Cart";
+            }
+
+            public class ShopLocalizationNl : DutchBase, ILocalizationSet, IShopLocalization;
+            """);
+
+        // Assert
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
     public void OnlyPublicInstanceMethodsReturningStringWithParametersAreTexts()
     {
-        // Arrange: a virtual method is a text (so a set can derive and override), an inherited method belongs to the
-        // base (it is not redeclared), and the rest are not texts by shape.
+        // Arrange: a virtual method is a text (so a set can derive and override), an inherited method marked as no text
+        // stays out (LOC208 would report one that isn't), and the rest are not texts by shape.
         const string source = """
             using CodeChops.Idioma;
 
@@ -3982,6 +4211,7 @@ public sealed class LocalizationSetsGeneratorTests
 
             public class ShopWordingBase
             {
+                [ExcludeFromLocalizationDiscovery]
                 public string Inherited(string name) => name;
             }
 

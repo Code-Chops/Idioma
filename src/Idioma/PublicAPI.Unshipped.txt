@@ -1,0 +1,91 @@
+#nullable enable
+CodeChops.Idioma.ExcludeFromLocalizationDiscoveryAttribute
+CodeChops.Idioma.ExcludeFromLocalizationDiscoveryAttribute.ExcludeFromLocalizationDiscoveryAttribute() -> void
+CodeChops.Idioma.ILocalizationSet
+CodeChops.Idioma.ILocalizationSet.GetLanguageCode(System.Type! setType) -> string!
+CodeChops.Idioma.ILocalizationSet.LocalizationLanguageCode.get -> string!
+CodeChops.Idioma.ILocalizationSet<TEnum>
+CodeChops.Idioma.Internals.GeneratedCode
+CodeChops.Idioma.Internals.InlineTextsAttribute
+CodeChops.Idioma.Internals.InlineTextsAttribute.InlineTextsAttribute() -> void
+CodeChops.Idioma.Internals.LocalizableTextJsonConverter
+CodeChops.Idioma.Internals.LocalizableTextJsonConverter.LocalizableTextJsonConverter() -> void
+CodeChops.Idioma.Internals.LocalizationContractAttribute
+CodeChops.Idioma.Internals.LocalizationContractAttribute.LocalizationContractAttribute() -> void
+CodeChops.Idioma.Internals.LocalizationSetAttribute
+CodeChops.Idioma.Internals.LocalizationSetAttribute.Contract.get -> string!
+CodeChops.Idioma.Internals.LocalizationSetAttribute.Language.get -> string!
+CodeChops.Idioma.Internals.LocalizationSetAttribute.LocalizationSetAttribute(string! contract, string! language) -> void
+CodeChops.Idioma.Internals.ShownValueAttribute
+CodeChops.Idioma.Internals.ShownValueAttribute.Parameter.get -> string!
+CodeChops.Idioma.Internals.ShownValueAttribute.ShownValueAttribute(string! parameter) -> void
+CodeChops.Idioma.LocalizableText
+CodeChops.Idioma.LocalizableText.Arguments.get -> System.Collections.Immutable.ImmutableArray<object?>
+CodeChops.Idioma.LocalizableText.Contract.get -> System.Type?
+CodeChops.Idioma.LocalizableText.DefaultLanguage.get -> string?
+CodeChops.Idioma.LocalizableText.DefaultText.get -> string!
+CodeChops.Idioma.LocalizableText.Equals(CodeChops.Idioma.LocalizableText? other) -> bool
+CodeChops.Idioma.LocalizableText.Equals(System.ReadOnlySpan<char> wording) -> bool
+CodeChops.Idioma.LocalizableText.FullKey.get -> string?
+CodeChops.Idioma.LocalizableText.GetWording(CodeChops.Idioma.ILocalizationSet! set) -> string?
+CodeChops.Idioma.LocalizableText.Key.get -> string?
+CodeChops.Idioma.LocalizableText.LocalizableText(string! defaultText) -> void
+CodeChops.Idioma.LocalizableText.ToString(System.Globalization.CultureInfo! culture) -> string!
+CodeChops.Idioma.LocalizableText.ToString(System.Globalization.CultureInfo! culture, CodeChops.Idioma.LocalizationRegistry? registry) -> string!
+CodeChops.Idioma.LocalizationRegistry
+CodeChops.Idioma.LocalizationRegistry.Find(System.Type! contract, System.Globalization.CultureInfo! culture) -> CodeChops.Idioma.ILocalizationSet?
+CodeChops.Idioma.LocalizationRegistry.Find<TContract>(System.Globalization.CultureInfo! culture) -> TContract?
+CodeChops.Idioma.LocalizationRegistry.Languages.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+CodeChops.Idioma.LocalizationRegistry.Sets.get -> System.Collections.Immutable.ImmutableArray<CodeChops.Idioma.ILocalizationSet!>
+CodeChops.Idioma.SupportedLanguagesAttribute
+CodeChops.Idioma.SupportedLanguagesAttribute.DefaultLanguage.get -> string!
+CodeChops.Idioma.SupportedLanguagesAttribute.Languages.get -> System.Collections.Generic.IReadOnlyList<string!>!
+CodeChops.Idioma.SupportedLanguagesAttribute.SupportedLanguagesAttribute(string! defaultLanguage, params string![]! otherLanguages) -> void
+override CodeChops.Idioma.Internals.LocalizableTextJsonConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> CodeChops.Idioma.LocalizableText!
+override CodeChops.Idioma.Internals.LocalizableTextJsonConverter.Write(System.Text.Json.Utf8JsonWriter! writer, CodeChops.Idioma.LocalizableText! value, System.Text.Json.JsonSerializerOptions! options) -> void
+override CodeChops.Idioma.LocalizableText.Equals(object? obj) -> bool
+override CodeChops.Idioma.LocalizableText.GetHashCode() -> int
+override CodeChops.Idioma.LocalizableText.ToString() -> string!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateMemberText(string! fullKey, string! key, params System.ReadOnlySpan<(string! Language, string! Text)> wordings) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8>(string! key, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7, TValue8 value8) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7>(string! key, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6>(string! key, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5>(string! key, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4>(string! key, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2, TValue3>(string! key, System.Func<TContract!, TValue1, TValue2, TValue3, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2, TValue3 value3) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2>(string! key, System.Func<TContract!, TValue1, TValue2, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1>(string! key, System.Func<TContract!, TValue1, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract>(string! key, System.Func<TContract!, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateText(string! defaultText, params System.ReadOnlySpan<(string! Language, string! Text)> translations) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateUndefinedEnumText<TEnum>(TEnum value) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateUnknownKeyException<TContract>(string? key, string! className) -> System.Exception!
+static CodeChops.Idioma.Internals.GeneratedCode.GetKeyedText<TContract>(CodeChops.Idioma.LocalizableText! text, string! key, System.ReadOnlySpan<object?> values) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.GetKeyedValue<TValue>(string! key, System.ReadOnlySpan<object?> values, int index, int count, string! parameterName) -> TValue
+static CodeChops.Idioma.Internals.GeneratedCode.RecordMemberTexts(System.Func<System.Type!, string?, CodeChops.Idioma.LocalizableText?>! find) -> void
+static CodeChops.Idioma.Internals.GeneratedCode.RecordSet<TSet>(string? languageCode, params string![]! ownTexts) -> void
+static CodeChops.Idioma.Internals.GeneratedCode.RegisterLanguages(string! defaultLanguage, params System.ReadOnlySpan<string!> otherLanguages) -> void
+static CodeChops.Idioma.Internals.GeneratedCode.RegisterSets(bool asDefaults, params System.ReadOnlySpan<(System.Type! Type, System.Func<CodeChops.Idioma.ILocalizationSet!>! Create)> sets) -> void
+static CodeChops.Idioma.LocalizableText.GetTextByMember(System.Reflection.MemberInfo! member) -> CodeChops.Idioma.LocalizableText?
+static CodeChops.Idioma.LocalizableText.GetTextByMember(System.Type! type, string! memberName) -> CodeChops.Idioma.LocalizableText?
+static CodeChops.Idioma.LocalizableText.GetTextByMember<T>(string! memberName) -> CodeChops.Idioma.LocalizableText?
+static CodeChops.Idioma.LocalizableText.GetTextOfType(System.Type! type) -> CodeChops.Idioma.LocalizableText?
+static CodeChops.Idioma.LocalizableText.GetTextOfType<T>() -> CodeChops.Idioma.LocalizableText?
+static CodeChops.Idioma.LocalizableText.implicit operator CodeChops.Idioma.LocalizableText?(string? text) -> CodeChops.Idioma.LocalizableText?
+static CodeChops.Idioma.LocalizableText.implicit operator string?(CodeChops.Idioma.LocalizableText? text) -> string?
+static CodeChops.Idioma.LocalizableText.Keyed(string! key, string! defaultText) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.LocalizableText.operator !=(CodeChops.Idioma.LocalizableText? left, CodeChops.Idioma.LocalizableText? right) -> bool
+static CodeChops.Idioma.LocalizableText.operator !=(CodeChops.Idioma.LocalizableText? left, System.ReadOnlySpan<char> right) -> bool
+static CodeChops.Idioma.LocalizableText.operator !=(System.ReadOnlySpan<char> left, CodeChops.Idioma.LocalizableText? right) -> bool
+static CodeChops.Idioma.LocalizableText.operator ==(CodeChops.Idioma.LocalizableText? left, CodeChops.Idioma.LocalizableText? right) -> bool
+static CodeChops.Idioma.LocalizableText.operator ==(CodeChops.Idioma.LocalizableText? left, System.ReadOnlySpan<char> right) -> bool
+static CodeChops.Idioma.LocalizableText.operator ==(System.ReadOnlySpan<char> left, CodeChops.Idioma.LocalizableText? right) -> bool
+static CodeChops.Idioma.LocalizationRegistry.Create(System.Collections.Generic.IEnumerable<CodeChops.Idioma.ILocalizationSet!>! sets) -> CodeChops.Idioma.LocalizationRegistry!
+static CodeChops.Idioma.LocalizationRegistry.Create(System.Collections.Generic.IEnumerable<CodeChops.Idioma.ILocalizationSet!>! sets, string! defaultLanguage, params System.ReadOnlySpan<string!> otherLanguages) -> CodeChops.Idioma.LocalizationRegistry!
+static CodeChops.Idioma.LocalizationRegistry.Current.get -> CodeChops.Idioma.LocalizationRegistry!
+static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.get -> System.Func<System.Globalization.CultureInfo?>?
+static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.set -> void
+static CodeChops.Idioma.LocalizationRegistry.DefaultLanguage.get -> string?
+static CodeChops.Idioma.LocalizationRegistry.Register(params System.ReadOnlySpan<CodeChops.Idioma.ILocalizationSet!> sets) -> void
+static CodeChops.Idioma.LocalizationRegistry.Register<TSet>() -> void
+static CodeChops.Idioma.LocalizationRegistry.RegisterDefaults(params System.ReadOnlySpan<CodeChops.Idioma.ILocalizationSet!> sets) -> void
+static CodeChops.Idioma.LocalizationRegistry.SupportedLanguages.get -> System.Collections.Immutable.ImmutableArray<string!>

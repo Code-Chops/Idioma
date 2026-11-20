@@ -155,7 +155,7 @@ internal static class LocalizedMembers
         if ((symbol.Symbol ?? symbol.CandidateSymbols[0]).ContainingType is not { ContainingType: null, ContainingNamespace: { IsGlobalNamespace: false } otherNamespace })
             return false;
 
-        for (SyntaxNode? node = attribute.Parent; node is not null; node = node.Parent)
+        for (var node = attribute.Parent; node is not null; node = node.Parent)
         {
             if (node is not BaseNamespaceDeclarationSyntax declaration)
                 continue;

@@ -88,6 +88,19 @@ The details have a page per subject under docs/, which the README links to. New 
     <InternalsVisibleTo Include="$(AssemblyName).Tests" />
   </ItemGroup>
 
+  <!--
+    The public API, as PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt list it. A change that the files don't list is
+    a build error (RS0016 for an addition, RS0017 for a removal or a changed signature). It holds Internals.GeneratedCode
+    and the attributes in particular: the code the generator wrote into a library built against one version calls them,
+    and an app that uses that library may run with a later one. So from 1.0, that API only grows. At each release, the
+    lines of Unshipped move to Shipped.
+  -->
+  <ItemGroup Label="PublicApi">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Builds the generator before this project, and runs it on this project's own code. -->
     <ProjectReference Include="..\Idioma.Generators\Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

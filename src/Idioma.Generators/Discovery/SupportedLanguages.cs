@@ -208,8 +208,9 @@ internal static class SupportedLanguages
             }
         }
 
+        // From the reference itself, which holds the tree and the span: the node isn't needed for its location.
         var location = attribute.ApplicationSyntaxReference is { } reference
-            ? DiagnosticLocation.From(reference.GetSyntax().GetLocation())
+            ? DiagnosticLocation.From(Location.Create(reference.SyntaxTree, reference.Span))
             : default;
 
         return new DeclaredLanguages(

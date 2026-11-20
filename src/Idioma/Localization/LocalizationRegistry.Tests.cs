@@ -33,6 +33,18 @@ public sealed partial class LocalizationRegistryTests
 
     private sealed class RegistryTierOverrideLocalizationNl : IRegistryTierLocalization;
 
+    private interface IRegistryLazyLocalization : ILocalizationSet;
+
+    /// <summary>
+    /// A set that counts how often it's created, to show when the registry creates a set it registered by its type.
+    /// </summary>
+    private sealed class RegistryLazyLocalizationNl : IRegistryLazyLocalization
+    {
+        public static int Created;
+
+        public RegistryLazyLocalizationNl() => Interlocked.Increment(ref Created);
+    }
+
     private interface IRegistryConcurrentLocalization : ILocalizationSet
     {
         string Name { get; }

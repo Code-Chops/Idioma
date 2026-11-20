@@ -348,4 +348,93 @@ public sealed class TextParametersAnalyzerTests
         // Assert
         diagnostics.ShouldBeEmpty();
     }
+
+    [Test]
+    public async Task PartialMethodLeavingValueOut_ShouldReportLOC302AtItsBody()
+    {
+        // Arrange & Act: the set names the part that declares the method as the text's implementation, and the part
+        // that implements it holds the wording.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class GreetingLocalizationEn : ILocalizationSet, IGreetingLocalization
+            {
+                public virtual string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public partial class GreetingLocalizationNl : ILocalizationSet, IGreetingLocalization
+            {
+                public partial string Greeting(string name);
+                public partial string Greeting(string name) => "Hallo!";
+            }
+
+            public class GreetingLocalizationEnGb : GreetingLocalizationEn;
+            """);
+
+        // Assert
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.GetMessage().ShouldStartWith("'GreetingLocalizationNl.Greeting' doesn't use its parameter 'name'");
+    }
+
+    [Test]
+    public async Task PartialMethodNamingParameterDifferently_ShouldReportLOC301Once()
+    {
+        // Arrange & Act: both parts name it, and the part that declares it is reported.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class GreetingLocalizationEn : ILocalizationSet, IGreetingLocalization
+            {
+                public virtual string Greeting(string name) => $"Hello, {name}!";
+            }
+
+            public partial class GreetingLocalizationNl : ILocalizationSet, IGreetingLocalization
+            {
+                public partial string Greeting(string naam);
+                public partial string Greeting(string naam) => $"Hallo, {naam}!";
+            }
+
+            public class GreetingLocalizationEnGb : GreetingLocalizationEn;
+            """);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC301");
+    }
+
+    [Test]
+    public async Task HandWrittenContract_ShouldHoldEveryLanguageToTheValuesTheDefaultWordingShows()
+    {
+        // Arrange & Act: no contract is generated, so nothing records what English shows. It's read from the English
+        // set instead, which shows the name and only chooses by the form of address.
+        var diagnostics = await AnalyzeAsync("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public enum Salutation { Unknown, Madam, Sir }
+
+            public interface IMailLocalization : ILocalizationSet
+            {
+                string Welcome(Salutation salutation, string name);
+            }
+
+            public class MailLocalizationEn : IMailLocalization
+            {
+                public string Welcome(Salutation salutation, string name) => salutation is Salutation.Madam ? $"Dear Mrs {name}" : $"Dear {name}";
+            }
+
+            public class MailLocalizationNl : IMailLocalization
+            {
+                public string Welcome(Salutation salutation, string name) => "Welkom!";
+            }
+            """);
+
+        // Assert: the name, and not the form of address.
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.GetMessage().ShouldBe("'MailLocalizationNl.Welcome' doesn't use its parameter 'name', but the default wording of 'IMailLocalization.Welcome' shows it. Use 'name' in every language, or users of 'nl' won't see it.");
+    }
 }
