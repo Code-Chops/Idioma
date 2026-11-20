@@ -364,7 +364,7 @@ For a text that isn't virtual, or a library that lacks one of your languages, se
 
 ## Translating your texts
 
-Your texts are C# in your repository, so an AI coding assistant can translate them, and the build tells it what's missing:
+Your texts are C# in your repository, so an AI coding assistant (that already knowns the context) can translate them, and the build tells it what's missing:
 
 - Add a language to the list, and the build names each set that is missing.
 - Add a text, and the build names it for each language that lacks it.
