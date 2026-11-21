@@ -6,10 +6,11 @@
 #   1. Showing a text on .NET, with BenchmarkDotNet.
 #   2. The same in Blazor WebAssembly in a headless Chrome, on the Mono runtime with its interpreter.
 #   3. The same with Mono's AOT, when the wasm-tools workload is installed (dotnet workload install wasm-tools).
-#   4. The download sizes of a language of 100 texts, from Idioma.Benchmarks.Size, with Mono's interpreter and AOT.
+#   4. The download sizes of each approach and of a language of 100 texts, from Idioma.Benchmarks.Size, with Mono's
+#      interpreter and AOT.
 #   5. Finding a label on .NET, with BenchmarkDotNet, in the run of step 1.
 #
-# Takes about 25 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
+# Takes about 30 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
 
 set -euo pipefail
 
@@ -49,20 +50,23 @@ else
   echo "    Skipped, because AOT needs the wasm-tools workload: dotnet workload install wasm-tools"
 fi
 
-publish_size() {
-  local name="$1"; shift
-  dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/$name" "$@" > "$results/publish-size-$name.log"
+# Publishes the app without localization, and with each approach in one language and in two.
+publish_sizes() {
+  local suffix="$1"; shift
+  dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/none$suffix" -p:SizeApproach=none "$@" > "$results/publish-size-none$suffix.log"
+  for approach in idioma localizer; do
+    dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/$approach-one$suffix" -p:SizeApproach=$approach -p:SecondLanguage=false "$@" > "$results/publish-size-$approach-one$suffix.log"
+    dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/$approach-two$suffix" -p:SizeApproach=$approach "$@" > "$results/publish-size-$approach-two$suffix.log"
+  done
 }
 
 echo "4/4 Download sizes"
-publish_size one-language -p:SecondLanguage=false
-publish_size two-languages
-dotnet "$runner" sizes obj/size/one-language/wwwroot obj/size/two-languages/wwwroot "with the interpreter" > "$results/4-download-sizes.md"
+publish_sizes ""
+dotnet "$runner" sizes obj/size "" "with the interpreter" > "$results/4-download-sizes.md"
 if $aot; then
-  publish_size one-language-aot -p:SecondLanguage=false -p:RunAOTCompilation=true
-  publish_size two-languages-aot -p:RunAOTCompilation=true
+  publish_sizes -aot -p:RunAOTCompilation=true
   echo >> "$results/4-download-sizes.md"
-  dotnet "$runner" sizes obj/size/one-language-aot/wwwroot obj/size/two-languages-aot/wwwroot "with AOT" >> "$results/4-download-sizes.md"
+  dotnet "$runner" sizes obj/size -aot "with AOT" >> "$results/4-download-sizes.md"
 fi
 
 # The tables alone go to a folder the repository keeps, next to the logs it doesn't. Commit them with the numbers of

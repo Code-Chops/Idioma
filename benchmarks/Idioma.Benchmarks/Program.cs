@@ -27,9 +27,9 @@ switch (args)
         await WasmRunner.RunAsync(wwwroot, WasmRunner.Options.Parse(options));
         break;
 
-    // The download sizes of Idioma.Benchmarks.Size, published with one language and with two, as a table.
-    case ["sizes", var oneLanguage, var twoLanguages, var label]:
-        SizeReport.Print(oneLanguage, twoLanguages, label);
+    // The download sizes of Idioma.Benchmarks.Size, published without localization and with each approach, as a table.
+    case ["sizes", var root, var suffix, var label]:
+        SizeReport.Print(root, suffix, label);
         break;
 
     default:

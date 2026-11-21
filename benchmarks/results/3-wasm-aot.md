@@ -4,19 +4,22 @@ Showing one text, in nanoseconds, after the cost of the loop and the call is tak
 
 | Text | Approach | en | nl | en-GB | de |
 |---|---|---:|---:|---:|---:|
-| Checkout | IStringLocalizer | 236 | 242 | 588 | 239 |
-| Checkout | Idioma set | 102 | 103 | 232 | 120 |
-| Checkout | Idioma inline, in a field | 35 | 42 | 46 | 50 |
-| Checkout | Idioma inline, in markup | 61 | 69 | 75 | 75 |
-| Checkout | Idioma attribute | 53 | 60 | 66 | 69 |
-| Cart | IStringLocalizer | 238 | 243 | 235 | 236 |
-| Cart | Idioma set | 95 | 101 | 165 | 118 |
-| Cart | Idioma inline, in a field | 36 | 44 | 47 | 51 |
-| Cart | Idioma inline, in markup | 59 | 68 | 71 | 73 |
-| Cart | Idioma attribute | 54 | 61 | 63 | 69 |
-| Greeting(name) | IStringLocalizer | 336 | 342 | 701 | 336 |
-| Greeting(name) | Idioma set | 422 | 419 | 717 | 726 |
-| Greeting(name) | Idioma inline, in a field | 36 | 43 | 47 | 49 |
-| Greeting(name) | Idioma inline, in markup | 208 | 215 | 217 | 221 |
+| Checkout | IStringLocalizer | 246 | 247 | 590 | 251 |
+| Checkout | resx class | 107 | 106 | 451 | 103 |
+| Checkout | Idioma set | 100 | 101 | 182 | 117 |
+| Checkout | Idioma inline, in a field | 35 | 43 | 46 | 47 |
+| Checkout | Idioma inline, in markup | 63 | 69 | 75 | 74 |
+| Checkout | Idioma attribute | 54 | 62 | 66 | 70 |
+| Cart | IStringLocalizer | 235 | 244 | 240 | 241 |
+| Cart | resx class | 104 | 104 | 101 | 103 |
+| Cart | Idioma set | 101 | 101 | 172 | 115 |
+| Cart | Idioma inline, in a field | 35 | 42 | 48 | 47 |
+| Cart | Idioma inline, in markup | 62 | 69 | 72 | 74 |
+| Cart | Idioma attribute | 50 | 59 | 65 | 65 |
+| Greeting(name) | IStringLocalizer | 351 | 358 | 698 | 338 |
+| Greeting(name) | resx class | 209 | 204 | 555 | 205 |
+| Greeting(name) | Idioma set | 435 | 426 | 531 | 730 |
+| Greeting(name) | Idioma inline, in a field | 35 | 41 | 45 | 48 |
+| Greeting(name) | Idioma inline, in markup | 215 | 217 | 216 | 221 |
 
-The loop and the call cost: en 8.5 ns, nl 8.6 ns, en-GB 8.5 ns, de 8.5 ns.
+The loop and the call cost: en 8.8 ns, nl 8.8 ns, en-GB 8.8 ns, de 9.0 ns.

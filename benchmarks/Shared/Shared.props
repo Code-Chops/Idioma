@@ -11,8 +11,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)*.cs" LinkBase="Shared" />
 
     <!-- Linked at the project's root, so their resources are named Benchmarks.Shop, which IStringLocalizer<Shop> looks
-         for. -->
-    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.resx" Link="Shop.resx" />
+         for. Shop.resx also gets the class resx generates, Shop, with a static property per text, as an app gets it
+         from its IDE. IStringLocalizer<Shop> is named after that class, as in an app that has both. -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.resx" Link="Shop.resx" StronglyTypedLanguage="CSharp"
+                      StronglyTypedClassName="Shop" StronglyTypedNamespace="Benchmarks"
+                      StronglyTypedFileName="$(IntermediateOutputPath)Shop.Designer.cs" />
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.nl.resx" Link="Shop.nl.resx" />
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)Shop.en-GB.resx" Link="Shop.en-GB.resx" />
   </ItemGroup>

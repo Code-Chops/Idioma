@@ -1,51 +1,144 @@
+using System.Text.RegularExpressions;
+
 namespace Benchmarks;
 
 /// <summary>
-/// The download sizes of Idioma.Benchmarks.Size, from two publishes: one with English only, and one with Dutch too.
+/// The download sizes of Idioma.Benchmarks.Size, from five publishes: the app without localization, and the app with
+/// each approach, once with English only and once with Dutch too.
 /// </summary>
 /// <remarks>
-/// A language of 100 texts costs IStringLocalizer a satellite assembly, which is measured as it is. It costs Idioma a set
-/// in the app's assembly, so it's what that assembly grows by. The rest of the download is left out, such as the boot
-/// manifest, which lists the satellite assembly as well. With AOT, the set is native code in dotnet.native.wasm too. That
-/// file is several megabytes, and Brotli's result for it moves by kilobytes when a little of it changes, so its growth is
-/// given before compression.
+/// An approach costs what its publish downloads beyond the app without localization, which shows the same 100 texts as
+/// English strings. That counts everything the approach brings: its own assemblies, its texts and generated code in the
+/// app's assembly, and what it keeps of .NET's own assemblies, which Blazor otherwise trims. A language costs what the
+/// publish with Dutch downloads beyond the one without. With AOT, code also becomes native code in dotnet.native.wasm.
+/// That file is several megabytes, and Brotli's result for it moves by kilobytes when a little of it changes, so it's
+/// left out of the compressed sizes, and its growth is given before compression.
 /// </remarks>
-internal static class SizeReport
+internal static partial class SizeReport
 {
-    private const string App = "Idioma.Benchmarks.Size.";
-    private const string Native = "dotnet.native.";
+    private const string AppPrefix = "Idioma.Benchmarks.Size.";
+    private const string NativePrefix = "dotnet.native.";
 
-    public static void Print(string oneLanguage, string twoLanguages, string label)
+    // Native code that grows by less is the noise of relinking, as with the interpreter.
+    private const long NativeShown = 1024;
+
+    // A file that grows by less isn't listed by name.
+    private const long FileShown = 512;
+
+    private static readonly (string Name, string Label)[] Approaches =
+    [
+        ("localizer", "resx and IStringLocalizer"),
+        ("idioma", "Idioma"),
+    ];
+
+    /// <summary>
+    /// Prints the tables of the publishes in <paramref name="root"/>, named <c>none</c>, <c>idioma-one</c>,
+    /// <c>idioma-two</c>, <c>localizer-one</c> and <c>localizer-two</c>, each followed by <paramref name="suffix"/>.
+    /// </summary>
+    public static void Print(string root, string suffix, string label)
     {
-        var one = Framework(oneLanguage);
-        var two = Framework(twoLanguages);
+        var none = Download.Of(Path.Combine(root, $"none{suffix}", "wwwroot"));
+        var publishes = Approaches.Select(approach => (
+                One: Download.Of(Path.Combine(root, $"{approach.Name}-one{suffix}", "wwwroot")),
+                Two: Download.Of(Path.Combine(root, $"{approach.Name}-two{suffix}", "wwwroot"))))
+            .ToArray();
 
-        var localization = Size(two, "Microsoft.Extensions.Localization", ".br");
-        var satellite = Size(Directory.GetFiles(Path.Combine(twoLanguages, "_framework", "nl")), "", ".br");
-        var idioma = Size(two, "CodeChops.Idioma.", ".br");
-        var set = Size(two, App, ".wasm.br") - Size(one, App, ".wasm.br");
-        var native = Size(two, Native, ".wasm") - Size(one, Native, ".wasm");
-
-        Console.WriteLine($"Download sizes, {label}, compressed with Brotli as a server sends them:");
+        Console.WriteLine($"Download sizes, {label}, compressed with Brotli as a server sends them. Each approach is measured against the same app without localization, which shows the 100 texts as English strings:");
         Console.WriteLine();
-        Console.WriteLine("| What's downloaded | Size |");
-        Console.WriteLine("|---|---:|");
-        Console.WriteLine($"| IStringLocalizer: Microsoft.Extensions.Localization and its abstractions | {Kilobytes(localization)} |");
-        Console.WriteLine($"| IStringLocalizer: a language of 100 texts, as a satellite assembly | {Kilobytes(satellite)} |");
-        Console.WriteLine($"| Idioma: CodeChops.Idioma | {Kilobytes(idioma)} |");
-        Console.WriteLine($"| Idioma: a language of 100 texts, as a set in the app's assembly | {Kilobytes(set)} |");
+        Console.WriteLine($"| What's downloaded | {string.Join(" | ", Approaches.Select(approach => approach.Label))} |");
+        Console.WriteLine($"|---|{string.Concat(Approaches.Select(_ => "---:|"))}");
 
-        if (native != 0)
-            Console.WriteLine($"| Idioma: the same set as native code in dotnet.native.wasm, before compression | {Kilobytes(native)} |");
+        Row("The approach, with 100 texts in the default language", publish => publish.One.Total - none.Total);
+        Row("Of that, its own assemblies", publish => publish.One.Library - none.Library);
+        Row("Of that, the app's assembly", publish => publish.One.App - none.App);
+        Row("Of that, .NET's own assemblies", publish => publish.One.DotNet - none.DotNet);
+        Row("Of that, the rest, such as dotnet.js", publish => publish.One.Rest - none.Rest);
+        Row("Each extra language of 100 texts", publish => publish.Two.Total - publish.One.Total);
+
+        if (publishes.Any(publish => Math.Abs(publish.One.Native - none.Native) >= NativeShown
+                || Math.Abs(publish.Two.Native - publish.One.Native) >= NativeShown))
+        {
+            Row("The approach as native code in dotnet.native.wasm, before compression", publish => publish.One.Native - none.Native);
+            Row("Each extra language as native code, before compression", publish => publish.Two.Native - publish.One.Native);
+        }
+
+        // The files behind the first row, so that a size can be traced to the assembly it comes from.
+        var files = publishes
+            .SelectMany(publish => publish.One.Files.Keys)
+            .Concat(none.Files.Keys)
+            .Distinct()
+            .Where(file => publishes.Any(publish => Math.Abs(Growth(publish.One, file)) >= FileShown))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Console.WriteLine();
+        Console.WriteLine($"The files that grow by {FileShown / 1024.0:F1} KB or more, with 100 texts in the default language:");
+        Console.WriteLine();
+        Console.WriteLine($"| File | {string.Join(" | ", Approaches.Select(approach => approach.Label))} |");
+        Console.WriteLine($"|---|{string.Concat(Approaches.Select(_ => "---:|"))}");
+
+        foreach (var file in files)
+            Console.WriteLine($"| {file} | {string.Join(" | ", publishes.Select(publish => Kilobytes(Growth(publish.One, file))))} |");
+
+        void Row(string what, Func<(Download One, Download Two), long> size) =>
+            Console.WriteLine($"| {what} | {string.Join(" | ", publishes.Select(publish => Kilobytes(size(publish))))} |");
+
+        long Growth(Download download, string file) => download.Files.GetValueOrDefault(file) - none.Files.GetValueOrDefault(file);
     }
 
-    private static string[] Framework(string wwwroot) => Directory.GetFiles(Path.Combine(wwwroot, "_framework"));
-
-    private static long Size(IEnumerable<string> files, string prefix, string suffix) =>
-        files.Where(file => Path.GetFileName(file) is var name
-                && name.StartsWith(prefix, StringComparison.Ordinal)
-                && name.EndsWith(suffix, StringComparison.Ordinal))
-            .Sum(file => new FileInfo(file).Length);
-
     private static string Kilobytes(long bytes) => $"{bytes / 1024.0:F1} KB";
+
+    /// <summary>
+    /// What a publish downloads from its _framework folder, compressed, per file without its fingerprint.
+    /// </summary>
+    private sealed partial record Download(Dictionary<string, long> Files, long Native)
+    {
+        public long Library => this.Sum(IsLibrary);
+        public long App => this.Sum(file => !IsLibrary(file) && IsApp(file));
+        public long DotNet => this.Sum(file => !IsLibrary(file) && !IsApp(file) && file.EndsWith(".wasm", StringComparison.Ordinal));
+        public long Rest => this.Total - this.Library - this.App - this.DotNet;
+        public long Total => this.Sum(_ => true);
+
+        public static Download Of(string wwwroot)
+        {
+            var framework = Path.Combine(wwwroot, "_framework");
+            var files = new Dictionary<string, long>(StringComparer.Ordinal);
+            long native = 0;
+
+            foreach (var file in Directory.GetFiles(framework, "*", SearchOption.AllDirectories))
+            {
+                var name = Path.GetFileName(file);
+                var size = new FileInfo(file).Length;
+
+                if (name.StartsWith(NativePrefix, StringComparison.Ordinal))
+                {
+                    if (name.EndsWith(".wasm", StringComparison.Ordinal))
+                        native += size;
+
+                    continue;
+                }
+
+                if (!name.EndsWith(".br", StringComparison.Ordinal))
+                    continue;
+
+                // A satellite assembly keeps the folder of its language, as in nl/Idioma.Benchmarks.Size.resources.wasm.
+                var path = Path.GetRelativePath(framework, Path.Combine(Path.GetDirectoryName(file)!, Fingerprint().Replace(name[..^".br".Length], ".")));
+                files[path] = files.GetValueOrDefault(path) + size;
+            }
+
+            return new Download(files, native);
+        }
+
+        private long Sum(Func<string, bool> belongs) => this.Files.Where(file => belongs(file.Key)).Sum(file => file.Value);
+
+        private static bool IsLibrary(string file) =>
+            file.StartsWith("CodeChops.Idioma.", StringComparison.Ordinal) || file.StartsWith("Microsoft.Extensions.Localization", StringComparison.Ordinal);
+
+        // A satellite assembly sits in a folder of its language, and belongs to the app.
+        private static bool IsApp(string file) => file.Contains(Path.DirectorySeparatorChar) || file.StartsWith(AppPrefix, StringComparison.Ordinal);
+
+        // The fingerprint a publish puts before the extension, as in CodeChops.Idioma.abc123xyz0.wasm.
+        [GeneratedRegex(@"\.[a-z0-9]{10}\.(?=[a-z]+$)")]
+        private static partial Regex Fingerprint();
+    }
 }

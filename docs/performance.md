@@ -1,19 +1,20 @@
 # Performance
 
-Idioma shows most texts in less time than `IStringLocalizer`, which is the approach Microsoft recommends for localizing an app. This page compares how long a text takes to show with each, on .NET and in Blazor WebAssembly, and what each adds to a Blazor WebAssembly download.
+Idioma shows most texts in less time than `IStringLocalizer`, which is the approach Microsoft recommends for localizing an app. This page compares how long a text takes to show with each, on .NET and in Blazor WebAssembly. It also compares what each adds to a Blazor WebAssembly download, where `IStringLocalizer` comes with its resx files.
 
-Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), and [how Idioma works](how-it-works.md).
+Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), and [advanced topics](advanced-topics.md).
 
 ## In short
 
-- On .NET, a plain text of a set takes about 16 ns for a user of the default or the second language, where `IStringLocalizer` takes about 42 ns. It allocates nothing, where `IStringLocalizer` allocates about 70 bytes.
+- On .NET, a plain text of a set takes about 17 ns for a user of the default or the second language, where `IStringLocalizer` takes about 42 ns. It allocates nothing, where `IStringLocalizer` allocates 72 bytes.
 - In Blazor WebAssembly, the same takes a set about 0.4 µs with Mono's interpreter, and about 0.1 µs with AOT. That's less than half of what `IStringLocalizer` takes.
-- A plain inline text kept in a field takes a sixth to a third of the time `IStringLocalizer` takes. Written in markup, which calls it on every render, it takes a quarter to two fifths, because Idioma keeps the text the first render created.
+- For a British user's text that comes from English, a set takes a quarter to a third of the time `IStringLocalizer` takes.
+- A set takes longer than `IStringLocalizer` only for a text with a parameter, in Blazor WebAssembly with AOT. It takes about 1.2 times as long there, and three quarters for a British user.
+- A plain inline text kept in a field takes a seventh to a third of the time `IStringLocalizer` takes. Written in markup, which calls it on every render, it takes a quarter to under half, because Idioma keeps the text the first render created. For a British user's text that comes from English, both take an eighth or less.
 - A plain text written as an attribute is found by its member before it's shown. It takes about a third of the time `IStringLocalizer` takes on .NET, and about a quarter in Blazor WebAssembly. It allocates nothing.
-- A set takes longer than `IStringLocalizer` only for a text with parameter with WebAssembly AOT. It takes about 1.25 times as long there, and about as long for a British user.
-- Idioma adds 19.4 KB to a Blazor WebAssembly download, compressed, plus 1.8 KB for each extra language of 100 texts. `IStringLocalizer` adds 11.3 KB, plus 3.6 KB for a user whose language isn't the default.
+- Idioma adds 20.3 KB to a Blazor WebAssembly download, compressed, plus 1.8 KB for each extra language of 100 texts. `IStringLocalizer` adds 11.3 KB, plus 3.7 KB for a user whose language isn't the default. The class resx generates adds no assembly of its own, and the same 3.7 KB.
 
-So speed rarely decides between them. A page that shows 200 texts spends about 8.5 µs on them with `IStringLocalizer` on .NET, and about 3 µs with Idioma's sets. With Mono's interpreter in WebAssembly, it spends about 0.2 ms with `IStringLocalizer`, and about 0.08 ms with Idioma's sets.
+So speed rarely decides between them. A page that shows 200 texts spends about 8.5 µs on them with `IStringLocalizer` on .NET, and about 3.3 µs with Idioma's sets. With Mono's interpreter in WebAssembly, it spends about 0.19 ms with `IStringLocalizer`, and about 0.08 ms with Idioma's sets.
 
 ## What was measured
 
@@ -21,11 +22,11 @@ Three texts: `Checkout` (plain), `Cart` (British English rewords it as "Basket")
 
 Five approaches show them:
 
-- **IStringLocalizer**: `localizer["Checkout"]` on an `IStringLocalizer<Shop>`, from resx files (the alternative to this library).
+- **IStringLocalizer**: `localizer["Checkout"]` on an `IStringLocalizer<Shop>`, from resx files (the approach Microsoft recommends). The resx files also get the class resx generates, as an app gets it from its IDE, and `IStringLocalizer<Shop>` is named after it.
 - **Idioma set**: `ShopLocalization.Checkout`.
-- **Inline, in a field**: `LocalizableText.Inline(...)`, created once and kept. So its text with parameter is already worded, and isn't comparable with the other columns.
+- **Inline, in a field**: `LocalizableText.Inline(...)`, created once and kept. So its text with a parameter is already worded, and isn't comparable with the other columns.
 - **Inline, in markup**: the same call on every render.
-- **Attribute**: `LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))`, for a property marked `[Localized]`. The text is found by its type and the name of its member on every render, as a form finds the label of a field. An attribute takes no value, so it has no text with parameter.
+- **Attribute**: `LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))`, for a property marked `[Localized]`. The text is found by its type and the name of its member on every render, as a form finds the label of a field. An attribute takes no value, so it has no text with a parameter.
 
 The app declares `("en", "nl", "en-GB")`. "Region" is a British user.
 
@@ -43,15 +44,15 @@ Each benchmark shows one text once, as a render does. The `IStringLocalizer` col
 
 ### On .NET
 
-| Text, user's culture                     | IStringLocalizer |   Idioma set | Inline, in a field | Inline, in markup |    Attribute |
-|------------------------------------------|-----------------:|-------------:|-------------------:|------------------:|-------------:|
-| Plain text, default language             |      42 ns, 72 B |   0.39×, 0 B |         0.28×, 0 B |        0.37×, 0 B |   0.32×, 0 B |
-| Plain text, second language              |      43 ns, 72 B |   0.38×, 0 B |         0.33×, 0 B |        0.41×, 0 B |   0.37×, 0 B |
-| Plain text, region                       |    137 ns, 168 B |   0.26×, 0 B |         0.10×, 0 B |        0.13×, 0 B |   0.11×, 0 B |
-| Reworded text, region                    |      39 ns, 72 B |   0.75×, 0 B |         0.35×, 0 B |        0.45×, 0 B |   0.39×, 0 B |
-| Text with parameter, default language    |     78 ns, 152 B | 0.72×, 168 B |         0.15×, 0 B |      0.68×, 264 B |            – |
-| Text with parameter, second language     |     80 ns, 152 B | 0.69×, 168 B |         0.17×, 0 B |      0.68×, 264 B |            – |
-| Text with parameter, region              |    183 ns, 248 B | 0.45×, 216 B |         0.07×, 0 B |      0.29×, 264 B |            – |
+| Text, user's culture                  | IStringLocalizer |   Idioma set | Inline, in a field | Inline, in markup |  Attribute |
+|---------------------------------------|-----------------:|-------------:|-------------------:|------------------:|-----------:|
+| Plain text, default language          |      41 ns, 72 B |   0.40×, 0 B |         0.29×, 0 B |        0.38×, 0 B | 0.32×, 0 B |
+| Plain text, second language           |      44 ns, 72 B |   0.38×, 0 B |         0.32×, 0 B |        0.40×, 0 B | 0.36×, 0 B |
+| Plain text, region                    |    134 ns, 168 B |   0.25×, 0 B |         0.10×, 0 B |        0.13×, 0 B | 0.11×, 0 B |
+| Reworded text, region                 |      40 ns, 72 B |   0.80×, 0 B |         0.35×, 0 B |        0.45×, 0 B | 0.39×, 0 B |
+| Text with parameter, default language |     79 ns, 152 B | 0.71×, 168 B |         0.15×, 0 B |      0.67×, 264 B |          – |
+| Text with parameter, second language  |     81 ns, 152 B | 0.69×, 168 B |         0.17×, 0 B |      0.67×, 264 B |          – |
+| Text with parameter, region           |    176 ns, 248 B | 0.43×, 168 B |         0.08×, 0 B |      0.31×, 264 B |          – |
 
 ### In Blazor WebAssembly
 
@@ -61,38 +62,38 @@ The browser has no BenchmarkDotNet, so the app times each text itself. Each time
 
 With Mono's interpreter:
 
-| Text, user's culture                     | IStringLocalizer | Idioma set | Inline, in a field | Inline, in markup | Attribute |
-|------------------------------------------|-----------------:|-----------:|-------------------:|------------------:|----------:|
-| Plain text, default language             |           933 ns |      0.45× |              0.20× |             0.33× |     0.27× |
-| Plain text, second language              |           945 ns |      0.44× |              0.23× |             0.36× |     0.30× |
-| Plain text, region                       |         2,658 ns |      0.37× |              0.07× |             0.12× |     0.10× |
-| Reworded text, region                    |           906 ns |      0.93× |              0.22× |             0.36× |     0.29× |
-| Text with parameter, default language    |         1,547 ns |      0.65× |              0.12× |             0.54× |         – |
-| Text with parameter, second language     |         1,547 ns |      0.62× |              0.14× |             0.53× |         – |
-| Text with parameter, region              |         3,177 ns |      0.57× |              0.06× |             0.30× |         – |
+| Text, user's culture                  | IStringLocalizer | Idioma set | Inline, in a field | Inline, in markup | Attribute |
+|---------------------------------------|-----------------:|-----------:|-------------------:|------------------:|----------:|
+| Plain text, default language          |           949 ns |      0.40× |              0.19× |             0.32× |     0.25× |
+| Plain text, second language           |           986 ns |      0.39× |              0.22× |             0.35× |     0.28× |
+| Plain text, region                    |         2,716 ns |      0.31× |              0.07× |             0.12× |     0.10× |
+| Reworded text, region                 |           983 ns |      0.84× |              0.20× |             0.33× |     0.27× |
+| Text with parameter, default language |         1,518 ns |      0.62× |              0.12× |             0.54× |         – |
+| Text with parameter, second language  |         1,491 ns |      0.65× |              0.14× |             0.60× |         – |
+| Text with parameter, region           |         3,252 ns |      0.46× |              0.06× |             0.25× |         – |
 
 With Mono's AOT:
 
-| Text, user's culture                     | IStringLocalizer | Idioma set | Inline, in a field | Inline, in markup | Attribute |
-|------------------------------------------|-----------------:|-----------:|-------------------:|------------------:|----------:|
-| Plain text, default language             |           236 ns |      0.43× |              0.15× |             0.26× |     0.22× |
-| Plain text, second language              |           242 ns |      0.43× |              0.17× |             0.29× |     0.25× |
-| Plain text, region                       |           588 ns |      0.39× |              0.08× |             0.13× |     0.11× |
-| Reworded text, region                    |           235 ns |      0.70× |              0.20× |             0.30× |     0.27× |
-| Text with parameter, default language    |           336 ns |      1.26× |              0.11× |             0.62× |         – |
-| Text with parameter, second language     |           342 ns |      1.23× |              0.13× |             0.63× |         – |
-| Text with parameter, region              |           701 ns |      1.02× |              0.07× |             0.31× |         – |
+| Text, user's culture                  | IStringLocalizer | Idioma set | Inline, in a field | Inline, in markup | Attribute |
+|---------------------------------------|-----------------:|-----------:|-------------------:|------------------:|----------:|
+| Plain text, default language          |           246 ns |      0.41× |              0.14× |             0.26× |     0.22× |
+| Plain text, second language           |           247 ns |      0.41× |              0.17× |             0.28× |     0.25× |
+| Plain text, region                    |           590 ns |      0.31× |              0.08× |             0.13× |     0.11× |
+| Reworded text, region                 |           240 ns |      0.72× |              0.20× |             0.30× |     0.27× |
+| Text with parameter, default language |           351 ns |      1.24× |              0.10× |             0.61× |         – |
+| Text with parameter, second language  |           358 ns |      1.19× |              0.11× |             0.61× |         – |
+| Text with parameter, region           |           698 ns |      0.76× |              0.06× |             0.31× |         – |
 
 ### What the numbers mean
 
-- **Plain text, default and second language.** A set takes a third to under half of the time `IStringLocalizer` takes, and allocates nothing. The registry works out once per culture which of its sets serve it, so each text looks only in those.
-- **Plain text, region.** A British user's text comes from English, and `IStringLocalizer` is at its slowest there. On .NET, it takes 137 ns and allocates 168 bytes each time a text is shown. A set takes a quarter to half of that. An inline text takes about a tenth of it, in a field or in markup.
-- **Reworded text, region.** A set takes about three quarters of the time `IStringLocalizer` takes on .NET and with AOT, and nearly as long with Mono's interpreter. Idioma checks which texts the British set words itself, as the build recorded them, so it reads only the wording it shows.
-- **Text with parameter.** A set creates the text on each call, and the set's method words it. On .NET, that takes about 30% less time than `IStringLocalizer`, and allocates 168 bytes where `IStringLocalizer` allocates 152. With Mono's interpreter, it takes about a third less. With AOT, it takes about 1.25 times as long. For a British user, a set takes about half the time `IStringLocalizer` takes on .NET and with the interpreter, and about as long with AOT. There, it allocates 216 bytes.
-- **Inline, in a field.** An inline text kept in a field takes a sixth to a third of the time `IStringLocalizer` takes, and allocates nothing. Its wording only has to be found for the user's culture.
-- **Inline, in markup.** Markup calls an inline text on every render. Idioma keeps the plain inline texts it creates, up to 1,024 of them, each shorter than 3,900 characters. A string literal is the same object on every render, so a render finds the text an earlier render created by comparing the strings as objects. A plain inline text then takes a quarter to two fifths of the time `IStringLocalizer` takes, and allocates nothing.
-- **Inline text with parameter, in markup.** Its wording is a new string on every render, so Idioma creates the text again each time. It takes half to three quarters of the time `IStringLocalizer` takes, and a quarter to a third for a British user. It allocates 264 bytes, where `IStringLocalizer` allocates 152. It words every language as it's created, so its cost grows with the number of languages. Idioma doesn't keep such a text, because no later render could find it. So a value written into the wording, such as a user's name, doesn't stay in memory after its text is gone. There's one exception. Wording that your code built earlier and that outlived a garbage collection before the call is kept like a literal, in one of the 1,024 places.
-- **Attribute.** Generated code keeps a text written as an attribute, and Idioma finds it by its type and the name of its member each time it's asked for. It compares the name as an object first, and `nameof(Address.City)` is the same string on every call. So the lookup adds little to what an inline text in a field takes: about 2 ns on .NET, 70 ns with Mono's interpreter, and 20 ns with AOT. It takes about a third of the time `IStringLocalizer` takes on .NET, and about a quarter in Blazor WebAssembly. It allocates nothing.
+- **Plain text, default and second language.** A set takes about two fifths of the time `IStringLocalizer` takes, and allocates nothing. The registry works out once per culture which of its sets serve it, so each text looks only in those.
+- **Plain text, region.** A British user's text comes from English. `IStringLocalizer` looks for British wording first, so it's at its slowest there. On .NET, it takes 134 ns and allocates 168 bytes each time a text is shown. A set takes a quarter to a third of that, and allocates nothing. An inline text takes an eighth or less of it, in a field or in markup.
+- **Reworded text, region.** A set takes about three quarters to four fifths of the time `IStringLocalizer` takes. Idioma checks which texts the British set words itself, as the build recorded them, so it reads only the wording it shows.
+- **Text with parameter.** A set creates the text on each call, and the set's method words it. On .NET and with Mono's interpreter, that takes 30 to 40% less time than `IStringLocalizer`. With AOT, it takes about 1.2 times as long. A set allocates 168 bytes, where `IStringLocalizer` allocates 152. For a British user, a set takes under half the time `IStringLocalizer` takes on .NET and with the interpreter, and three quarters with AOT.
+- **Inline, in a field.** An inline text kept in a field takes a seventh to a third of the time `IStringLocalizer` takes, and a tenth or less for a British user's text that comes from English. It allocates nothing. Its wording only has to be found for the user's culture.
+- **Inline, in markup.** Markup calls an inline text on every render. Idioma keeps the plain inline texts it creates, up to 1,024 of them, each shorter than 3,900 characters. A string literal is the same object on every render, so a render finds the text an earlier render created by comparing the strings as objects. A plain inline text then takes a quarter to under half of the time `IStringLocalizer` takes, and an eighth for a British user's text that comes from English. It allocates nothing.
+- **Inline text with parameter, in markup.** Its wording is a new string on every render, so Idioma creates the text again each time. It takes half to two thirds of the time `IStringLocalizer` takes, and a quarter to a third for a British user. It allocates 264 bytes, where `IStringLocalizer` allocates 152. It words every language as it's created, so its cost grows with the number of languages. Idioma doesn't keep such a text, because no later render could find it. So a value written into the wording, such as a user's name, doesn't stay in memory after its text is gone. There's one exception. Wording that your code built earlier and that outlived a garbage collection before the call is kept like a literal, in one of the 1,024 places.
+- **Attribute.** Generated code keeps a text written as an attribute, and Idioma finds it by its type and the name of its member each time it's asked for. It compares the name as an object first, and `nameof(Address.City)` is the same string on every call. So the lookup adds little to what an inline text in a field takes: about 2 ns on .NET, 60 ns with Mono's interpreter, and 20 ns with AOT. It takes about a third of the time `IStringLocalizer` takes on .NET, and about a quarter in Blazor WebAssembly. It allocates nothing.
 
 ## Labels and enum values
 
@@ -104,18 +105,18 @@ Each row finds one label and shows it once, for a Dutch user, on .NET:
 
 | Approach           | What's measured                                        |   Time | Allocated |
 |--------------------|--------------------------------------------------------|-------:|----------:|
-| .NET's `[Display]` | Its attribute read once and kept                       |  28 ns |       0 B |
-| .NET's `[Display]` | Its attribute read from the property each time         | 759 ns |     760 B |
+| .NET's `[Display]` | Its attribute read once and kept                       |  27 ns |       0 B |
+| .NET's `[Display]` | Its attribute read from the property each time         | 746 ns |     760 B |
 | Idioma             | `GetTextByMember<Order>(nameof(Order.Checkout))`       |  17 ns |       0 B |
-| Idioma             | `GetTextByMember(property)`, by a `PropertyInfo`       |  18 ns |       0 B |
+| Idioma             | `GetTextByMember(property)`, by a `PropertyInfo`       |  19 ns |       0 B |
 | Idioma             | `GetTextOfType<Order>()`                               |  15 ns |       0 B |
 | Idioma             | `status.GetText()`, an enum with `[Localized]` members |  13 ns |       0 B |
 | Idioma             | `status.GetText()`, a set of the enum                  |  17 ns |       0 B |
 
 What the numbers mean:
 
-- **`[Display]`.** With its attribute kept, a label takes 28 ns, most of it the lookup in the resource file. Read from the property each time, it takes about 0.8 µs and allocates 760 bytes, because .NET creates the attribute anew on every read.
-- **Idioma, a property.** A label takes 17 to 18 ns, about three fifths of what `[Display]` takes with its attribute kept. It allocates nothing, and the caller has nothing to keep.
+- **`[Display]`.** With its attribute kept, a label takes 27 ns, most of it the lookup in the resource file. Read from the property each time, it takes about 0.75 µs and allocates 760 bytes, because .NET creates the attribute anew on every read.
+- **Idioma, a property.** A label takes 17 to 19 ns, about two thirds of what `[Display]` takes with its attribute kept. It allocates nothing, and the caller has nothing to keep.
 - **Idioma, a type.** The text of a type takes 15 ns.
 - **Idioma, a value of an enum.** `GetText()` chooses the text in a `switch`. It takes 13 ns for an enum with `[Localized]` members, which is what showing an inline text takes. It takes 17 ns for a set of the enum, as a text of a set does.
 
@@ -128,16 +129,18 @@ Each approach adds a base to the download, plus a part for each language beyond 
 | What's downloaded                                                            | Interpreter |     AOT |
 |------------------------------------------------------------------------------|------------:|--------:|
 | `IStringLocalizer`: `Microsoft.Extensions.Localization` and its abstractions |     11.3 KB | 10.4 KB |
-| `IStringLocalizer`: each extra language, as a satellite assembly             |      3.6 KB |  3.6 KB |
-| Idioma: `CodeChops.Idioma`                                                   |     19.4 KB | 15.3 KB |
-| Idioma: each extra language, as a set in the app's assembly                  |      1.8 KB |  1.7 KB |
+| resx: each extra language, as a satellite assembly                           |      3.7 KB |  3.7 KB |
+| Idioma: `CodeChops.Idioma`                                                   |     20.3 KB | 16.0 KB |
+| Idioma: each extra language, as a set in the app's assembly                  |      1.8 KB |  1.5 KB |
 
 What to know:
 
-- A user of `IStringLocalizer` downloads only the satellite assembly of their own language. A user of the default language downloads none, because its resx wording is in the app's own assembly. So with the interpreter, `IStringLocalizer` costs a user 11.3 KB, or 14.9 KB for a user whose language isn't the default.
-- Idioma compiles the set of every language into the app's assembly, so every user downloads all of them. So with the interpreter, an app in three languages costs every user 19.4 KB plus 2 × 1.8 KB, which is 23.0 KB.
-- With AOT, a set also becomes native code, which adds 8.2 KB to `dotnet.native.wasm` before compression. That file is 3.6 MB compressed, and Brotli's result for it moves by kilobytes when a little of it changes. So the table can't show what that code adds after compression.
-- Both approaches keep the default language's 100 texts in the app's own assembly, which the table leaves out. Idioma also generates a contract and a class for the texts there.
+- The class resx generates needs no assembly of its own, because `ResourceManager` is part of .NET. It reads the same satellite assemblies as `IStringLocalizer`.
+- A user of resx downloads only the satellite assembly of their own language. A user of the default language downloads none, because its resx wording is in the app's own assembly. So with the interpreter, `IStringLocalizer` costs a user 11.3 KB, or 15.0 KB for a user whose language isn't the default. The class resx generates costs such a user 3.7 KB.
+- Idioma compiles the set of every language into the app's assembly, so every user downloads all of them. So with the interpreter, an app in three languages costs every user 20.3 KB plus 2 × 1.8 KB, which is 23.9 KB.
+- The table counts the assemblies each approach brings, and not what each keeps of .NET itself. Blazor trims what an app doesn't use out of .NET's own assemblies. So an app that uses resx keeps `ResourceManager`, which an app without resx files can leave out.
+- With AOT, a set also becomes native code, which adds 8.4 KB to `dotnet.native.wasm` before compression. That file is 3.4 MB compressed, and Brotli's result for it moves by kilobytes when a little of it changes. So the table can't show what that code adds after compression.
+- Every approach keeps the default language's 100 texts in the app's own assembly, which the table leaves out. Idioma also generates a contract and a class for the texts there, and so does resx where you use its class.
 - `CodeChops.Idioma` is as large as an app that uses sets keeps it, because the trimmer leaves out the rest. An app that also writes inline texts or attributes keeps a little more of it.
 - The sizes come from an app made to measure them: 100 shop texts in English and Dutch, published once with Dutch and once without.
 
@@ -151,6 +154,6 @@ The benchmarks are in [`benchmarks`](../benchmarks). One script runs them all, a
 
 What to know:
 
-- It takes about 25 minutes.
+- It takes about 30 minutes.
 - It needs Chrome. Set `CHROME` to its path when it's installed somewhere else.
 - The AOT steps need the `wasm-tools` workload: `dotnet workload install wasm-tools`. Without it, the script skips those steps.

@@ -1,35 +1,71 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
 
   <!--
-    An app with 100 texts in English and Dutch, as sets of Idioma and as resx files for IStringLocalizer, for the download
-    sizes of docs/performance.md. run.sh publishes it twice: with English only (-p:SecondLanguage=false), and with Dutch
-    too. What the second publish adds is what a language of 100 texts costs. The app is published, never run.
+    An app that shows 100 texts a shop shows, for the download sizes of docs/performance.md. The app is published, never
+    run. run.sh publishes it once per approach (-p:SizeApproach):
+
+      none       The texts as English strings, without localization: the app the others are measured against.
+      idioma     The texts in Idioma's sets.
+      localizer  The texts in resx files, with the class resx generates, read through IStringLocalizer.
+
+    It publishes idioma and localizer twice: with English only (-p:SecondLanguage=false), and with Dutch too. What the
+    second publish adds is what a language of 100 texts costs.
   -->
 
   <PropertyGroup>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <SizeApproach Condition="'$(SizeApproach)' == ''">idioma</SizeApproach>
     <SecondLanguage Condition="'$(SecondLanguage)' == ''">true</SecondLanguage>
-    <!-- Each variant builds into folders of its own, so that no build of one is taken for the other. Set here, because
+    <DefineConstants>$(DefineConstants);$(SizeApproach.ToUpperInvariant())</DefineConstants>
+    <!-- Each variant builds into folders of its own, so that no build of one is taken for another. Set here, because
          on the command line they would apply to the referenced projects too, which then embed other paths. -->
-    <SizeVariant>second-language-$(SecondLanguage)-aot-$(RunAOTCompilation)</SizeVariant>
+    <SizeVariant>$(SizeApproach)-second-language-$(SecondLanguage)-aot-$(RunAOTCompilation)</SizeVariant>
     <IntermediateOutputPath>obj/$(Configuration)/$(SizeVariant)/</IntermediateOutputPath>
     <OutputPath>bin/$(Configuration)/$(SizeVariant)/</OutputPath>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(SecondLanguage)' == 'true'">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="11.0.0" />
+  </ItemGroup>
+
+  <!-- Without localization. -->
+  <ItemGroup Condition="'$(SizeApproach)' != 'none'">
+    <Compile Remove="PlainStorePage.cs" />
+  </ItemGroup>
+
+  <!-- Idioma. -->
+  <ItemGroup Condition="'$(SizeApproach)' == 'idioma'">
+    <ProjectReference Include="../../src/Idioma/Idioma.csproj" />
+    <ProjectReference Include="../../src/Idioma.Generators/Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SizeApproach)' != 'idioma'">
+    <Compile Remove="IdiomaStorePage.cs;StoreLocalizationEn.cs;StoreLocalizationNl.cs;OneLanguage.cs;TwoLanguages.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SizeApproach)' == 'idioma' and '$(SecondLanguage)' == 'true'">
     <Compile Remove="OneLanguage.cs" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(SecondLanguage)' != 'true'">
+  <ItemGroup Condition="'$(SizeApproach)' == 'idioma' and '$(SecondLanguage)' != 'true'">
     <Compile Remove="TwoLanguages.cs;StoreLocalizationNl.cs" />
-    <EmbeddedResource Remove="Store.nl.resx" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="11.0.0" />
+  <!-- resx and IStringLocalizer. Store.resx gets the class resx generates, Store, as an app gets it from its IDE.
+       IStringLocalizer<Store> is named after that class. -->
+  <ItemGroup Condition="'$(SizeApproach)' == 'localizer'">
     <PackageReference Include="Microsoft.Extensions.Localization" Version="11.0.0" />
-    <ProjectReference Include="../../src/Idioma/Idioma.csproj" />
-    <ProjectReference Include="../../src/Idioma.Generators/Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <EmbeddedResource Update="Store.resx" StronglyTypedLanguage="CSharp" StronglyTypedClassName="Store"
+                      StronglyTypedNamespace="Benchmarks" StronglyTypedFileName="$(IntermediateOutputPath)Store.Designer.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SizeApproach)' != 'localizer'">
+    <Compile Remove="LocalizerStorePage.cs" />
+    <EmbeddedResource Remove="Store.resx;Store.nl.resx" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SizeApproach)' == 'localizer' and '$(SecondLanguage)' != 'true'">
+    <EmbeddedResource Remove="Store.nl.resx" />
   </ItemGroup>
 
 </Project>
