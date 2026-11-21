@@ -61,7 +61,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Checkout { get; } = CreateSetText<IShopLocalization>("TestApp.ShopLocalization.Checkout", static set => set.Checkout, DefaultSet<ShopLocalizationEn>.Instance);
+    public static CodeChops.Idioma.LocalizableText Checkout { get; } = CreateSetText<IShopLocalization>("TestApp.ShopLocalization.Checkout", static set => set.Checkout, GetDefaultSet<ShopLocalizationEn>);
 
     /// <summary>
     /// Total
@@ -73,7 +73,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Total { get; } = CreateSetText<IShopLocalization>("TestApp.ShopLocalization.Total", static set => set.Total, DefaultSet<ShopLocalizationEn>.Instance);
+    public static CodeChops.Idioma.LocalizableText Total { get; } = CreateSetText<IShopLocalization>("TestApp.ShopLocalization.Total", static set => set.Total, GetDefaultSet<ShopLocalizationEn>);
 
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Checkout"</c>.
@@ -89,12 +89,6 @@ public static partial class ShopLocalization
         "Total" => GetKeyedText<IShopLocalization>(ShopLocalization.Total, key, values),
         _ => throw CreateUnknownKeyException<IShopLocalization>(key, "ShopLocalization"),
     };
-}
-
-file static class DefaultSet<TSet>
-    where TSet : new()
-{
-    internal static TSet Instance { get; } = new();
 }
 #pragma warning restore CS0612, CS0618
 #nullable restore

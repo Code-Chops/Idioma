@@ -372,9 +372,25 @@ internal static class LocalizedMembers
             MemberName: isMember ? symbol.Name : null,
             Wordings: wordings,
             IsNameable: DescribeUnnameable(chain) is null,
+            SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(symbol, chain)),
             Enum: enumMember);
 
         return member;
+    }
+
+    /// <summary>
+    /// The diagnostics that the generated code of a member reports by naming what its author marked
+    /// <c>[Experimental]</c>, or <c>[Obsolete]</c> with an id of its own: the member's type, a type around it, or the
+    /// member itself where it's a member of an enum, which <c>GetText()</c> names. The generated file turns them off.
+    /// </summary>
+    private static ImmutableArray<string> GetSuppressedDiagnostics(ISymbol symbol, List<INamedTypeSymbol> chain)
+    {
+        var suppressed = chain.SelectMany(static part => LocalizationDiscovery.GetSuppressedDiagnostics(part));
+
+        if (symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum })
+            suppressed = suppressed.Concat(LocalizationDiscovery.GetSuppressedDiagnostics(symbol));
+
+        return [.. suppressed.Distinct(StringComparer.Ordinal)];
     }
 
     private static UnnameableType? DescribeUnnameable(List<INamedTypeSymbol> chain)
@@ -404,15 +420,18 @@ internal static class LocalizedMembers
         var recorderName = GetRecorderName(assemblyName);
 
         if (codes.Length is 0 || members.Length is 0)
-            return new LocalizedMembersModel(recorderName, codes, default);
+            return new LocalizedMembersModel(recorderName, codes, default, default);
 
         var types = new SortedDictionary<string, List<(LocalizedMember Member, EquatableArray<string> Wordings)>>(StringComparer.Ordinal);
         var seen = new HashSet<(string Type, string? Member)>();
+        var suppressed = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var member in members)
         {
             if (!member.IsNameable || ResolveWordings(member, codes) is not { } wordings || !seen.Add((member.TypeKey, member.MemberName)))
                 continue;
+
+            suppressed.UnionWith(member.SuppressedDiagnostics);
 
             if (!types.TryGetValue(member.TypeKey, out var texts))
                 types.Add(member.TypeKey, texts = []);
@@ -442,7 +461,7 @@ internal static class LocalizedMembers
             model.Add(new LocalizedType(first.TypeReference, first.TypeKey, first.TypeName, new EquatableArray<LocalizedText>(texts), extension));
         }
 
-        return new LocalizedMembersModel(recorderName, codes, new EquatableArray<LocalizedType>(model.ToImmutable()));
+        return new LocalizedMembersModel(recorderName, codes, new EquatableArray<LocalizedType>(model.ToImmutable()), new EquatableArray<string>([.. suppressed]));
     }
 
     /// <summary>
@@ -498,6 +517,10 @@ internal static class LocalizedMembers
 /// <param name="MemberName">The name of the member, or <see langword="null"/> for the type's own text.</param>
 /// <param name="Wordings">The arguments of the attribute, in the order they're written.</param>
 /// <param name="IsNameable">Whether generated code can name the type.</param>
+/// <param name="SuppressedDiagnostics">
+/// What naming the type, or a member of an enum, reports besides <c>CS0612</c> and <c>CS0618</c>: the id of
+/// <c>[Experimental]</c>, and the <c>DiagnosticId</c> of <c>[Obsolete]</c>.
+/// </param>
 /// <param name="Enum">What the extension method of an enum needs, for a member of an enum or an enum's own text.</param>
 internal readonly record struct LocalizedMember(
     string TypeReference,
@@ -506,6 +529,7 @@ internal readonly record struct LocalizedMember(
     string? MemberName,
     EquatableArray<LocalizedArgument> Wordings,
     bool IsNameable,
+    EquatableArray<string> SuppressedDiagnostics,
     LocalizedMemberEnum? Enum);
 
 /// <summary>
@@ -540,13 +564,15 @@ internal readonly record struct LocalizedMemberEnum(
     string? Value);
 
 /// <summary>
-/// The texts to generate for the members of an assembly: the name of the class that records them, the languages, and
-/// the types with their texts, in the order of their full names.
+/// The texts to generate for the members of an assembly: the name of the class that records them, the languages, the
+/// types with their texts, in the order of their full names, and what naming those types and members reports besides
+/// <c>CS0612</c> and <c>CS0618</c>, in the order of the ids (<see cref="LocalizedMember.SuppressedDiagnostics"/>).
 /// </summary>
 internal readonly record struct LocalizedMembersModel(
     string RecorderName,
     EquatableArray<string> Codes,
-    EquatableArray<LocalizedType> Types)
+    EquatableArray<LocalizedType> Types,
+    EquatableArray<string> SuppressedDiagnostics)
 {
     /// <summary>
     /// Whether the assembly has a text to record, and so gets the class that records them.

@@ -577,10 +577,12 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
             ? lookup.ShowsCulture
             : IsServed(culture, appLanguages));
 
+        // Below the culture's own wording, a text of a culture the app shows falls back alone: the texts around it, and
+        // a text its own wording shows, still have that culture's wording.
         var text = (showsCulture ? this.FindOwnTranslation(culture, lookup) : null)
                ?? (showsCulture && lookup is not null ? this.FindTranslation(registry!, lookup) : null)
-               ?? (appDefaultLanguage is null ? null : this.GetWording(appDefaultLanguage, registry))
-               ?? (registry is null ? null : this.FindDefaultTranslation(registry))
+               ?? (appDefaultLanguage is null ? null : this.GetWording(appDefaultLanguage, registry, fallsBackAlone: showsCulture))
+               ?? (registry is null ? null : this.FindDefaultTranslation(registry, fallsBackAlone: showsCulture))
                ?? this.OwnDefaultText;
 
         return text;
@@ -610,7 +612,11 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
     /// The wording for a language code. That's the text's own translation for it or a language above it, else the
     /// wording of the set registered for it or a language above it (see <see cref="FindTranslation"/>).
     /// </summary>
-    private string? GetWording(string language, LocalizationRegistry? registry)
+    /// <param name="fallsBackAlone">
+    /// Whether this text falls back to the language while the texts around it show the reader's culture, which the app
+    /// has. A text its wording shows then follows the language too.
+    /// </param>
+    private string? GetWording(string language, LocalizationRegistry? registry, bool fallsBackAlone = false)
     {
         // Through the culture of the language where there is one, so that a text falling back to a language shows what
         // a user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh)
@@ -637,9 +643,11 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
         }
 
         // A text among the values shows in this language too, where the user reads another, as for a fallback. A text
-        // without values enters no scope here, on the path of every text a user of an unsupported culture sees. A text
-        // its property shows falls back as it does, so both end in this language anyway.
-        using var scope = this.TakesValues ? this.EnterLanguageUnlessServed(language, registry) : default;
+        // without values enters no scope for a culture the app doesn't show, on the path of every text a user of such a
+        // culture sees. A text its property shows falls back as it does there, so both end in this language anyway.
+        // Where the app shows the culture, only this text falls back, as one of a contract without a set for it does.
+        // A text its property shows would stay in the reader's language, in a sentence of this one.
+        using var scope = this.TakesValues || fallsBackAlone ? this.EnterLanguageUnlessServed(language, registry) : default;
 
         var text = lookup is null
             ? null

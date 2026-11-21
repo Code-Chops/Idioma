@@ -58,6 +58,12 @@ internal class TextOrigin
     public virtual ILocalizationSet? DefaultSet => null;
 
     /// <summary>
+    /// Whether a set words the text, so that it has a <see cref="DefaultSet"/>. Asked in place of that set where the
+    /// set itself isn't needed, because a text of a generated class creates it at the first read.
+    /// </summary>
+    public virtual bool IsOfSet => false;
+
+    /// <summary>
     /// The text as a set of <see cref="Contract"/> words it.
     /// </summary>
     public virtual string Select(ILocalizationSet set)

@@ -241,7 +241,54 @@ internal static partial class LocalizationDiscovery
                 return $"the namespace '{GetNamespaceName(other)}'";
         }
 
+        // The enum whose texts the set holds, where it lies in another namespace and the set names it by its name
+        // alone, as behind a using. Inside the set's namespace the generated class would stand before the enum, so the
+        // set's own ILocalizationSet<OrderStatus> would name that class (CS0718).
+        foreach (var @interface in type.AllInterfaces)
+        {
+            if (PackageNames.IsLocalizationSetOfEnum(@interface)
+                && @interface.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Enum, ContainingType: null } @enum
+                && String.Equals(@enum.Name, textsName, StringComparison.Ordinal)
+                && ListsSetOfEnumBySimpleName(type, textsName, cancellationToken))
+            {
+                return $"the enum '{@enum.ToDisplayString()}' it holds the texts of";
+            }
+        }
+
         return null;
+    }
+
+    /// <summary>
+    /// Whether a set lists <c>ILocalizationSet&lt;TEnum&gt;</c> with the enum written by its name alone, and not with
+    /// its namespace in front. All the syntax can tell.
+    /// </summary>
+    private static bool ListsSetOfEnumBySimpleName(INamedTypeSymbol type, string enumName, CancellationToken cancellationToken)
+    {
+        foreach (var reference in type.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax(cancellationToken) is not TypeDeclarationSyntax { BaseList.Types: var baseTypes })
+                continue;
+
+            foreach (var baseType in baseTypes)
+            {
+                var listed = baseType.Type switch
+                {
+                    GenericNameSyntax name => name,
+                    QualifiedNameSyntax { Right: GenericNameSyntax name } => name,
+                    AliasQualifiedNameSyntax { Name: GenericNameSyntax name } => name,
+                    _ => null,
+                };
+
+                if (listed is { TypeArgumentList.Arguments: [IdentifierNameSyntax argument] }
+                    && String.Equals(listed.Identifier.ValueText, PackageNames.LocalizationSetName, StringComparison.Ordinal)
+                    && String.Equals(argument.Identifier.ValueText, enumName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -528,16 +575,16 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The diagnostics that naming the type reports, other than <c>CS0612</c> and <c>CS0618</c>, which every generated
-    /// file turns off: the id of <c>[Experimental("SHOP001")]</c>, and the <c>DiagnosticId</c> of <c>[Obsolete]</c>.
-    /// The author of a set marked so can't act on them in generated code, and a build that treats warnings as errors
-    /// would stop at them.
+    /// The diagnostics that naming a type or a member reports, other than <c>CS0612</c> and <c>CS0618</c>, which every
+    /// generated file turns off: the id of <c>[Experimental("SHOP001")]</c>, and the <c>DiagnosticId</c> of
+    /// <c>[Obsolete]</c>. The author of a set or a member marked so can't act on them in generated code, and a build
+    /// that treats warnings as errors would stop at them.
     /// </summary>
-    private static ImmutableArray<string> GetSuppressedDiagnostics(INamedTypeSymbol type)
+    internal static ImmutableArray<string> GetSuppressedDiagnostics(ISymbol symbol)
     {
         var builder = ImmutableArray.CreateBuilder<string>();
 
-        foreach (var attribute in type.GetAttributes())
+        foreach (var attribute in symbol.GetAttributes())
         {
             switch (attribute.AttributeClass)
             {

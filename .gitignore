@@ -21,3 +21,6 @@ TestResults/
 
 # Verify writes a received file next to a failing snapshot
 *.received.*
+
+# A worktree an AI coding assistant works in
+.claude/worktrees/

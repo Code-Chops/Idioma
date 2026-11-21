@@ -56,8 +56,10 @@ static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1
 static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1, TValue2>(string! key, System.Func<TContract!, TValue1, TValue2, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1, TValue2 value2) -> CodeChops.Idioma.LocalizableText!
 static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract, TValue1>(string! key, System.Func<TContract!, TValue1, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet, TValue1 value1) -> CodeChops.Idioma.LocalizableText!
 static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract>(string! key, System.Func<TContract!, string!>! selector, CodeChops.Idioma.ILocalizationSet! defaultSet) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.CreateSetText<TContract>(string! key, System.Func<TContract!, string!>! selector, System.Func<CodeChops.Idioma.ILocalizationSet!>! defaultSet) -> CodeChops.Idioma.LocalizableText!
 static CodeChops.Idioma.Internals.GeneratedCode.CreateText(string! defaultText, params System.ReadOnlySpan<(string! Language, string! Text)> translations) -> CodeChops.Idioma.LocalizableText!
 static CodeChops.Idioma.Internals.GeneratedCode.CreateUndefinedEnumText<TEnum>(TEnum value) -> CodeChops.Idioma.LocalizableText!
+static CodeChops.Idioma.Internals.GeneratedCode.GetDefaultSet<TSet>() -> TSet!
 static CodeChops.Idioma.Internals.GeneratedCode.CreateUnknownKeyException<TContract>(string? key, string! className) -> System.Exception!
 static CodeChops.Idioma.Internals.GeneratedCode.GetKeyedText<TContract>(CodeChops.Idioma.LocalizableText! text, string! key, System.ReadOnlySpan<object?> values) -> CodeChops.Idioma.LocalizableText!
 static CodeChops.Idioma.Internals.GeneratedCode.GetKeyedValue<TValue>(string! key, System.ReadOnlySpan<object?> values, int index, int count, string! parameterName) -> TValue

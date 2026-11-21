@@ -107,6 +107,8 @@ Two sets are the default-language set of one contract when their names differ on
 
 The generated class is named after the set without its language, so `OrderStatusEn` next to an enum `OrderStatus` would give a second `OrderStatus`. Rename the set, as in `OrderStatusLocalizationEn`, or the other type. A static partial class of that name is fine, because it's a part of the generated class. A namespace of that name counts too, as the folder `Texts` gives `MyApp.Texts` next to `TextsEn`.
 
+An enum in another namespace counts when the set names it by its name alone, as `ILocalizationSet<OrderStatus>` does behind `using Domain;`. Inside the set's namespace, the generated class would stand before the enum, so that name would mean the generated class.
+
 The contract is named after the set too, so an interface `IShopLocalization` of your own next to `ShopLocalizationEn` would give a second `IShopLocalization`. Rename the set or your interface. An interface that derives from `ILocalizationSet` is a contract you write yourself, and the generator writes none next to it ([a contract you write yourself](advanced-topics.md#a-contract-you-write-yourself)).
 
 A set that implements another contract, such as `Shop.IShopLocalization` of a library, translates or rewords that contract, and starts none of its own:
@@ -358,6 +360,7 @@ Title = "Orders";
 Title = $"Order {number}";
 Title = "Order " + number;
 Title = flag ? "Yes" : "No";
+Title += " (draft)";
 ```
 
 A `const` counts too, and so does the same in Razor. Write the text as `LocalizableText.Inline(en: "...", nl: "...")`, or in a set.

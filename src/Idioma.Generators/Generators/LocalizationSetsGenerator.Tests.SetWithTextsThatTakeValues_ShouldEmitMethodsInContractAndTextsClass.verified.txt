@@ -77,7 +77,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Checkout { get; } = CreateSetText<IShopLocalization>("TestApp.ShopLocalization.Checkout", static set => set.Checkout, DefaultSet<ShopLocalizationEn>.Instance);
+    public static CodeChops.Idioma.LocalizableText Checkout { get; } = CreateSetText<IShopLocalization>("TestApp.ShopLocalization.Checkout", static set => set.Checkout, GetDefaultSet<ShopLocalizationEn>);
 
     /// <inheritdoc cref="ShopLocalizationEn.Greeting"/>
     /// <remarks>
@@ -87,7 +87,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Greeting">nl</see>: Hallo, {name}!</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Greeting(string name) => CreateSetText<IShopLocalization, string>("TestApp.ShopLocalization.Greeting", static (set, name) => set.Greeting(name), DefaultSet<ShopLocalizationEn>.Instance, name);
+    public static CodeChops.Idioma.LocalizableText Greeting(string name) => CreateSetText<IShopLocalization, string>("TestApp.ShopLocalization.Greeting", static (set, name) => set.Greeting(name), GetDefaultSet<ShopLocalizationEn>(), name);
 
     /// <summary>
     /// The <c>ItemsInCart</c> text of <see cref="ShopLocalizationEn"/>.
@@ -99,7 +99,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.ItemsInCart">nl</see></description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText ItemsInCart(int count, string shop) => CreateSetText<IShopLocalization, int, string>("TestApp.ShopLocalization.ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), DefaultSet<ShopLocalizationEn>.Instance, count, shop);
+    public static CodeChops.Idioma.LocalizableText ItemsInCart(int count, string shop) => CreateSetText<IShopLocalization, int, string>("TestApp.ShopLocalization.ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), GetDefaultSet<ShopLocalizationEn>(), count, shop);
 
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Checkout"</c>.
@@ -116,12 +116,6 @@ public static partial class ShopLocalization
         "ItemsInCart" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, "count"), GetKeyedValue<string>(key, values, 1, 2, "shop")),
         _ => throw CreateUnknownKeyException<IShopLocalization>(key, "ShopLocalization"),
     };
-}
-
-file static class DefaultSet<TSet>
-    where TSet : new()
-{
-    internal static TSet Instance { get; } = new();
 }
 #pragma warning restore CS0612, CS0618
 #nullable restore

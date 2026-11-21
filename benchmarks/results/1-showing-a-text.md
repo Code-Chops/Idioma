@@ -12,12 +12,6 @@ IterationCount=15  LaunchCount=1  WarmupCount=5
 ```
 | Method                        | Categories              | Culture | Mean      | Error    | StdDev   | Ratio | Gen0   | Allocated | 
 |------------------------------ |------------------------ |-------- |----------:|---------:|---------:|------:|-------:|----------:|
-| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **de**      |  **40.76 ns** | **0.275 ns** | **0.257 ns** |  **1.00** | **0.0076** |      **64 B** | 
-| IdiomaSet_Cart                | Cart (en-GB rewords it) | de      |  22.94 ns | 0.175 ns | 0.146 ns |  0.56 |      - |         - | 
-| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | de      |  15.73 ns | 0.240 ns | 0.224 ns |  0.39 |      - |         - | 
-| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | de      |  21.06 ns | 1.257 ns | 1.114 ns |  0.52 |      - |         - | 
-| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | de      |  16.88 ns | 0.115 ns | 0.102 ns |  0.41 |      - |         - | 
-|                               |                         |         |           |          |          |       |        |           | 
 | **Localizer_Cart**                | **Cart (en-GB rewords it)** | **en**      |  **39.54 ns** | **0.312 ns** | **0.277 ns** |  **1.00** | **0.0076** |      **64 B** | 
 | IdiomaSet_Cart                | Cart (en-GB rewords it) | en      |  16.84 ns | 0.165 ns | 0.155 ns |  0.43 |      - |         - | 
 | IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | en      |  11.97 ns | 0.093 ns | 0.083 ns |  0.30 |      - |         - | 
@@ -36,12 +30,6 @@ IterationCount=15  LaunchCount=1  WarmupCount=5
 | IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | nl      |  17.75 ns | 0.122 ns | 0.114 ns |  0.43 |      - |         - | 
 | IdiomaAttribute_Cart          | Cart (en-GB rewords it) | nl      |  15.65 ns | 0.062 ns | 0.055 ns |  0.38 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Checkout**            | **Checkout**                | **de**      |  **44.28 ns** | **0.156 ns** | **0.122 ns** |  **1.00** | **0.0086** |      **72 B** | 
-| IdiomaSet_Checkout            | Checkout                | de      |  22.77 ns | 0.052 ns | 0.044 ns |  0.51 |      - |         - | 
-| IdiomaInlineInField_Checkout  | Checkout                | de      |  15.61 ns | 0.160 ns | 0.149 ns |  0.35 |      - |         - | 
-| IdiomaInlineInMarkup_Checkout | Checkout                | de      |  20.90 ns | 1.302 ns | 1.217 ns |  0.47 |      - |         - | 
-| IdiomaAttribute_Checkout      | Checkout                | de      |  16.83 ns | 0.059 ns | 0.055 ns |  0.38 |      - |         - | 
-|                               |                         |         |           |          |          |       |        |           | 
 | **Localizer_Checkout**            | **Checkout**                | **en**      |  **43.16 ns** | **0.228 ns** | **0.202 ns** |  **1.00** | **0.0086** |      **72 B** | 
 | IdiomaSet_Checkout            | Checkout                | en      |  16.53 ns | 0.132 ns | 0.124 ns |  0.38 |      - |         - | 
 | IdiomaInlineInField_Checkout  | Checkout                | en      |  11.79 ns | 0.086 ns | 0.081 ns |  0.27 |      - |         - | 
@@ -59,11 +47,6 @@ IterationCount=15  LaunchCount=1  WarmupCount=5
 | IdiomaInlineInField_Checkout  | Checkout                | nl      |  14.00 ns | 0.053 ns | 0.047 ns |  0.32 |      - |         - | 
 | IdiomaInlineInMarkup_Checkout | Checkout                | nl      |  17.55 ns | 0.086 ns | 0.080 ns |  0.40 |      - |         - | 
 | IdiomaAttribute_Checkout      | Checkout                | nl      |  15.40 ns | 0.102 ns | 0.090 ns |  0.35 |      - |         - | 
-|                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Greeting**            | **Greeting(name)**          | **de**      |  **81.28 ns** | **0.383 ns** | **0.340 ns** |  **1.00** | **0.0181** |     **152 B** | 
-| IdiomaSet_Greeting            | Greeting(name)          | de      | 151.12 ns | 1.493 ns | 1.246 ns |  1.86 | 0.0305 |     256 B | 
-| IdiomaInlineInField_Greeting  | Greeting(name)          | de      |  15.36 ns | 0.152 ns | 0.142 ns |  0.19 |      - |         - | 
-| IdiomaInlineInMarkup_Greeting | Greeting(name)          | de      |  55.20 ns | 0.216 ns | 0.192 ns |  0.68 | 0.0315 |     264 B | 
 |                               |                         |         |           |          |          |       |        |           | 
 | **Localizer_Greeting**            | **Greeting(name)**          | **en**      |  **77.28 ns** | **0.391 ns** | **0.366 ns** |  **1.00** | **0.0181** |     **152 B** | 
 | IdiomaSet_Greeting            | Greeting(name)          | en      |  55.54 ns | 0.204 ns | 0.191 ns |  0.72 | 0.0200 |     168 B | 

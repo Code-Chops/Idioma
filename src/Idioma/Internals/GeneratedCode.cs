@@ -57,14 +57,116 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// Declares a text of a localization contract, with its default wording taken from a set. The generated class
-    /// declares its texts this way:
+    /// The set of a contract's default language, which gives the texts of the generated class their default wording.
+    /// It's one instance per set, created when a text first needs it.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// The set isn't created as the generated class is first used. So a set whose constructor throws doesn't fail that
+    /// class for good, with an exception that names only the class. The text that needs the set throws, and so does
+    /// every text after it.
+    /// </remarks>
+    /// <typeparam name="TSet">The set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
+    /// <exception cref="InvalidOperationException">
+    /// When the set's constructor throws, with that exception inside. The message names the set.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static TSet GetDefaultSet<TSet>()
+        where TSet : class, ILocalizationSet, new()
+    {
+        var set = DefaultSet<TSet>.Instance ?? DefaultSet<TSet>.Create();
+        return set;
+    }
+
+    /// <summary>
+    /// The one instance of a set of a default language (<see cref="GetDefaultSet{TSet}"/>).
+    /// </summary>
+    private static class DefaultSet<TSet>
+        where TSet : class, ILocalizationSet, new()
+    {
+        internal static TSet? Instance;
+
+        // Not kept where the constructor throws, so the next text tries again and says the same. Two threads may each
+        // create the set, and the first one to finish gives every text its instance.
+        internal static TSet Create()
+        {
+            var created = (TSet)LocalizationRegistry.CreateSet(typeof(TSet), static () => New());
+
+            var set = Interlocked.CompareExchange(ref Instance, created, comparand: null) ?? created;
+            return set;
+        }
+
+        // new TSet() of a type parameter creates the set through the runtime, which puts what the constructor throws
+        // inside an exception of its own. Taken out again, so that the exception that names the set holds the set's
+        // own, as for a set the registry creates.
+        private static TSet New()
+        {
+            try
+            {
+                return new TSet();
+            }
+            catch (System.Reflection.TargetInvocationException exception) when (exception.InnerException is { } thrown)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(thrown);
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// Declares a text of a localization contract, with its default wording taken from a set that is created when the
+    /// text first needs it. The generated class declares its texts this way:
     /// <code>
     /// GeneratedCode.CreateSetText&lt;IShopLocalization&gt;("MyApp.Localization.ShopLocalization.Checkout",
-    ///     static set => set.Checkout, DefaultSet&lt;ShopLocalizationEn&gt;.Instance)
+    ///     static set => set.Checkout, GeneratedCode.GetDefaultSet&lt;ShopLocalizationEn&gt;)
     /// </code>
-    /// <c>DefaultSet&lt;ShopLocalizationEn&gt;.Instance</c> is one instance of the set, which the generated code
-    /// creates once.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// The generated class creates its texts as it's first used. A set created there would fail the class for good
+    /// when its constructor throws. So the text takes what gives the set, and asks it when it words its default
+    /// wording or reads its <see cref="LocalizableText.DefaultLanguage"/>.
+    /// </remarks>
+    /// <typeparam name="TContract">
+    /// The contract the text belongs to. Every registered set implementing it provides the text.
+    /// </typeparam>
+    /// <param name="key">The name of this text in a resource file.</param>
+    /// <param name="selector">Picks the text from a set.</param>
+    /// <param name="defaultSet">
+    /// Gives the set that supplies the default wording, the contract's set of the default language. It implements
+    /// <typeparamref name="TContract"/>.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// When <paramref name="key"/> is empty or white-space. Pass the name the text has in the resource file.
+    /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="key"/>, <paramref name="selector"/>, or <paramref name="defaultSet"/> is
+    /// <see langword="null"/>.
+    /// </exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LocalizableText CreateSetText<TContract>(string key, Func<TContract, string> selector, Func<ILocalizationSet> defaultSet)
+        where TContract : class
+    {
+        var text = LocalizableText.Create(key, selector, defaultSet);
+        return text;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// Declares a text of a localization contract, with its default wording taken from a set that exists already:
+    /// <code>
+    /// GeneratedCode.CreateSetText&lt;IShopLocalization&gt;("MyApp.Localization.ShopLocalization.Checkout",
+    ///     static set => set.Checkout, new ShopLocalizationEn())
+    /// </code>
+    /// The generated class passes what gives the set instead
+    /// (<see cref="CreateSetText{TContract}(string, Func{TContract, string}, Func{ILocalizationSet})"/>).
     /// </para>
     /// </summary>
     /// <typeparam name="TContract">
@@ -105,10 +207,9 @@ public static class GeneratedCode
     /// Declares a text of a localization contract that takes values, with its default wording taken from a set. A
     /// method of the generated class creates its text this way, on every call, with an overload per number of values:
     /// <c>GeneratedCode.CreateSetText&lt;IShopLocalization, string&gt;("MyApp.Localization.ShopLocalization.Greeting",
-    /// static (set, name) => set.Greeting(name), DefaultSet&lt;ShopLocalizationEn&gt;.Instance,
+    /// static (set, name) => set.Greeting(name), GeneratedCode.GetDefaultSet&lt;ShopLocalizationEn&gt;(),
     /// name)</c>.
-    /// <c>DefaultSet&lt;ShopLocalizationEn&gt;.Instance</c> is one instance of the set, which the generated code
-    /// creates once.
+    /// <see cref="GetDefaultSet{TSet}"/> gives one instance of the set, which it creates at the first call.
     /// </para>
     /// </summary>
     /// <remarks>

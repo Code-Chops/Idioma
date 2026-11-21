@@ -311,7 +311,7 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// What keeps generated code from creating a default-language set, as the clause of the <c>LOC200</c> message, or
     /// <see langword="null"/> when it can: what keeps any set from registering (<c>new T()</c>), and besides that a
-    /// parameterless constructor that is not public, which the texts' <c>DefaultSet&lt;TSet&gt;</c> asks for
+    /// parameterless constructor that is not public, which <c>GeneratedCode.GetDefaultSet</c> asks for
     /// (<c>where TSet : new()</c>).
     /// </summary>
     public static string? GetCreationProblem(DiscoveredLocalization set)

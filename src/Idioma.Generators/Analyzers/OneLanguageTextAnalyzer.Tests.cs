@@ -51,6 +51,7 @@ public sealed class OneLanguageTextAnalyzerTests
     [Arguments("""public static LocalizableText Bad { get; } = new LocalizableText("Orders");""")]
     [Arguments("""public static LocalizableText Bad { get; } = LocalizableText.Keyed("Shop.Orders", "Orders");""")]
     [Arguments("""public static LocalizableText Bad { get; } = (LocalizableText)"Orders";""")]
+    [Arguments("""public static LocalizableText Bad(LocalizableText text) { text += " (draft)"; return text; }""")]
     [Arguments("""public static LocalizableText Bad { get; } = "Idioma";""")]                     // A name
     [Arguments("""public static LocalizableText Bad(double distance) => $"{distance} km";""")]    // A unit
     public async Task WordingInOneLanguage_ShouldReportLOC500(string member)
@@ -69,6 +70,7 @@ public sealed class OneLanguageTextAnalyzerTests
 
     [Test]
     [Arguments("public static LocalizableText Good(string customerName) => customerName;")]
+    [Arguments("public static LocalizableText Good(LocalizableText text, string customerName) { text += customerName; return text; }")]
     [Arguments("public static LocalizableText Good(Customer customer) => customer.Name;")]
     [Arguments("public static LocalizableText Good(Customer customer) => customer.ToString();")]
     [Arguments("""public static LocalizableText Good(Customer customer) => $"{customer.Name} - {customer.City}";""")]

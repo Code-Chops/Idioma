@@ -63,7 +63,7 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Pending">nl</see>: In behandeling</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Pending { get; } = CreateSetText<IOrderStatusLocalization>("TestApp.OrderStatusLocalization.Pending", static set => set.Pending, DefaultSet<OrderStatusLocalizationEn>.Instance);
+    public static CodeChops.Idioma.LocalizableText Pending { get; } = CreateSetText<IOrderStatusLocalization>("TestApp.OrderStatusLocalization.Pending", static set => set.Pending, GetDefaultSet<OrderStatusLocalizationEn>);
 
     /// <inheritdoc cref="OrderStatusLocalizationEn.Shipped"/>
     /// <remarks>
@@ -73,7 +73,7 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Shipped">nl</see>: Verzonden</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Shipped { get; } = CreateSetText<IOrderStatusLocalization>("TestApp.OrderStatusLocalization.Shipped", static set => set.Shipped, DefaultSet<OrderStatusLocalizationEn>.Instance);
+    public static CodeChops.Idioma.LocalizableText Shipped { get; } = CreateSetText<IOrderStatusLocalization>("TestApp.OrderStatusLocalization.Shipped", static set => set.Shipped, GetDefaultSet<OrderStatusLocalizationEn>);
 
     /// <summary>
     /// The text of a value of <see cref="OrderStatus"/>, such as <see cref="Pending"/> for <c>OrderStatus.Pending</c>.
@@ -109,12 +109,6 @@ public static partial class OrderStatusLocalization
         "Shipped" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
         _ => throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization"),
     };
-}
-
-file static class DefaultSet<TSet>
-    where TSet : new()
-{
-    internal static TSet Instance { get; } = new();
 }
 
 file static class TextsByValue<TContract>

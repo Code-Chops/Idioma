@@ -99,7 +99,7 @@ public sealed partial class LocalizableText
     /// Whether a set words this text, with or without values. A property or method of the set then runs each time the
     /// text is worded.
     /// </summary>
-    private bool IsOfSet => this.Origin?.DefaultSet is not null;
+    private bool IsOfSet => this.Origin?.IsOfSet is true;
 
     /// <summary>
     /// A text that a resource file can provide under <paramref name="key"/>, for an app or library that looks texts up
@@ -193,6 +193,27 @@ public sealed partial class LocalizableText
     }
 
     /// <summary>
+    /// Declares a text of a localization contract, with its default wording taken from a set that is created when the
+    /// text first needs it.
+    /// <see cref="Internals.GeneratedCode.CreateSetText{TContract}(string, Func{TContract, string}, Func{ILocalizationSet})"/>
+    /// calls this for the generated class.
+    /// </summary>
+    // The set isn't created here: the generated class creates its texts as it's first used, and a set whose constructor
+    // throws there would fail the class for good.
+    internal static LocalizableText Create<TContract>(string key, Func<TContract, string> selector, Func<ILocalizationSet> createDefaultSet)
+        where TContract : class
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(createDefaultSet);
+
+        var origin = new SetTextOrigin<TContract>(key, selector, createDefaultSet);
+
+        var text = new LocalizableText(origin);
+        return text;
+    }
+
+    /// <summary>
     /// Declares a text of a localization contract that takes values, with its default wording taken from the set of
     /// the values. The overloads of <c>GeneratedCode.CreateSetText</c> that take values call this for a method of the
     /// generated class.
@@ -272,14 +293,19 @@ public sealed partial class LocalizableText
     /// <see cref="FindTranslation"/>), or <see langword="null"/> when the text has no default language or no such set
     /// is registered.
     /// </summary>
-    private string? FindDefaultTranslation(LocalizationRegistry registry)
+    /// <param name="registry">The sets to look in.</param>
+    /// <param name="fallsBackAlone">
+    /// Whether this text falls back to its default language while the texts around it show the reader's culture, which
+    /// the app has. A text its wording shows then follows the default language too.
+    /// </param>
+    private string? FindDefaultTranslation(LocalizationRegistry registry, bool fallsBackAlone = false)
     {
         if (this.Contract is not { } contract || this.DefaultLanguage is not { } defaultLanguage)
             return null;
 
         // A text among the values shows in the default language too, where the user reads another. A text without
-        // values enters no scope on this path, for the reason GetWording gives.
-        using var scope = this.TakesValues ? this.EnterLanguageUnlessServed(defaultLanguage, registry) : default;
+        // values enters a scope only where it falls back alone, for the reason GetWording gives.
+        using var scope = this.TakesValues || fallsBackAlone ? this.EnterLanguageUnlessServed(defaultLanguage, registry) : default;
 
         // From the language code, through its culture only where this machine has one: under invariant globalization (a
         // NativeAOT console, a trimmed WebAssembly app) constructing any culture but the invariant one throws by

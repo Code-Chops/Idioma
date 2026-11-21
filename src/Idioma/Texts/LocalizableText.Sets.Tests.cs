@@ -1358,6 +1358,25 @@ public sealed class LocalizableTextSetsTests
     }
 
     [Test]
+    public void ToString_OfTextOfPropertyThatFallsBackAlone_ShouldShowItsTextInTheLanguageItFallsBackTo()
+    {
+        // Arrange: a Dutch user of an app that has Dutch, and a contract without a Dutch set. The text the property
+        // shows has Dutch wording.
+        using var _ = new CulturesScope(uiCulture: "nl-NL", culture: "nl-NL");
+        var registry = LocalizationRegistry.Create([new SetShowingLocalizationEn()]);
+        var dutch = CultureInfo.CurrentUICulture;
+        var hint = CreateHint();
+
+        // Act & Assert: one language throughout, and not "Open the Winkelwagen to pay". English through the app's
+        // default language, and through the text's own default language where the app's has no set.
+        hint.ToString(dutch, registry, appLanguages: ["en", "nl"]).ShouldBe("Open the Cart to pay");
+        hint.ToString(dutch, registry, appLanguages: ["fr", "nl"]).ShouldBe("Open the Cart to pay");
+
+        // A user whose culture the app doesn't have sees every text in the default language, so this one too.
+        hint.ToString(CultureInfo.GetCultureInfo("de-DE"), registry, appLanguages: ["en", "nl"]).ShouldBe("Open the Cart to pay");
+    }
+
+    [Test]
     public void DefaultText_OfTextOfProperty_ShouldShowItsTextInDefaultLanguage()
     {
         // Arrange

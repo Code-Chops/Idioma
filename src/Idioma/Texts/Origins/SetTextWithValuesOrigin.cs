@@ -13,6 +13,8 @@ internal abstract class SetTextWithValuesOrigin : TextOrigin
 {
     public override ILocalizationSet DefaultSet { get; }
 
+    public override bool IsOfSet => true;
+
     public override Type Contract { get; }
 
     // Asked of the set only when it's read: such a text is created on every call, and one that finds its wording in

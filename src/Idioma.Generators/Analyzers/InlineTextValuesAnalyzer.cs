@@ -26,8 +26,8 @@ namespace CodeChops.Idioma.Generators;
 /// <list type="bullet">
 /// <item>An argument that isn't written in place, such as a variable or the result of a call.</item>
 /// <item>An argument that calls a local function or a delegate, which may read the value.</item>
-/// <item>For a field or property, an argument that calls a method of this assembly, or reads a property of it that has
-/// a body.</item>
+/// <item>For a field, a property, or a parameter of a primary constructor, an argument that calls a method of this
+/// assembly, or reads a property of it that has a body.</item>
 /// <item>A call that doesn't compile.</item>
 /// </list>
 /// </remarks>
@@ -134,7 +134,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
 
             foreach (var value in shown)
             {
-                if (reads.Symbols.Contains(value) || (value is IFieldSymbol or IPropertySymbol && reads.CallsOwnCode))
+                if (reads.Symbols.Contains(value) || (reads.CallsOwnCode && IsReadableByOwnCode(value, context.CancellationToken)))
                     continue;
 
                 var language = SupportedLanguages.FindLanguageOfParameter(parameter.Name, codes);
@@ -143,6 +143,27 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
                 context.ReportDiagnostic(Diagnostic.Create(ValueLeftOutRule, argument.Syntax.GetLocation(), language, value.Name, defaultLanguage));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a method or a property of this assembly can read a value, so that a wording that calls one may show
+    /// the value unseen: a field, a property, or a parameter of a primary constructor, which every member of its type
+    /// reads as it reads a field. Any other parameter and a local variable belong to the code around the call alone.
+    /// </summary>
+    private static bool IsReadableByOwnCode(ISymbol value, CancellationToken cancellationToken)
+    {
+        if (value is IFieldSymbol or IPropertySymbol)
+            return true;
+
+        if (value is not IParameterSymbol { ContainingSymbol: IMethodSymbol { MethodKind: MethodKind.Constructor } })
+            return false;
+
+        // A primary constructor declares its parameters in the list of the type itself.
+        foreach (var reference in value.DeclaringSyntaxReferences)
+            if (reference.GetSyntax(cancellationToken) is ParameterSyntax { Parent.Parent: TypeDeclarationSyntax })
+                return true;
+
+        return false;
     }
 
     /// <summary>

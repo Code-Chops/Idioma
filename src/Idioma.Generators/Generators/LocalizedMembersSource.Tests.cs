@@ -415,6 +415,44 @@ public sealed class LocalizedMembersSourceTests
     }
 
     [Test]
+    [Arguments("[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]", "", "")]
+    [Arguments("", "[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]", "")]
+    [Arguments("", "", "[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]")]
+    [Arguments("[System.Obsolete(\"Use the new order.\", DiagnosticId = \"SHOP002\")]", "", "")]
+    [Arguments("", "", "[System.Obsolete(\"Use the new status.\", DiagnosticId = \"SHOP002\")]")]
+    public void TypeOrEnumMemberWithDiagnosticOfItsOwn_LeavesNothingInGeneratedCode(string onClass, string onEnum, string onEnumMember)
+    {
+        // Arrange: naming the type or the member reports a diagnostic of its author's choosing, which a build treats as
+        // an error (Experimental) or stops at when it treats warnings as errors (Obsolete).
+        var source = $$"""
+            {{Header}}
+
+            {{onClass}}
+            public class Order
+            {
+                [Localized(en: "Number", nl: "Nummer")]
+                public int Number { get; }
+            }
+
+            {{onEnum}}
+            public enum OrderStatus
+            {
+                {{onEnumMember}}
+                [Localized(en: "Pending", nl: "In behandeling")]
+                Pending,
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
     public void WordingThatIsNull_ShouldGetNoText()
     {
         // Arrange & Act: LocalizedMemberAnalyzer reports it.

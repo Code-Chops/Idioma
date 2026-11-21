@@ -466,7 +466,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
 
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName} {{ get; }} = CreateSetText<{name}>({keyLiteral}, static set => set.{memberName}, DefaultSet<{className}>.Instance);");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName} {{ get; }} = CreateSetText<{name}>({keyLiteral}, static set => set.{memberName}, GetDefaultSet<{className}>);");
                 continue;
             }
 
@@ -479,7 +479,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName}({RenderParameters(member, contract.Namespace, aliases)}) => CreateSetText<{name}, {types}>({keyLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), DefaultSet<{className}>.Instance, {arguments});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName}({RenderParameters(member, contract.Namespace, aliases)}) => CreateSetText<{name}, {types}>({keyLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), GetDefaultSet<{className}>(), {arguments});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
@@ -491,22 +491,17 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
 
         AppendGet(sb, contract, aliases, name, textsName, texts);
 
-        // The end of the texts, and the set every text takes its default wording from. File-local, so that inside this
-        // file its name binds to it even next to another type of that name. Generic, so that no text can stand before
-        // it: a name with a type argument is not looked for among the texts. DefaultSet alone would find a text named
-        // DefaultSet first, and with its namespace in front, Checkout.DefaultSet, a text named Checkout.
-        sb.AppendLine("""
-            }
-
-            file static class DefaultSet<TSet>
-                where TSet : new()
-            {
-                internal static TSet Instance { get; } = new();
-            }
-            """);
+        // The end of the texts. The set every text takes its default wording from is the package's to create
+        // (GetDefaultSet), when a text first needs it. Created here, as this class is first used, a set whose
+        // constructor throws would fail the class for good, with an exception that names the class alone. It's called
+        // with a type argument, so that no text can stand before it: a name with a type argument is not looked for
+        // among the texts.
+        sb.AppendLine("}");
 
         // The text of each member of an enum, outside the generated class: there a text named like the enum, or like
-        // what its name starts with, would stand before it in a pattern. File-local and generic, as DefaultSet is.
+        // what its name starts with, would stand before it in a pattern. File-local, so that inside this file its name
+        // binds to it even next to another type of that name. Generic, so that no text can stand before it: a name
+        // with a type argument is not looked for among the texts.
         if (lookups.Length > 0)
         {
             sb.AppendLine($$"""

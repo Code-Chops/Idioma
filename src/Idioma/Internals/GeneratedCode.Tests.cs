@@ -19,6 +19,27 @@ public sealed class GeneratedCodeTests
     {
         public string Greeting(string name) => $"Hello, {name}!";
     }
+
+    private interface IThrowingLocalization : ILocalizationSet
+    {
+        string Checkout { get; }
+    }
+
+    /// <summary>
+    /// A set of a default language whose constructor throws, as one that reads a setting that isn't there.
+    /// </summary>
+    private sealed class ThrowingLocalizationEn : IThrowingLocalization
+    {
+        public static int Created { get; private set; }
+
+        public ThrowingLocalizationEn()
+        {
+            Created++;
+            throw new FormatException("No shop name.");
+        }
+
+        public string Checkout => "Checkout";
+    }
     #endregion
 
     [Test]
@@ -33,7 +54,7 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["CreateText", "CreateSetText", "CreateUndefinedEnumText", "CreateMemberText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
+            ["CreateText", "CreateSetText", "GetDefaultSet", "CreateUndefinedEnumText", "CreateMemberText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
             ignoreOrder: true);
     }
 
@@ -175,6 +196,50 @@ public sealed class GeneratedCodeTests
         text.Contract.ShouldBe(typeof(IGeneratedCodeLocalization));
         text.DefaultText.ShouldBe("Hello, Anna!");
         text.Arguments.ShouldBe(["Anna"]);
+    }
+
+    [Test]
+    public void GetDefaultSet_ShouldGiveOneInstanceOfTheSet()
+    {
+        // Arrange & Act
+        var first = GeneratedCode.GetDefaultSet<GeneratedCodeLocalizationEn>();
+        var second = GeneratedCode.GetDefaultSet<GeneratedCodeLocalizationEn>();
+
+        // Assert
+        second.ShouldBeSameAs(first);
+    }
+
+    [Test]
+    public void SetOfDefaultLanguageWhoseConstructorThrows_ShouldNotFailUntilATextNeedsIt()
+    {
+        // Arrange & Act: as the class the source generator writes declares a text, when the class is first used.
+        var text = GeneratedCode.CreateSetText<IThrowingLocalization>("Shop.Checkout", static set => set.Checkout, GeneratedCode.GetDefaultSet<ThrowingLocalizationEn>);
+
+        // Assert: declaring the text creates no set, so the class is there for every text. What needs the set says
+        // which set threw, with the set's own exception inside, and so does every read after it.
+        ThrowingLocalizationEn.Created.ShouldBe(0);
+        text.Key.ShouldBe("Checkout");
+        text.Contract.ShouldBe(typeof(IThrowingLocalization));
+
+        var first = Should.Throw<InvalidOperationException>(() => text.DefaultText);
+        var second = Should.Throw<InvalidOperationException>(() => text.DefaultLanguage);
+
+        first.Message.ShouldContain(nameof(ThrowingLocalizationEn));
+        first.InnerException.ShouldBeOfType<FormatException>().Message.ShouldBe("No shop name.");
+        second.Message.ShouldBe(first.Message);
+    }
+
+    [Test]
+    public void CreateSetText_WithWhatGivesTheSet_ShouldWordItsDefaultTextWithThatSet()
+    {
+        // Arrange & Act
+        var text = GeneratedCode.CreateSetText<IGeneratedCodeLocalization, string>("Shop.Greeting", static (set, value) => set.Greeting(value), GeneratedCode.GetDefaultSet<GeneratedCodeLocalizationEn>(), "Anna");
+        var hint = GeneratedCode.CreateSetText<IGeneratedCodeLocalization>("Shop.Hint", static set => set.Greeting("you"), GeneratedCode.GetDefaultSet<GeneratedCodeLocalizationEn>);
+
+        // Assert: the language comes from the set's name, as for a set that is passed in.
+        text.DefaultText.ShouldBe("Hello, Anna!");
+        hint.DefaultText.ShouldBe("Hello, you!");
+        hint.DefaultLanguage.ShouldBe("en");
     }
 
     [Test]

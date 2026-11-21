@@ -12,7 +12,8 @@ internal static class PackageNames
     public const string Namespace = "CodeChops.Idioma";
     public const string InternalsNamespace = Namespace + ".Internals";
 
-    public const string LocalizationSet = Namespace + ".ILocalizationSet";
+    public const string LocalizationSetName = "ILocalizationSet";
+    public const string LocalizationSet = Namespace + "." + LocalizationSetName;
     public const string LocalizableTextName = "LocalizableText";
     public const string LocalizableText = Namespace + "." + LocalizableTextName;
     public const string LocalizationRegistry = Namespace + ".LocalizationRegistry";

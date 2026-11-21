@@ -983,8 +983,7 @@ public sealed class LocalizationSetsGeneratorTests
         var generated = result.Results.ShouldHaveSingleItem().GeneratedSources;
         var text = generated.Single(source => source.HintName is "ShopLocalizationEn.Localization.g.cs").SourceText.ToString();
         text.ShouldNotContain("namespace ");
-        text.ShouldContain(" DefaultSet<ShopLocalizationEn>.Instance);");
-        text.ShouldContain("internal static TSet Instance { get; } = new();");
+        text.ShouldContain(" GetDefaultSet<ShopLocalizationEn>);");
         generated.Single(source => source.HintName is "LocalizationSets.g.cs").SourceText.ToString().ShouldContain("LocalizationSetAttribute(\"IShopLocalization\", \"en\")");
     }
 
@@ -1068,16 +1067,17 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     [Arguments("namespace Checkout;", "Checkout")]
     [Arguments("namespace Orders.Texts;", "Orders")]
-    [Arguments("", "DefaultSet")]
+    [Arguments("", "GetDefaultSet")]
     [Arguments("namespace TestApp;", "CodeChops")]
     [Arguments("namespace TestApp;", "CreateSetText")]
+    [Arguments("namespace TestApp;", "GetDefaultSet")]
     [Arguments("namespace TestApp;", "ResourceKeyPrefix")]
     public void TextNamedLikeNameGeneratedClassWrites_ShouldCompileWithResolvedCrefs(string @namespace, string text)
     {
         // Arrange: inside the generated class a text stands before every namespace and type of its name. So the class
-        // names the set behind the defaults without its namespace and with a type argument, which neither a text named
-        // like the namespace nor one named DefaultSet stands before, and it calls what creates a text by its name alone,
-        // without the package's namespace, which a text named CodeChops would stand before.
+        // names the set behind the defaults without its namespace, and asks for it with a type argument, which neither
+        // a text named like the namespace nor one named GetDefaultSet stands before. It calls what creates a text by
+        // its name alone, without the package's namespace, which a text named CodeChops would stand before.
         var source = $$"""
             using CodeChops.Idioma;
 
@@ -3473,8 +3473,8 @@ public sealed class LocalizationSetsGeneratorTests
     [Arguments("public ShopLocalizationEn(string shop) { } public string Checkout => \"Checkout\";", "it has no parameterless constructor")]
     public void DefaultSetGeneratedCodeCannotCreate_ShouldReportLOC200AsItsOnlyError(string members, string expectedReason)
     {
-        // Arrange & Act: the generated texts create the set through DefaultSet<TSet>, which takes a public
-        // parameterless constructor (CS0310) and no member left to set (CS9040). With every generator at work.
+        // Arrange & Act: the generated texts create the set through GeneratedCode.GetDefaultSet<TSet>, which takes a
+        // public parameterless constructor (CS0310) and no member left to set (CS9040). With every generator at work.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
             using CodeChops.Idioma;
 
@@ -3523,6 +3523,49 @@ public sealed class LocalizationSetsGeneratorTests
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe("LOC200");
         error.GetMessage().ShouldStartWith($"'OrderStatusEn' is the default-language set of a contract, but its generated class would be named 'OrderStatus', like {expectedType}.");
+        error.GetMessage().ShouldEndWith("Rename the set or that type.");
+    }
+
+    [Test]
+    [Arguments("using Domain;", "ILocalizationSet<OrderStatus>", true)]
+    [Arguments("using Domain;", "CodeChops.Idioma.ILocalizationSet<OrderStatus>", true)]
+    [Arguments("", "ILocalizationSet<Domain.OrderStatus>", false)]
+    public void DefaultSetWhoseGeneratedClassIsNamedLikeItsEnumOfAnotherNamespace_ShouldReportLOC200OnlyWhereItNamesTheEnumAlone(
+        string usings, string setInterface, bool isReported)
+    {
+        // Arrange & Act: the enum lies in another namespace than the set that is named after it. Inside the set's
+        // namespace the generated class would stand before the enum. So the set's own ILocalizationSet<OrderStatus>
+        // would name that class, which is static (CS0718). A set that writes the enum with its namespace still names it.
+        var errors = GeneratorTestHelper.CompileWithGenerators($$"""
+            using CodeChops.Idioma;
+            {{usings}}
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace Domain
+            {
+                public enum OrderStatus { Pending }
+            }
+
+            namespace TestApp
+            {
+                public sealed class OrderStatusEn : {{setInterface}}, IOrderStatus
+                {
+                    public string Pending => "Pending";
+                }
+            }
+            """);
+
+        // Assert: one error, at the set, where it's reported. The contract is still written, so the set compiles.
+        if (!isReported)
+        {
+            errors.ShouldBeEmpty();
+            return;
+        }
+
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC200");
+        error.GetMessage().ShouldStartWith("'OrderStatusEn' is the default-language set of a contract, but its generated class would be named 'OrderStatus', like the enum 'Domain.OrderStatus' it holds the texts of.");
         error.GetMessage().ShouldEndWith("Rename the set or that type.");
     }
 
@@ -3656,7 +3699,7 @@ public sealed class LocalizationSetsGeneratorTests
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopLocalizationEn");
         diagnostic.Properties.ShouldNotContainKey(LocalizationSetsGenerator.SuggestedNameProperty);
         DiagnosticIds(result).ShouldBe(["LOC200"]);
-        ContractText(result).ShouldContain("DefaultSet<ShopLocalizationEN>.Instance");
+        ContractText(result).ShouldContain("GetDefaultSet<ShopLocalizationEN>)");
         errors.Select(static error => error.Id).ShouldBe(["LOC200"]);
     }
 
@@ -4248,8 +4291,8 @@ public sealed class LocalizationSetsGeneratorTests
         ShownValues(text, "Greeting").ShouldBe(["name"]);
         ShownValues(text, "ItemsInCart").ShouldBe(["count", "shop"]);
         text.ShouldContain("LocalizableText Greeting(string name) =>");
-        text.ShouldContain("""public static CodeChops.Idioma.LocalizableText Greeting(string name) => CreateSetText<IShopLocalization, string>("TestApp.ShopLocalization.Greeting", static (set, name) => set.Greeting(name), DefaultSet<ShopLocalizationEn>.Instance, name);""");
-        text.ShouldContain("""public static CodeChops.Idioma.LocalizableText ItemsInCart(int count, string shop) => CreateSetText<IShopLocalization, int, string>("TestApp.ShopLocalization.ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), DefaultSet<ShopLocalizationEn>.Instance, count, shop);""");
+        text.ShouldContain("""public static CodeChops.Idioma.LocalizableText Greeting(string name) => CreateSetText<IShopLocalization, string>("TestApp.ShopLocalization.Greeting", static (set, name) => set.Greeting(name), GetDefaultSet<ShopLocalizationEn>(), name);""");
+        text.ShouldContain("""public static CodeChops.Idioma.LocalizableText ItemsInCart(int count, string shop) => CreateSetText<IShopLocalization, int, string>("TestApp.ShopLocalization.ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), GetDefaultSet<ShopLocalizationEn>(), count, shop);""");
     }
 
     [Test]
@@ -4704,7 +4747,7 @@ public sealed class LocalizationSetsGeneratorTests
         text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
         text.ShouldContain("    string Delegates(Namespace_System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
-        text.ShouldContain("LocalizableText @event(string @class, int @int) => CreateSetText<IShopLocalization, string, int>(\"TestApp.ShopLocalization.event\", static (set, @class, @int) => set.@event(@class, @int), DefaultSet<ShopLocalizationEn>.Instance, @class, @int);");
+        text.ShouldContain("LocalizableText @event(string @class, int @int) => CreateSetText<IShopLocalization, string, int>(\"TestApp.ShopLocalization.event\", static (set, @class, @int) => set.@event(@class, @int), GetDefaultSet<ShopLocalizationEn>(), @class, @int);");
     }
 
     [Test]

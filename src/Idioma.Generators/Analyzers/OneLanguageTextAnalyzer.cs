@@ -118,6 +118,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         var excluded = context.Compilation.GetTypeByMetadataName(PackageNames.ExcludeFromLocalizationDiscoveryAttribute);
 
         context.RegisterOperationAction(c => AnalyzeConversion(c, text, excluded, languages, sample), OperationKind.Conversion);
+        context.RegisterOperationAction(c => AnalyzeCompoundAssignment(c, text, excluded, languages, sample), OperationKind.CompoundAssignment);
         context.RegisterOperationAction(c => AnalyzeCreation(c, text, excluded, languages, sample), OperationKind.ObjectCreation);
         context.RegisterOperationAction(c => AnalyzeKeyed(c, text, excluded, languages, sample), OperationKind.Invocation);
     }
@@ -209,6 +210,26 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
             && HoldsWording(conversion.Operand))
         {
             context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, conversion.Syntax.GetLocation(), languages, sample));
+        }
+    }
+
+    /// <summary>
+    /// Reports wording added to a text, as in <c>title += " (draft)";</c>. The text becomes a string, the wording is
+    /// added, and the result converts back to a text in one language.
+    /// </summary>
+    // The conversion back is no operation of its own, so AnalyzeConversion never sees it.
+    private static void AnalyzeCompoundAssignment(OperationAnalysisContext context, INamedTypeSymbol text, INamedTypeSymbol? excluded,
+        string languages, string sample)
+    {
+        var assignment = (ICompoundAssignmentOperation)context.Operation;
+
+        if (assignment.OutConversion.MethodSymbol is { Parameters.Length: 1 } method
+            && SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
+            && method.Parameters[0].Type.SpecialType is SpecialType.System_String
+            && IsChecked(context, excluded)
+            && HoldsWording(assignment.Value))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, assignment.Value.Syntax.GetLocation(), languages, sample));
         }
     }
 

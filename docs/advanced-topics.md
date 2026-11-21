@@ -241,7 +241,7 @@ List<LocalizableText> texts = [ShopLocalization.Checkout];
 
 ShopLocalization.Checkout == wording
 ShopLocalization.Checkout.Equals(wording)
-ShopLocalization.Checkout == LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")
+ShopLocalization.Checkout == LocalizableText.Inline(en: "Pay", nl: "Afrekenen")
 texts.Contains(wording)
 ```
 

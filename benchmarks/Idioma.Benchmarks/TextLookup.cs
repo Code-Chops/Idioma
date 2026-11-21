@@ -21,7 +21,7 @@ public class TextLookup
 
     private Scenarios scenarios = null!;
 
-    [Params("en", "nl", "en-GB", "de")]
+    [Params("en", "nl", "en-GB")]
     public string Culture { get; set; } = "en";
 
     [GlobalSetup]

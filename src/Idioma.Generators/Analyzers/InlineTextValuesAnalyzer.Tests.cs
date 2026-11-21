@@ -190,6 +190,33 @@ public sealed class InlineTextValuesAnalyzerTests
     }
 
     [Test]
+    [Arguments("""nl: $"Hallo, {Who()}!" """, 0)]
+    [Arguments("""nl: $"Hallo, {WhoInCapitals}!" """, 0)]
+    [Arguments("""nl: "Hallo!" """, 1)]
+    public async Task ValueOfPrimaryConstructor_ShouldBeExcusedOnlyByCodeOfItsTypeThatMayShowIt(string dutch, int expected)
+    {
+        // Arrange
+        var source = $$"""
+            {{Header}}
+
+            public sealed class Greeter(string name)
+            {
+                public LocalizableText Text => LocalizableText.Inline(en: $"Hello, {name}!", {{dutch}}, enGb: $"Hello, {name}!");
+
+                private string Who() => name;
+                private string WhoInCapitals => name.ToUpperInvariant();
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: every member of the type reads a parameter of its primary constructor, as it reads a field. So a
+        // method or a property with a body may show the name, and a wording that calls neither still leaves it out.
+        diagnostics.Length.ShouldBe(expected);
+    }
+
+    [Test]
     [Arguments("""en: $"Hello, {name}!", nl: $"Hallo, {naam}!", enGb: $"Hello, {name}!" """)]
     [Arguments("""en: $"Hello, {name}!", nl: "Hallo" + , enGb: $"Hello, {name}!" """)]
     [Arguments("""en: $"Hello, {name}!", nl: "Hallo!" """)]
