@@ -1,5 +1,11 @@
 # Language codes
 
+A language code, such as `en` or `en-GB`, is written in three ways: as a culture name in `[assembly: SupportedLanguages]`, in PascalCase at the end of a set's name, and in camelCase as a parameter name of an inline text or an attribute. This page covers the names, and the two ways to add a regional variant.
+
+Other subjects have a page of their own: [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
+
+## Codes in names
+
 A set's language code is the end of its name, written in PascalCase. A two-letter code is the last two letters: `ShopLocalizationEn` serves `en` and every culture under it.
 
 A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name only when `[assembly: SupportedLanguages]` lists it. It's written in PascalCase too: `ShopLocalizationEnGb`, `ShopLocalizationZhHans`, `ShopLocalizationFil`. A set deriving from such a set serves the same language.
@@ -9,8 +15,6 @@ Only the capital that starts the code counts. After it, the code matches in any 
 An inline text and an attribute take the same codes as parameter names, in camelCase: `nl:` where a set's name ends in `Nl`, and `enGb:`, `zhHans:`, and `fil:` for the sets above.
 
 When a longer code isn't listed, only the last two letters count. A name alone can't tell `ShopLocalizationEnGb` (British English) from `AdminUiNl` (Dutch). So an unlisted `ShopLocalizationEnGb` serves `gb`, which isn't a language (build error `LOC202`).
-
-Other subjects have a page of their own: [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
 
 ## Regional variants
 

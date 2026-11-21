@@ -123,7 +123,13 @@ public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
 }
 ```
 
-A missing text or a missing language is a build error. So is a set without its contract, and your IDE adds it. Without `ILocalizationSet`, a class isn't a set, so the build reports its language as missing. There's nothing to register, because every set is registered automatically.
+The build checks your sets:
+
+- A missing text or a missing language is a build error.
+- A set without its contract is a build error too, and your IDE adds the contract.
+- A class without `ILocalizationSet` isn't a set, so the build reports its language as missing.
+
+There's nothing to register, because every set is registered automatically.
 
 If you add German to your languages, the build tells you which set to write:
 
@@ -178,7 +184,7 @@ In your IDE, hovering over `ShopLocalization.Cart` shows its wording in every la
 
 An inline text shows where you write it.
 
-Ask for a text written as an attribute by the type and the name of its member, or for the text of the type itself. Both give `null` where there's no `[Localized]`. A call that names the type and the member in the code, as both do here, is then a build error (`LOC504`):
+Ask for a text written as an attribute by the type and the name of its member, or for the text of the type itself ([details](#labels-in-a-form-a-table-or-an-export)):
 
 ```razor
 <h2>
@@ -203,8 +209,6 @@ static readonly string Frozen = ShopLocalization.Checkout;         // The first 
 static readonly LocalizableText Label = ShopLocalization.Checkout; // Each user's own language
 ```
 
-Two texts are equal when they show the same wording in the user's language, and a text's hash follows that wording. So a `Dictionary` or `HashSet` keyed by texts can't find its texts after a language switch, or when users of different languages share it. Give such a collection `ReferenceEqualityComparer.Instance`, which tells texts apart by object ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#equality)).
-
 ### The user's language
 
 The user's language is `CultureInfo.CurrentUICulture`.
@@ -213,7 +217,7 @@ A desktop or console app starts with the language of the user's system, and a Bl
 > An ASP.NET Core app needs request localization, as in `app.UseRequestLocalization("en", "nl")`,
 > which sets the language for each request. Without it, every user gets the language of the server.
 
-Users whose language you don't support see your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#fallback-order)).
+Users whose language you don't support see your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order)).
 
 To get the wording in another language, such as that of an email's recipient, pass its culture to `ToString`:
 
@@ -221,7 +225,7 @@ To get the wording in another language, such as that of an email's recipient, pa
 string dutch = ShopLocalization.Checkout.ToString(CultureInfo.GetCultureInfo("nl"));
 ```
 
-An app that keeps the user's language somewhere else, such as in a user profile, sets `LocalizationRegistry.CurrentUICultureProvider` once at startup. Every text then follows the culture it returns ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#the-current-culture)):
+An app that keeps the user's language somewhere else, such as in a user profile, sets `LocalizationRegistry.CurrentUICultureProvider` once at startup. Every text then follows the culture it returns ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#the-current-culture)):
 
 ```csharp
 LocalizationRegistry.CurrentUICultureProvider = () => UserProfile.Current?.Culture;
@@ -305,7 +309,7 @@ The build checks that every language uses the same parameters, names included, s
 error LOC301: 'ShopLocalizationNl.ItemsInCart' names this parameter 'aantal', but 'IShopLocalization.ItemsInCart' names it 'count'. Use the same parameter names in every language, so that two values of one type can't swap unnoticed.
 ```
 
-Idioma has no plural rules. Each language writes its own conditions in C#: English and Dutch have two forms, and Polish has more ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#texts-with-parameters)).
+Idioma has no plural rules. Each language writes its own conditions in C#: English and Dutch have two forms, and Polish has more ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#texts-with-parameters)).
 
 ### Enums
 
@@ -350,7 +354,7 @@ error CS0535: 'OrderStatusLocalizationNl' does not implement interface member 'I
 
 The source generator writes `GetText()` next to the generated class, so it's in reach wherever the namespace of your set is. It calls `OrderStatusLocalization.GetTextByValue(order.Status)`, which you can write yourself too.
 
-A text of a member is a text like any other, so `OrderStatusLocalization.Shipped` works too ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#enums)).
+A text of a member is a text like any other, so `OrderStatusLocalization.Shipped` works too ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#enums)).
 
 #### An attribute on each member
 
@@ -387,9 +391,11 @@ LocalizableText? city = LocalizableText.GetTextByMember(type, "City");
 LocalizableText? caption = LocalizableText.GetTextOfType(type);
 ```
 
+Each gives `null` where there's no `[Localized]`. Where the call names the type and the member in the code, as `GetTextByMember<Address>(nameof(Address.City))` does, a member without `[Localized]` is build error `LOC504` instead.
+
 A class without a text for a member gets that of its nearest base class. So an override without `[Localized]` keeps the text of the property it overrides.
 
-The source generator reads each `[Localized]` as your project builds, and writes its text as code. So nothing reads the attribute at run time, and the attribute isn't part of your assembly ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#attributes-on-members)).
+The source generator reads each `[Localized]` as your project builds, and writes its text as code. So nothing reads the attribute at run time, and the attribute isn't part of your assembly ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#attributes-on-members)).
 
 ### Get a text by its key
 
@@ -408,7 +414,11 @@ A text with parameters takes its values after the key:
 LocalizableText greeting = ShopLocalization.GetTextByKey("Greeting", customer.Name);
 ```
 
-The build can't check a key, so a key that no text has throws `KeyNotFoundException`. Where you know the text, write `ShopLocalization.Cart` instead ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md#getting-a-text-by-its-key)).
+The build can't check a key, so a key that no text has throws `KeyNotFoundException`. Where you know the text, write `ShopLocalization.Cart` instead ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key)).
+
+### Equality
+
+Two texts are equal when they show the same wording in the user's language, and a text's hash follows that wording. So a `Dictionary` or `HashSet` keyed by texts can't find its texts after a language switch, or when users of different languages share it. Give such a collection `ReferenceEqualityComparer.Instance`, which tells texts apart by object ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#equality)).
 
 ### Regional variants, such as British English
 
@@ -494,13 +504,13 @@ Review a translation as code too, because a set is C#. A change to a set can run
 Each subject has a page of its own:
 
 - [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md): how a set's name gives its language, and the two ways to add a regional variant.
-- [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): which project's languages your users get, what the build asks when such a library lacks one of them, and how your app changes one of its texts.
-- [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): switching language without a reload, Blazor on a server, dates and numbers, and a text as a component parameter.
+- [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): what a library does so that apps can translate and reword it, which project's languages your users get, what the build asks when such a library lacks one of them, and how your app changes one of its texts.
+- [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): a language picker for every render mode, a browser language the app doesn't have, dates and numbers, and a text as a component parameter.
 - [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning by its code, what still converts to a text, and what the build misses.
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, moving a resource file, and keeping a resource file as an override.
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes to show next to `IStringLocalizer`, on .NET and in Blazor WebAssembly, and what Idioma adds to a download.
 - [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): four complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
-- [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, enums, attributes on members, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
+- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): what happens behind the texts you write, such as which wording a user sees and what the source generator writes. It also covers the tasks this page leaves out, such as registering a set by hand, testing with sets of your own, and writing a contract yourself.
 
 ## License
 

@@ -7,7 +7,7 @@ This folder has four demos of [Idioma](../README.md). Each is a complete app in 
 - [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline.
 - [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class, its properties and the members of an enum.
 
-All four support English and Dutch. `SetDemo.cs`, `InlineTextDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English. Each prints its texts in each of its languages, and for a German user. German isn't one of their languages, so that user gets English, the default, as a [fallback](../docs/how-it-works.md#fallback-order).
+All four support English and Dutch. `SetDemo.cs`, `InlineTextDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English. Each prints its texts in each of its languages, and for a German user. German isn't one of their languages, so that user gets English, the default, as a [fallback](../docs/advanced-topics.md#fallback-order).
 
 ## In your browser
 

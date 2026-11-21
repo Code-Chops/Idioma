@@ -8,7 +8,7 @@ In a Blazor or Razor project, add three namespaces to `_Imports.razor`: Idioma's
 @using MyApp.Localization
 ```
 
-Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
+Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
 
 ## A language picker
 
@@ -170,4 +170,4 @@ Dates and numbers follow the culture too, but they need its globalization data. 
 
 ## A text as a component parameter
 
-A text can be a parameter of a component with another render mode, such as an `InteractiveWebAssembly` component on a static page. Blazor passes it on as JSON, and the text still shows the user's language on the other side, even after a switch ([details](how-it-works.md#texts-in-json)).
+A text can be a parameter of a component with another render mode, such as an `InteractiveWebAssembly` component on a static page. Blazor passes it on as JSON, and the text still shows the user's language on the other side, even after a switch ([details](advanced-topics.md#texts-in-json)).

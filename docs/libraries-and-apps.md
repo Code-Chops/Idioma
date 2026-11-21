@@ -2,6 +2,7 @@
 
 A library can use Idioma for its own texts, as an app does. It declares its languages with `[assembly: SupportedLanguages]` and writes its sets. This page covers such a library and an app that references it:
 
+- what the library does so that apps can translate and reword it
 - which of the two decides the languages your users get
 - what the app adds when the library lacks one of its languages
 - how the app changes one of the library's texts
@@ -9,7 +10,15 @@ A library can use Idioma for its own texts, as an app does. It declares its lang
 
 In the examples, the library is `Shop`. Its contract is `Shop.IShopLocalization`, and its English set is `ShopLocalizationEn`.
 
-Other subjects have a page of their own: [language codes](language-codes.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
+Other subjects have a page of their own: [language codes](language-codes.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
+
+## Writing a library
+
+Three choices decide what an app that uses your library can change:
+
+- **Write texts in sets.** An app can add a language to a set, but not to an inline text or a text written as an attribute ([LOC601](build-errors.md#loc601)).
+- **Make the sets public.** A contract takes the accessibility of its set, and an app needs a public contract to add a language.
+- **Leave the sets unsealed and the texts `virtual`.** An app can then reword one text and keep the rest ([Changing a text of a library](#changing-a-text-of-a-library)).
 
 ## The app's languages
 
@@ -68,10 +77,10 @@ Every other text keeps the library's wording, and so does every other language. 
 Such a rewording:
 
 - Always wins over the library's own set, whichever assembly loads first. So does a set you register yourself.
-- Reaches the library's regional sets. Rewording `ShopLocalizationEn` also changes a text for British users, unless `ShopLocalizationEnGb` has its own wording for that text.
+- Reaches the library's regional sets. Rewording `ShopLocalizationEn` also changes a text for British users, unless `ShopLocalizationEnGb` has its own wording for that text. To change that wording too, reword `ShopLocalizationEnGb` the same way.
 - Adds up with other rewordings. When a shared library of yours rewords some texts and your app rewords others of the same set, both show. When both reword the same text, the set registered last wins.
 
-A library allows this by leaving its sets unsealed and its texts `virtual`, as in `public virtual string Checkout => "Checkout";`. Where a library's set is sealed, or the text isn't virtual, implement the library's contract in full, in the same language. A sealed set has no regional sets to reach, because none can derive from it. Where the library's set isn't sealed, your wording also shows for its regional sets, for every text such a set leaves alone. Reword a text that a regional set changes the same way.
+A library allows this by leaving its sets unsealed and its texts `virtual`, as in `public virtual string Checkout => "Checkout";`. Where a library's set is sealed, or the text isn't virtual, implement the library's contract in full, in the same language. Such a set reaches the library's regional sets too, as a rewording does.
 
 ## An assembly without languages
 

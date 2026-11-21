@@ -8,7 +8,7 @@ error LOC500: This text is in one language, but this assembly supports en, nl. W
 
 This page lists every code, grouped by subject, with an example and the fix. Your IDE offers a fix for the codes marked *(code fix)*.
 
-Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
+Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
 
 ## All codes
 
@@ -81,26 +81,33 @@ A project that declares no languages builds with an older version, such as one t
 
 ### LOC200
 
-The generator can't use the default-language set, so it writes no texts for it. The set must be:
+The generator can't use the default-language set, so it writes no texts for it. A default-language set it can use:
 
-- named after its language, such as `ShopLocalizationEn`
-- top-level, so not nested
-- not file-local, generic, or abstract
-- with a public parameterless constructor
-- without `required` members
-- not marked `[Obsolete]` as an error
-- the only default-language set of its contract
-- a set of no other contract, such as a library's
-- named so that its generated class gets a name no other type or namespace has
-- named so that its contract gets a name no other type has
+- is named after its language, such as `ShopLocalizationEn`
+- is top-level, so not nested
+- isn't file-local, generic, or abstract
+- has a public parameterless constructor
+- has no `required` members
+- isn't marked `[Obsolete]` as an error
+- is the only default-language set of its contract
+- is a set of no other contract, such as a library's
+- has a name that gives its generated class a name no other type or namespace has
+- has a name that gives its contract a name no other type has
 
-When only the constructor, a `required` member, `[Obsolete]` or the name of the generated class is the problem, the generator still writes the contract. Otherwise it writes no contract either. The contract your sets list then doesn't exist, so they don't compile (`CS0246`) until you fix this error. The message ends in what to change.
+The generator still writes the contract when the only problem is one of these:
+
+- the constructor
+- a `required` member
+- `[Obsolete]`
+- the name of the generated class
+
+Otherwise it writes no contract either. The contract your sets list then doesn't exist, so they don't compile (`CS0246`) until you fix this error. The message ends in what to change.
 
 Two sets are the default-language set of one contract when their names differ only in the letter case of the language, as `ShopLocalizationEn` and `ShopLocalizationEN` do. The generator writes the contract from the first by name and reports the other. Remove one of them, or rename it.
 
 The generated class is named after the set without its language, so `OrderStatusEn` next to an enum `OrderStatus` would give a second `OrderStatus`. Rename the set, as in `OrderStatusLocalizationEn`, or the other type. A static partial class of that name is fine, because it's a part of the generated class. A namespace of that name counts too, as the folder `Texts` gives `MyApp.Texts` next to `TextsEn`.
 
-The contract is named after the set too, so an interface `IShopLocalization` of your own next to `ShopLocalizationEn` would give a second `IShopLocalization`. Rename the set or your interface. An interface that derives from `ILocalizationSet` is a contract you write yourself, and the generator writes none next to it ([a contract you write yourself](how-it-works.md#a-contract-you-write-yourself)).
+The contract is named after the set too, so an interface `IShopLocalization` of your own next to `ShopLocalizationEn` would give a second `IShopLocalization`. Rename the set or your interface. An interface that derives from `ILocalizationSet` is a contract you write yourself, and the generator writes none next to it ([a contract you write yourself](advanced-topics.md#a-contract-you-write-yourself)).
 
 A set that implements another contract, such as `Shop.IShopLocalization` of a library, translates or rewords that contract, and starts none of its own:
 
@@ -160,8 +167,8 @@ A set lists `ILocalizationSet` without its contract, so no text reads it. This a
 A text has a name the generated class can't give it, so that text isn't generated. Rename the text. Four names are taken:
 
 - The name of the generated class, as in `ShopLocalization.ShopLocalization`. In C#, a member can't have the name of its own class.
-- `GetTextByKey`. The generated class has a method of that name, which gives a [text by its key](how-it-works.md#getting-a-text-by-its-key).
-- `GetTextByValue`, in a [set of an enum](how-it-works.md#enums). The generated class has a method of that name, which gives the text of an enum value.
+- `GetTextByKey`. The generated class has a method of that name, which gives a [text by its key](advanced-topics.md#getting-a-text-by-its-key).
+- `GetTextByValue`, in a [set of an enum](advanced-topics.md#enums). The generated class has a method of that name, which gives the text of an enum value.
 - `GetText`, in a set of an enum. The generated class has an extension method of that name, which gives a value its text: `order.Status.GetText()`.
 
 ### LOC206
@@ -228,7 +235,7 @@ A public method of the default-language set that returns a `string` is a text wi
 - takes more than eight parameters
 - has a parameter that is passed by reference, is `params`, has a default value, or is `dynamic`
 - has a parameter of a type a text can't keep until it's shown, such as a pointer or a span
-- has the name of an enum member, in a [set of an enum](how-it-works.md#enums), where the text of a member is a property
+- has the name of an enum member, in a [set of an enum](advanced-topics.md#enums), where the text of a member is a property
 
 A method that can't become a property isn't reported: an override such as `ToString()`, or a method that another interface of the set asks for.
 
@@ -289,7 +296,7 @@ To keep the wording of the moment on purpose, call `ToString()` on the text. The
 
 The IDE fix changes the parameter's type in every set of your project at once. A call that passes a value, such as a customer's name, still compiles, because a string converts to a text. A call that passes wording written in the source, as in `PressToPay("Enter")`, becomes `LOC500`, because that wording is in one language. A text of a library gets no fix, because your project can't change the library's sets.
 
-An inline text gets no warning for a text in its wording, because it fills its values in at once ([details](how-it-works.md#texts-with-parameters)).
+An inline text gets no warning for a text in its wording, because it fills its values in at once ([details](advanced-topics.md#texts-with-parameters)).
 
 ## Registration
 
@@ -319,7 +326,7 @@ A member marked `[Localized]` gets LOC400 when its text can't be registered, so 
 warning LOC400: The text of 'Line.Article' can't be registered because generated code can't name 'Line', which is private, so it won't be found. Make 'Line' internal or public.
 ```
 
-See [attributes on members](how-it-works.md#attributes-on-members).
+See [attributes on members](advanced-topics.md#attributes-on-members).
 
 ### LOC401
 
@@ -366,7 +373,7 @@ public static LocalizableText Brand { get; } = "Idioma";
 
 The attribute covers the initializer and the getter, as in `public static LocalizableText Brand => "Idioma";`. Its setter and what other code assigns to the property are still checked, so a marked component parameter still holds its callers to every language.
 
-A lookup by wording is LOC500 too, as in `texts.Contains("Orders")` or `counts["Orders"]` on a collection of texts. Two texts are equal when they show the same wording for the user ([Equality](how-it-works.md#equality)), so the lookup only finds "Orders" for English users. Look the text up by itself instead: `texts.Contains(ShopLocalization.Orders)`.
+A lookup by wording is LOC500 too, as in `texts.Contains("Orders")` or `counts["Orders"]` on a collection of texts. Two texts are equal when they show the same wording for the user ([Equality](advanced-topics.md#equality)), so the lookup only finds "Orders" for English users. Look the text up by itself instead: `texts.Contains(ShopLocalization.Orders)`.
 
 LOC500 starts with your second language, because one language has nothing to be translated into. See also [what still converts](#what-still-converts).
 
@@ -414,7 +421,7 @@ The fix changes every language or none. There's no fix when:
 
 - a language's text can't become a method, such as one with a setter or one the constructor assigns
 - code of your project uses the text as a property of a set, such as another text that shows it, because that code would no longer compile. The override of the text in a regional set is the exception: its `base.Greeting` becomes `base.Greeting(arg0)`
-- it's the text of an enum member, in a [set of the enum](how-it-works.md#enums), because the contract takes that text from the enum
+- it's the text of an enum member, in a [set of the enum](advanced-topics.md#enums), because the contract takes that text from the enum
 - the contract's text takes no values and the contract is another assembly's or one you wrote by hand, because the fix doesn't change a contract
 - the text overrides a text of another assembly's set
 
@@ -434,7 +441,7 @@ An enum without a marked member gets no warning, also when the enum itself is ma
 
 For a member that's never shown, turn the warning off around it: `#pragma warning disable LOC503`.
 
-Where a missing text has to be a build error, write a [set of the enum](how-it-works.md#enums) instead. An enum that has a set gets its `GetText()` from the set, also while its members are still marked.
+Where a missing text has to be a build error, write a [set of the enum](advanced-topics.md#enums) instead. An enum that has a set gets its `GetText()` from the set, also while its members are still marked.
 
 ### LOC504
 
