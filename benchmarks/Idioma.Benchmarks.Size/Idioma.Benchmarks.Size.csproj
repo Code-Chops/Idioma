@@ -10,16 +10,21 @@
 
     It publishes idioma and localizer twice: with English only (-p:SecondLanguage=false), and with Dutch too. What the
     second publish adds is what a language of 100 texts costs.
+
+    It publishes idioma a third time with -p:LazyLanguage=true. The English set is then in a library, and the Dutch set
+    in an assembly of its own that the app loads lazily, so only a Dutch user downloads it.
   -->
 
   <PropertyGroup>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <SizeApproach Condition="'$(SizeApproach)' == ''">idioma</SizeApproach>
     <SecondLanguage Condition="'$(SecondLanguage)' == ''">true</SecondLanguage>
+    <LazyLanguage Condition="'$(LazyLanguage)' == ''">false</LazyLanguage>
     <DefineConstants>$(DefineConstants);$(SizeApproach.ToUpperInvariant())</DefineConstants>
+    <DefineConstants Condition="'$(LazyLanguage)' == 'true'">$(DefineConstants);LAZY</DefineConstants>
     <!-- Each variant builds into folders of its own, so that no build of one is taken for another. Set here, because
          on the command line they would apply to the referenced projects too, which then embed other paths. -->
-    <SizeVariant>$(SizeApproach)-second-language-$(SecondLanguage)-aot-$(RunAOTCompilation)</SizeVariant>
+    <SizeVariant>$(SizeApproach)-second-language-$(SecondLanguage)-lazy-$(LazyLanguage)-aot-$(RunAOTCompilation)</SizeVariant>
     <IntermediateOutputPath>obj/$(Configuration)/$(SizeVariant)/</IntermediateOutputPath>
     <OutputPath>bin/$(Configuration)/$(SizeVariant)/</OutputPath>
   </PropertyGroup>
@@ -49,6 +54,14 @@
 
   <ItemGroup Condition="'$(SizeApproach)' == 'idioma' and '$(SecondLanguage)' != 'true'">
     <Compile Remove="TwoLanguages.cs;StoreLocalizationNl.cs" />
+  </ItemGroup>
+
+  <!-- Idioma, with the sets outside the app. The Dutch one is left out of what the app downloads when it starts. -->
+  <ItemGroup Condition="'$(SizeApproach)' == 'idioma' and '$(LazyLanguage)' == 'true'">
+    <Compile Remove="StoreLocalizationEn.cs;StoreLocalizationNl.cs" />
+    <ProjectReference Include="../Idioma.Benchmarks.Size.Texts/Idioma.Benchmarks.Size.Texts.csproj" />
+    <ProjectReference Include="../Idioma.Benchmarks.Size.Texts.Nl/Idioma.Benchmarks.Size.Texts.Nl.csproj" />
+    <BlazorWebAssemblyLazyLoad Include="Idioma.Benchmarks.Size.Texts.Nl.wasm" />
   </ItemGroup>
 
   <!-- resx and IStringLocalizer. Store.resx gets the class resx generates, Store, as an app gets it from its IDE.

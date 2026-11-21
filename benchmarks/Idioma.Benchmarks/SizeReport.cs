@@ -3,8 +3,9 @@ using System.Text.RegularExpressions;
 namespace Benchmarks;
 
 /// <summary>
-/// The download sizes of Idioma.Benchmarks.Size, from five publishes: the app without localization, and the app with
-/// each approach, once with English only and once with Dutch too.
+/// The download sizes of Idioma.Benchmarks.Size, from six publishes: the app without localization, the app with each
+/// approach, once with English only and once with Dutch too, and the app with Idioma's Dutch set in an assembly of its
+/// own that it loads lazily.
 /// </summary>
 /// <remarks>
 /// An approach costs what its publish downloads beyond the app without localization, which shows the same 100 texts as
@@ -13,11 +14,18 @@ namespace Benchmarks;
 /// publish with Dutch downloads beyond the one without. With AOT, code also becomes native code in dotnet.native.wasm.
 /// That file is several megabytes, and Brotli's result for it moves by kilobytes when a little of it changes, so it's
 /// left out of the other rows, and its growth is given before and after compression.
+/// <para>
+/// A publish holds the lazily loaded assembly too, though only a Dutch user downloads it. So a user of the default
+/// language downloads what that publish holds without it.
+/// </para>
 /// </remarks>
 internal static partial class SizeReport
 {
     private const string AppPrefix = "Idioma.Benchmarks.Size.";
     private const string NativePrefix = "dotnet.native.";
+
+    // The assembly with the Dutch set, in the publish that loads it lazily.
+    private const string LazyAssembly = "Idioma.Benchmarks.Size.Texts.Nl.wasm";
 
     // Native code that grows by less is the noise of relinking, as with the interpreter.
     private const long NativeShown = 1024;
@@ -33,7 +41,8 @@ internal static partial class SizeReport
 
     /// <summary>
     /// Prints the tables of the publishes in <paramref name="root"/>, named <c>none</c>, <c>idioma-one</c>,
-    /// <c>idioma-two</c>, <c>localizer-one</c> and <c>localizer-two</c>, each followed by <paramref name="suffix"/>.
+    /// <c>idioma-two</c>, <c>idioma-lazy</c>, <c>localizer-one</c> and <c>localizer-two</c>, each followed by
+    /// <paramref name="suffix"/>.
     /// </summary>
     public static void Print(string root, string suffix, string label)
     {
@@ -81,6 +90,23 @@ internal static partial class SizeReport
 
         foreach (var file in files)
             Console.WriteLine($"| {file} | {string.Join(" | ", publishes.Select(publish => Kilobytes(Growth(publish.One, file))))} |");
+
+        // What loading a language lazily saves a user of the default language, and what it costs a Dutch one.
+        var idioma = publishes[Array.FindIndex(Approaches, approach => approach.Name is "idioma")];
+        var lazy = Download.Of(Path.Combine(root, $"idioma-lazy{suffix}", "wwwroot"));
+        var lazyAssembly = lazy.Files[LazyAssembly];
+
+        Console.WriteLine();
+        Console.WriteLine("Idioma in two languages, with the Dutch set in an assembly of its own that the app loads lazily, so only a Dutch user downloads it. Measured against the same app without localization:");
+        Console.WriteLine();
+        Console.WriteLine("| What's downloaded | Both sets in the app's assembly | The Dutch set loaded lazily |");
+        Console.WriteLine("|---|---:|---:|");
+        Console.WriteLine($"| By a user of the default language | {Kilobytes(idioma.Two.Total - none.Total)} | {Kilobytes(lazy.Total - lazyAssembly - none.Total)} |");
+        Console.WriteLine($"| By a Dutch user | {Kilobytes(idioma.Two.Total - none.Total)} | {Kilobytes(lazy.Total - none.Total)} |");
+        Console.WriteLine($"| Of that, the Dutch set | {Kilobytes(idioma.Two.Total - idioma.One.Total)} | {Kilobytes(lazyAssembly)} |");
+
+        if (Math.Abs(lazy.Native - none.Native) >= NativeShown)
+            Console.WriteLine($"| By every user, as native code in dotnet.native.wasm, before compression | {Kilobytes(idioma.Two.Native - none.Native)} | {Kilobytes(lazy.Native - none.Native)} |");
 
         void Row(string what, Func<(Download One, Download Two), long> size) =>
             Console.WriteLine($"| {what} | {string.Join(" | ", publishes.Select(publish => Kilobytes(size(publish))))} |");

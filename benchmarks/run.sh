@@ -6,8 +6,8 @@
 #   1. Showing a text on .NET, with BenchmarkDotNet.
 #   2. The same in Blazor WebAssembly in a headless Chrome, on the Mono runtime with its interpreter.
 #   3. The same with Mono's AOT, when the wasm-tools workload is installed (dotnet workload install wasm-tools).
-#   4. The download sizes of each approach and of a language of 100 texts, from Idioma.Benchmarks.Size, with Mono's
-#      interpreter and AOT.
+#   4. The download sizes of each approach, of a language of 100 texts, and of a language loaded lazily, from
+#      Idioma.Benchmarks.Size, with Mono's interpreter and AOT.
 #   5. Finding a label on .NET, with BenchmarkDotNet, in the run of step 1.
 #
 # Takes about 30 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
@@ -50,7 +50,8 @@ else
   echo "    Skipped, because AOT needs the wasm-tools workload: dotnet workload install wasm-tools"
 fi
 
-# Publishes the app without localization, and with each approach in one language and in two.
+# Publishes the app without localization, with each approach in one language and in two, and with Idioma's second
+# language in an assembly the app loads lazily.
 publish_sizes() {
   local suffix="$1"; shift
   dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/none$suffix" -p:SizeApproach=none "$@" > "$results/publish-size-none$suffix.log"
@@ -58,6 +59,7 @@ publish_sizes() {
     dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/$approach-one$suffix" -p:SizeApproach=$approach -p:SecondLanguage=false "$@" > "$results/publish-size-$approach-one$suffix.log"
     dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/$approach-two$suffix" -p:SizeApproach=$approach "$@" > "$results/publish-size-$approach-two$suffix.log"
   done
+  dotnet publish Idioma.Benchmarks.Size -c Release -o "obj/size/idioma-lazy$suffix" -p:SizeApproach=idioma -p:LazyLanguage=true "$@" > "$results/publish-size-idioma-lazy$suffix.log"
 }
 
 echo "4/4 Download sizes"

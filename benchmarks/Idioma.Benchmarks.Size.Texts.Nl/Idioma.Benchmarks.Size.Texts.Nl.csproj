@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Dutch set of Idioma.Benchmarks.Size in an assembly of its own, for the publish with -p:LazyLanguage=true. The app
+    loads it lazily, so only a Dutch user downloads it. It declares no languages, and gives the contract of
+    Idioma.Benchmarks.Size.Texts another one. It compiles the app's own file, so both hold the same texts.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="../Idioma.Benchmarks.Size.Texts/Idioma.Benchmarks.Size.Texts.csproj" />
+    <ProjectReference Include="../../src/Idioma/Idioma.csproj" />
+    <ProjectReference Include="../../src/Idioma.Generators/Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Idioma.Benchmarks.Size/StoreLocalizationNl.cs" />
+  </ItemGroup>
+
+</Project>

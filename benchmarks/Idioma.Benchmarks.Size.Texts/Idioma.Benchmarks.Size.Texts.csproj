@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The English set of Idioma.Benchmarks.Size in a library of its own, for the publish with -p:LazyLanguage=true. The
+    contract is generated next to the default-language set, so the Dutch set of Idioma.Benchmarks.Size.Texts.Nl can
+    implement it only when the set is outside the app. It compiles the app's own file, so both hold the same texts.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Idioma/Idioma.csproj" />
+    <ProjectReference Include="../../src/Idioma.Generators/Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../Idioma.Benchmarks.Size/StoreLocalizationEn.cs;../Idioma.Benchmarks.Size/OneLanguage.cs" />
+  </ItemGroup>
+
+</Project>
