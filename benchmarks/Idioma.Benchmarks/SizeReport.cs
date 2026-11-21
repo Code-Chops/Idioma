@@ -12,7 +12,7 @@ namespace Benchmarks;
 /// app's assembly, and what it keeps of .NET's own assemblies, which Blazor otherwise trims. A language costs what the
 /// publish with Dutch downloads beyond the one without. With AOT, code also becomes native code in dotnet.native.wasm.
 /// That file is several megabytes, and Brotli's result for it moves by kilobytes when a little of it changes, so it's
-/// left out of the compressed sizes, and its growth is given before compression.
+/// left out of the other rows, and its growth is given before and after compression.
 /// </remarks>
 internal static partial class SizeReport
 {
@@ -59,7 +59,9 @@ internal static partial class SizeReport
                 || Math.Abs(publish.Two.Native - publish.One.Native) >= NativeShown))
         {
             Row("The approach as native code in dotnet.native.wasm, before compression", publish => publish.One.Native - none.Native);
+            Row("The approach as native code, compressed", publish => publish.One.NativeCompressed - none.NativeCompressed);
             Row("Each extra language as native code, before compression", publish => publish.Two.Native - publish.One.Native);
+            Row("Each extra language as native code, compressed", publish => publish.Two.NativeCompressed - publish.One.NativeCompressed);
         }
 
         // The files behind the first row, so that a size can be traced to the assembly it comes from.
@@ -91,7 +93,7 @@ internal static partial class SizeReport
     /// <summary>
     /// What a publish downloads from its _framework folder, compressed, per file without its fingerprint.
     /// </summary>
-    private sealed partial record Download(Dictionary<string, long> Files, long Native)
+    private sealed partial record Download(Dictionary<string, long> Files, long Native, long NativeCompressed)
     {
         public long Library => this.Sum(IsLibrary);
         public long App => this.Sum(file => !IsLibrary(file) && IsApp(file));
@@ -103,7 +105,7 @@ internal static partial class SizeReport
         {
             var framework = Path.Combine(wwwroot, "_framework");
             var files = new Dictionary<string, long>(StringComparer.Ordinal);
-            long native = 0;
+            long native = 0, nativeCompressed = 0;
 
             foreach (var file in Directory.GetFiles(framework, "*", SearchOption.AllDirectories))
             {
@@ -114,6 +116,8 @@ internal static partial class SizeReport
                 {
                     if (name.EndsWith(".wasm", StringComparison.Ordinal))
                         native += size;
+                    else if (name.EndsWith(".wasm.br", StringComparison.Ordinal))
+                        nativeCompressed += size;
 
                     continue;
                 }
@@ -126,7 +130,7 @@ internal static partial class SizeReport
                 files[path] = files.GetValueOrDefault(path) + size;
             }
 
-            return new Download(files, native);
+            return new Download(files, native, nativeCompressed);
         }
 
         private long Sum(Func<string, bool> belongs) => this.Files.Where(file => belongs(file.Key)).Sum(file => file.Value);

@@ -4,22 +4,19 @@ Showing one text, in nanoseconds, after the cost of the loop and the call is tak
 
 | Text | Approach | en | nl | en-GB | de |
 |---|---|---:|---:|---:|---:|
-| Checkout | IStringLocalizer | 246 | 247 | 590 | 251 |
-| Checkout | resx class | 107 | 106 | 451 | 103 |
-| Checkout | Idioma set | 100 | 101 | 182 | 117 |
-| Checkout | Idioma inline, in a field | 35 | 43 | 46 | 47 |
-| Checkout | Idioma inline, in markup | 63 | 69 | 75 | 74 |
-| Checkout | Idioma attribute | 54 | 62 | 66 | 70 |
-| Cart | IStringLocalizer | 235 | 244 | 240 | 241 |
-| Cart | resx class | 104 | 104 | 101 | 103 |
-| Cart | Idioma set | 101 | 101 | 172 | 115 |
-| Cart | Idioma inline, in a field | 35 | 42 | 48 | 47 |
-| Cart | Idioma inline, in markup | 62 | 69 | 72 | 74 |
-| Cart | Idioma attribute | 50 | 59 | 65 | 65 |
-| Greeting(name) | IStringLocalizer | 351 | 358 | 698 | 338 |
-| Greeting(name) | resx class | 209 | 204 | 555 | 205 |
-| Greeting(name) | Idioma set | 435 | 426 | 531 | 730 |
-| Greeting(name) | Idioma inline, in a field | 35 | 41 | 45 | 48 |
-| Greeting(name) | Idioma inline, in markup | 215 | 217 | 216 | 221 |
+| Checkout | IStringLocalizer | 266 | 280 | 696 | 285 |
+| Checkout | Idioma set | 100 | 104 | 193 | 126 |
+| Checkout | Idioma inline, in a field | 37 | 45 | 49 | 56 |
+| Checkout | Idioma inline, in markup | 68 | 78 | 83 | 82 |
+| Checkout | Idioma attribute | 57 | 64 | 69 | 70 |
+| Cart | IStringLocalizer | 277 | 288 | 271 | 280 |
+| Cart | Idioma set | 103 | 107 | 195 | 129 |
+| Cart | Idioma inline, in a field | 38 | 45 | 52 | 54 |
+| Cart | Idioma inline, in markup | 70 | 78 | 84 | 82 |
+| Cart | Idioma attribute | 55 | 62 | 68 | 72 |
+| Greeting(name) | IStringLocalizer | 446 | 458 | 869 | 464 |
+| Greeting(name) | Idioma set | 500 | 494 | 618 | 824 |
+| Greeting(name) | Idioma inline, in a field | 38 | 45 | 51 | 56 |
+| Greeting(name) | Idioma inline, in markup | 286 | 289 | 289 | 300 |
 
-The loop and the call cost: en 8.8 ns, nl 8.8 ns, en-GB 8.8 ns, de 9.0 ns.
+The loop and the call cost: en 9.0 ns, nl 9.0 ns, en-GB 9.0 ns, de 8.9 ns.

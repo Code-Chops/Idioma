@@ -2,7 +2,7 @@
 
 BenchmarkDotNet v0.16.0-preview.2, macOS Tahoe 26.6.2 (25G83) [Darwin 25.6.0]
 Apple M2 Max, 1 CPU, 12 logical and 12 physical cores
-Memory: 64 GB Total, 0.59 GB Available
+Memory: 64 GB Total, 0.55 GB Available
 .NET SDK 11.0.100
   [Host]     : .NET 11.0.0 (11.0.0, 11.0.26.53018), Arm64 RyuJIT armv8.0-a
   Job-BDGCJE : .NET 11.0.0 (11.0.0, 11.0.26.53018), Arm64 RyuJIT armv8.0-a
@@ -12,82 +12,70 @@ IterationCount=15  LaunchCount=1  WarmupCount=5
 ```
 | Method                        | Categories              | Culture | Mean      | Error    | StdDev   | Ratio | Gen0   | Allocated | 
 |------------------------------ |------------------------ |-------- |----------:|---------:|---------:|------:|-------:|----------:|
-| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **de**      |  **40.14 ns** | **0.264 ns** | **0.234 ns** |  **1.00** | **0.0076** |      **64 B** | 
-| ResxClass_Cart                | Cart (en-GB rewords it) | de      |  27.79 ns | 0.135 ns | 0.120 ns |  0.69 |      - |         - | 
-| IdiomaSet_Cart                | Cart (en-GB rewords it) | de      |  22.68 ns | 0.097 ns | 0.091 ns |  0.57 |      - |         - | 
-| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | de      |  15.64 ns | 0.205 ns | 0.192 ns |  0.39 |      - |         - | 
-| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | de      |  19.98 ns | 0.651 ns | 0.577 ns |  0.50 |      - |         - | 
-| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | de      |  16.76 ns | 0.064 ns | 0.056 ns |  0.42 |      - |         - | 
+| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **de**      |  **40.76 ns** | **0.275 ns** | **0.257 ns** |  **1.00** | **0.0076** |      **64 B** | 
+| IdiomaSet_Cart                | Cart (en-GB rewords it) | de      |  22.94 ns | 0.175 ns | 0.146 ns |  0.56 |      - |         - | 
+| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | de      |  15.73 ns | 0.240 ns | 0.224 ns |  0.39 |      - |         - | 
+| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | de      |  21.06 ns | 1.257 ns | 1.114 ns |  0.52 |      - |         - | 
+| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | de      |  16.88 ns | 0.115 ns | 0.102 ns |  0.41 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **en**      |  **38.75 ns** | **0.164 ns** | **0.137 ns** |  **1.00** | **0.0076** |      **64 B** | 
-| ResxClass_Cart                | Cart (en-GB rewords it) | en      |  27.92 ns | 0.080 ns | 0.071 ns |  0.72 |      - |         - | 
-| IdiomaSet_Cart                | Cart (en-GB rewords it) | en      |  16.61 ns | 0.067 ns | 0.062 ns |  0.43 |      - |         - | 
-| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | en      |  11.81 ns | 0.024 ns | 0.021 ns |  0.30 |      - |         - | 
-| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | en      |  15.45 ns | 0.075 ns | 0.066 ns |  0.40 |      - |         - | 
-| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | en      |  13.29 ns | 0.090 ns | 0.080 ns |  0.34 |      - |         - | 
+| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **en**      |  **39.54 ns** | **0.312 ns** | **0.277 ns** |  **1.00** | **0.0076** |      **64 B** | 
+| IdiomaSet_Cart                | Cart (en-GB rewords it) | en      |  16.84 ns | 0.165 ns | 0.155 ns |  0.43 |      - |         - | 
+| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | en      |  11.97 ns | 0.093 ns | 0.083 ns |  0.30 |      - |         - | 
+| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | en      |  15.27 ns | 0.082 ns | 0.073 ns |  0.39 |      - |         - | 
+| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | en      |  13.13 ns | 0.058 ns | 0.054 ns |  0.33 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **en-GB**   |  **39.59 ns** | **0.139 ns** | **0.124 ns** |  **1.00** | **0.0086** |      **72 B** | 
-| ResxClass_Cart                | Cart (en-GB rewords it) | en-GB   |  27.34 ns | 0.106 ns | 0.099 ns |  0.69 |      - |         - | 
-| IdiomaSet_Cart                | Cart (en-GB rewords it) | en-GB   |  31.62 ns | 0.186 ns | 0.174 ns |  0.80 |      - |         - | 
-| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | en-GB   |  13.71 ns | 0.040 ns | 0.037 ns |  0.35 |      - |         - | 
-| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | en-GB   |  17.62 ns | 0.080 ns | 0.074 ns |  0.45 |      - |         - | 
-| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | en-GB   |  15.34 ns | 0.081 ns | 0.076 ns |  0.39 |      - |         - | 
+| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **en-GB**   |  **39.41 ns** | **0.470 ns** | **0.439 ns** |  **1.00** | **0.0086** |      **72 B** | 
+| IdiomaSet_Cart                | Cart (en-GB rewords it) | en-GB   |  31.02 ns | 0.229 ns | 0.203 ns |  0.79 |      - |         - | 
+| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | en-GB   |  13.63 ns | 0.064 ns | 0.057 ns |  0.35 |      - |         - | 
+| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | en-GB   |  17.55 ns | 0.069 ns | 0.064 ns |  0.45 |      - |         - | 
+| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | en-GB   |  15.63 ns | 0.184 ns | 0.172 ns |  0.40 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **nl**      |  **40.13 ns** | **0.211 ns** | **0.198 ns** |  **1.00** | **0.0076** |      **64 B** | 
-| ResxClass_Cart                | Cart (en-GB rewords it) | nl      |  27.89 ns | 0.057 ns | 0.054 ns |  0.70 |      - |         - | 
-| IdiomaSet_Cart                | Cart (en-GB rewords it) | nl      |  16.54 ns | 0.062 ns | 0.058 ns |  0.41 |      - |         - | 
-| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | nl      |  13.94 ns | 0.044 ns | 0.039 ns |  0.35 |      - |         - | 
-| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | nl      |  17.72 ns | 0.066 ns | 0.062 ns |  0.44 |      - |         - | 
-| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | nl      |  15.52 ns | 0.061 ns | 0.048 ns |  0.39 |      - |         - | 
+| **Localizer_Cart**                | **Cart (en-GB rewords it)** | **nl**      |  **40.93 ns** | **0.351 ns** | **0.329 ns** |  **1.00** | **0.0076** |      **64 B** | 
+| IdiomaSet_Cart                | Cart (en-GB rewords it) | nl      |  16.59 ns | 0.046 ns | 0.041 ns |  0.41 |      - |         - | 
+| IdiomaInlineInField_Cart      | Cart (en-GB rewords it) | nl      |  14.07 ns | 0.122 ns | 0.109 ns |  0.34 |      - |         - | 
+| IdiomaInlineInMarkup_Cart     | Cart (en-GB rewords it) | nl      |  17.75 ns | 0.122 ns | 0.114 ns |  0.43 |      - |         - | 
+| IdiomaAttribute_Cart          | Cart (en-GB rewords it) | nl      |  15.65 ns | 0.062 ns | 0.055 ns |  0.38 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Checkout**            | **Checkout**                | **de**      |  **42.37 ns** | **0.190 ns** | **0.168 ns** |  **1.00** | **0.0086** |      **72 B** | 
-| ResxClass_Checkout            | Checkout                | de      |  27.80 ns | 0.076 ns | 0.071 ns |  0.66 |      - |         - | 
-| IdiomaSet_Checkout            | Checkout                | de      |  22.67 ns | 0.078 ns | 0.073 ns |  0.54 |      - |         - | 
-| IdiomaInlineInField_Checkout  | Checkout                | de      |  15.57 ns | 0.177 ns | 0.166 ns |  0.37 |      - |         - | 
-| IdiomaInlineInMarkup_Checkout | Checkout                | de      |  19.68 ns | 0.652 ns | 0.610 ns |  0.46 |      - |         - | 
-| IdiomaAttribute_Checkout      | Checkout                | de      |  16.70 ns | 0.049 ns | 0.044 ns |  0.39 |      - |         - | 
+| **Localizer_Checkout**            | **Checkout**                | **de**      |  **44.28 ns** | **0.156 ns** | **0.122 ns** |  **1.00** | **0.0086** |      **72 B** | 
+| IdiomaSet_Checkout            | Checkout                | de      |  22.77 ns | 0.052 ns | 0.044 ns |  0.51 |      - |         - | 
+| IdiomaInlineInField_Checkout  | Checkout                | de      |  15.61 ns | 0.160 ns | 0.149 ns |  0.35 |      - |         - | 
+| IdiomaInlineInMarkup_Checkout | Checkout                | de      |  20.90 ns | 1.302 ns | 1.217 ns |  0.47 |      - |         - | 
+| IdiomaAttribute_Checkout      | Checkout                | de      |  16.83 ns | 0.059 ns | 0.055 ns |  0.38 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Checkout**            | **Checkout**                | **en**      |  **41.05 ns** | **0.219 ns** | **0.205 ns** |  **1.00** | **0.0086** |      **72 B** | 
-| ResxClass_Checkout            | Checkout                | en      |  27.67 ns | 0.073 ns | 0.065 ns |  0.67 |      - |         - | 
-| IdiomaSet_Checkout            | Checkout                | en      |  16.51 ns | 0.075 ns | 0.067 ns |  0.40 |      - |         - | 
-| IdiomaInlineInField_Checkout  | Checkout                | en      |  11.79 ns | 0.050 ns | 0.047 ns |  0.29 |      - |         - | 
-| IdiomaInlineInMarkup_Checkout | Checkout                | en      |  15.45 ns | 0.067 ns | 0.063 ns |  0.38 |      - |         - | 
-| IdiomaAttribute_Checkout      | Checkout                | en      |  13.27 ns | 0.048 ns | 0.045 ns |  0.32 |      - |         - | 
+| **Localizer_Checkout**            | **Checkout**                | **en**      |  **43.16 ns** | **0.228 ns** | **0.202 ns** |  **1.00** | **0.0086** |      **72 B** | 
+| IdiomaSet_Checkout            | Checkout                | en      |  16.53 ns | 0.132 ns | 0.124 ns |  0.38 |      - |         - | 
+| IdiomaInlineInField_Checkout  | Checkout                | en      |  11.79 ns | 0.086 ns | 0.081 ns |  0.27 |      - |         - | 
+| IdiomaInlineInMarkup_Checkout | Checkout                | en      |  15.29 ns | 0.061 ns | 0.055 ns |  0.35 |      - |         - | 
+| IdiomaAttribute_Checkout      | Checkout                | en      |  13.32 ns | 0.080 ns | 0.075 ns |  0.31 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Checkout**            | **Checkout**                | **en-GB**   | **133.99 ns** | **0.826 ns** | **0.732 ns** |  **1.00** | **0.0200** |     **168 B** | 
-| ResxClass_Checkout            | Checkout                | en-GB   | 122.27 ns | 0.707 ns | 0.590 ns |  0.91 | 0.0105 |      88 B | 
-| IdiomaSet_Checkout            | Checkout                | en-GB   |  33.88 ns | 0.125 ns | 0.117 ns |  0.25 |      - |         - | 
-| IdiomaInlineInField_Checkout  | Checkout                | en-GB   |  13.71 ns | 0.032 ns | 0.027 ns |  0.10 |      - |         - | 
-| IdiomaInlineInMarkup_Checkout | Checkout                | en-GB   |  17.32 ns | 0.087 ns | 0.081 ns |  0.13 |      - |         - | 
-| IdiomaAttribute_Checkout      | Checkout                | en-GB   |  15.28 ns | 0.067 ns | 0.056 ns |  0.11 |      - |         - | 
+| **Localizer_Checkout**            | **Checkout**                | **en-GB**   | **136.29 ns** | **1.379 ns** | **1.223 ns** |  **1.00** | **0.0200** |     **168 B** | 
+| IdiomaSet_Checkout            | Checkout                | en-GB   |  33.45 ns | 0.208 ns | 0.195 ns |  0.25 |      - |         - | 
+| IdiomaInlineInField_Checkout  | Checkout                | en-GB   |  13.74 ns | 0.150 ns | 0.140 ns |  0.10 |      - |         - | 
+| IdiomaInlineInMarkup_Checkout | Checkout                | en-GB   |  17.35 ns | 0.086 ns | 0.076 ns |  0.13 |      - |         - | 
+| IdiomaAttribute_Checkout      | Checkout                | en-GB   |  15.32 ns | 0.061 ns | 0.051 ns |  0.11 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Checkout**            | **Checkout**                | **nl**      |  **43.73 ns** | **0.181 ns** | **0.169 ns** |  **1.00** | **0.0086** |      **72 B** | 
-| ResxClass_Checkout            | Checkout                | nl      |  27.81 ns | 0.145 ns | 0.129 ns |  0.64 |      - |         - | 
-| IdiomaSet_Checkout            | Checkout                | nl      |  16.57 ns | 0.058 ns | 0.055 ns |  0.38 |      - |         - | 
-| IdiomaInlineInField_Checkout  | Checkout                | nl      |  13.96 ns | 0.024 ns | 0.018 ns |  0.32 |      - |         - | 
-| IdiomaInlineInMarkup_Checkout | Checkout                | nl      |  17.56 ns | 0.074 ns | 0.069 ns |  0.40 |      - |         - | 
-| IdiomaAttribute_Checkout      | Checkout                | nl      |  15.58 ns | 0.089 ns | 0.083 ns |  0.36 |      - |         - | 
+| **Localizer_Checkout**            | **Checkout**                | **nl**      |  **43.78 ns** | **0.235 ns** | **0.220 ns** |  **1.00** | **0.0086** |      **72 B** | 
+| IdiomaSet_Checkout            | Checkout                | nl      |  16.48 ns | 0.066 ns | 0.059 ns |  0.38 |      - |         - | 
+| IdiomaInlineInField_Checkout  | Checkout                | nl      |  14.00 ns | 0.053 ns | 0.047 ns |  0.32 |      - |         - | 
+| IdiomaInlineInMarkup_Checkout | Checkout                | nl      |  17.55 ns | 0.086 ns | 0.080 ns |  0.40 |      - |         - | 
+| IdiomaAttribute_Checkout      | Checkout                | nl      |  15.40 ns | 0.102 ns | 0.090 ns |  0.35 |      - |         - | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Greeting**            | **Greeting(name)**          | **de**      |  **78.83 ns** | **0.432 ns** | **0.337 ns** |  **1.00** | **0.0181** |     **152 B** | 
-| ResxClass_Greeting            | Greeting(name)          | de      |  53.77 ns | 0.293 ns | 0.260 ns |  0.68 | 0.0057 |      48 B | 
-| IdiomaSet_Greeting            | Greeting(name)          | de      | 145.79 ns | 0.845 ns | 0.791 ns |  1.85 | 0.0305 |     256 B | 
-| IdiomaInlineInField_Greeting  | Greeting(name)          | de      |  15.59 ns | 0.289 ns | 0.270 ns |  0.20 |      - |         - | 
-| IdiomaInlineInMarkup_Greeting | Greeting(name)          | de      |  56.11 ns | 0.403 ns | 0.357 ns |  0.71 | 0.0315 |     264 B | 
+| **Localizer_Greeting**            | **Greeting(name)**          | **de**      |  **81.28 ns** | **0.383 ns** | **0.340 ns** |  **1.00** | **0.0181** |     **152 B** | 
+| IdiomaSet_Greeting            | Greeting(name)          | de      | 151.12 ns | 1.493 ns | 1.246 ns |  1.86 | 0.0305 |     256 B | 
+| IdiomaInlineInField_Greeting  | Greeting(name)          | de      |  15.36 ns | 0.152 ns | 0.142 ns |  0.19 |      - |         - | 
+| IdiomaInlineInMarkup_Greeting | Greeting(name)          | de      |  55.20 ns | 0.216 ns | 0.192 ns |  0.68 | 0.0315 |     264 B | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Greeting**            | **Greeting(name)**          | **en**      |  **78.95 ns** | **0.228 ns** | **0.202 ns** |  **1.00** | **0.0181** |     **152 B** | 
-| ResxClass_Greeting            | Greeting(name)          | en      |  53.88 ns | 0.345 ns | 0.322 ns |  0.68 | 0.0057 |      48 B | 
-| IdiomaSet_Greeting            | Greeting(name)          | en      |  55.99 ns | 0.264 ns | 0.246 ns |  0.71 | 0.0200 |     168 B | 
-| IdiomaInlineInField_Greeting  | Greeting(name)          | en      |  11.85 ns | 0.142 ns | 0.118 ns |  0.15 |      - |         - | 
-| IdiomaInlineInMarkup_Greeting | Greeting(name)          | en      |  53.05 ns | 0.402 ns | 0.376 ns |  0.67 | 0.0315 |     264 B | 
+| **Localizer_Greeting**            | **Greeting(name)**          | **en**      |  **77.28 ns** | **0.391 ns** | **0.366 ns** |  **1.00** | **0.0181** |     **152 B** | 
+| IdiomaSet_Greeting            | Greeting(name)          | en      |  55.54 ns | 0.204 ns | 0.191 ns |  0.72 | 0.0200 |     168 B | 
+| IdiomaInlineInField_Greeting  | Greeting(name)          | en      |  11.79 ns | 0.028 ns | 0.024 ns |  0.15 |      - |         - | 
+| IdiomaInlineInMarkup_Greeting | Greeting(name)          | en      |  52.06 ns | 0.147 ns | 0.138 ns |  0.67 | 0.0315 |     264 B | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Greeting**            | **Greeting(name)**          | **en-GB**   | **176.16 ns** | **3.279 ns** | **2.738 ns** |  **1.00** | **0.0296** |     **248 B** | 
-| ResxClass_Greeting            | Greeting(name)          | en-GB   | 144.42 ns | 1.153 ns | 1.022 ns |  0.82 | 0.0162 |     136 B | 
-| IdiomaSet_Greeting            | Greeting(name)          | en-GB   |  76.38 ns | 0.273 ns | 0.213 ns |  0.43 | 0.0200 |     168 B | 
-| IdiomaInlineInField_Greeting  | Greeting(name)          | en-GB   |  13.90 ns | 0.098 ns | 0.087 ns |  0.08 |      - |         - | 
-| IdiomaInlineInMarkup_Greeting | Greeting(name)          | en-GB   |  54.19 ns | 0.168 ns | 0.149 ns |  0.31 | 0.0315 |     264 B | 
+| **Localizer_Greeting**            | **Greeting(name)**          | **en-GB**   | **172.57 ns** | **0.902 ns** | **0.753 ns** |  **1.00** | **0.0296** |     **248 B** | 
+| IdiomaSet_Greeting            | Greeting(name)          | en-GB   |  74.60 ns | 0.227 ns | 0.189 ns |  0.43 | 0.0200 |     168 B | 
+| IdiomaInlineInField_Greeting  | Greeting(name)          | en-GB   |  13.63 ns | 0.058 ns | 0.052 ns |  0.08 |      - |         - | 
+| IdiomaInlineInMarkup_Greeting | Greeting(name)          | en-GB   |  54.30 ns | 0.248 ns | 0.219 ns |  0.31 | 0.0315 |     264 B | 
 |                               |                         |         |           |          |          |       |        |           | 
-| **Localizer_Greeting**            | **Greeting(name)**          | **nl**      |  **81.39 ns** | **0.527 ns** | **0.493 ns** |  **1.00** | **0.0181** |     **152 B** | 
-| ResxClass_Greeting            | Greeting(name)          | nl      |  54.18 ns | 0.657 ns | 0.583 ns |  0.67 | 0.0057 |      48 B | 
-| IdiomaSet_Greeting            | Greeting(name)          | nl      |  56.04 ns | 0.295 ns | 0.230 ns |  0.69 | 0.0200 |     168 B | 
-| IdiomaInlineInField_Greeting  | Greeting(name)          | nl      |  13.88 ns | 0.086 ns | 0.080 ns |  0.17 |      - |         - | 
-| IdiomaInlineInMarkup_Greeting | Greeting(name)          | nl      |  54.66 ns | 0.386 ns | 0.342 ns |  0.67 | 0.0315 |     264 B | 
+| **Localizer_Greeting**            | **Greeting(name)**          | **nl**      |  **78.69 ns** | **0.351 ns** | **0.329 ns** |  **1.00** | **0.0181** |     **152 B** | 
+| IdiomaSet_Greeting            | Greeting(name)          | nl      |  55.54 ns | 0.473 ns | 0.443 ns |  0.71 | 0.0200 |     168 B | 
+| IdiomaInlineInField_Greeting  | Greeting(name)          | nl      |  13.85 ns | 0.104 ns | 0.092 ns |  0.18 |      - |         - | 
+| IdiomaInlineInMarkup_Greeting | Greeting(name)          | nl      |  54.19 ns | 0.256 ns | 0.214 ns |  0.69 | 0.0315 |     264 B | 
