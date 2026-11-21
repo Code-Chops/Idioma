@@ -1,12 +1,13 @@
 # Run a demo
 
-This folder has three demos of [Idioma](../README.md). Each is a complete app in one file, which `dotnet run` runs without a project:
+This folder has four demos of [Idioma](../README.md). Each is a complete app in one file, which `dotnet run` runs without a project:
 
-- [`SetDemo.cs`](SetDemo.cs) writes its texts in a set per language.
+- [`SetDemo.cs`](SetDemo.cs) writes its texts in a set per language, including a plural.
+- [`EnumSetDemo.cs`](EnumSetDemo.cs) writes the texts of an enum in a set of the enum.
 - [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline.
 - [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class, its properties and the members of an enum.
 
-All three support English, Dutch, and British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English, and print their texts in each.
+All four support English and Dutch. `SetDemo.cs`, `InlineTextDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English. Each prints its texts in each of its languages, and for a German user. German isn't one of their languages, so that user gets English, the default, as a [fallback](../docs/how-it-works.md#fallback-order).
 
 ## In your browser
 
@@ -31,4 +32,4 @@ dotnet run SetDemo.cs
 
 A demo runs with .NET 10 or later. Its first line fetches the latest version of the package.
 
-Remove a Dutch wording from any of the files, or the parameter of the Dutch `Greeting` in `SetDemo.cs`, and it no longer builds.
+A comment in each file says how to break its build. For example, remove a Dutch wording from any of the files, and it no longer builds.

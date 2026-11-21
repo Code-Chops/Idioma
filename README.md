@@ -311,8 +311,8 @@ Idioma has no plural rules. Each language writes its own conditions in C#: Engli
 
 Give an enum its texts in one of two ways:
 
-- **A set of the enum** makes a member without a text a build error.
-- **An attribute on each member** keeps the wording next to the member, and a member without one is a build warning.
+- **A set of the enum** makes a member without a text a build error. It also works for an enum you can't change, such as `DayOfWeek` or one from a library.
+- **An attribute on each member** keeps the wording next to the member, and a member without one is a build warning. It needs the enum's source, because the attribute goes on each member.
 
 Either way, a value of the enum gives its text itself, with `GetText()`:
 
@@ -499,7 +499,7 @@ Each subject has a page of its own:
 - [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning by its code, what still converts to a text, and what the build misses.
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, moving a resource file, and keeping a resource file as an override.
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes to show next to `IStringLocalizer`, on .NET and in Blazor WebAssembly, and what Idioma adds to a download.
-- [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): three complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
+- [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): four complete apps, each in one file, which `dotnet run` runs without a project, and which fetch the latest package version.
 - [How Idioma works](https://github.com/Code-Chops/Idioma/blob/main/docs/how-it-works.md): the background, which you don't need to use Idioma. It covers which wording a user sees, what the source generator writes, texts with parameters, enums, attributes on members, how sets register, how to read a set yourself, how a text travels through JSON, and when two texts are equal.
 
 ## License

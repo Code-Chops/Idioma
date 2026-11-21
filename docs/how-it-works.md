@@ -210,8 +210,8 @@ What else to know:
 
 An enum can also get its texts from `[Localized]` on its members ([Attributes on members](#attributes-on-members)). Choose by what you need:
 
-- **A set of the enum** makes a member without a text a build error. An app can add a language to a library's set, and a regional set can reword one member.
-- **`[Localized]`** keeps the wording next to the member. A member without it shows its name. The build warns about it when other members of the enum are marked (`LOC503`), and stays silent for an enum with no marked member.
+- **A set of the enum** makes a member without a text a build error. It also works for an enum you can't change, such as `DayOfWeek` or one from a library. An app can add a language to a library's set, and a regional set can reword one member.
+- **`[Localized]`** keeps the wording next to the member. It needs the enum's source, because the attribute goes on each member. A member without it shows its name. The build warns about it when other members of the enum are marked (`LOC503`), and stays silent for an enum with no marked member.
 
 ## Attributes on members
 

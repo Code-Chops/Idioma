@@ -5,11 +5,18 @@ using CodeChops.Idioma;
 
 [assembly: SupportedLanguages("en", "en-GB", "nl")] // The first is the default
 
-const string name = "Max";
-var choice = LocalizableText.Inline(en: $"{name}, pick a color.", enGb: $"{name}, pick a colour.", nl: $"{name}, kies een kleur.");
+var name = args.FirstOrDefault() ?? "Max";
 
-foreach (var language in LocalizationRegistry.SupportedLanguages)
+// The text is made once. It shows its wording in the language of the user it's shown to.
+// Leave out nl:, or the {name} in it, and it doesn't build.
+var choice = LocalizableText.Inline(
+    en: $"{name}, pick a color.",
+    enGb: $"{name}, pick a colour.",
+    nl: $"{name}, kies een kleur.");
+
+// The supported languages, and German, which isn't one of them. A German user sees English, the default.
+foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
 {
-    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(language);
-    Console.WriteLine(choice);
+    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
+    Console.WriteLine($"{culture}: {choice}");
 }
