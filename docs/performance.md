@@ -36,6 +36,8 @@ Each benchmark first checks that every approach shows the expected wording, so n
 
 The numbers come from one machine, an Apple M2 Max on macOS 26.6. They ran on .NET 11.0.0 with BenchmarkDotNet 0.16.0-preview.2, and in Blazor WebAssembly on .NET 11.0.0 in a headless Chrome 158. Compare the approaches with each other rather than with your own numbers, because those depend on the machine.
 
+A second machine gave the same picture. It's an AMD Ryzen AI 9 HX PRO 370 on Windows 11, and [its tables](../benchmarks/results/second-machine) are kept too. On .NET, a set took within 8 ns of its time here. `IStringLocalizer` took 1.1 to 1.4 times as long there, so 28 of the 33 factors were lower. With Mono's interpreter, each factor was within 0.15 of the one here, in a run with more noise. AOT wasn't measured on it.
+
 On most rows, two runs of the same code differed by less than 5%. A few differed by up to 13%. So a gap of about 10% or less between two approaches may be noise. One row differed more: in some runs, the inline text in a field for the second language took 18 ns on .NET, where it took 12 to 14 ns in the others.
 
 ## Showing a text
