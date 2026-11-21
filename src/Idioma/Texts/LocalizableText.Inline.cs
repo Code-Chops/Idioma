@@ -61,10 +61,14 @@ public sealed partial class LocalizableText
     // whole. Two slots per pair, so that two texts of a page that pick the same pair don't keep replacing each other.
     private static LocalizableText?[] InlineTexts { get; } = new LocalizableText?[1024];
 
-    // A string of 85,000 bytes or more lies on the large object heap, where the runtime reports every string as old,
-    // also one created a moment ago. That's about 42,500 characters. Wording of this length or more is never kept, so
-    // that a large wording with a value, such as the body of an email, doesn't stay in memory after its text is gone.
-    private const int MaxKeptWordingLength = 40_000;
+    // A large string lies outside generation 0 from the start, so GC.GetGeneration reports it as old, also one created
+    // a moment ago. On CoreCLR that's a string of 85,000 bytes or more (the large object heap). On Mono, which runs
+    // Blazor WebAssembly, Android and iOS apps, it's an object of more than 8,000 bytes (SGEN_MAX_SMALL_OBJ_SIZE): a
+    // string of about 3,990 characters, after its header, its length and its terminator. Wording of this length or
+    // more is never kept, below both and with room for either header size, so that a large wording with a value, such
+    // as the body of an email, doesn't stay in memory after its text is gone. A literal that long is created again on
+    // every call instead.
+    private const int MaxKeptWordingLength = 3_900;
 
     /// <summary>
     /// A text with one wording for every culture, so a member that takes a text also takes a value that has no
@@ -163,7 +167,7 @@ public sealed partial class LocalizableText
         // (generation 0). A string literal never is. Wording with a value is a new string on every call, so no later
         // call could find its text. Keeping it would hold the value in memory after the text is gone, in the slot of a
         // text that can be found again. Two kinds of wording can't be told from a literal this way:
-        // - A string of MaxKeptWordingLength characters or more. The runtime never counts a string that large as new,
+        // - A string of MaxKeptWordingLength characters or more. A runtime may never count a string that large as new,
         //   so it isn't kept at all, and a literal that long is created again on every call.
         // - A string that outlived a collection before this call, such as wording an app builds once and holds on to.
         //   It's kept like a literal, also when it holds a value.

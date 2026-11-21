@@ -1,11 +1,14 @@
+using System.Collections.Concurrent;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC400</c>), and a member of an enum without
-/// <c>[Localized]</c> next to members that have it (<c>LOC503</c>). Without these, <c>GetTextByMember</c> would
-/// silently give nothing, and <c>GetText()</c> would silently show the member's name.
+/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC400</c>), a member of an enum without
+/// <c>[Localized]</c> next to members that have it (<c>LOC503</c>), and a call of <c>GetTextByMember</c> or
+/// <c>GetTextOfType</c> that names a member or a type without a text (<c>LOC504</c>). Without these,
+/// <c>GetTextByMember</c> would silently give nothing, and <c>GetText()</c> would silently show the member's name.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,6 +33,10 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 {
     public const string CannotRegisterDiagnosticId = LocalizationRegistrationGenerator.CannotRegisterDiagnosticId;
     public const string UnmarkedEnumMemberDiagnosticId = "LOC503";
+    public const string NoTextToFindDiagnosticId = "LOC504";
+
+    private const string GetTextByMemberName = "GetTextByMember";
+    private const string GetTextOfTypeName = "GetTextOfType";
 
     // The code of a set that can't be registered, which the generator reports. Both say that texts won't be found.
     // So the code is shared on purpose.
@@ -52,10 +59,20 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "An enum whose members are marked [Localized] shows the name of a member that isn't, in every language. That's usually a member added later. Mark it too. Where every member of an enum needs a text, a set of the enum (ILocalizationSet<TEnum>) makes a missing one a build error. An enum with a text of its own and no marked member isn't reported, because its values may never be shown.",
+        description: "An enum whose members are marked [Localized] shows the name of a member that isn't, in every language. That's usually a member added later. Mark it too. Where every member of an enum needs a text, a set of the enum (ILocalizationSet<TEnum>) makes a missing one a build error. Its GetText then comes from the set. An enum with a text of its own and no marked member isn't reported, because its values may never be shown.",
         helpLinkUri: PackageNames.HelpLink(UnmarkedEnumMemberDiagnosticId));
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [CannotRegisterRule, UnmarkedEnumMemberRule];
+    private static readonly DiagnosticDescriptor NoTextToFindRule = new(
+        id: NoTextToFindDiagnosticId,
+        title: "Text asked of a member or a type that has none",
+        messageFormat: "'{0}' has no text, so {1} gives null. {2}.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "LocalizableText.GetTextByMember and GetTextOfType give the text that [Localized] writes on a member or a type, or null where there's none. A call that names its type and its member in the code asks for a text the build can look for, so a member or a type without [Localized] is a mistake it can see. A type of another assembly is checked only when that assembly doesn't use Idioma, because the attribute isn't kept in a compiled assembly.",
+        helpLinkUri: PackageNames.HelpLink(NoTextToFindDiagnosticId));
+
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [CannotRegisterRule, UnmarkedEnumMemberRule, NoTextToFindRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -79,6 +96,149 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
         context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, codes), SyntaxKind.Attribute);
         context.RegisterSyntaxNodeAction(c => AnalyzeEnum(c, sample), SyntaxKind.EnumDeclaration);
+
+        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText) is not { } text)
+            return;
+
+        // Per assembly the calls name a type of, whether it uses Idioma.
+        var usesIdioma = new ConcurrentDictionary<IAssemblySymbol, bool>(SymbolEqualityComparer.Default);
+
+        context.RegisterOperationAction(c => AnalyzeLookup(c, text, sample, usesIdioma), OperationKind.Invocation);
+    }
+
+    /// <summary>
+    /// Reports a call of <c>GetTextByMember</c> or <c>GetTextOfType</c> that names its type and its member in the code,
+    /// when that member or type has no text (<c>LOC504</c>): <c>GetTextByMember&lt;Address&gt;(nameof(Address.Street))</c>,
+    /// <c>GetTextByMember(typeof(Address), "Street")</c>, or <c>GetTextOfType&lt;Address&gt;()</c>.
+    /// </summary>
+    // Not a call that takes a MemberInfo or a Type the code only has at run time, such as the property a form shows,
+    // where null is the answer for a member without a text, and not a type parameter.
+    private static void AnalyzeLookup(OperationAnalysisContext context, INamedTypeSymbol text, string sample, ConcurrentDictionary<IAssemblySymbol, bool> usesIdioma)
+    {
+        var invocation = (IInvocationOperation)context.Operation;
+        var method = invocation.TargetMethod;
+
+        if (method.Name is not (GetTextByMemberName or GetTextOfTypeName)
+            || !SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
+            || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
+        {
+            return;
+        }
+
+        var type = method.IsGenericMethod
+            ? method.TypeArguments[0]
+            : method.Parameters is [{ Type: { Name: nameof(Type), ContainingNamespace: { Name: nameof(System), ContainingNamespace.IsGlobalNamespace: true } } }, ..]
+              && invocation.Arguments is [{ Value: ITypeOfOperation typeOf }, ..]
+                ? typeOf.TypeOperand
+                : null;
+
+        if (type is not INamedTypeSymbol { TypeKind: not TypeKind.Error } named)
+            return;
+
+        IOperation? memberArgument = null;
+        string? member = null;
+
+        if (method.Name is GetTextByMemberName)
+        {
+            memberArgument = invocation.Arguments.FirstOrDefault(static argument => argument.Parameter?.Type.SpecialType is SpecialType.System_String)?.Value;
+
+            if (memberArgument?.ConstantValue is not { HasValue: true, Value: string name })
+                return;
+
+            member = name;
+        }
+
+        if (FindMissingText(named.OriginalDefinition, member, sample, context.Compilation, usesIdioma) is not { } missing)
+            return;
+
+        var location = memberArgument?.Syntax.GetLocation()
+                       ?? (invocation.Syntax is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } ? access.Name.GetLocation() : invocation.Syntax.GetLocation());
+
+        context.ReportDiagnostic(Diagnostic.Create(NoTextToFindRule, location, missing.Subject, method.Name, missing.Advice));
+    }
+
+    /// <summary>
+    /// What a call misses that asks for the text of <paramref name="member"/> of <paramref name="type"/>, or for the
+    /// type's own text when <paramref name="member"/> is <see langword="null"/>: the member as a message names it, and
+    /// what to do. It's <see langword="null"/> where there's a text, or may be one the build can't see.
+    /// </summary>
+    // As LocalizableText finds one: a member's text also on a base class, and a type's own text on the type alone.
+    private static (string Subject, string Advice)? FindMissingText(
+        INamedTypeSymbol type,
+        string? member,
+        string sample,
+        Compilation compilation,
+        ConcurrentDictionary<IAssemblySymbol, bool> usesIdioma)
+    {
+        var subject = member is null ? type.Name : $"{type.Name}.{member}";
+
+        if (member is null)
+        {
+            if (!IsOwn(type, compilation))
+                return UsesIdioma(type.ContainingAssembly) ? null : (subject, OfOtherAssembly(type));
+
+            return HasGeneratedAttribute(type, compilation) ? null : (subject, $"Mark '{type.Name}' {sample}");
+        }
+
+        // The first member of that name, which is where the attribute goes.
+        ISymbol? declared = null;
+
+        for (var current = type; current is not null && current.SpecialType is not SpecialType.System_Object; current = current.BaseType?.OriginalDefinition)
+        {
+            if (!IsOwn(current, compilation))
+            {
+                // A text the build can't see, as the attribute isn't kept in a compiled assembly.
+                if (UsesIdioma(current.ContainingAssembly))
+                    return null;
+
+                continue;
+            }
+
+            foreach (var candidate in current.GetMembers(member))
+            {
+                if (candidate is not (IPropertySymbol or IFieldSymbol))
+                    continue;
+
+                if (HasGeneratedAttribute(candidate, compilation))
+                    return null;
+
+                declared ??= candidate;
+            }
+        }
+
+        if (declared is null)
+        {
+            return IsOwn(type, compilation)
+                ? (subject, $"'{type.Name}' has no property or field of that name. Name the member with nameof, which the compiler checks")
+                : (subject, OfOtherAssembly(type));
+        }
+
+        var where = SymbolEqualityComparer.Default.Equals(declared.ContainingType, type) ? declared.Name : $"{declared.ContainingType.Name}.{declared.Name}";
+        return (subject, $"Mark '{where}' {sample}");
+
+        bool UsesIdioma(IAssemblySymbol assembly) => usesIdioma.GetOrAdd(assembly, static assembly => assembly.Modules.Any(static module =>
+            module.ReferencedAssemblies.Any(static identity => String.Equals(identity.Name, PackageNames.Assembly, StringComparison.Ordinal))));
+
+        static string OfOtherAssembly(INamedTypeSymbol type) =>
+            $"'{type.Name}' is a type of '{type.ContainingAssembly.Name}', which doesn't use Idioma, so it has no texts written as attributes";
+    }
+
+    /// <summary>
+    /// Whether a type is one of this assembly's own, whose attributes the build sees.
+    /// </summary>
+    private static bool IsOwn(INamedTypeSymbol type, Compilation compilation)
+    {
+        var isOwn = SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly);
+        return isOwn;
+    }
+
+    /// <summary>
+    /// Whether a member or a type is marked with the generated <c>[Localized]</c>.
+    /// </summary>
+    private static bool HasGeneratedAttribute(ISymbol symbol, Compilation compilation)
+    {
+        var hasGeneratedAttribute = symbol.GetAttributes().Any(attribute => LocalizedMembers.IsGeneratedAttribute(attribute.AttributeClass, compilation.Assembly));
+        return hasGeneratedAttribute;
     }
 
     /// <summary>

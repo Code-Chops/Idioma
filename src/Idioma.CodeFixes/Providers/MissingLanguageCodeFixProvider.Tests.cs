@@ -1,6 +1,9 @@
+using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
 using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -32,7 +35,7 @@ public sealed class MissingLanguageCodeFixProviderTests
     /// <summary>
     /// A library with an English set alone, which an app that supports German adds a set to.
     /// </summary>
-    private static Microsoft.CodeAnalysis.MetadataReference ShopLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("MissingLanguageFixShop", """
+    private static MetadataReference ShopLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("MissingLanguageFixShop", """
         using CodeChops.Idioma;
 
         [assembly: SupportedLanguages("en")]
@@ -44,6 +47,22 @@ public sealed class MissingLanguageCodeFixProviderTests
             public virtual string Checkout => "Checkout";
         }
         """);
+
+    /// <summary>
+    /// The errors of the files of one project as a build compiles them, with the generators run over them.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> CompileFilesWithGenerators(MetadataReference[] references, params string[] sources)
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            sources.Select(static source => CSharpSyntaxTree.ParseText(source, GeneratorTestHelper.ParseOptions)),
+            [.. GeneratorTestHelper.References, .. references],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        GeneratorTestHelper.CreateFullDriver(GeneratorTestHelper.ParseOptions).RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics);
+
+        return [.. diagnostics.Concat(updated.GetDiagnostics()).Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error)];
+    }
 
     private static void ShouldReportNothing(params string[] sources)
     {
@@ -158,7 +177,8 @@ public sealed class MissingLanguageCodeFixProviderTests
         // Act
         var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
 
-        // Assert: the set the message names, next to the file that lists the languages.
+        // Assert: the set the message names, next to the file that lists the languages. It names the contract with a
+        // using of its namespace.
         var fix = fixes.ShouldHaveSingleItem();
         fix.Title.ShouldBe("Add 'ShopLocalizationDe'");
 
@@ -166,10 +186,11 @@ public sealed class MissingLanguageCodeFixProviderTests
         path.Replace(oldChar: '\\', newChar: '/').ShouldBe("/TestAssembly/ShopLocalizationDe.cs");
         text.ShouldBe("""
             using CodeChops.Idioma;
+            using MissingLanguageFixShop;
 
             namespace TestApp.Localization;
 
-            public class ShopLocalizationDe : ILocalizationSet, MissingLanguageFixShop.IShopLocalization
+            public class ShopLocalizationDe : ILocalizationSet, IShopLocalization
             {
             }
 
@@ -196,6 +217,75 @@ public sealed class MissingLanguageCodeFixProviderTests
         // Assert
         fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text.ShouldBe("""
             using CodeChops.Idioma;
+            using MissingLanguageFixShop;
+
+            public class ShopLocalizationDe : ILocalizationSet, IShopLocalization
+            {
+            }
+
+            """);
+    }
+
+    [Test]
+    public async Task LibraryMissingLanguage_NamespaceThatEndsInTheLibrarysFirstPart_ShouldNameTheLibrarysContract()
+    {
+        // Arrange: inside namespace Contoso.MissingLanguageFixShop, the full name MissingLanguageFixShop.IShopLocalization
+        // would mean Contoso.MissingLanguageFixShop.IShopLocalization.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "de")]
+
+            namespace Contoso.MissingLanguageFixShop;
+
+            public static class Marker;
+            """;
+
+        // Act
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
+
+        // Assert: a using at the top of the file reads the library's namespace from the global namespace.
+        var text = fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text;
+        text.ShouldBe("""
+            using CodeChops.Idioma;
+            using MissingLanguageFixShop;
+
+            namespace Contoso.MissingLanguageFixShop;
+
+            public class ShopLocalizationDe : ILocalizationSet, IShopLocalization
+            {
+            }
+
+            """);
+
+        // The set implements the library's contract, so the only error is the text it lacks, which is the compiler's to
+        // name (CS0535).
+        CompileFilesWithGenerators([ShopLibrary], source, text).ShouldHaveSingleItem().Id.ShouldBe("CS0535");
+    }
+
+    [Test]
+    public async Task LibraryMissingLanguage_TypeOfTheContractsNameInTheAppsNamespace_ShouldNameTheContractInFull()
+    {
+        // Arrange: the app has an IShopLocalization of its own in the namespace the set goes to, which the name alone
+        // would mean, also with a using.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "de")]
+
+            namespace TestApp;
+
+            public interface IShopLocalization;
+            """;
+
+        // Act
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
+
+        // Assert
+        fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text.ShouldBe("""
+            using CodeChops.Idioma;
+
+            namespace TestApp;
 
             public class ShopLocalizationDe : ILocalizationSet, MissingLanguageFixShop.IShopLocalization
             {

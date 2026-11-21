@@ -4,12 +4,14 @@ namespace CodeChops.Idioma;
 /// The names to try when looking up a culture, most specific first:
 /// <list type="number">
 /// <item>The culture.</item>
+/// <item>The same name without its script, where that's the same culture: <c>zh-TW</c> after <c>zh-Hant-TW</c>.</item>
 /// <item>Each parent culture.</item>
 /// <item>The last of those names, with its subtags dropped one at a time.</item>
 /// </list>
-/// For <c>zh-TW</c> that's <c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>. For a culture name instead of a culture, only
-/// the subtags are dropped: <c>zh-TW</c>, then <c>zh</c>. The invariant culture gives no names. A name that's empty or
-/// white space is refused.
+/// For <c>zh-TW</c> that's <c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>, and for <c>zh-Hant-TW</c> it's
+/// <c>zh-Hant-TW</c>, <c>zh-TW</c>, <c>zh-Hant</c>, then <c>zh</c>. For a culture name instead of a culture, the
+/// subtags are dropped by name: <c>zh-TW</c>, then <c>zh</c>. The invariant culture gives no names. A name that's
+/// empty or white space is refused.
 /// </summary>
 // Through CultureInfo.Parent, because a parent need not be a prefix of the name (zh-TW falls back to zh-Hant), and by
 // name as well: under invariant globalization a culture either can't be created at all (the default) or has the
@@ -25,6 +27,9 @@ internal readonly struct CultureFallback
     // off lets any name become a culture) can't grow this without end.
     private const int MaxNamesKept = 1024;
 
+    // Every script subtag has four letters (ISO 15924), and no other subtag has four letters in second place.
+    private const int ScriptLength = 4;
+
     /// <summary>
     /// Per culture name, the name above it, which is the same name without its last subtag (<c>zh-Hant-TW</c> gives
     /// <c>zh-Hant</c>, <c>en-GB</c> gives <c>en</c>). Up to <see cref="MaxNamesKept"/> names are kept, so a walk by name
@@ -39,6 +44,20 @@ internal readonly struct CultureFallback
     // Names are never removed, so this is set once. A walk past the limit then skips NamesAbove.Count, which takes all
     // of the dictionary's locks. A thread that doesn't see it set yet reads Count once more, which is harmless.
     private static bool HasKeptMaxNames { get; set; }
+
+    /// <summary>
+    /// Per culture name with a script and more after it, such as <c>zh-Hant-TW</c>, the same name without its script
+    /// (<c>zh-TW</c>), or <see langword="null"/> where that name is another culture. Up to <see cref="MaxNamesKept"/>
+    /// names are kept, as in <see cref="NamesAbove"/>.
+    /// </summary>
+    // A user's culture can carry its script, as zh-Hant-TW does on Apple platforms, where an app declares zh-TW. The
+    // parent cultures of zh-Hant-TW are zh-Hant and zh, so without this the walk never meets zh-TW.
+    private static ConcurrentDictionary<string, string?> NamesWithoutScript { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether <see cref="NamesWithoutScript"/> holds <see cref="MaxNamesKept"/> names, so no more are kept.
+    /// </summary>
+    private static bool HasKeptMaxNamesWithoutScript { get; set; }
 
     private CultureInfo? Culture { get; }
     private string? Name { get; }
@@ -92,11 +111,61 @@ internal readonly struct CultureFallback
         private CultureInfo? Next { get; set; } = culture;
         private string? First { get; set; } = name;
 
+        /// <summary>
+        /// The first name without its script, to try right after it, or <see langword="null"/>.
+        /// </summary>
+        private string? WithoutScript { get; set; }
+
+        /// <summary>
+        /// The name without its script that was tried, so that the walk doesn't try it a second time.
+        /// </summary>
+        private string? TriedWithoutScript { get; set; }
+
+        /// <summary>
+        /// The last name of the walk itself, which dropping a subtag starts from. The name without its script lies
+        /// beside the walk, so it's never this one. Dropping a subtag from <c>zh-TW</c> would skip <c>zh-Hant</c>.
+        /// </summary>
+        private string Last { get; set; } = "";
+
+        private bool HasStarted { get; set; }
+
         public bool MoveNext()
+        {
+            if (this.WithoutScript is { } withoutScript)
+            {
+                this.Current = this.TriedWithoutScript = withoutScript;
+                this.WithoutScript = null;
+
+                return true;
+            }
+
+            while (this.MoveToNextName())
+            {
+                if (this.TriedWithoutScript is { } tried && String.Equals(this.Last, tried, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                this.Current = this.Last;
+
+                if (!this.HasStarted)
+                {
+                    this.HasStarted = true;
+                    this.WithoutScript = GetNameWithoutScript(this.Last);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Moves <see cref="Last"/> on to the next name of the walk itself.
+        /// </summary>
+        private bool MoveToNextName()
         {
             if (this.First is { Length: > 0 } first)
             {
-                this.Current = first;
+                this.Last = first;
                 this.First = null;
 
                 return true;
@@ -104,42 +173,125 @@ internal readonly struct CultureFallback
 
             if (this.Next is { Name.Length: > 0 } next)
             {
-                this.Current = next.Name;
+                this.Last = next.Name;
                 this.Next = next.Parent;
 
                 return true;
             }
 
             this.Next = null;
-            var separator = this.Current.LastIndexOf('-');
+            var separator = this.Last.LastIndexOf('-');
 
             if (separator < 0)
                 return false;
 
-            this.Current = GetNameAbove(this.Current, separator);
+            this.Last = GetNameAbove(this.Last, separator);
 
             return true;
-
-            static string GetNameAbove(string name, int separator)
-            {
-                if (NamesAbove.TryGetValue(name, out var above))
-                    return above;
-
-                above = name[..separator];
-
-                // The string that is kept, also when another thread kept one for this name in the meantime: every
-                // walk then hands out that one, where two threads walking a name for the first time would otherwise
-                // each go on with a string of their own.
-                if (HasKeptMaxNames)
-                    return above;
-
-                if (NamesAbove.Count < MaxNamesKept)
-                    above = NamesAbove.GetOrAdd(name, above);
-                else
-                    HasKeptMaxNames = true;
-
-                return above;
-            }
         }
+
+        private static string GetNameAbove(string name, int separator)
+        {
+            if (NamesAbove.TryGetValue(name, out var above))
+                return above;
+
+            above = name[..separator];
+
+            // The string that is kept, also when another thread kept one for this name in the meantime: every walk
+            // then hands out that one, where two threads walking a name for the first time would otherwise each go on
+            // with a string of their own.
+            if (HasKeptMaxNames)
+                return above;
+
+            if (NamesAbove.Count < MaxNamesKept)
+                above = NamesAbove.GetOrAdd(name, above);
+            else
+                HasKeptMaxNames = true;
+
+            return above;
+        }
+    }
+
+    /// <summary>
+    /// A culture name without its script, such as <c>zh-TW</c> for <c>zh-Hant-TW</c>, where that's the same culture.
+    /// It's <see langword="null"/> for:
+    /// <list type="bullet">
+    /// <item>A name without a script.</item>
+    /// <item>A name with nothing after its script, such as <c>zh-Hant</c>.</item>
+    /// <item>A name whose culture without the script writes in another one. <c>sr-RS</c> is written in Cyrillic, so it
+    /// isn't tried for <c>sr-Latn-RS</c>.</item>
+    /// </list>
+    /// </summary>
+    internal static string? GetNameWithoutScript(string name)
+    {
+        // Told without a lookup, because nearly every name has no script.
+        var start = FindScript(name);
+        if (start < 0 || start + ScriptLength == name.Length)
+            return null;
+
+        if (NamesWithoutScript.TryGetValue(name, out var kept))
+            return kept;
+
+        var withoutScript = String.Concat(name.AsSpan(0, start - 1), name.AsSpan(start + ScriptLength));
+        var sameCulture = HasSameScript(name, name.AsSpan(start, ScriptLength), withoutScript) ? withoutScript : null;
+
+        if (HasKeptMaxNamesWithoutScript)
+            return sameCulture;
+
+        if (NamesWithoutScript.Count < MaxNamesKept)
+            sameCulture = NamesWithoutScript.GetOrAdd(name, sameCulture);
+        else
+            HasKeptMaxNamesWithoutScript = true;
+
+        return sameCulture;
+    }
+
+    /// <summary>
+    /// Whether the culture without the script writes in that script, as <c>zh-TW</c> writes in <c>Hant</c>.
+    /// </summary>
+    // Through the cultures of this machine, as a name alone can't tell: zh-TW is Traditional Chinese, zh-CN Simplified,
+    // and sr-RS Cyrillic. A parent culture with a script names it (zh-TW falls back to zh-Hant). Without one, the names
+    // of a month and a day show the script: Latin "januar" for sr-Latn-RS, Cyrillic for sr-RS. Without the cultures, as
+    // under invariant globalization, the name alone decides, as it does for the rest of the walk there. Worked out once
+    // per name (NamesWithoutScript), so the cultures are read once too.
+    private static bool HasSameScript(string name, ReadOnlySpan<char> script, string withoutScript)
+    {
+        if (CultureName.FindCulture(withoutScript) is not { } other || CultureName.FindCulture(name) is not { } culture)
+            return true;
+
+        // The culture itself too, for a name the cultures know under another one with a script.
+        for (var current = other; current.Name.Length > 0; current = current.Parent)
+            if (FindScript(current.Name) is >= 0 and var start)
+                return current.Name.AsSpan(start, ScriptLength).Equals(script, StringComparison.OrdinalIgnoreCase);
+
+        var format = culture.DateTimeFormat;
+        var otherFormat = other.DateTimeFormat;
+
+        var isSame = String.Equals(format.GetMonthName(1), otherFormat.GetMonthName(1), StringComparison.Ordinal)
+                     && String.Equals(format.GetDayName(DayOfWeek.Monday), otherFormat.GetDayName(DayOfWeek.Monday), StringComparison.Ordinal);
+        return isSame;
+    }
+
+    /// <summary>
+    /// Where the script of a culture name starts, or -1 for a name without one. A script is the second subtag, of
+    /// <see cref="ScriptLength"/> letters, after a language of two letters or more: <c>Hant</c> in <c>zh-Hant-TW</c>.
+    /// </summary>
+    private static int FindScript(string name)
+    {
+        var first = name.IndexOf('-');
+
+        if (first < 2)
+            return -1;
+
+        var end = name.IndexOf('-', first + 1);
+
+        if ((end < 0 ? name.Length : end) - first - 1 != ScriptLength)
+            return -1;
+
+        for (var i = first + 1; i <= first + ScriptLength; i++)
+            if (!Char.IsAsciiLetter(name[i]))
+                return -1;
+
+        return first + 1;
     }
 }

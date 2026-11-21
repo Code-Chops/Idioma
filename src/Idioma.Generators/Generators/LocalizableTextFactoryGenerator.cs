@@ -75,6 +75,20 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
         description: "The code generated for an assembly that declares languages uses extension members, which C# 14 brings, so the generators write none of it for an older version. C# 14 is the default on .NET 10, unless the project sets an older LangVersion.",
         helpLinkUri: PackageNames.HelpLink(LanguageVersionTooOldDiagnosticId));
 
+    // The code of a set in an assembly without languages, and of a call of LocalizableText.Inline there: all say that
+    // the attribute is missing, and all have the same fix.
+#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
+    private static readonly DiagnosticDescriptor LocalizedWithoutLanguagesRule = new(
+        id: LocalizationSetsGenerator.NoLanguagesDeclaredDiagnosticId,
+        title: "Text on a member in an assembly without languages",
+        messageFormat: "{0} takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The source generator writes [Localized] with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such attribute (CS0246).",
+        helpLinkUri: PackageNames.HelpLink(LocalizationSetsGenerator.NoLanguagesDeclaredDiagnosticId));
+#pragma warning restore RS1019
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         context.RegisterPostInitializationOutput(static context => context.AddEmbeddedAttributeDefinition());
@@ -109,6 +123,20 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
 
             context.AddSource("LocalizableText.Factory.g.cs", GenerateSource(codes));
             context.AddSource("LocalizedAttribute.g.cs", GenerateAttribute(codes));
+        });
+
+        // Reported here, and not by an analyzer: the compiler stops at an attribute that binds to nothing (CS0246)
+        // before any analyzer runs, so a build would show only that, and the advice to add a using directive.
+        var localizedWithoutLanguages = context.SyntaxProvider
+            .CreateSyntaxProvider(static (node, _) => LocalizedMembers.IsNamedLocalized(node), static (context, cancellationToken) => FindLocalizedWithoutLanguages(context, cancellationToken))
+            .Where(static location => location is not null)
+            .Select(static (location, _) => location!.Value)
+            .Collect();
+
+        context.RegisterSourceOutput(localizedWithoutLanguages, static (context, locations) =>
+        {
+            foreach (var location in locations)
+                context.ReportDiagnostic(Diagnostic.Create(LocalizedWithoutLanguagesRule, location.ToLocation(), $"[{LocalizedMembers.AttributeName}]"));
         });
 
         var callsInCode = context.SyntaxProvider
@@ -153,6 +181,22 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
                && String.Equals(access.Name.Identifier.ValueText, FactoryName, StringComparison.Ordinal);
 
         return isInlineCall;
+    }
+
+    /// <summary>
+    /// Where an attribute named <c>Localized</c> is written, when its assembly declares no languages and it binds to
+    /// nothing, else <see langword="null"/>. An attribute of that name that binds is one the code brought itself.
+    /// </summary>
+    // The languages first, which the compilation reads once: with them, the attribute is the generated one, and nothing
+    // needs binding.
+    private static DiagnosticLocation? FindLocalizedWithoutLanguages(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    {
+        var attribute = (AttributeSyntax)context.Node;
+
+        var isWithoutLanguages = SupportedLanguages.ReadCodes(context.SemanticModel.Compilation.Assembly).Length is 0
+                                 && LocalizedMembers.IsUnbound(attribute, context.SemanticModel, cancellationToken);
+
+        return isWithoutLanguages ? DiagnosticLocation.From(attribute.Name.GetLocation()) : null;
     }
 
     /// <summary>

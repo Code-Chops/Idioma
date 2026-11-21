@@ -63,6 +63,16 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
     /// </summary>
     internal const string ObsoleteWarnings = "CS0612, CS0618";
 
+    /// <summary>
+    /// <see cref="ObsoleteWarnings"/>, followed by what naming the sets a file names reports besides
+    /// (<see cref="DiscoveredLocalization.SuppressedDiagnostics"/>), as a pragma lists them.
+    /// </summary>
+    internal static string WithSuppressed(string warnings, EquatableArray<string> suppressed)
+    {
+        var withSuppressed = suppressed.Length is 0 ? warnings : $"{warnings}, {String.Join(", ", suppressed)}";
+        return withSuppressed;
+    }
+
     private static readonly DiagnosticDescriptor CannotRegisterRule = new(
         id: CannotRegisterDiagnosticId,
         title: "Localization set can't be registered automatically",
@@ -109,8 +119,9 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
 
         // Every set whose language comes from its name, or that derives from another set, an excluded one included.
         // Registered by hand, it must serve the language the build counted it for, and reword what the build saw.
+        // Not a set marked [Obsolete] as an error, which no generated code may name (LOC400).
         var records = allSets.Select(static (sets, _) => new EquatableArray<SetRecord>(sets
-            .Where(static set => set.RecordedLanguageCode is not null || set.Depth > 0)
+            .Where(static set => (set.RecordedLanguageCode is not null || set.Depth > 0) && !set.IsObsoleteAsError)
             .Select(static set => new SetRecord(set.MetadataName, set.FullyQualifiedName, set.RecordedLanguageCode, set.OwnTexts))
             .Distinct()
             .OrderBy(static set => set.MetadataName, StringComparer.Ordinal)
@@ -166,20 +177,38 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
 
         // The texts of members marked [Localized]. Read here alone, and not by a generator of their own, because
         // every attribute of that name is bound again on each edit.
-        var members = LocalizedMembers.ReadModel(context);
+        // An enum that a set holds the texts of gets its GetText from that set's generated class alone.
+        var enumsWithSets = allSets.Select(static (sets, _) => new EquatableArray<string>(sets
+            .SelectMany(static set => set.Enums)
+            .Select(static @enum => @enum.FullyQualifiedName)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToImmutableArray()));
+
+        var members = LocalizedMembers.ReadModel(context)
+            .Combine(enumsWithSets)
+            .Select(static (data, _) => LocalizedMembers.WithoutExtensionsOf(data.Left, data.Right));
 
         // The class that records those texts, where the assembly has one. Its name alone, so that an edit of a wording
         // rewrites no registrar.
         var memberTexts = members.Select(static (model, _) => model.HasTexts ? model.RecorderName : null);
+
+        // What naming a set marked [Experimental], or [Obsolete] with an id of its own, reports.
+        var suppressedDiagnostics = allSets.Select(static (sets, _) => new EquatableArray<string>(sets
+            .SelectMany(static set => set.SuppressedDiagnostics)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static id => id, StringComparer.Ordinal)
+            .ToImmutableArray()));
 
         var registrar = registrations
             .Combine(records)
             .Combine(assembly)
             .Combine(languages)
             .Combine(memberTexts)
+            .Combine(suppressedDiagnostics)
             .Select(static (data, _) =>
             {
-                var ((((sets, records), assembly), languages), memberTexts) = data;
+                var (((((sets, records), assembly), languages), memberTexts), suppressedDiagnostics) = data;
                 var forwards = sets.Length > 0 || assembly.IsApplication || languages is { Codes.Length: > 0 };
                 // Not without a default language (LOC101): the first valid language must not become the app's default.
                 var appLanguages = assembly.IsApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
@@ -190,7 +219,8 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                     ReferencedRegistrars: forwards ? assembly.ReferencedRegistrars : default,
                     Languages: appLanguages,
                     Records: records,
-                    MemberTexts: memberTexts);
+                    MemberTexts: memberTexts,
+                    SuppressedDiagnostics: suppressedDiagnostics);
             });
 
         // Once per class that declares the property, where the fix is, however many sets derive from it.
@@ -331,14 +361,15 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         var accessibility = registrar.Sets.Length > 0 || registrar.Languages.Length > 0 || registrar.MemberTexts is not null ? "public" : "internal";
         var hasOwnSets = registrar.Sets.Length > 0 || registrar.Records.Length > 0;
 
-        // The pragma also covers a set marked [Obsolete], which registers for as long as it exists. The warning about
-        // naming it is one its author can't act on in generated code, and a build that treats warnings as errors would
-        // stop at it.
+        // The pragma also covers a set marked [Obsolete] or [Experimental], which registers for as long as it exists.
+        // The warning about naming it is one its author can't act on in generated code, and a build that treats
+        // warnings as errors would stop at it.
+        var warnings = WithSuppressed(ObsoleteWarnings, registrar.SuppressedDiagnostics);
         var sb = new StringBuilder();
         sb.AppendLine($$"""
             // <auto-generated/>
             #nullable enable
-            #pragma warning disable {{ObsoleteWarnings}} // Only generated code calls GeneratedCode.
+            #pragma warning disable {{warnings}} // Only generated code calls GeneratedCode.
 
             namespace {{RegistrarNamespace}}
             {
@@ -467,7 +498,7 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
                 """);
         }
 
-        sb.AppendLine($"#pragma warning restore {ObsoleteWarnings}");
+        sb.AppendLine($"#pragma warning restore {warnings}");
         sb.AppendLine("#nullable restore");
 
         return sb.ToString();
@@ -529,7 +560,8 @@ internal readonly record struct Registrar(
     EquatableArray<ReferencedRegistrar> ReferencedRegistrars,
     EquatableArray<string> Languages,
     EquatableArray<SetRecord> Records,
-    string? MemberTexts);
+    string? MemberTexts,
+    EquatableArray<string> SuppressedDiagnostics);
 
 /// <summary>
 /// What the registrar records about a set before it registers: the language that comes from its name, or from the name

@@ -28,13 +28,17 @@ namespace CodeChops.Idioma.CodeFixes;
 /// in a raw string keeps its placeholder, and its warning.
 /// </para>
 /// <para>
+/// A set that reads the text of the set it derives from, as a regional set does in
+/// <c>base.Greeting.Replace("color", "colour")</c>, passes the values on: <c>base.Greeting(arg0)</c>.
+/// </para>
+/// <para>
 /// The fix changes every language or none. There's no fix for:
 /// </para>
 /// <list type="bullet">
 /// <item>An inline text, because its wording has no parameter to take the value.</item>
 /// <item>A wording in a raw string, unless the fix of another language makes its property a method.</item>
 /// <item>A text that a language can't write as a method, such as one with a setter or one the constructor assigns.</item>
-/// <item>A text that code of the project uses as a property of a set, such as another text that shows it. That code would no longer compile.</item>
+/// <item>A text that other code of the project uses as a property of a set, such as another text that shows it. That code would no longer compile.</item>
 /// <item>A text of a member of an enum, because the contract takes it from the enum.</item>
 /// <item>A text that takes no values, of another assembly's contract or one written by hand, because the fix doesn't change a contract.</item>
 /// <item>A property that overrides one of another assembly, because that property doesn't change with it.</item>
@@ -135,7 +139,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         {
             var parameters = method.ParameterList.Parameters;
 
-            return FillIn(text, wordings, number => number < parameters.Count ? parameters[number].Identifier.ValueText : null) is { } filled
+            return FillIn(text, wordings, number => number < parameters.Count ? parameters[number].Identifier.ValueText : null, [], []) is { } filled
                 ? new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax> { [text] = filled }
                 : null;
         }
@@ -146,7 +150,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         if (semanticModel.GetDeclaredSymbol(property, cancellationToken) is not { } symbol
             || FindLanguages(symbol, compilation, cancellationToken) is not var (languages, properties, implementsContractText)
             || ReadParameters(symbol, implementsContractText, languages) is not { } writeParameters
-            || IsUsedAsProperty(properties, compilation, semanticModel, cancellationToken))
+            || IsUsedAsProperty(properties, languages, compilation, semanticModel, cancellationToken))
         {
             return null;
         }
@@ -158,9 +162,10 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         foreach (var language in languages)
         {
             var languageModel = language.SyntaxTree == property.SyntaxTree ? semanticModel : compilation.GetSemanticModel(language.SyntaxTree);
+            var baseReads = FindBaseReads(language, properties, languageModel, cancellationToken);
 
             // A raw string keeps its placeholders, and a wording without any has none to fill in.
-            if (ToMethod(language, FindWordings(language) ?? [], writeParameters(language, languageModel)) is not { } fixedText)
+            if (ToMethod(language, FindWordings(language) ?? [], baseReads, writeParameters(language, languageModel)) is not { } fixedText)
                 return null;
 
             fixedTexts.Add(language, fixedText);
@@ -171,9 +176,11 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// A property as the method that takes <paramref name="parameters"/>, with a parameter in place of each placeholder
-    /// of <paramref name="wordings"/>. <see langword="null"/> when the property can't become one.
+    /// of <paramref name="wordings"/>, and each of <paramref name="baseReads"/> as a call that passes them on.
+    /// <see langword="null"/> when the property can't become one.
     /// </summary>
-    private static MethodDeclarationSyntax? ToMethod(PropertyDeclarationSyntax property, ImmutableArray<ExpressionSyntax> wordings, ParameterListSyntax parameters)
+    private static MethodDeclarationSyntax? ToMethod(PropertyDeclarationSyntax property, ImmutableArray<ExpressionSyntax> wordings,
+        ImmutableArray<MemberAccessExpressionSyntax> baseReads, ParameterListSyntax parameters)
     {
         var names = parameters.Parameters.Select(static parameter => parameter.Identifier.ValueText).ToArray();
 
@@ -181,9 +188,39 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         if (property.DescendantNodes().OfType<IdentifierNameSyntax>().Any(identifier => names.Contains(identifier.Identifier.ValueText, StringComparer.Ordinal)))
             return null;
 
-        return FillIn(property, wordings, number => number < names.Length ? names[number] : null) is PropertyDeclarationSyntax filled
+        return FillIn(property, wordings, number => number < names.Length ? names[number] : null, baseReads, names) is PropertyDeclarationSyntax filled
             ? ToMethod(filled, parameters)
             : null;
+    }
+
+    /// <summary>
+    /// Where a property reads the text of the set its set derives from, as in <c>base.Greeting</c>, which becomes a method
+    /// too. Each such read becomes a call that passes the values on (<see cref="PassOn"/>).
+    /// </summary>
+    private static ImmutableArray<MemberAccessExpressionSyntax> FindBaseReads(PropertyDeclarationSyntax language, ImmutableHashSet<IPropertySymbol> properties,
+        SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        return
+        [
+            .. language.DescendantNodes()
+                .OfType<MemberAccessExpressionSyntax>()
+                .Where(access => access.Expression is BaseExpressionSyntax
+                                 && semanticModel.GetSymbolInfo(access, cancellationToken).Symbol is IPropertySymbol read
+                                 && properties.Contains(read.OriginalDefinition)),
+        ];
+    }
+
+    /// <summary>
+    /// Whether an identifier is the name in a read of <c>base</c> inside the text in one of the languages, as in
+    /// <c>base.Greeting</c>. Such a read becomes a call along with the text (<see cref="FindBaseReads"/>).
+    /// </summary>
+    private static bool IsReadOfBaseInLanguage(IdentifierNameSyntax identifier, ImmutableArray<PropertyDeclarationSyntax> languages)
+    {
+        var isReadOfBase = identifier.Parent is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax } access
+                           && access.Name == identifier
+                           && languages.Any(language => language.SyntaxTree == access.SyntaxTree && language.Span.Contains(access.Span));
+
+        return isReadOfBase;
     }
 
     /// <summary>
@@ -332,11 +369,12 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     /// <remarks>
     /// Code that reads the text through the contract or the generated class, as in <c>ShopLocalization.Greeting</c>,
     /// doesn't count. It reads another member, which becomes a method that takes the value, and the compiler then
-    /// points at each place that has to pass it. Neither does a reference in a doc comment.
+    /// points at each place that has to pass it. Neither does a reference in a doc comment, nor a read of
+    /// <c>base.Greeting</c> in the text itself, which passes the values on once both are methods.
     /// </remarks>
     // By name first, which binds nothing, and then by the compiler for a name that matches: one of a few in a project.
-    private static bool IsUsedAsProperty(ImmutableHashSet<IPropertySymbol> properties, Compilation compilation, SemanticModel semanticModel,
-        CancellationToken cancellationToken)
+    private static bool IsUsedAsProperty(ImmutableHashSet<IPropertySymbol> properties, ImmutableArray<PropertyDeclarationSyntax> languages,
+        Compilation compilation, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var names = properties.Select(GetTextName).ToImmutableHashSet(StringComparer.Ordinal);
 
@@ -346,7 +384,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
             foreach (var identifier in tree.GetRoot(cancellationToken).DescendantNodes().OfType<IdentifierNameSyntax>())
             {
-                if (!names.Contains(identifier.Identifier.ValueText))
+                if (!names.Contains(identifier.Identifier.ValueText) || IsReadOfBaseInLanguage(identifier, languages))
                     continue;
 
                 model ??= tree == semanticModel.SyntaxTree ? semanticModel : compilation.GetSemanticModel(tree);
@@ -463,22 +501,36 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The text with each of its wordings filled in (<see cref="FillIn(ExpressionSyntax, Func{int, string?})"/>), or
-    /// <see langword="null"/> when a placeholder has no parameter.
+    /// The text with each of its wordings filled in (<see cref="FillIn(ExpressionSyntax, Func{int, string?})"/>), and
+    /// each of <paramref name="baseReads"/> as a call that passes <paramref name="arguments"/> on. <see langword="null"/>
+    /// when a placeholder has no parameter.
     /// </summary>
-    private static MemberDeclarationSyntax? FillIn(MemberDeclarationSyntax text, ImmutableArray<ExpressionSyntax> wordings, Func<int, string?> name)
+    private static MemberDeclarationSyntax? FillIn(MemberDeclarationSyntax text, ImmutableArray<ExpressionSyntax> wordings, Func<int, string?> name,
+        ImmutableArray<MemberAccessExpressionSyntax> baseReads, IReadOnlyList<string> arguments)
     {
-        var filled = new Dictionary<ExpressionSyntax, ExpressionSyntax>();
+        // Checked on the wordings as written. A wording inside another changes what that one holds in a value, and not
+        // its text, so the filled-in one has the same placeholders.
+        if (wordings.Any(wording => FillIn(wording, name) is null))
+            return null;
 
-        foreach (var wording in wordings)
-        {
-            if (FillIn(wording, name) is not { } written)
-                return null;
+        // Each from what it holds after the nodes inside it changed, so that a wording inside another one, as in
+        // $"Hey {{0}}{(more ? " and {1}" : "")}", or a read of base inside a wording, changes too.
+        return text.ReplaceNodes(
+            wordings.Cast<SyntaxNode>().Concat(baseReads),
+            (original, changed) => original is MemberAccessExpressionSyntax
+                ? PassOn((ExpressionSyntax)changed, arguments)
+                : SyntaxFactory.ParseExpression(FillIn((ExpressionSyntax)changed, name)!).WithTriviaFrom(original));
+    }
 
-            filled.Add(wording, SyntaxFactory.ParseExpression(written).WithTriviaFrom(wording));
-        }
+    /// <summary>
+    /// A read of the text of the set a set derives from as a call that passes the values on: <c>base.Greeting</c>
+    /// becomes <c>base.Greeting(arg0)</c>.
+    /// </summary>
+    private static InvocationExpressionSyntax PassOn(ExpressionSyntax read, IReadOnlyList<string> arguments)
+    {
+        var argumentList = SyntaxFactory.ParseArgumentList($"({String.Join(", ", arguments.Select(Escape))})");
 
-        return text.ReplaceNodes(filled.Keys, (original, _) => filled[original]);
+        return SyntaxFactory.InvocationExpression(read.WithoutTrailingTrivia(), argumentList).WithTrailingTrivia(read.GetTrailingTrivia());
     }
 
     /// <summary>

@@ -324,12 +324,12 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// Whether a set implements a contract the input compilation knows: one written by hand in its own assembly,
-    /// whatever its accessibility, or a public one of any assembly. Such a set rewords or translates that contract, and
-    /// starts none of its own.
+    /// whatever its accessibility, a public one of any assembly, or an internal one of another assembly that it sees
+    /// through <c>InternalsVisibleTo</c>. Such a set rewords or translates that contract, and starts none of its own.
     /// </summary>
     public static bool ImplementsContract(DiscoveredLocalization set)
     {
-        var implementsContract = set.ContractNames.Length > 0 || set.OwnContractNames.Length > 0;
+        var implementsContract = set.ContractNames.Length > 0 || set.OwnContractNames.Length > 0 || set.ImplementsInternalContract;
         return implementsContract;
     }
 
@@ -407,8 +407,11 @@ internal static partial class LocalizationDiscovery
                 Texts = new EquatableArray<LocalizationMember>(ImmutableArray<LocalizationMember>.Empty),
                 UnsupportedTexts = new EquatableArray<UnsupportedText>(ImmutableArray<UnsupportedText>.Empty),
                 Usings = default,
-                Enums = new EquatableArray<LocalizedEnum>(ImmutableArray<LocalizedEnum>.Empty),
+                // Only which enums it holds the texts of, which the registrar's generator asks so that an enum doesn't
+                // get a second GetText from its [Localized] members. Not their members, which change with every edit.
+                Enums = new EquatableArray<LocalizedEnum>([.. set.Enums.Select(static @enum => @enum with { Members = new EquatableArray<LocalizedEnumMember>(ImmutableArray<LocalizedEnumMember>.Empty) })]),
                 TypeNamedLikeTexts = null,
+                TypeNamedLikeContract = null,
                 ReservedTexts = new EquatableArray<ReservedText>(ImmutableArray<ReservedText>.Empty),
                 UndeclaredTexts = new EquatableArray<UndeclaredText>(ImmutableArray<UndeclaredText>.Empty),
             },

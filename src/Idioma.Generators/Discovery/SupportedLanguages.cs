@@ -34,15 +34,38 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// Whether a set for <paramref name="provided"/> serves <paramref name="requested"/>: the same language, or a culture
-    /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>, and <c>zh-Hant</c> serves <c>zh-TW</c>).
+    /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>, <c>zh-Hant</c> serves <c>zh-TW</c>, and
+    /// <c>zh-TW</c> serves <c>zh-Hant-TW</c>).
     /// </summary>
     public static bool Serves(string provided, string requested)
     {
         var serves = String.Equals(provided, requested, StringComparison.OrdinalIgnoreCase)
                || requested.StartsWith(provided + "-", StringComparison.OrdinalIgnoreCase)
-               || (FindScriptParentOfChineseRegion(requested) is { } parent && Serves(provided, parent));
+               || (FindScriptParentOfChineseRegion(requested) is { } parent && Serves(provided, parent))
+               || (FindChineseRegionWithoutScript(requested) is { } region && Serves(provided, region));
 
         return serves;
+    }
+
+    /// <summary>
+    /// A Chinese region written with its script, without that script: <c>zh-TW</c> for <c>zh-Hant-TW</c>, and
+    /// <c>zh-CN</c> for <c>zh-Hans-CN</c>. At run time a text tries that name right after the culture. It's
+    /// <see langword="null"/> for every other code, and for a region with the other script, such as <c>zh-Hant-CN</c>,
+    /// which writes in another script than <c>zh-CN</c> does.
+    /// </summary>
+    // Only the Chinese regions of FindScriptParentOfChineseRegion, whose scripts are known without the cultures of this
+    // machine. At run time a text compares the scripts of any language (CultureFallback), which a build can't, for the
+    // reason given there.
+    internal static string? FindChineseRegionWithoutScript(string code)
+    {
+        if (code.Length is not 10 || !code.StartsWith("zh-", StringComparison.OrdinalIgnoreCase) || code[7] is not '-')
+            return null;
+
+        var region = "zh-" + code.Substring(8);
+        var isSameScript = FindScriptParentOfChineseRegion(region) is { } parent
+                           && String.Equals(parent.Substring(3), code.Substring(3, 4), StringComparison.OrdinalIgnoreCase);
+
+        return isSameScript ? region : null;
     }
 
     /// <summary>

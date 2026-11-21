@@ -99,7 +99,7 @@ public static partial class OrderStatusLocalization
     /// The text with a key. The key is the name of the text, such as <c>"Pending"</c>.
     /// </summary>
     /// <param name="key">The <see cref="CodeChops.Idioma.LocalizableText.Key"/> of the text: its name, in the same letter case.</param>
-    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
+    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter, except a string for a LocalizableText.</param>
     /// <exception cref="Namespace_System.ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
     /// <exception cref="Namespace_System_Collections_Generic.KeyNotFoundException">When no text has the key.</exception>
     /// <exception cref="Namespace_System.ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>

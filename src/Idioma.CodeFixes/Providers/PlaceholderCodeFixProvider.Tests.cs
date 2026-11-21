@@ -3,6 +3,7 @@ using CodeChops.Idioma.CodeFixes;
 using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -114,6 +115,22 @@ public sealed class PlaceholderCodeFixProviderTests
         GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
         (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), fixedSource, [])).ShouldNotContain(diagnostic => diagnostic.Id == "LOC502");
     }
+
+    /// <summary>
+    /// The errors of the files of one project as a build compiles them, with the generators run over them.
+    /// </summary>
+    private static ImmutableArray<Diagnostic> CompileFilesWithGenerators(params string[] sources)
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            sources.Select(static source => CSharpSyntaxTree.ParseText(source, GeneratorTestHelper.ParseOptions)),
+            GeneratorTestHelper.References,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        GeneratorTestHelper.CreateFullDriver(GeneratorTestHelper.ParseOptions).RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics);
+
+        return [.. diagnostics.Concat(updated.GetDiagnostics()).Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error)];
+    }
     #endregion
 
     [Test]
@@ -186,7 +203,9 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(Sets(EnglishGreeting, dutch));
 
         // Assert: the block is formatted, which writes the line endings of the platform, so those don't count here.
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ReplaceLineEndings().ShouldBe(Sets(EnglishGreetingTakingValue, expected).ReplaceLineEndings());
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ReplaceLineEndings().ShouldBe(Sets(EnglishGreetingTakingValue, expected).ReplaceLineEndings());
+        await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
     [Test]
@@ -202,6 +221,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
         fixedSource.ShouldContain("""public string Greeting(object arg0) => $"Hallo, {arg0}!";""");
         fixedSource.ShouldContain(EnglishGreetingTakingValue);
+        await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
     [Test]
@@ -217,8 +237,10 @@ public sealed class PlaceholderCodeFixProviderTests
         // Assert: {1} is the second parameter, in a string and in the text of an interpolated string.
         fixes.Length.ShouldBe(2);
         fixes.ShouldAllBe(fix => fix.Title == "Replace the placeholders with the parameters");
-        fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem().ShouldBe(Sets(english,
+        var fixedSource = fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets(english,
             """public string Items(int count, string shop) => count is 1 ? $"1 artikel bij {shop}" : $"{count} artikelen bij {shop}";"""));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
     [Test]
@@ -482,8 +504,10 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(Sets(english, dutch));
 
         // Assert: the string passed to a method has no diagnostic, and stays as it is.
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(Sets(english,
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets(english,
             """public string Items(int count) => count is 1 ? $"{count} artikel" : string.Format("{0} artikelen", count);"""));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
     [Test]
@@ -720,11 +744,13 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await CodeFixTestHelper.FixWithGeneratedCodeAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), english, dutch);
 
         // Assert
-        fixes.ShouldHaveSingleItem().Sources.ShouldBe(
+        var fixedSources = fixes.ShouldHaveSingleItem().Sources;
+        fixedSources.ShouldBe(
         [
             english.Replace("""Greeting => "Hello!";""", """Greeting(object? arg0) => "Hello!";""", StringComparison.Ordinal),
             dutch.Replace("""Greeting => "Hallo, {0}!";""", """Greeting(object? arg0) => $"Hallo, {arg0}!";""", StringComparison.Ordinal),
         ]);
+        CompileFilesWithGenerators([.. fixedSources]).ShouldBeEmpty();
     }
 
     [Test]
@@ -773,7 +799,90 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(Sets(english, dutch));
 
         // Assert
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(Sets(
-            """public virtual string Total(decimal amount) => $"Total: {amount, -8:N2}";""", dutch));
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets("""public virtual string Total(decimal amount) => $"Total: {amount, -8:N2}";""", dutch));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
+    }
+
+    [Test]
+    public async Task WordingInsideAnotherWording_ShouldBeFilledInToo()
+    {
+        // Arrange: the text of the interpolated string holds {0}, and a string in one of its values holds {1}.
+        var source = Sets(
+            """public virtual string Greeting => $"Hello, {{0}}{(System.DateTime.Now.Hour < 12 ? " and good morning, {1}" : "")}!";""",
+            """public string Greeting => "Hallo, {0} en {1}!";""");
+
+        // Act: each of the three strings has a diagnostic, and the fix of each changes the whole text.
+        var fixes = await FixAsync(source);
+
+        // Assert: both get a parameter, in the order of their numbers.
+        var fixedSource = fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Sets(
+            """public virtual string Greeting(object? arg0, object? arg1) => $"Hello, {arg0}{(System.DateTime.Now.Hour < 12 ? $" and good morning, {arg1}" : "")}!";""",
+            """public string Greeting(object? arg0, object? arg1) => $"Hallo, {arg0} en {arg1}!";"""));
+        await ShouldCompileWithoutPlaceholders(fixedSource);
+    }
+
+    /// <summary>
+    /// A British set that rewords the English text it derives from, reading that text with <c>base</c>.
+    /// </summary>
+    private static string SetsWithBritish(string british) => $$"""
+        #nullable enable
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en", "nl", "en-GB")]
+
+        namespace TestApp;
+
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+        {
+            public virtual string Greeting => "Hello, {0}! Pick a color.";
+            public virtual string Farewell => "Bye!";
+        }
+
+        public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+        {
+            public string Greeting => "Hallo, {0}! Kies een kleur.";
+            public string Farewell => "Doei!";
+        }
+
+        public class ShopLocalizationEnGb : ShopLocalizationEn
+        {
+            {{Indent(british)}}
+        }
+        """;
+
+    [Test]
+    [Arguments("""public override string Greeting => base.Greeting.Replace("color", "colour");""", """public override string Greeting(object? arg0) => base.Greeting(arg0).Replace("color", "colour");""")]
+    [Arguments("""public override string Greeting { get { return base.Greeting.Replace("color", "colour"); } }""", """public override string Greeting(object? arg0) { return base.Greeting(arg0).Replace("color", "colour"); }""")]
+    [Arguments("""public override string Greeting => $"{base.Greeting} Cheers.";""", """public override string Greeting(object? arg0) => $"{base.Greeting(arg0)} Cheers.";""")]
+    public async Task OverrideThatReadsTheTextOfItsBaseSet_ShouldPassTheValuesOn(string british, string expected)
+    {
+        // Arrange
+        var source = SetsWithBritish(british);
+
+        // Act: English and Dutch each have a fix.
+        var fixes = await FixAsync(source);
+
+        // Assert: the British text reads the English one with the value it takes itself.
+        var fixedSource = fixes.Select(static fix => fix.Sources.ShouldHaveSingleItem()).Distinct(StringComparer.Ordinal).ShouldHaveSingleItem();
+        fixedSource.ReplaceLineEndings().ShouldBe(SetsWithBritish(expected)
+            .Replace("""Greeting => "Hello, {0}! Pick a color.";""", """Greeting(object? arg0) => $"Hello, {arg0}! Pick a color.";""", StringComparison.Ordinal)
+            .Replace("""Greeting => "Hallo, {0}! Kies een kleur.";""", """Greeting(object? arg0) => $"Hallo, {arg0}! Kies een kleur.";""", StringComparison.Ordinal)
+            .ReplaceLineEndings());
+        await ShouldCompileWithoutPlaceholders(fixedSource);
+    }
+
+    [Test]
+    public async Task OtherTextThatReadsTheTextOfTheBaseSet_ShouldGetNoFix()
+    {
+        // Arrange: the British farewell shows the English greeting. It takes no value to pass on.
+        var source = SetsWithBritish("""public override string Farewell => base.Greeting + " Bye!";""");
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        fixes.ShouldBeEmpty();
     }
 }

@@ -86,6 +86,28 @@ public sealed class LocalizableTextSetsTests
     }
 
     /// <summary>
+    /// A contract no other test uses, for the test that registers a rewording of its default language with the sets of
+    /// the whole app.
+    /// </summary>
+    private interface ISetDefaultRewordedLocalization : ILocalizationSet
+    {
+        string Checkout { get; }
+    }
+
+    private class SetDefaultRewordedLocalizationEn : ISetDefaultRewordedLocalization
+    {
+        public virtual string Checkout => "Checkout";
+    }
+
+    /// <summary>
+    /// An app's rewording of the default language, as the docs' BrandedShopLocalizationEn.
+    /// </summary>
+    private sealed class SetBrandedDefaultRewordedLocalizationEn : SetDefaultRewordedLocalizationEn
+    {
+        public override string Checkout => "Pay now";
+    }
+
+    /// <summary>
     /// A library's British set, deriving from its English set and wording one text its own way.
     /// </summary>
     private sealed class SetBritishLocalization : SetLocalizationEn, ILocalizationSet
@@ -998,6 +1020,29 @@ public sealed class LocalizableTextSetsTests
         // Act & Assert
         using (new CulturesScope(uiCulture: "en-US", culture: "en-US"))
             text.DefaultText.ShouldBe("Cart");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void DefaultText_ShouldFollowSetThatRewordsDefaultLanguage()
+    {
+        // Arrange: a contract no other test uses, so the sets of the whole app hold only this test's rewording of it.
+        var text = LocalizableText.Create<ISetDefaultRewordedLocalization>("Set.Checkout", static set => set.Checkout, new SetDefaultRewordedLocalizationEn());
+        var french = CultureInfo.GetCultureInfo("fr-FR");
+
+        // Act: before and after the rewording registers.
+        var before = text.DefaultText;
+        LocalizationRegistry.Register(new SetBrandedDefaultRewordedLocalizationEn());
+        var after = text.DefaultText;
+
+        // Assert: the rewording, as a user whose language has no wording sees it and as the copy for JSON holds it.
+        before.ShouldBe("Checkout");
+        after.ShouldBe("Pay now");
+        text.ToString(french, LocalizationRegistry.Current, appLanguages: []).ShouldBe("Pay now");
+        text.GetDefaultWording(LocalizationRegistry.Current).ShouldBe("Pay now");
+
+        // A registry of its own, without that rewording, still ends at the set the text was declared with.
+        text.ToString(french, LocalizationRegistry.Create([])).ShouldBe("Checkout");
     }
 
     [Test]

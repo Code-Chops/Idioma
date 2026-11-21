@@ -107,6 +107,52 @@ public sealed class LocalizableTextJsonConverterTests
         public override string Greeting => "哈囉";
     }
 
+    /// <summary>
+    /// A contract whose text takes a text as its value, so that texts can be nested.
+    /// </summary>
+    private interface IJsonNestedLocalization : ILocalizationSet
+    {
+        string Wrap(LocalizableText inner);
+    }
+
+    /// <summary>
+    /// An English set that counts how often it words a text, per instance, so that tests running next to each other
+    /// don't count each other's calls.
+    /// </summary>
+    private class JsonNestedLocalizationEn : IJsonNestedLocalization
+    {
+        private int _calls;
+
+        public int Calls => this._calls;
+
+        public string Wrap(LocalizableText inner)
+        {
+            Interlocked.Increment(ref this._calls);
+            return $"[{inner}]";
+        }
+    }
+
+    /// <summary>
+    /// A British set that leaves the text to the English one, recorded as the build records it.
+    /// </summary>
+    private sealed class JsonNestedBritishLocalization : JsonNestedLocalizationEn, ILocalizationSet
+    {
+        string ILocalizationSet.LocalizationLanguageCode => "en-GB";
+    }
+
+    private sealed class JsonNestedLocalizationNl : IJsonNestedLocalization
+    {
+        private int _calls;
+
+        public int Calls => this._calls;
+
+        public string Wrap(LocalizableText inner)
+        {
+            Interlocked.Increment(ref this._calls);
+            return $"<{inner}>";
+        }
+    }
+
     private static LocalizableText Greeting { get; } = LocalizableText.Create<IJsonLocalization>("Json.Greeting", t => t.Greeting, new JsonLocalizationEn());
 
     private static LocalizableText Inline { get; } = LocalizableText.FromGeneratedCode("Checkout", ("en", "Checkout"), ("nl", "Afrekenen"));
@@ -379,6 +425,60 @@ public sealed class LocalizableTextJsonConverterTests
 
         // Assert
         ShouldHold(text, key: null, "Checkout");
+    }
+
+    [Test]
+    public void Serialize_TextNestedInTexts_ShouldWordEachLevelOncePerLanguage()
+    {
+        // Arrange: a text nested 8 deep in texts that take a text as their value, in an app with British English, whose
+        // set leaves the text to the English one.
+        LocalizationRegistry.RecordSet<JsonNestedBritishLocalization>(null, []);
+        var english = new JsonNestedLocalizationEn();
+        var british = new JsonNestedBritishLocalization();
+        var dutch = new JsonNestedLocalizationNl();
+        var registry = LocalizationRegistry.Create([english, british, dutch], "en", "nl", "en-GB");
+        const int depth = 8;
+
+        var text = LocalizableText.FromGeneratedCode("Cart", ("en", "Cart"), ("nl", "Winkelwagen"), ("en-GB", "Basket"));
+        for (var i = 0; i < depth; i++)
+            text = GeneratedCode.CreateSetText<IJsonNestedLocalization, LocalizableText>("Json.Wrap", static (set, inner) => set.Wrap(inner), english, text);
+
+        // Act
+        var json = Write(text, registry);
+
+        // Assert: once per level for each of the three languages and the default wording, where every level once
+        // worded its British text twice (510 calls instead of 8 for this text alone). The British set isn't called,
+        // because the build's record says it leaves the text to English.
+        (english.Calls + british.Calls + dutch.Calls).ShouldBe(4 * depth);
+        british.Calls.ShouldBe(0);
+
+        var read = JsonSerializer.Deserialize<LocalizableText>(json, Options)!;
+        read.ToString(CultureInfo.GetCultureInfo("en-GB")).ShouldBe($"{new string('[', depth)}Basket{new string(']', depth)}");
+        read.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe($"{new string('<', depth)}Winkelwagen{new string('>', depth)}");
+        read.DefaultText.ShouldBe($"{new string('[', depth)}Cart{new string(']', depth)}");
+    }
+
+    [Test]
+    public void ToString_OfTextNestedInTextsForRegion_ShouldWordEachLevelOnce()
+    {
+        // Arrange: as above, shown to a British user.
+        LocalizationRegistry.RecordSet<JsonNestedBritishLocalization>(null, []);
+        var english = new JsonNestedLocalizationEn();
+        var british = new JsonNestedBritishLocalization();
+        var registry = LocalizationRegistry.Create([english, british, new JsonNestedLocalizationNl()], "en", "nl", "en-GB");
+        const int depth = 8;
+
+        var text = LocalizableText.FromGeneratedCode("Cart", ("en", "Cart"), ("nl", "Winkelwagen"), ("en-GB", "Basket"));
+        for (var i = 0; i < depth; i++)
+            text = GeneratedCode.CreateSetText<IJsonNestedLocalization, LocalizableText>("Json.Wrap", static (set, inner) => set.Wrap(inner), english, text);
+
+        // Act
+        var wording = text.ToString(CultureInfo.GetCultureInfo("en-GB"), registry);
+
+        // Assert: a set a less specific name overrides isn't worded at all.
+        wording.ShouldBe($"{new string('[', depth)}Basket{new string(']', depth)}");
+        english.Calls.ShouldBe(depth);
+        british.Calls.ShouldBe(0);
     }
 
     [Test]

@@ -15,8 +15,13 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <remarks>
 /// <para>
 /// Every set changes at once, also one that overrides the text or implements it explicitly, so that each still
-/// implements the contract. A call that passes a string still compiles, because a string converts to a text. A set
+/// implements the contract. A helper of a set with the text's name, such as a private overload, stays as it is. A set
 /// that uses the value as a string, as in <c>button.Length</c>, stops compiling, which marks what to change by hand.
+/// </para>
+/// <para>
+/// A call that passes a value, such as a customer's name, still compiles, because a string converts to a text. A call
+/// that passes wording written in the source becomes build error <c>LOC500</c>, because the text would show that
+/// wording in one language.
 /// </para>
 /// <para>
 /// There's no fix for a text of another assembly's contract, because a set can't change it.
@@ -69,7 +74,7 @@ public sealed class TextAsStringCodeFixProvider : CodeFixProvider
         if (root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true).FirstAncestorOrSelf<ArgumentSyntax>() is not { } argument
             || semanticModel.GetOperation(argument, cancellationToken) is not IArgumentOperation { Parameter: { } parameter, Parent: IInvocationOperation { TargetMethod: var text } }
             || compilation.GetTypeByMetadataName(PackageNames.LocalizableText) is not { } localizableText
-            || FindContract(text, compilation) is not { } contract)
+            || FindContractText(text, compilation) is not { } contractText)
         {
             return null;
         }
@@ -78,12 +83,12 @@ public sealed class TextAsStringCodeFixProvider : CodeFixProvider
 
         foreach (var set in CodeFixSupport.GetClasses(compilation.Assembly.GlobalNamespace))
         {
-            if (!set.AllInterfaces.Contains(contract, SymbolEqualityComparer.Default))
+            if (!set.AllInterfaces.Contains(contractText.ContainingType, SymbolEqualityComparer.Default))
                 continue;
 
             foreach (var method in set.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!IsText(method, text, contract))
+                if (!IsText(method, set, contractText))
                     continue;
 
                 foreach (var reference in method.DeclaringSyntaxReferences)
@@ -108,11 +113,11 @@ public sealed class TextAsStringCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The contract of a text of a generated class, such as <c>IShopLocalization</c> for
+    /// The method of the contract that a text of a generated class calls, such as <c>IShopLocalization.Greeting</c> for
     /// <c>ShopLocalization.Greeting</c>, when this assembly generates it. A contract of another assembly doesn't change
     /// with the sets here.
     /// </summary>
-    private static INamedTypeSymbol? FindContract(IMethodSymbol text, Compilation compilation)
+    private static IMethodSymbol? FindContractText(IMethodSymbol text, Compilation compilation)
     {
         if (text.ContainingType is not { ContainingType: null } texts
             || !SymbolEqualityComparer.Default.Equals(texts.ContainingAssembly, compilation.Assembly))
@@ -121,25 +126,36 @@ public sealed class TextAsStringCodeFixProvider : CodeFixProvider
         }
 
         foreach (var contract in texts.ContainingNamespace.GetTypeMembers($"I{texts.Name}"))
-            if (PackageNames.IsContract(contract) && contract.GetMembers(text.Name).OfType<IMethodSymbol>().Any())
-                return contract;
+        {
+            if (!PackageNames.IsContract(contract))
+                continue;
+
+            foreach (var member in contract.GetMembers(text.Name))
+                if (member is IMethodSymbol method && method.Parameters.Length == text.Parameters.Length)
+                    return method;
+        }
 
         return null;
     }
 
     /// <summary>
-    /// Whether a method of a set words a text: it has the text's name and as many parameters, or implements the
-    /// contract's method of that name explicitly.
+    /// Whether a method of a set words the text: it implements the contract's method, explicitly or as the method the
+    /// set implements it through, or it overrides that method. A helper with the text's name and as many parameters,
+    /// such as a private overload, doesn't.
     /// </summary>
-    private static bool IsText(IMethodSymbol method, IMethodSymbol text, INamedTypeSymbol contract)
+    private static bool IsText(IMethodSymbol method, INamedTypeSymbol set, IMethodSymbol contractText)
     {
-        if (method.Parameters.Length != text.Parameters.Length)
-            return false;
+        if (!method.ExplicitInterfaceImplementations.IsEmpty)
+            return method.ExplicitInterfaceImplementations.Contains(contractText, SymbolEqualityComparer.Default);
 
-        var isText = String.Equals(method.Name, text.Name, StringComparison.Ordinal)
-                     || method.ExplicitInterfaceImplementations.Any(implemented => String.Equals(implemented.Name, text.Name, StringComparison.Ordinal)
-                                                                                   && SymbolEqualityComparer.Default.Equals(implemented.ContainingType, contract));
+        // Asked of the set, and not told by the name. A set that derives from another implements the text through the
+        // method of that set, which its own method overrides.
+        var implementation = set.FindImplementationForInterfaceMember(contractText);
 
-        return isText;
+        for (var current = method; current is not null; current = current.OverriddenMethod)
+            if (SymbolEqualityComparer.Default.Equals(current, implementation))
+                return true;
+
+        return false;
     }
 }

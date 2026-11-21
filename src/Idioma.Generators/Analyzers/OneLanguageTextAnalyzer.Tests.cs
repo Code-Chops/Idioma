@@ -108,9 +108,13 @@ public sealed class OneLanguageTextAnalyzerTests
     [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Distance { get; } = $"{1.5} km";""")]
     [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = new LocalizableText("Idioma");""")]
     [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = LocalizableText.Keyed("Shop.Brand", "Idioma");""")]
-    public async Task WordingInInitializerOfExcludedProperty_ShouldReportNothing(string member)
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand => "Idioma";""")]
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get => "Idioma"; }""")]
+    [Arguments("""[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get { return "Idioma"; } }""")]
+    public async Task WordingOfExcludedProperty_ShouldReportNothing(string member)
     {
-        // Arrange & Act: wording its author marked as the same in every language, such as a name or a unit.
+        // Arrange & Act: wording its author marked as the same in every language, such as a name or a unit, in the
+        // initializer or the getter.
         var diagnostics = await AnalyzeMemberAsync(member);
 
         // Assert
@@ -118,10 +122,24 @@ public sealed class OneLanguageTextAnalyzerTests
     }
 
     [Test]
+    public async Task WordingTheSetterOfExcludedPropertyStores_ShouldReportLOC500()
+    {
+        // Arrange & Act: the setter runs for each caller, as an assignment elsewhere does.
+        var diagnostics = await AnalyzeMemberAsync("""
+            [ExcludeFromLocalizationDiscovery] public static LocalizableText Title { get => field; set => field = value ?? "Orders"; } = "Idioma";
+            """);
+
+        // Assert: in the setter, not in the initializer.
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(OneLanguageTextAnalyzer.OneLanguageDiagnosticId);
+        diagnostic.Location.SourceTree!.ToString()[diagnostic.Location.SourceSpan.Start..].ShouldStartWith("\"Orders\"; }");
+    }
+
+    [Test]
     public async Task WordingAssignedToExcludedProperty_ShouldReportLOC500()
     {
-        // Arrange & Act: the attribute covers the property's own initializer alone. So a marked component parameter
-        // still holds the wording of each caller to every language.
+        // Arrange & Act: the attribute covers the property's own initializer and getter alone. So a marked component
+        // parameter still holds the wording of each caller to every language.
         var diagnostics = await AnalyzeMemberAsync("""
             [ExcludeFromLocalizationDiscovery] public static LocalizableText Title { get; set; } = "Idioma";
             public static void Rename() => Title = "Orders";
@@ -376,51 +394,6 @@ public sealed class OneLanguageTextAnalyzerTests
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe("LOC100");
         diagnostic.GetMessage().ShouldBe("LocalizableText.Inline takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.");
-    }
-
-    [Test]
-    public async Task LocalizedMember_InAssemblyWithoutLanguages_ShouldReportLOC100()
-    {
-        // Arrange & Act: without [assembly: SupportedLanguages] the generator writes no attribute, and the compiler
-        // only says that it isn't found (CS0246).
-        var diagnostics = await GeneratorTestHelper.AnalyzeAsync("""
-            namespace TestApp;
-
-            public class Address
-            {
-                [Localized(en: "City", nl: "Plaats")]
-                public string City { get; } = "";
-            }
-            """);
-
-        // Assert: at the name of the attribute.
-        var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC100");
-        diagnostic.GetMessage().ShouldBe("[Localized] takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.");
-        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Localized");
-    }
-
-    [Test]
-    public async Task LocalizedOfAnotherType_InAssemblyWithoutLanguages_ShouldNotBeReported()
-    {
-        // Arrange & Act: an attribute of that name the code brings itself.
-        var diagnostics = await GeneratorTestHelper.AnalyzeAsync("""
-            namespace TestApp;
-
-            public sealed class LocalizedAttribute(string en) : System.Attribute
-            {
-                public string En { get; } = en;
-            }
-
-            public class Address
-            {
-                [Localized(en: "City")]
-                public string City { get; } = "";
-            }
-            """);
-
-        // Assert
-        diagnostics.ShouldBeEmpty();
     }
 
     [Test]

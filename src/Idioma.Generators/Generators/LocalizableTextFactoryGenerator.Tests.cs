@@ -451,6 +451,73 @@ public sealed class LocalizableTextFactoryGeneratorTests
     }
 
     [Test]
+    public void LocalizedMember_InAssemblyWithoutLanguages_ShouldReportLOC100()
+    {
+        // Arrange & Act: without [assembly: SupportedLanguages] the generator writes no attribute. The compiler only says
+        // that it isn't found (CS0246), and stops there before any analyzer runs, so the generator reports it.
+        var result = Run("""
+            namespace TestApp;
+
+            public class Address
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert: at the name of the attribute.
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC100");
+        diagnostic.GetMessage().ShouldBe("[Localized] takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.");
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Localized");
+    }
+
+    [Test]
+    public void LocalizedOfAnotherType_InAssemblyWithoutLanguages_ShouldNotBeReported()
+    {
+        // Arrange & Act: an attribute of that name the code brings itself.
+        var result = Run("""
+            namespace TestApp;
+
+            public sealed class LocalizedAttribute(string en) : System.Attribute
+            {
+                public string En { get; } = en;
+            }
+
+            public class Address
+            {
+                [Localized(en: "City")]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LocalizedMember_InAssemblyWithLanguages_ShouldNotReportLOC100()
+    {
+        // Arrange & Act: the attribute doesn't exist in the compilation the generator sees, but the generator writes it.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class Address
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
     [Arguments("\"en\", \"nl\", \"\"", "'' isn't a culture name")]
     [Arguments("\"en\", \"n\"", "'n' isn't a culture name")]
     [Arguments("\"en\", \"nl_BE\"", "'nl_BE' isn't a culture name")]

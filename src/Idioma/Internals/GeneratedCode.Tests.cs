@@ -91,6 +91,37 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
+    public void GetKeyedValue_ForTextParameter_ShouldTakeStringAsCallDoes()
+    {
+        // Arrange & Act: a string for a parameter that takes a text, as a key from a database comes with one, and a
+        // text and null, which pass as they are.
+        var cart = LocalizableText.FromGeneratedCode("Cart", ("en", "Cart"), ("nl", "Winkelwagen"));
+        var fromString = GeneratedCode.GetKeyedValue<LocalizableText>("Removed", ["Cart"], index: 0, count: 1, "what");
+        var fromText = GeneratedCode.GetKeyedValue<LocalizableText>("Removed", [cart], index: 0, count: 1, "what");
+        var fromNull = GeneratedCode.GetKeyedValue<LocalizableText?>("Removed", [null], index: 0, count: 1, "what");
+
+        // Assert: the string becomes a text with that one wording, as LocalizableText converts it in a call of the
+        // text's method.
+        fromString.DefaultText.ShouldBe("Cart");
+        fromString.ToString(CultureInfo.GetCultureInfo("nl")).ShouldBe("Cart");
+        fromText.ShouldBeSameAs(cart);
+        fromNull.ShouldBeNull();
+    }
+
+    [Test]
+    public void GetKeyedValue_ForOtherParameter_ShouldStillRefuseString()
+    {
+        // Arrange & Act: the one conversion is from a string to a text; a string for a number isn't parsed, and a text
+        // for a string isn't worded.
+        var forNumber = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", ["3"], index: 0, count: 1, "count"));
+        var forString = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<string>("Greeting", [new LocalizableText("Anna")], index: 0, count: 1, "name"));
+
+        // Assert
+        forNumber.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', but a value of type 'System.String' was passed.");
+        forString.Message.ShouldStartWith("The text 'Greeting' takes a value of type 'System.String' for 'name', but a value of type 'CodeChops.Idioma.LocalizableText' was passed.");
+    }
+
+    [Test]
     public void CreateUnknownKeyException_ShouldNameTheKeyAndTheClass()
     {
         // Arrange & Act
@@ -271,7 +302,7 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
-    public void CreateText_WithWordingOf40000CharactersOrMore_ShouldNotKeepTheText()
+    public void CreateText_WithWordingOnLargeObjectHeap_ShouldNotKeepTheText()
     {
         // Arrange: the runtime reports a string this large as old from the start, so it can't be told from a literal. It
         // may hold a value, such as the body of an email, so its text isn't kept.
@@ -284,6 +315,29 @@ public sealed class GeneratedCodeTests
 
         // Assert
         second.ShouldNotBeSameAs(first);
+        second.ToString(CultureInfo.GetCultureInfo("nl")).ShouldBe(dutch);
+    }
+
+    [Test]
+    [Arguments(3_899, true)]
+    [Arguments(3_900, false)]
+    public void CreateText_WithOldWording_ShouldKeepTextOnlyBelowMonosLargeObjects(int length, bool isKept)
+    {
+        // Arrange: wording that outlived a collection, as a large string does on Mono from the start. Mono, which runs
+        // Blazor WebAssembly, puts an object of more than 8,000 bytes in its large object space, which it reports as
+        // old: a string of about 3,990 characters. So wording of 3,900 characters or more is never kept.
+        var english = new string('e', length);
+        var dutch = new string('n', length);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        // Act
+        var first = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
+        var second = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
+
+        // Assert
+        ReferenceEquals(first, second).ShouldBe(isKept);
         second.ToString(CultureInfo.GetCultureInfo("nl")).ShouldBe(dutch);
     }
 }

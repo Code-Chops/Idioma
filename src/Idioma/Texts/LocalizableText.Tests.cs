@@ -35,6 +35,12 @@ public sealed class LocalizableTextTests
         public string Greeting => "Hallo";
     }
 
+    private sealed class TextTaiwaneseLocalization : ITextLocalization
+    {
+        public string LocalizationLanguageCode => "zh-TW";
+        public string Greeting => "Ni hao";
+    }
+
     /// <summary>
     /// A culture whose parent is the invariant culture, as every culture's is under invariant globalization.
     /// </summary>
@@ -61,6 +67,25 @@ public sealed class LocalizableTextTests
 
         using (new UICultureScope("en-US"))
             text.ToString().ShouldBe("Name");
+    }
+
+    [Test]
+    public void ToString_ForCultureWithScript_ShouldShowWordingOfNameWithoutScript()
+    {
+        // Arrange: an app in English and Taiwanese Chinese (zh-TW), and a user whose culture carries its script, as
+        // zh-Hant-TW does on Apple platforms. A set, an inline text and a text on a member each have zh-TW wording.
+        var registry = LocalizationRegistry.Create([new TextLocalizationEn(), new TextTaiwaneseLocalization()], "en", "zh-TW");
+        var ofSet = LocalizableText.Create<ITextLocalization>("Text.Greeting", static set => set.Greeting, new TextLocalizationEn());
+        var inline = LocalizableText.FromGeneratedCode("Hello", ("en", "Hello"), ("zh-TW", "Ni hao"));
+        var ofMember = LocalizableText.CreateMemberText("Shop.Greeting", "Greeting", [("en", "Hello"), ("zh-TW", "Ni hao")]);
+        var user = CultureInfo.GetCultureInfo("zh-Hant-TW");
+
+        // Act & Assert: each serves zh-Hant-TW through zh-TW, the same culture without its script.
+        ofSet.ToString(user, registry).ShouldBe("Ni hao");
+        inline.ToString(user, registry).ShouldBe("Ni hao");
+        ofMember.ToString(user, registry).ShouldBe("Ni hao");
+        inline.GetWording(user).ShouldBe("Ni hao");
+        LocalizableText.IsServed(user, ["en", "zh-TW"]).ShouldBeTrue();
     }
 
     [Test]

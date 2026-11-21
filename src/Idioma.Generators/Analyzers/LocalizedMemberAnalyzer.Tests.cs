@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.Tests;
 /// <summary>
 /// Tests for <see cref="LocalizedMemberAnalyzer"/>: a member marked <c>[Localized]</c> that gets no text is reported
 /// (<c>LOC400</c>), and so is a member of an enum without <c>[Localized]</c> next to members that have it
-/// (<c>LOC503</c>).
+/// (<c>LOC503</c>), and a call that asks for the text of a member or a type without one (<c>LOC504</c>).
 /// </summary>
 public sealed class LocalizedMemberAnalyzerTests
 {
@@ -43,6 +43,46 @@ public sealed class LocalizedMemberAnalyzerTests
 
         return diagnostic;
     }
+
+    /// <summary>
+    /// The model and a call of <paramref name="call"/>, as a form or a table of the shop writes it.
+    /// </summary>
+    private static string Lookup(string call) => $$"""
+        {{Header}}
+
+        [Localized(en: "Person", nl: "Persoon")]
+        public class Person
+        {
+            [Localized(en: "Name", nl: "Naam")]
+            public virtual string Name { get; set; } = "";
+
+            public string Email { get; set; } = "";
+        }
+
+        public class Customer : Person
+        {
+            public override string Name { get; set; } = "";
+
+            public string Phone = "";
+        }
+
+        public class Page<T>
+        {
+            [Localized(en: "Items", nl: "Items")]
+            public List<T> Items { get; } = [];
+        }
+
+        public enum Status
+        {
+            [Localized(en: "Open", nl: "Open")]
+            Open,
+        }
+
+        public static class Labels
+        {
+            public static LocalizableText? Of(System.Type type, string member, System.Reflection.PropertyInfo property) => {{call}};
+        }
+        """;
     #endregion
 
     [Test]
@@ -423,5 +463,161 @@ public sealed class LocalizedMemberAnalyzerTests
 
         // Assert
         diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("LocalizableText.GetTextByMember<Person>(nameof(Person.Name))")]
+    [Arguments("LocalizableText.GetTextByMember(typeof(Person), \"Name\")")]
+    [Arguments("LocalizableText.GetTextByMember<Customer>(nameof(Customer.Name))")] // From the property it overrides
+    [Arguments("LocalizableText.GetTextByMember<Page<int>>(nameof(Page<int>.Items))")]
+    [Arguments("LocalizableText.GetTextByMember(typeof(Page<>), \"Items\")")]
+    [Arguments("LocalizableText.GetTextByMember<Status>(nameof(Status.Open))")]
+    [Arguments("LocalizableText.GetTextOfType<Person>()")]
+    [Arguments("LocalizableText.GetTextOfType(typeof(Person))")]
+    public async Task LookupOfMemberOrTypeWithText_ShouldReportNothing(string call)
+    {
+        // Arrange & Act
+        var diagnostics = await AnalyzeAsync(Lookup(call));
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("LocalizableText.GetTextByMember(type, member)")]                   // Known at run time alone
+    [Arguments("LocalizableText.GetTextByMember(type, \"Email\")")]
+    [Arguments("LocalizableText.GetTextByMember<Person>(member)")]
+    [Arguments("LocalizableText.GetTextByMember(property)")]
+    [Arguments("LocalizableText.GetTextOfType(type)")]
+    [Arguments("LocalizableText.GetTextByMember<System.Uri>(nameof(System.Uri.Host))")] // System.Private.Uri uses no Idioma, but is in the next test
+    public async Task LookupTheBuildCantCheck_ShouldReportNothing(string call)
+    {
+        // Arrange: what a form does with the property of a field it shows, where null means no label.
+        var source = Lookup(call);
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: Uri lies in an assembly without Idioma, so only that one is reported.
+        if (call.Contains("System.Uri", StringComparison.Ordinal))
+            diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC504");
+        else
+            diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("LocalizableText.GetTextByMember<Person>(nameof(Person.Email))", "nameof(Person.Email)", "'Person.Email' has no text, so GetTextByMember gives null. Mark 'Email' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizableText.GetTextByMember(typeof(Person), \"Email\")", "\"Email\"", "'Person.Email' has no text, so GetTextByMember gives null. Mark 'Email' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizableText.GetTextByMember<Customer>(nameof(Customer.Email))", "nameof(Customer.Email)", "'Customer.Email' has no text, so GetTextByMember gives null. Mark 'Person.Email' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizableText.GetTextByMember<Customer>(nameof(Customer.Phone))", "nameof(Customer.Phone)", "'Customer.Phone' has no text, so GetTextByMember gives null. Mark 'Phone' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizableText.GetTextByMember<Person>(\"Nmae\")", "\"Nmae\"", "'Person.Nmae' has no text, so GetTextByMember gives null. 'Person' has no property or field of that name. Name the member with nameof, which the compiler checks.")]
+    [Arguments("LocalizableText.GetTextOfType<Customer>()", "GetTextOfType<Customer>", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizableText.GetTextOfType(typeof(Customer))", "GetTextOfType", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
+    public async Task LookupOfMemberOrTypeWithoutText_ShouldReportLOC504(string call, string at, string message)
+    {
+        // Arrange & Act: a type's own text isn't inherited, so Customer has none.
+        var diagnostic = (await AnalyzeAsync(Lookup(call))).ShouldHaveSingleItem();
+
+        // Assert
+        diagnostic.Id.ShouldBe(LocalizedMemberAnalyzer.NoTextToFindDiagnosticId);
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.GetMessage().ShouldBe(message);
+        At(diagnostic).ShouldBe(at);
+    }
+
+    [Test]
+    [Arguments("LocalizableText.GetTextOfType<System.DayOfWeek>()", "GetTextOfType<System.DayOfWeek>", "'DayOfWeek' has no text, so GetTextOfType gives null.")]
+    [Arguments("LocalizableText.GetTextByMember<System.DayOfWeek>(nameof(System.DayOfWeek.Monday))", "nameof(System.DayOfWeek.Monday)", "'DayOfWeek.Monday' has no text, so GetTextByMember gives null.")]
+    public async Task LookupOfTypeOfAssemblyWithoutIdioma_ShouldReportLOC504(string call, string at, string start)
+    {
+        // Arrange & Act: an assembly that doesn't reference the package has no texts on its members.
+        var diagnostic = (await AnalyzeAsync(Lookup(call))).ShouldHaveSingleItem();
+
+        // Assert: the assembly as the compilation references it, which is System.Runtime in a build.
+        diagnostic.Id.ShouldBe(LocalizedMemberAnalyzer.NoTextToFindDiagnosticId);
+        diagnostic.GetMessage().ShouldStartWith($"{start} 'DayOfWeek' is a type of '");
+        diagnostic.GetMessage().ShouldEndWith("', which doesn't use Idioma, so it has no texts written as attributes.");
+        At(diagnostic).ShouldBe(at);
+    }
+
+    [Test]
+    public async Task LookupOfTypeParameter_ShouldReportNothing()
+    {
+        // Arrange & Act: the type comes from the caller.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public static class Labels
+            {
+                public static LocalizableText? Of<T>() => LocalizableText.GetTextByMember<T>("Name");
+
+                public static LocalizableText? OfType<T>() => LocalizableText.GetTextOfType<T>();
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task LookupOfTypeOfLibraryThatUsesIdioma_ShouldReportNothing()
+    {
+        // Arrange: the attribute isn't kept in the library's assembly, so the build can't see which member has a text.
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators("LookupLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace LookupLibrary;
+
+            public class Address
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; set; } = "";
+
+                public string Street { get; set; } = "";
+            }
+            """);
+
+        // Act
+        var diagnostics = await GeneratorTestHelper.AnalyzeAsync(new LocalizedMemberAnalyzer(), $$"""
+            {{Header}}
+
+            public class Delivery : LookupLibrary.Address;
+
+            public static class Labels
+            {
+                public static LocalizableText? City => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.City));
+                public static LocalizableText? Street => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.Street));
+                public static LocalizableText? Inherited => LocalizableText.GetTextByMember<Delivery>(nameof(Delivery.City));
+            }
+            """, [library]);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task LookupWithoutText_ShouldBeQuietUnderPragma()
+    {
+        // Arrange & Act: a call that wants null on purpose.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class Address
+            {
+                public string Street { get; set; } = "";
+            }
+
+            public static class Labels
+            {
+            #pragma warning disable LOC504 // No label yet
+                public static LocalizableText? Street => LocalizableText.GetTextByMember<Address>(nameof(Address.Street));
+            #pragma warning restore LOC504
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.IsSuppressed);
     }
 }

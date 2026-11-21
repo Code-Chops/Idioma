@@ -44,6 +44,7 @@ The hundreds of a code name its subject. The subjects come in the order of this 
 | [`LOC501`](#loc501) (code fix)                      | A language argument without its name                    |
 | [`LOC502`](#loc502) (warning, code fix)             | A placeholder such as `{0}` in a wording                |
 | [`LOC503`](#loc503) (warning)                       | An enum member without a label next to members with one |
+| [`LOC504`](#loc504)                                 | A text asked of a member or a type that has none        |
 | **[Libraries](#libraries)**                         |                                                         |
 | [`LOC600`](#loc600) (code fix)                      | A library without a set for one of your languages       |
 | [`LOC601`](#loc601) (warning)                       | A library whose inline texts lack one of your languages |
@@ -87,14 +88,27 @@ The generator can't use the default-language set, so it writes no texts for it. 
 - not file-local, generic, or abstract
 - with a public parameterless constructor
 - without `required` members
+- not marked `[Obsolete]` as an error
 - the only default-language set of its contract
-- named so that its generated class gets a name no other type has
+- a set of no other contract, such as a library's
+- named so that its generated class gets a name no other type or namespace has
+- named so that its contract gets a name no other type has
 
-When only the constructor, a `required` member or the name of the generated class is the problem, the generator still writes the contract. Otherwise it writes no contract either. The contract your sets list then doesn't exist, so they don't compile (`CS0246`) until you fix this error.
+When only the constructor, a `required` member, `[Obsolete]` or the name of the generated class is the problem, the generator still writes the contract. Otherwise it writes no contract either. The contract your sets list then doesn't exist, so they don't compile (`CS0246`) until you fix this error. The message ends in what to change.
 
 Two sets are the default-language set of one contract when their names differ only in the letter case of the language, as `ShopLocalizationEn` and `ShopLocalizationEN` do. The generator writes the contract from the first by name and reports the other. Remove one of them, or rename it.
 
-The generated class is named after the set without its language, so `OrderStatusEn` next to an enum `OrderStatus` would give a second `OrderStatus`. Rename the set, as in `OrderStatusLocalizationEn`, or the other type. A static partial class of that name is fine, because it's a part of the generated class.
+The generated class is named after the set without its language, so `OrderStatusEn` next to an enum `OrderStatus` would give a second `OrderStatus`. Rename the set, as in `OrderStatusLocalizationEn`, or the other type. A static partial class of that name is fine, because it's a part of the generated class. A namespace of that name counts too, as the folder `Texts` gives `MyApp.Texts` next to `TextsEn`.
+
+The contract is named after the set too, so an interface `IShopLocalization` of your own next to `ShopLocalizationEn` would give a second `IShopLocalization`. Rename the set or your interface. An interface that derives from `ILocalizationSet` is a contract you write yourself, and the generator writes none next to it ([a contract you write yourself](how-it-works.md#a-contract-you-write-yourself)).
+
+A set that implements another contract, such as `Shop.IShopLocalization` of a library, translates or rewords that contract, and starts none of its own:
+
+```csharp
+public class AppLocalizationEn : ILocalizationSet, IAppLocalization, Shop.IShopLocalization // LOC200
+```
+
+Write the texts of `IAppLocalization` in a set of their own, and implement `Shop.IShopLocalization` in another class.
 
 The IDE fix renames the class after its language, or removes `abstract` or `file`.
 
@@ -273,7 +287,7 @@ The text becomes a string at the call, in the language in use at that moment. Th
 
 To keep the wording of the moment on purpose, call `ToString()` on the text. The build then reports nothing.
 
-The IDE fix changes the parameter's type in every set of your project at once. A call that passes a string still compiles, because a string converts to a text. A text of a library gets no fix, because your project can't change the library's sets.
+The IDE fix changes the parameter's type in every set of your project at once. A call that passes a value, such as a customer's name, still compiles, because a string converts to a text. A call that passes wording written in the source, as in `PressToPay("Enter")`, becomes `LOC500`, because that wording is in one language. A text of a library gets no fix, because your project can't change the library's sets.
 
 An inline text gets no warning for a text in its wording, because it fills its values in at once ([details](how-it-works.md#texts-with-parameters)).
 
@@ -287,8 +301,11 @@ A set can't be registered automatically, so its texts won't be found. This is a 
 - no `required` members
 - a language code: the end of its name, starting with a capital, such as `En`, or an implementation of `ILocalizationSet.LocalizationLanguageCode` (see [language codes](language-codes.md) for a longer code such as `EnGb`)
 - a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
+- no `[Obsolete]` marked as an error, because generated code can't name such a class
 
 Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an instance to `LocalizationRegistry.Register`.
+
+A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
 
 A member marked `[Localized]` gets LOC400 when its text can't be registered, so `LocalizableText.GetTextByMember` won't find it:
 
@@ -340,14 +357,14 @@ A `const` counts too, and so does the same in Razor. Write the text as `Localiza
 
 Any letter counts, so a name, a unit, or an abbreviation is reported too: `Title = "Idioma"` and `Title = $"{distance} km"` are LOC500. When it reads the same in every language, write the same wording for each: `LocalizableText.Inline(en: "Idioma", nl: "Idioma")`.
 
-Or keep it in a property marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't check that property's initializer:
+Or keep it in a property marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't check that property's initializer or getter:
 
 ```csharp
 [ExcludeFromLocalizationDiscovery] // Reads the same in every language
 public static LocalizableText Brand { get; } = "Idioma";
 ```
 
-The attribute covers the initializer alone. What other code assigns to the property is still checked, so a marked component parameter still holds its callers to every language.
+The attribute covers the initializer and the getter, as in `public static LocalizableText Brand => "Idioma";`. Its setter and what other code assigns to the property are still checked, so a marked component parameter still holds its callers to every language.
 
 A lookup by wording is LOC500 too, as in `texts.Contains("Orders")` or `counts["Orders"]` on a collection of texts. Two texts are equal when they show the same wording for the user ([Equality](how-it-works.md#equality)), so the lookup only finds "Orders" for English users. Look the text up by itself instead: `texts.Contains(ShopLocalization.Orders)`.
 
@@ -396,7 +413,7 @@ Code that shows the text, as in `ShopLocalization.Greeting`, then has to pass th
 The fix changes every language or none. There's no fix when:
 
 - a language's text can't become a method, such as one with a setter or one the constructor assigns
-- code of your project uses the text as a property of a set, such as another text that shows it, because that code would no longer compile
+- code of your project uses the text as a property of a set, such as another text that shows it, because that code would no longer compile. The override of the text in a regional set is the exception: its `base.Greeting` becomes `base.Greeting(arg0)`
 - it's the text of an enum member, in a [set of the enum](how-it-works.md#enums), because the contract takes that text from the enum
 - the contract's text takes no values and the contract is another assembly's or one you wrote by hand, because the fix doesn't change a contract
 - the text overrides a text of another assembly's set
@@ -417,7 +434,24 @@ An enum without a marked member gets no warning, also when the enum itself is ma
 
 For a member that's never shown, turn the warning off around it: `#pragma warning disable LOC503`.
 
-Where a missing text has to be a build error, write a [set of the enum](how-it-works.md#enums) instead.
+Where a missing text has to be a build error, write a [set of the enum](how-it-works.md#enums) instead. An enum that has a set gets its `GetText()` from the set, also while its members are still marked.
+
+### LOC504
+
+A call asks for the text of a member or a type that has none, so it always gives `null`:
+
+```csharp
+LocalizableText.GetTextByMember<Address>(nameof(Address.Street)) // LOC504: Street isn't marked [Localized]
+LocalizableText.GetTextOfType<Customer>()                        // LOC504: Customer has no text of its own
+```
+
+Mark the member or the type `[Localized(en: "...", nl: "...")]`. An override has the text of the property it overrides, so a marked property in a base class is enough. A type's own text isn't inherited.
+
+The build checks a call that names its type and its member in the code: by a type argument or by `typeof`, and by a member name that's a constant, such as `nameof(Address.Street)`. It doesn't check a call that takes a `Type` or a `PropertyInfo` your code only has at run time. There, `null` is the answer for a member without a text, as a form gets it for a field without a label.
+
+A type of another assembly is checked only when that assembly doesn't use Idioma, such as `DayOfWeek` of .NET itself. The attribute isn't kept in a compiled assembly, so the build can't see which members of a library have a text.
+
+To ask for a text that isn't there yet on purpose, turn the error off around the call: `#pragma warning disable LOC504`.
 
 ### What still converts
 
@@ -465,7 +499,7 @@ A library you reference has no set for one of your languages. The message names 
 error LOC600: No set serves 'Shop.IShopLocalization' in 'de', which this assembly supports. Add 'class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization'.
 ```
 
-The IDE fix adds that class in a file of its own, without texts, as the fix of [LOC201](#loc201) does. The file goes next to the one that lists your languages, and the class gets that file's namespace. "Fix all" adds a set for every library and language at once.
+The IDE fix adds that class in a file of its own, without texts, as the fix of [LOC201](#loc201) does. The file goes next to the one that lists your languages, and the class gets that file's namespace. It names the contract after a `using` of its namespace, as in `using Shop;` and `IShopLocalization`, and writes its full name only where the short one would mean another type. "Fix all" adds a set for every library and language at once.
 
 See [a language the library lacks](libraries-and-apps.md#a-language-the-library-lacks).
 
@@ -478,3 +512,5 @@ warning LOC601: 'Shop' has inline texts without 'de', which this assembly suppor
 ```
 
 The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too.
+
+To accept it, add `LOC601` to `<NoWarn>` in the project file, or put `#pragma warning disable LOC601` around `[assembly: SupportedLanguages]`, where it's reported.

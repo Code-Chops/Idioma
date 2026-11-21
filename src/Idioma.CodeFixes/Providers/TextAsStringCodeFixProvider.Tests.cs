@@ -128,6 +128,46 @@ public sealed class TextAsStringCodeFixProviderTests
     }
 
     [Test]
+    public async Task HelperWithTheNameOfTheText_ShouldStayAsItIs()
+    {
+        // Arrange: the Dutch set has a private method of the text's name with as many parameters, which isn't the text.
+        const string source = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+                public string PressToPay(string button) => $"Press {button} to pay";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+                public string PressToPay(string button) => $"Druk op {button} om te betalen{PressToPay(times: 1)}";
+                private string PressToPay(int times) => times > 1 ? $" ({times} keer)" : "";
+            }
+
+            public static class Usage
+            {
+                public static LocalizableText Hint { get; } = ShopLocalization.PressToPay(ShopLocalization.Checkout);
+            }
+            """;
+
+        // Act
+        var fixes = await CodeFixTestHelper.FixWithGeneratedCodeAsync(Provider, Analyzer, source);
+
+        // Assert: the helper keeps its parameter, so it doesn't take the text's signature (CS0111).
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(source.Replace("PressToPay(string button)", "PressToPay(LocalizableText button)", StringComparison.Ordinal));
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task TextOfALibrary_ShouldGetNoFix()
     {
         // Arrange: the sets and their contract lie in another assembly.

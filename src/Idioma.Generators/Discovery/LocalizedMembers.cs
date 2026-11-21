@@ -77,6 +77,23 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
+    /// The model without the extension method of an enum that a set of the assembly holds the texts of
+    /// (<c>ILocalizationSet&lt;TEnum&gt;</c>). The generated class of that set gives the enum its <c>GetText</c>
+    /// already, and two would make every call ambiguous (<c>CS0121</c>). The texts of its members are still recorded.
+    /// </summary>
+    public static LocalizedMembersModel WithoutExtensionsOf(LocalizedMembersModel model, EquatableArray<string> enumsWithSets)
+    {
+        if (enumsWithSets.Length is 0 || !model.Types.Any(type => type.Extension is not null && enumsWithSets.AsImmutableArray().Contains(type.Reference, StringComparer.Ordinal)))
+            return model;
+
+        var types = model.Types
+            .Select(type => type.Extension is not null && enumsWithSets.AsImmutableArray().Contains(type.Reference, StringComparer.Ordinal) ? type with { Extension = null } : type)
+            .ToImmutableArray();
+
+        return model with { Types = new EquatableArray<LocalizedType>(types) };
+    }
+
+    /// <summary>
     /// The name of the class that records an assembly's member texts: <c>LocalizedMembers_My_App</c> for
     /// <c>My-App</c>. Built from the assembly's name, as its registrar's is, so that a test project that sees the
     /// internals of the library it tests has a class of another name.
@@ -321,7 +338,8 @@ internal static class LocalizedMembers
             ? containing.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted))
             : "";
 
-        var keyNamespace = type.ContainingNamespace is { IsGlobalNamespace: false } ? type.ContainingNamespace.ToDisplayString() + "." : "";
+        // Without the @ of an escaped keyword (namespace Shop.@event), as a set's key: a key is a name, not code.
+        var keyNamespace = type.ContainingNamespace is { IsGlobalNamespace: false } ? type.ContainingNamespace.ToDisplayString().Replace("@", "") + "." : "";
         var prefix = @namespace.Length is 0 ? "" : @namespace + ".";
         var isInGenericType = chain.Any(static part => part.Arity > 0);
 

@@ -30,7 +30,7 @@ public static class GeneratedCode
     /// A call with the same strings as an earlier one gets the text that call created, where it's still kept. The same
     /// means the same string objects, not only the same characters. A string literal is the same object on every call,
     /// so a call with literals finds its text. A text isn't kept when part of its wording is a new string, as wording
-    /// with a value is, because no later call could find it. Wording of 40,000 characters or more isn't kept either. A
+    /// with a value is, because no later call could find it. Wording of 3,900 characters or more isn't kept either. A
     /// string that outlived a garbage collection before the call is kept like a literal, also when it holds a value.
     /// </para>
     /// </remarks>
@@ -410,11 +410,7 @@ public static class GeneratedCode
         where TContract : class
     {
         if (!values.IsEmpty)
-        {
-            throw new ArgumentException(
-                $"The text '{key}' of '{typeof(TContract).Name}' takes no values, but {Count(values.Length)} passed. Pass the key alone.",
-                nameof(values));
-        }
+            throw new ArgumentException($"The text '{key}' of '{typeof(TContract).Name}' takes no values, but {values.Length} {(values.Length is 1 ? "was" : "were")} passed. Pass the key alone.", nameof(values));
 
         return text;
     }
@@ -430,8 +426,14 @@ public static class GeneratedCode
     /// </para>
     /// </summary>
     /// <remarks>
-    /// A value isn't converted. An <see cref="int"/> isn't accepted for a parameter of type <see cref="long"/>.
-    /// <see langword="null"/> is accepted for a parameter whose type allows it.
+    /// <para>
+    /// A value isn't converted, with one exception. A <see cref="string"/> for a parameter of type
+    /// <see cref="LocalizableText"/> becomes a text with that one wording, as it does in a call of the text's method.
+    /// </para>
+    /// <para>
+    /// So an <see cref="int"/> isn't accepted for a parameter of type <see cref="long"/>. <see langword="null"/> is
+    /// accepted for a parameter whose type allows it.
+    /// </para>
     /// </remarks>
     /// <typeparam name="TValue">The type of the parameter.</typeparam>
     /// <param name="key">The key the text was asked for by. See <see cref="LocalizableText.Key"/>.</param>
@@ -441,17 +443,13 @@ public static class GeneratedCode
     /// <param name="parameterName">The name of the parameter.</param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="values"/> doesn't hold one value per parameter, or the value at
-    /// <paramref name="index"/> isn't of type <typeparamref name="TValue"/>.
+    /// <paramref name="index"/> isn't of type <typeparamref name="TValue"/>, nor a string for a text.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static TValue GetKeyedValue<TValue>(string key, ReadOnlySpan<object?> values, int index, int count, string parameterName)
     {
         if (values.Length != count)
-        {
-            throw new ArgumentException(
-                $"The text '{key}' takes {count} {(count is 1 ? "value" : "values")}, but {Count(values.Length)} passed. Pass one for each of its parameters, in their order, after the key.",
-                nameof(values));
-        }
+            throw new ArgumentException($"The text '{key}' takes {count} {(count is 1 ? "value" : "values")}, but {values.Length} {(values.Length is 1 ? "was" : "were")} passed. Pass one for each of its parameters, in their order, after the key.", nameof(values));
 
         var value = values[index];
 
@@ -460,6 +458,11 @@ public static class GeneratedCode
 
         if (value is null && default(TValue) is null)
             return default!;
+
+        // The one conversion a call of the text's method makes itself, so a key from a database can come with the
+        // string it has. Past the type test above, so a value of the right type pays nothing for it.
+        if (value is string wording && typeof(TValue) == typeof(LocalizableText))
+            return (TValue)(object)new LocalizableText(wording);
 
         var passed = value is null ? "null was" : $"a value of type '{value.GetType()}' was";
 
@@ -495,15 +498,6 @@ public static class GeneratedCode
             $"'{className}' has no text with the key '{key}'. A key is the name of a text of '{typeof(TContract).Name}', in the same letter case.");
 
         return exception;
-    }
-
-    /// <summary>
-    /// How many values were passed, as a message says it: <c>1 was</c>, or <c>2 were</c>.
-    /// </summary>
-    private static string Count(int values)
-    {
-        var count = values is 1 ? "1 was" : $"{values} were";
-        return count;
     }
 
     /// <summary>

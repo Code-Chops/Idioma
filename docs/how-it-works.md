@@ -8,7 +8,7 @@ Other subjects have a page of their own: [language codes](language-codes.md), [l
 
 A text follows `CultureInfo.CurrentUICulture` and shows the first wording it finds:
 
-1. The wording for that culture, or else for its parent culture. An `en` wording serves `en-US` and `en-GB` alike, and an `en-GB` wording wins over it in Britain.
+1. The wording for that culture, or else for its parent culture. An `en` wording serves `en-US` and `en-GB` alike, and an `en-GB` wording wins over it in Britain. A culture whose name holds its script, as `zh-Hant-TW` does on Apple platforms, tries the name without it right after itself, so a `zh-TW` wording serves it.
 2. The wording for the app's default language, which is the first language it declares. Library texts fall back to it too, so no screen ends up in two languages. A culture that none of the app's languages serves starts here, even when a library has its language. For example, an app declaring `("en", "fr")` shows a Dutch user a library's texts in English, like its own.
 3. The wording for the default language of the project that wrote the text.
 
@@ -106,10 +106,10 @@ public static LocalizableText GetTextByKey(string key, params ReadOnlySpan<objec
 ```
 
 - **The key.** It's the name of the text, in the same letter case. A key no text has throws `KeyNotFoundException`, and so does a full key.
-- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many.
+- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. A string for a `LocalizableText` parameter is the exception: it becomes a text, as it does in a call of the method itself. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many.
 - **The result.** It's the text, a `LocalizableText`. For a text without parameters, it's the one the class already holds, so a call allocates nothing. Show it for another culture with `ToString(culture)`, as any text.
 
-The generator also writes the code that registers your sets (see [Registration](#registration)). It's a class named after your assembly, `LocalizationRegistrar_MyApp` for `MyApp`, in the namespace `CodeChops.Idioma.Generated`. The class is public in an assembly that has sets, and in an app that declares languages, so an app that references the assembly can register them at startup. It's hidden from autocomplete. A library that keeps a list of its public API still finds it there, next to the contract and the generated class of every public set.
+The generator also writes the code that registers your sets (see [Registration](#registration)). It's a class named after your assembly, `LocalizationRegistrar_MyApp` for `MyApp`, in the namespace `CodeChops.Idioma.Generated`. The class is public in an assembly that has sets or texts written as attributes, and in an app that declares languages, so an app that references the assembly can register them at startup. It's hidden from autocomplete. A library that keeps a list of its public API still finds it there, next to the contract and the generated class of every public set.
 
 ## Texts with parameters
 
@@ -207,6 +207,7 @@ What else to know:
 - **Accessibility.** `GetTextByValue` and `GetText` are public for a public enum, and internal for an internal one.
 - **More than one enum.** A set that lists `ILocalizationSet<TEnum>` for two enums holds the texts of both, and gets a `GetTextByValue` and a `GetText` for each. Two members with the same name share a text.
 - **Two sets of one enum.** Each set gives the enum a `GetText`. Where the namespaces of both are in reach, the call is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
+- **A set and `[Localized]` members.** An enum that has a set in its own assembly gets its `GetText` from the set alone, also while its members are still marked. `GetTextByMember` still finds the texts of the marked members.
 
 An enum can also get its texts from `[Localized]` on its members ([Attributes on members](#attributes-on-members)). Choose by what you need:
 
@@ -260,7 +261,7 @@ So nothing reads the attribute at run time, and no assembly is scanned. The attr
 
 `LocalizableText.GetTextOfType` gives the text of a type itself, the same way: `GetTextOfType<ParcelStatus>()`, or `GetTextOfType(type)` for a type your code only has at run time.
 
-Each gives `null` where there's no text, and the same text on every call.
+Each gives `null` where there's no text, and the same text on every call. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC504` when the member has no text ([details](build-errors.md#loc504)).
 
 What else to know:
 
@@ -335,6 +336,30 @@ string? checkout = LocalizationRegistry.Current.Find<IShopLocalization>(dutch)?.
 var registry = LocalizationRegistry.Create([new ShopLocalizationNl()]);
 string wording = ShopLocalization.Checkout.ToString(dutch, registry);
 ```
+
+A set of a test project may implement the internal contract of the library it tests, which it sees through `InternalsVisibleTo`. It translates that contract, as a set of a public contract does, so the test project needs no languages of its own.
+
+### A contract you write yourself
+
+An interface that derives from `ILocalizationSet` is a contract too, one you write yourself. Every set lists it next to `ILocalizationSet`, the default-language set too:
+
+```csharp
+public interface IGridLocalization : ILocalizationSet
+{
+    string First { get; }
+}
+
+public class GridLocalizationEn : ILocalizationSet, IGridLocalization
+{
+    public string First => "First";
+}
+```
+
+The build holds every language to it as to a generated contract. Each language needs a set (`LOC201`), and each set uses the values that the default-language set shows (`LOC302`).
+
+The generator writes no contract and no generated class next to it, so its texts have no `LocalizableText` of their own. Read them through the registry, as in `LocalizationRegistry.Current.Find<IGridLocalization>(culture)?.First`.
+
+An interface that doesn't derive from `ILocalizationSet` isn't a contract. One with the name of the contract a set would get, as `IShopLocalization` next to `ShopLocalizationEn`, is build error `LOC200`.
 
 ## Texts in JSON
 

@@ -16,8 +16,9 @@ namespace CodeChops.Idioma.Generators;
 /// directly (<see cref="BaseSetName"/>). <see cref="BaseSetContracts"/> holds the unresolved base types through which
 /// that set would implement a contract generated here. It's empty when that set implements <c>ILocalizationSet</c>
 /// already.</item>
-/// <item>The public contracts it implements (<see cref="ContractNames"/>), and those written by hand in its assembly
-/// (<see cref="OwnContractNames"/>).</item>
+/// <item>The public contracts it implements (<see cref="ContractNames"/>), those written by hand in its assembly
+/// (<see cref="OwnContractNames"/>), and whether it implements an internal contract of another assembly, which it
+/// sees through <c>InternalsVisibleTo</c> (<see cref="ImplementsInternalContract"/>).</item>
 /// </list>
 /// <para>
 /// Its registration:
@@ -27,6 +28,10 @@ namespace CodeChops.Idioma.Generators;
 /// (<see cref="Depth"/>).</item>
 /// <item>Why it can't be registered automatically, if so (<see cref="RegistrationProblem"/>), and whether its
 /// parameterless constructor is public, as the texts of a default-language set need it.</item>
+/// <item>Whether it's marked <c>[Obsolete]</c> as an error (<see cref="IsObsoleteAsError"/>), which no generated code
+/// may name, and the diagnostics that naming it reports besides <c>CS0612</c> and <c>CS0618</c>
+/// (<see cref="SuppressedDiagnostics"/>), which generated code turns off: the id of <c>[Experimental]</c>, and the
+/// <c>DiagnosticId</c> of <c>[Obsolete]</c>.</item>
 /// <item>Whether it's marked <c>[ExcludeFromLocalizationDiscovery]</c>. Such a set is neither registered nor checked,
 /// and counts only as a set of its language.</item>
 /// </list>
@@ -58,8 +63,10 @@ namespace CodeChops.Idioma.Generators;
 /// set doesn't declare.</item>
 /// <item><see cref="DeclaredTexts"/>, <see cref="InheritedTexts"/>, and <see cref="Wordings"/> are what the doc
 /// comments of the generated contract link to and show.</item>
-/// <item><see cref="TypeNamedLikeTexts"/> is the type of its namespace that has the name its generated class would
-/// get, as a message names it (<c>the enum 'OrderStatus'</c>), if any.</item>
+/// <item><see cref="TypeNamedLikeTexts"/> is the type or namespace in its namespace that has the name its generated
+/// class would get, as a message names it (<c>the enum 'OrderStatus'</c>), if any. <see cref="TypeNamedLikeContract"/>
+/// is the same for the name of its contract, such as an interface <c>IShopLocalization</c> written by hand that isn't a
+/// contract.</item>
 /// <item><see cref="ReservedTexts"/> are its texts with a name its generated class can't give them, with where each is
 /// written. Most sets have none.</item>
 /// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
@@ -77,6 +84,8 @@ internal readonly record struct DiscoveredLocalization(
     int Depth,
     EquatableArray<UnresolvedBaseType> UnresolvedBaseTypes,
     string? RegistrationProblem,
+    bool IsObsoleteAsError,
+    EquatableArray<string> SuppressedDiagnostics,
     bool HasPublicParameterlessConstructor,
     bool IsExcluded,
     DiagnosticLocation Location,
@@ -88,6 +97,7 @@ internal readonly record struct DiscoveredLocalization(
     bool ListsLocalizationSet,
     EquatableArray<string> ContractNames,
     EquatableArray<string> OwnContractNames,
+    bool ImplementsInternalContract,
     EquatableArray<string> AncestorNames,
     string? BaseSetName,
     string? BaseSetLanguage,
@@ -106,6 +116,7 @@ internal readonly record struct DiscoveredLocalization(
     RepeatedUsings Usings,
     EquatableArray<LocalizedEnum> Enums,
     string? TypeNamedLikeTexts,
+    string? TypeNamedLikeContract,
     EquatableArray<ReservedText> ReservedTexts,
     EquatableArray<UndeclaredText> UndeclaredTexts);
 

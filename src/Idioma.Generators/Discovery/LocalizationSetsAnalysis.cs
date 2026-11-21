@@ -139,12 +139,52 @@ internal sealed record LocalizationSetsAnalysis(
                     continue;
 
                 var suffix = SupportedLanguages.ToTypeSuffix(defaultLanguage);
+                var suggestedName = SuggestNameEndingIn(set.Name, suffix);
+
+                // Its name gives no language, so it may be meant for another one, as ShopLocalizationDutch is. The
+                // contract it lists, IShopLocalization, gives the name that set would have.
+                var otherLanguage = declared.Codes.FirstOrDefault(code => !String.Equals(code, defaultLanguage, StringComparison.OrdinalIgnoreCase));
+                var contractStem = set.UnresolvedBaseTypes.Select(static baseType => baseType.Name)
+                    .FirstOrDefault(static name => name.Length > 1 && name[0] == 'I' && Char.IsUpper(name[1]))?.Substring(1);
+                var advice = otherLanguage is null || contractStem is null
+                    ? $"Rename it to {suggestedName}."
+                    : $"Rename it to {suggestedName}. If it's the set of another language, end its name in that language instead, as in {contractStem}{SupportedLanguages.ToTypeSuffix(otherLanguage)}.";
 
                 findings.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.CannotExtend,
                     set.Location,
-                    new EquatableArray<string>([set.Name, $"its name doesn't end in {suffix}, the suffix of the default language, so the build can't read its language"]),
-                    SuggestedName: SuggestNameEndingIn(set.Name, suffix)));
+                    new EquatableArray<string>([set.Name, $"its name doesn't end in {suffix}, the suffix of the default language, so the build can't read its language", advice]),
+                    SuggestedName: suggestedName));
+            }
+
+            // A default-language set that implements a contract already, such as a library's, translates or rewords it,
+            // and starts none of its own. When it also lists the contract named after it, which binds to nothing, that
+            // contract is the one it meant to start, and every set that lists it fails to compile (CS0246).
+            foreach (var set in sets)
+            {
+                if (set is not { ListsLocalizationSet: true, Language: { } language }
+                    || !String.Equals(language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
+                    || !LocalizationDiscovery.ImplementsContract(set)
+                    || LocalizationDiscovery.RewordsSet(set)
+                    || LocalizationDiscovery.DeriveBaseName(set.Name, language) is not { } baseName)
+                {
+                    continue;
+                }
+
+                var ownContract = $"I{baseName}";
+
+                if (!set.UnresolvedBaseTypes.Any(baseType => String.Equals(baseType.Name, ownContract, StringComparison.Ordinal)
+                                                             && LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is null))
+                {
+                    continue;
+                }
+
+                var other = set.ContractNames.Concat(set.OwnContractNames).FirstOrDefault() is { } name ? $"'{name}'" : "an internal contract of another assembly";
+
+                findings.Add(new LocalizationSetsFinding(
+                    LocalizationSetsRule.CannotExtend,
+                    set.Location,
+                    new EquatableArray<string>([set.Name, $"it implements {other} too, and a set starts a contract only when it implements no other", $"Write the texts of '{ownContract}' in a set of their own, and implement {other} in another class."])));
             }
 
             // A default-language set of a shape the generator can't extend would otherwise leave its contract and texts
@@ -156,7 +196,7 @@ internal sealed record LocalizationSetsAnalysis(
                 if (String.Equals(set.Language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
                     && !LocalizationDiscovery.ListsOnlyOtherGeneratedContracts(set.UnresolvedBaseTypes, generatedContracts, ownContract: null))
                 {
-                    findings.Add(new LocalizationSetsFinding(LocalizationSetsRule.CannotExtend, set.Location, new EquatableArray<string>([set.Name, set.Problem])));
+                    findings.Add(new LocalizationSetsFinding(LocalizationSetsRule.CannotExtend, set.Location, new EquatableArray<string>([set.Name, set.Problem, "Make it a top-level class that isn't generic, abstract, or file-local."])));
                 }
             }
         }
@@ -304,12 +344,13 @@ internal sealed record LocalizationSetsAnalysis(
             if (LocalizationDiscovery.DeriveBaseName(set.Name, set.Language!) is not { } baseName)
             {
                 var suffix = SupportedLanguages.ToTypeSuffix(defaultLanguage ?? set.Language!);
+                var suggestedName = SuggestNameEndingIn(set.Name, suffix);
 
                 findings?.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.CannotExtend,
                     set.Location,
-                    new EquatableArray<string>([set.Name, $"its name doesn't end in {suffix}, the suffix of the default language, so the generated class would carry the same name"]),
-                    SuggestedName: SuggestNameEndingIn(set.Name, suffix)));
+                    new EquatableArray<string>([set.Name, $"its name doesn't end in {suffix}, the suffix of the default language, so the generated class would carry the same name", $"Rename it to {suggestedName}."]),
+                    SuggestedName: suggestedName));
 
                 continue;
             }
@@ -329,13 +370,26 @@ internal sealed record LocalizationSetsAnalysis(
                     findings?.Add(new LocalizationSetsFinding(
                         LocalizationSetsRule.CannotExtend,
                         set.Location,
-                        new EquatableArray<string>([set.Name, $"'{firstSet}' is the default-language set of '{contractName}' already, and a contract has only one"])));
+                        new EquatableArray<string>([set.Name, $"'{firstSet}' is the default-language set of '{contractName}' already, and a contract has only one", "Remove one of the two, or rename this one."])));
                 }
 
                 continue;
             }
 
             written.Add(contractFullName, set.Name);
+
+            // A type of the contract's name, such as an interface written by hand that doesn't derive from
+            // ILocalizationSet, would meet the generated contract (CS0101). So neither the contract nor its texts are
+            // written, and the sets that list that type aren't told to add it (LOC204).
+            if (set.TypeNamedLikeContract is { } typeOfContractName)
+            {
+                findings?.Add(new LocalizationSetsFinding(
+                    LocalizationSetsRule.CannotExtend,
+                    set.Location,
+                    new EquatableArray<string>([set.Name, $"its contract would be named '{contractName}', like {typeOfContractName}", "Rename the set or that type. To write the contract yourself, derive it from ILocalizationSet."])));
+
+                continue;
+            }
 
             // The generated texts take their default wording from an instance the generated code creates, so a set it
             // can't create gets no texts. It still gets its contract, which it lists, as every other language does.
@@ -345,7 +399,11 @@ internal sealed record LocalizationSetsAnalysis(
             var hasTexts = true;
             if (LocalizationDiscovery.GetCreationProblem(set) is { } problem)
             {
-                findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.CannotExtend, set.Location, new EquatableArray<string>([set.Name, problem])));
+                var advice = String.Equals(problem, LocalizationDiscovery.ObsoleteAsErrorProblem, StringComparison.Ordinal)
+                    ? "Mark it [Obsolete] as a warning while code still uses it, or remove it."
+                    : "Generated code creates it, so give it a public parameterless constructor and no required members.";
+
+                findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.CannotExtend, set.Location, new EquatableArray<string>([set.Name, problem, advice])));
                 hasTexts = false;
             }
 
@@ -353,10 +411,12 @@ internal sealed record LocalizationSetsAnalysis(
             // for a set that can't be created: the sets list it.
             if (set.TypeNamedLikeTexts is { } typeOfName)
             {
+                var that = typeOfName.StartsWith("the namespace ", StringComparison.Ordinal) ? "that namespace" : "that type";
+
                 findings?.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.CannotExtend,
                     set.Location,
-                    new EquatableArray<string>([set.Name, $"its generated class would be named '{baseName}', like {typeOfName}. Rename the set or that type"])));
+                    new EquatableArray<string>([set.Name, $"its generated class would be named '{baseName}', like {typeOfName}", $"Rename the set or {that}."])));
 
                 hasTexts = false;
             }
@@ -474,7 +534,8 @@ internal sealed record LocalizationSetsAnalysis(
                 Sets: new EquatableArray<SetLink>(links),
                 HasTexts: hasTexts,
                 Usings: set.Usings,
-                Enums: set.Enums));
+                Enums: set.Enums,
+                SuppressedDiagnostics: set.SuppressedDiagnostics));
         }
     }
 
@@ -665,7 +726,8 @@ internal sealed record LocalizationSetsAnalysis(
             {
                 findings.Add(DerivedFromOtherLanguage(set, language));
             }
-            else if (IsMissingContract(set, defaultLanguage))
+            // A type of the contract's name, which the default-language set's LOC200 reports, is what it lists.
+            else if (IsMissingContract(set, defaultLanguage) && set.TypeNamedLikeContract is null)
             {
                 var baseName = LocalizationDiscovery.DeriveBaseName(set.Name, language) ?? set.Name;
                 var defaultSet = $"{baseName}{SupportedLanguages.ToTypeSuffix(defaultLanguage)}";
@@ -884,7 +946,8 @@ internal sealed record LocalizationSetsAnalysis(
 /// them, whether the generated class holds the texts, the using directives its file repeats
 /// (<see cref="RepeatedUsings"/>), and the enums whose members it has a text for, each of which the generated class
 /// gets a method for that gives the text of a value. The class doesn't hold the texts when the generated code can't
-/// create the set for their default wording (<c>LOC200</c>).
+/// create the set for their default wording (<c>LOC200</c>). The file turns off what naming the default-language set
+/// reports (<see cref="DiscoveredLocalization.SuppressedDiagnostics"/>).
 /// </summary>
 internal sealed record LocalizationContract(
     string HintName,
@@ -898,7 +961,8 @@ internal sealed record LocalizationContract(
     EquatableArray<SetLink> Sets,
     bool HasTexts,
     RepeatedUsings Usings,
-    EquatableArray<LocalizedEnum> Enums);
+    EquatableArray<LocalizedEnum> Enums,
+    EquatableArray<string> SuppressedDiagnostics);
 
 /// <summary>
 /// A set translating a generated contract, for the crefs on its texts: its language, a culture name, its namespace and

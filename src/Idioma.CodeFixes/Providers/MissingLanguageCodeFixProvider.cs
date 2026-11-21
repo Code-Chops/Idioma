@@ -22,7 +22,11 @@ namespace CodeChops.Idioma.CodeFixes;
 /// </para>
 /// <para>
 /// A set of a library's contract gets the namespace of the file the diagnostic is in. A file without a namespace gives
-/// it the project's default namespace.
+/// it the project's default namespace. The set names the contract by its name alone, with a <see langword="using"/> of
+/// its namespace where the file needs one: <c>using Shop;</c> and <c>IShopLocalization</c>. The full name could mean
+/// another type there, as <c>Shop.IShopLocalization</c> means <c>Contoso.Shop.IShopLocalization</c> inside
+/// <c>namespace Contoso.Shop</c>. The fix checks with the compiler that the name it writes means the contract, and
+/// writes the full name only where the name alone doesn't.
 /// </para>
 /// <para>
 /// "Fix all" adds every missing set at once, one file each.
@@ -86,7 +90,8 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
             }
 
             var newLine = (await set.Document.GetTextAsync(cancellationToken).ConfigureAwait(false)).ToString().Contains("\r\n") ? "\r\n" : "\n";
-            var text = Write(set.Namespace, set.Declaration, imports && set.Declaration.Contains(SupportedLanguages.SetInterface), newLine);
+            var usings = imports && set.Declaration.Contains(SupportedLanguages.SetInterface) ? set.Usings.Add(PackageNames.Namespace) : set.Usings;
+            var text = Write(set.Namespace, set.Declaration, usings, newLine);
 
             solution = solution.AddDocument(DocumentId.CreateNewId(project.Id), set.FileName, text, set.Document.Folders, set.FilePath);
         }
@@ -107,27 +112,38 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The file of the new set: the package's namespace where the set lists <c>ILocalizationSet</c> and no global using
-    /// imports it, the set's namespace, and the set without texts.
+    /// The file of the new set: a <see langword="using"/> of each namespace in <paramref name="usings"/>, such as the
+    /// package's where the set lists <c>ILocalizationSet</c> and no global using imports it, the set's namespace, and
+    /// the set without texts.
     /// </summary>
-    private static string Write(string @namespace, string declaration, bool importsPackage, string newLine)
+    private static string Write(string @namespace, string declaration, ImmutableSortedSet<string> usings, string newLine)
     {
         var text = new StringBuilder();
 
-        if (importsPackage)
-            text.Append($"using {PackageNames.Namespace};").Append(newLine).Append(newLine);
+        foreach (var imported in usings)
+            text.Append($"using {imported};").Append(newLine);
+
+        if (usings.Count > 0)
+            text.Append(newLine);
 
         if (@namespace.Length > 0)
-        {
-            var escaped = String.Join(".", @namespace.Split('.').Select(static part => SyntaxFacts.GetKeywordKind(part) is SyntaxKind.None ? part : $"@{part}"));
-            text.Append($"namespace {escaped};").Append(newLine).Append(newLine);
-        }
+            text.Append($"namespace {Escape(@namespace)};").Append(newLine).Append(newLine);
 
         text.Append(declaration).Append(newLine)
             .Append('{').Append(newLine)
             .Append('}').Append(newLine);
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// A namespace as code writes it: with an <c>@</c> in front of each part that is a keyword, as in
+    /// <c>Shop.@event</c>.
+    /// </summary>
+    private static string Escape(string @namespace)
+    {
+        var escaped = String.Join(".", @namespace.Split('.').Select(static part => SyntaxFacts.GetKeywordKind(part) is SyntaxKind.None ? part : $"@{part}"));
+        return escaped;
     }
 
     /// <summary>
@@ -156,9 +172,10 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// A set to add: the document its diagnostic is in, next to which its file goes, its name and namespace, its
-    /// declaration without a body, and the name and path of its file.
+    /// declaration without a body, the namespaces its file imports for the types it names, and the name and path of its
+    /// file.
     /// </summary>
-    private sealed record NewSet(Document Document, string Name, string Namespace, string Declaration, string FileName, string? FilePath)
+    private sealed record NewSet(Document Document, string Name, string Namespace, string Declaration, ImmutableSortedSet<string> Usings, string FileName, string? FilePath)
     {
         /// <summary>
         /// The set a diagnostic asks for, or <see langword="null"/> when the diagnostic names none, or a type or a file
@@ -178,11 +195,98 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
 
             var fileName = $"{name}.cs";
             var filePath = document.FilePath is { } path && Path.GetDirectoryName(path) is { } directory ? Path.Combine(directory, fileName) : null;
-            var set = new NewSet(document, name, @namespace, declaration, fileName, filePath);
+            var set = new NewSet(document, name, @namespace, declaration, ImmutableSortedSet.Create<string>(StringComparer.Ordinal), fileName, filePath);
 
-            return compilation.GetTypeByMetadataName(@namespace.Length > 0 ? $"{@namespace}.{name}" : name) is not null || IsTaken(document.Project, set)
-                ? null
-                : set;
+            if (compilation.GetTypeByMetadataName(@namespace.Length > 0 ? $"{@namespace}.{name}" : name) is not null || IsTaken(document.Project, set))
+                return null;
+
+            var (shortened, usings) = NameTypesAsFileCan(declaration, @namespace, compilation, cancellationToken);
+            return set with { Declaration = shortened, Usings = usings };
+        }
+
+        /// <summary>
+        /// The declaration with each type it names by its full name, as the contract of a library, named as the new
+        /// file reaches it, with the namespaces the file then imports. Each name is the first of these that the compiler
+        /// binds to the type in that file:
+        /// <list type="number">
+        /// <item>The name alone, as where a global using imports its namespace.</item>
+        /// <item>The name alone, with a <see langword="using"/> of its namespace.</item>
+        /// <item>The full name, as the diagnostic writes it.</item>
+        /// </list>
+        /// </summary>
+        /// <remarks>
+        /// The full name isn't the first choice, because a namespace around the set can take its first part:
+        /// <c>Shop.IShopLocalization</c> means <c>Contoso.Shop.IShopLocalization</c> inside <c>namespace Contoso.Shop</c>.
+        /// A <see langword="using"/> at the top of the file reads its namespace from the global namespace, so it isn't
+        /// taken. A type it can't find stays as it is written, such as a contract the generator writes, which a workspace
+        /// may not hold yet.
+        /// </remarks>
+        private static (string Declaration, ImmutableSortedSet<string> Usings) NameTypesAsFileCan(string declaration, string @namespace, Compilation compilation,
+            CancellationToken cancellationToken)
+        {
+            var usings = ImmutableSortedSet.Create<string>(StringComparer.Ordinal);
+
+            if (SyntaxFactory.ParseMemberDeclaration($"{declaration} {{ }}") is not ClassDeclarationSyntax { BaseList: { } baseList }
+                || baseList.Types.Any(static type => type.Type.ContainsDiagnostics))
+            {
+                return (declaration, usings);
+            }
+
+            var names = baseList.Types.Select(static type => type.Type.ToString()).ToArray();
+            var head = declaration.Substring(0, baseList.SpanStart);
+
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (baseList.Types[i].Type is not QualifiedNameSyntax { Left: var left, Right: var right } written
+                    || compilation.GetTypeByMetadataName(ToMetadataName(written)) is not { } type)
+                {
+                    continue;
+                }
+
+                var withUsing = usings.Add(left.ToString());
+
+                foreach (var (name, imports) in new[] { (right.ToString(), usings), (right.ToString(), withUsing), (written.ToString(), usings) })
+                {
+                    names[i] = name;
+
+                    if (Binds(Write(@namespace, $"{head}: {String.Join(", ", names)}", imports, "\n"), i, type, compilation, cancellationToken))
+                    {
+                        usings = imports;
+                        break;
+                    }
+
+                    // As the diagnostic writes it until one binds, and when none does.
+                    names[i] = written.ToString();
+                }
+            }
+
+            return ($"{head}: {String.Join(", ", names)}", usings);
+        }
+
+        /// <summary>
+        /// The name the compiler finds a type of a namespace by, without the <c>@</c> that escapes a keyword:
+        /// <c>Shop.IShopLocalization</c>.
+        /// </summary>
+        private static string ToMetadataName(QualifiedNameSyntax name)
+        {
+            var metadataName = String.Join(".", name.ToString().Split('.').Select(static part => part.Trim().TrimStart('@')));
+            return metadataName;
+        }
+
+        /// <summary>
+        /// Whether a base type of the new set binds to <paramref name="type"/>, in the file as it would be added to the
+        /// project.
+        /// </summary>
+        private static bool Binds(string file, int index, INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
+        {
+            var tree = CSharpSyntaxTree.ParseText(file, compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions, cancellationToken: cancellationToken);
+            var model = compilation.AddSyntaxTrees(tree).GetSemanticModel(tree);
+
+            var binds = tree.GetRoot(cancellationToken).DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault() is { BaseList.Types: var types }
+                        && index < types.Count
+                        && SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(types[index].Type, cancellationToken).Symbol, type);
+
+            return binds;
         }
 
         /// <summary>

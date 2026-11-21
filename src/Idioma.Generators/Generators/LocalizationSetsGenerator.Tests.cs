@@ -1452,7 +1452,7 @@ public sealed class LocalizationSetsGeneratorTests
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe("LOC200");
         error.GetMessage().ShouldContain("it has no parameterless constructor");
-        error.GetMessage().ShouldContain("has a public parameterless constructor");
+        error.GetMessage().ShouldEndWith("Generated code creates it, so give it a public parameterless constructor and no required members.");
     }
 
     [Test]
@@ -2766,6 +2766,198 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    [Arguments(false, "")]
+    [Arguments(false, """[assembly: SupportedLanguages("en", "nl", "de")]""")]
+    [Arguments(true, "")]
+    [Arguments(true, """[assembly: SupportedLanguages("en", "nl", "de")]""")]
+    public void SetOfInternalContractOfLibrary_ShouldTranslateIt(bool asProject, string languages)
+    {
+        // Arrange: the library's sets are internal, so its contract is too, and only the test project sees it.
+        const string librarySource = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("TestAssembly")]
+
+            namespace ShopLibrary;
+
+            internal sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            internal sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        var library = asProject
+            ? GeneratorTestHelper.CompileProjectWithGenerators("ShopLibrary", librarySource)
+            : GeneratorTestHelper.CompileLibraryWithGenerators("ShopLibrary", librarySource);
+
+        // Act: a set the test passes to LocalizationRegistry.Create, which takes only an ILocalizationSet.
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            {{languages}}
+
+            namespace TestApp;
+
+            internal sealed class ShopLocalizationDe : ILocalizationSet, ShopLibrary.IShopLocalization
+            {
+                public string Checkout => "Zur Kasse";
+            }
+            """, library);
+
+        // Assert: it translates the library's contract, so it needs no languages (LOC100), and lists its contract (LOC204).
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void DefaultSetWhoseGeneratedClassIsNamedLikeNamespace_ShouldReportLOC200AsItsOnlyError()
+    {
+        // Arrange & Act: a folder Texts gives the namespace MyApp.Texts, which the generated class MyApp.Texts would meet
+        // (CS0101).
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace MyApp.Texts
+            {
+                public static class Helper { }
+            }
+
+            namespace MyApp
+            {
+                public sealed class TextsEn : ILocalizationSet, ITexts
+                {
+                    public string Checkout => "Checkout";
+                }
+
+                public sealed class TextsNl : ILocalizationSet, ITexts
+                {
+                    public string Checkout => "Afrekenen";
+                }
+            }
+            """);
+
+        // Assert: the contract is still written, so the sets compile.
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC200");
+        error.GetMessage().ShouldStartWith("'TextsEn' is the default-language set of a contract, but its generated class would be named 'Texts', like the namespace 'MyApp.Texts'.");
+        error.GetMessage().ShouldEndWith("Rename the set or that namespace.");
+    }
+
+    [Test]
+    public void InterfaceWithTheNameOfTheContract_ShouldReportLOC200AsItsOnlyError()
+    {
+        // Arrange & Act: an interface written by hand that doesn't derive from ILocalizationSet isn't a contract, and the
+        // generated one would meet it (CS0101).
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public interface IHandLocalization
+            {
+                string Checkout { get; }
+            }
+
+            public sealed class HandLocalizationEn : ILocalizationSet, IHandLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed class HandLocalizationNl : ILocalizationSet, IHandLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert: no LOC204 asks a set to list the interface it lists.
+        var error = errors.ShouldHaveSingleItem();
+        error.Id.ShouldBe("LOC200");
+        error.GetMessage().ShouldStartWith("'HandLocalizationEn' is the default-language set of a contract, but its contract would be named 'IHandLocalization', like the interface 'IHandLocalization'.");
+        error.GetMessage().ShouldEndWith("Rename the set or that type. To write the contract yourself, derive it from ILocalizationSet.");
+    }
+
+    [Test]
+    public void SetsWhoseNamesGiveNoLanguage_ShouldBeToldBothNames()
+    {
+        // Arrange & Act: neither name gives a language, so the build can't tell which one is English.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEnglish : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed class ShopLocalizationDutch : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert: the Dutch set isn't only told to end in En.
+        var dutch = result.Results.ShouldHaveSingleItem().Diagnostics.Single(diagnostic => diagnostic.Id is "LOC200" && diagnostic.GetMessage().StartsWith("'ShopLocalizationDutch'", StringComparison.Ordinal));
+        dutch.GetMessage().ShouldEndWith("If it's the set of another language, end its name in that language instead, as in ShopLocalizationNl.");
+    }
+
+    [Test]
+    public void DefaultSetImplementingAnotherContract_ShouldReportLOC200()
+    {
+        // Arrange & Act: one English class that would start the app's contract and serve the library's.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class AppLocalizationEn : ILocalizationSet, IAppLocalization, GridLibrary.IGridLocalization
+            {
+                public string First => "First";
+                public string Title => "Orders";
+            }
+            """, GridLibrary);
+
+        // Assert: it says why IAppLocalization isn't there, where the compiler only says it isn't found (CS0246).
+        var message = SingleDiagnostic(result, LocalizationSetsGenerator.CannotExtendDiagnosticId).GetMessage();
+        message.ShouldStartWith("'AppLocalizationEn' is the default-language set of a contract, but it implements 'GridLibrary.IGridLocalization' too, and a set starts a contract only when it implements no other.");
+        message.ShouldEndWith("Write the texts of 'IAppLocalization' in a set of their own, and implement 'GridLibrary.IGridLocalization' in another class.");
+    }
+
+    [Test]
+    public void SetTranslatingLibraryContract_ShouldNotReportLOC200()
+    {
+        // Arrange & Act: a set of the library's contract in the default language, listing nothing else.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class GridLocalizationEn : ILocalizationSet, GridLibrary.IGridLocalization
+            {
+                public string First => "First";
+            }
+            """, GridLibrary);
+
+        // Assert
+        DiagnosticIds(result).Contains(LocalizationSetsGenerator.CannotExtendDiagnosticId, StringComparer.Ordinal).ShouldBeFalse();
+    }
+
+    [Test]
     public void SetListingILocalizationSetInOtherLanguage_ShouldReportLOC204Only()
     {
         // Arrange & Act: it compiles, and no text would ever read it.
@@ -3330,7 +3522,8 @@ public sealed class LocalizationSetsGeneratorTests
         // Assert: one error, at the set. The contract is still written, so the set compiles.
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe("LOC200");
-        error.GetMessage().ShouldStartWith($"'OrderStatusEn' is the default-language set of a contract, but its generated class would be named 'OrderStatus', like {expectedType}. Rename the set or that type.");
+        error.GetMessage().ShouldStartWith($"'OrderStatusEn' is the default-language set of a contract, but its generated class would be named 'OrderStatus', like {expectedType}.");
+        error.GetMessage().ShouldEndWith("Rename the set or that type.");
     }
 
     [Test]

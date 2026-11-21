@@ -1,6 +1,6 @@
 # Coming from resx
 
-With resx files and `IStringLocalizer`, a text is a string key in an XML file per language. With Idioma, it's a property in a C# class per language, or a method for a text that takes values. So a lookup at runtime becomes a name the compiler checks. This page maps one to the other, shows how to move a resource file, and shows how a resource file can still override a wording.
+With resx files and `IStringLocalizer`, a text is a string key in an XML file per language. With Idioma, it's a property in a C# class per language, or a method for a text that takes values. So a lookup at run time becomes a name the compiler checks. This page maps one to the other, shows how to move a resource file, and shows how a resource file can still override a wording.
 
 Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [performance](performance.md), and [how Idioma works](how-it-works.md).
 

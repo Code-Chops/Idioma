@@ -5,7 +5,7 @@ Translations for any .NET app, written in C# and checked at compile time:
 - The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation that never uses a value the original shows.
 - There are no resource files, so you get full IDE support: autocomplete, go to definition, and find all references.
 - The package has no dependencies, and is safe to trim and to publish with Native AOT.
-- Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing. A text with parameters takes longer for a user whose language your app doesn't support, but that's an edge case.
+- Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing. Only a text with parameters takes longer, in Blazor WebAssembly compiled ahead of time ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
 - An AI coding assistant can translate your texts, and the build tells it which are missing ([details](#translating-your-texts)).
 
 Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and write each text in one of three ways:
@@ -178,7 +178,7 @@ In your IDE, hovering over `ShopLocalization.Cart` shows its wording in every la
 
 An inline text shows where you write it.
 
-Ask for a text written as an attribute by the type and the name of its member, or for the text of the type itself. Both give `null` where there's no `[Localized]`:
+Ask for a text written as an attribute by the type and the name of its member, or for the text of the type itself. Both give `null` where there's no `[Localized]`. A call that names the type and the member in the code, as both do here, is then a build error (`LOC504`):
 
 ```razor
 <h2>

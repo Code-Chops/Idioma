@@ -7,14 +7,17 @@ namespace CodeChops.Idioma;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Put the attribute once in any file of the assembly. You can then write a text in two ways, and both demand every
+/// Put the attribute once in any file of the assembly. You can then write a text in three ways, and each demands every
 /// language:
 /// </para>
 /// <list type="bullet">
-/// <item>An inline text: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. The source generator
-/// writes this method with one required argument per language, so leaving a language out doesn't compile.</item>
 /// <item>A set: one class per language, for a library or a larger group of texts. See
 /// <see cref="ILocalizationSet"/>.</item>
+/// <item>An inline text: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. The source generator
+/// writes this method with one required argument per language, so leaving a language out doesn't compile.</item>
+/// <item>An attribute on the type or the member it names, for the label of a type, a property or an enum member:
+/// <c>[Localized(en: "City", nl: "Plaats")]</c>. The source generator writes the attribute with the same arguments
+/// as <c>Inline</c>. <see cref="LocalizableText.GetTextByMember{T}(string)"/> gives the text of a member.</item>
 /// </list>
 /// <para>
 /// With two or more languages listed, a plain string where a text is expected is a build error (<c>LOC500</c>). So a
@@ -39,8 +42,8 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// An assembly without this attribute has no texts of its own to translate. Its strings convert to texts as they are,
-/// and <c>LocalizableText.Inline</c> doesn't exist there. It can still reword a library's set, or give a library's
-/// contract another language.
+/// and neither <c>LocalizableText.Inline</c> nor <c>[Localized]</c> exists there. It can still reword a library's set,
+/// or give a library's contract another language.
 /// </para>
 /// <para>
 /// The build reports each mistake with a code, such as <c>LOC201</c>.

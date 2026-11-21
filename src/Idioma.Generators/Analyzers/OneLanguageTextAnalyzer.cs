@@ -7,17 +7,18 @@ namespace CodeChops.Idioma.Generators;
 /// Closes what the generated factory can't in an assembly that declares <c>[assembly: SupportedLanguages(...)]</c>:
 /// <c>LOC500</c> for wording written in one language, and <c>LOC501</c> for a language argument without its name, of
 /// <c>LocalizableText.Inline</c> or of <c>[Localized]</c>. In an assembly without the attribute, it reports a call of
-/// <c>LocalizableText.Inline</c> and a member marked <c>[Localized]</c> (<c>LOC100</c>), which the compiler alone
-/// reports as a method or a type that doesn't exist.
+/// <c>LocalizableText.Inline</c> (<c>LOC100</c>), which the compiler alone reports as a method that doesn't exist. The
+/// generator reports a member marked <c>[Localized]</c> there (<see cref="LocalizableTextFactoryGenerator"/>), because
+/// the compiler stops at an attribute that doesn't exist before any analyzer runs.
 /// </summary>
 /// <remarks>
 /// Wording means text written in the source: a constant holding a letter, also inside an interpolation, a concatenation,
 /// a conditional, a coalesce, or a switch. A runtime value (a customer's name) converts to a text as it always did,
 /// because it has no translations to demand. The build can't tell it from wording kept in a local variable, which
 /// therefore passes too. Generated code is left alone, as its author can't fix a report on it, except what Razor
-/// generates from a <c>.razor</c> or <c>.cshtml</c> file, which is the user's own markup and maps back to it. So is the
-/// initializer of a property marked <c>[ExcludeFromLocalizationDiscovery]</c>, whose author marked its wording as the
-/// same in every language, such as a name.
+/// generates from a <c>.razor</c> or <c>.cshtml</c> file, which is the user's own markup and maps back to it. So are the
+/// initializer and the getter of a property marked <c>[ExcludeFromLocalizationDiscovery]</c>, whose author marked its
+/// wording as the same in every language, such as a name.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
@@ -49,7 +50,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Every text must show in every language of [assembly: SupportedLanguages]. A string converts to a text, which suits a value such as a customer's name. But wording written in the source would show in this one language to everybody. For wording that reads the same in every language, such as a name, mark the property that holds it [ExcludeFromLocalizationDiscovery], and its initializer isn't checked.",
+        description: "Every text must show in every language of [assembly: SupportedLanguages]. A string converts to a text, which suits a value such as a customer's name. But wording written in the source would show in this one language to everybody. For wording that reads the same in every language, such as a name, mark the property that holds it [ExcludeFromLocalizationDiscovery]. Its initializer and its getter aren't checked then.",
         helpLinkUri: PackageNames.HelpLink(OneLanguageDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnnamedLanguageRule = new(
@@ -72,7 +73,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The source generator writes LocalizableText.Inline and [Localized] with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes neither, so the compiler finds no such method (CS0117) and no such attribute (CS0246).",
+        description: "The source generator writes LocalizableText.Inline with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such method (CS0117).",
         helpLinkUri: PackageNames.HelpLink(NoLanguagesDeclaredDiagnosticId));
 #pragma warning restore RS1019
 
@@ -98,10 +99,8 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
 
         if (codes.Length is 0)
         {
-            // Without languages there is no factory and no attribute, and the compiler only says that LocalizableText
-            // has no Inline, and that Localized isn't found.
+            // Without languages there is no factory, and the compiler only says that LocalizableText has no Inline.
             context.RegisterSyntaxNodeAction(c => AnalyzeInlineWithoutLanguages(c, text), SyntaxKind.InvocationExpression);
-            context.RegisterSyntaxNodeAction(AnalyzeLocalizedWithoutLanguages, SyntaxKind.Attribute);
             return;
         }
 
@@ -115,7 +114,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         if (codes.Length < 2)
             return;
 
-        // Null in a package without the attribute, where no initializer is left alone.
+        // Null in a package without the attribute, where no property is left alone.
         var excluded = context.Compilation.GetTypeByMetadataName(PackageNames.ExcludeFromLocalizationDiscoveryAttribute);
 
         context.RegisterOperationAction(c => AnalyzeConversion(c, text, excluded, languages, sample), OperationKind.Conversion);
@@ -142,24 +141,6 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
             && context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken) is { Symbol: null, CandidateSymbols.IsEmpty: true })
         {
             context.ReportDiagnostic(Diagnostic.Create(InlineWithoutLanguagesRule, access.Name.GetLocation(), $"{PackageNames.LocalizableTextName}.{LocalizableTextFactoryGenerator.FactoryName}"));
-        }
-    }
-
-    /// <summary>
-    /// Reports a member marked <c>[Localized]</c> whose attribute binds to nothing, in an assembly that declares no
-    /// languages.
-    /// </summary>
-    private static void AnalyzeLocalizedWithoutLanguages(SyntaxNodeAnalysisContext context)
-    {
-        var attribute = (AttributeSyntax)context.Node;
-
-        // By its name first, which binds nothing: nearly every attribute is another one. One that binds is an
-        // attribute of that name the code brought itself.
-        if (LocalizedMembers.IsNamedLocalized(attribute)
-            && IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree)
-            && LocalizedMembers.IsUnbound(attribute, context.SemanticModel, context.CancellationToken))
-        {
-            context.ReportDiagnostic(Diagnostic.Create(InlineWithoutLanguagesRule, attribute.Name.GetLocation(), $"[{LocalizedMembers.AttributeName}]"));
         }
     }
 
@@ -272,39 +253,48 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Whether LOC500 checks the wording of an operation. It does in the user's own source
-    /// (<see cref="IsHandWritten(OperationAnalysisContext)"/>), except in the initializer of a property marked
-    /// <c>[ExcludeFromLocalizationDiscovery]</c> (<see cref="IsInExcludedInitializer"/>).
+    /// (<see cref="IsHandWritten(OperationAnalysisContext)"/>), except in the initializer or the getter of a property
+    /// marked <c>[ExcludeFromLocalizationDiscovery]</c> (<see cref="IsInExcludedProperty"/>).
     /// </summary>
     private static bool IsChecked(OperationAnalysisContext context, INamedTypeSymbol? excluded)
     {
-        var isChecked = IsHandWritten(context) && !IsInExcludedInitializer(context.Operation, excluded);
+        var isChecked = IsHandWritten(context) && !IsInExcludedProperty(context, excluded);
         return isChecked;
     }
 
     /// <summary>
-    /// Whether an operation lies in the initializer of a property marked <c>[ExcludeFromLocalizationDiscovery]</c>, as in
-    /// <c>public static LocalizableText Brand { get; } = "Idioma";</c>. Its author marked that wording as the same in
-    /// every language, such as a name.
+    /// Whether an operation lies in the initializer or the getter of a property marked
+    /// <c>[ExcludeFromLocalizationDiscovery]</c>, as in <c>public static LocalizableText Brand { get; } = "Idioma";</c> or
+    /// <c>public static LocalizableText Brand => "Idioma";</c>. Its author marked that wording as the same in every
+    /// language, such as a name.
     /// </summary>
-    // The initializer alone, and not every assignment to the property: a marked component parameter would otherwise
-    // leave the wording of every caller unchecked.
-    private static bool IsInExcludedInitializer(IOperation operation, INamedTypeSymbol? excluded)
+    // Not what other code assigns to the property, nor its setter. A marked component parameter would otherwise leave the
+    // wording of every caller unchecked.
+    private static bool IsInExcludedProperty(OperationAnalysisContext context, INamedTypeSymbol? excluded)
     {
         if (excluded is null)
             return false;
 
-        for (var current = operation.Parent; current is not null; current = current.Parent)
+        // The getter, written as an expression body or as an accessor. What it returns is the property's own wording.
+        if (context.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.PropertyGet, AssociatedSymbol: IPropertySymbol property })
+            return IsMarked(property, excluded);
+
+        for (var current = context.Operation.Parent; current is not null; current = current.Parent)
         {
             if (current is not IPropertyInitializerOperation initializer)
                 continue;
 
-            var isExcluded = initializer.InitializedProperties.Any(property => property.GetAttributes()
-                .Any(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, excluded)));
-
+            var isExcluded = initializer.InitializedProperties.Any(initialized => IsMarked(initialized, excluded));
             return isExcluded;
         }
 
         return false;
+    }
+
+    private static bool IsMarked(IPropertySymbol property, INamedTypeSymbol excluded)
+    {
+        var isMarked = property.GetAttributes().Any(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, excluded));
+        return isMarked;
     }
 
     private static void AnalyzeInvocation(OperationAnalysisContext context, string sample)

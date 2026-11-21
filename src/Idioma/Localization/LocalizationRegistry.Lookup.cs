@@ -201,7 +201,7 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// The wording the sets of a contract give a text for the first of the names that has a set, or
     /// <see langword="null"/> when none has. Within a name, it's the wording of the set registered last that words the
-    /// text itself, rather than leaving it to the set it derives from (<see cref="FindLevelWording"/>). So rewordings of
+    /// text itself, rather than leaving it to the set it derives from (<see cref="FindLevelSet"/>). So rewordings of
     /// one set, registered one after another, each show the texts they change. When that set leaves the text to a set of
     /// a less specific name it derives from, the text takes the wording of that name instead, and so on up. So a set that
     /// rewords a language reaches the regional sets built on that language, for every text they leave as it was.
@@ -216,42 +216,85 @@ public sealed partial class LocalizationRegistry
     // wording instead: it gives way where it words the text as the set it derives from does. A set deriving from no
     // other set of its name, or a regional set deriving from no set of its language, gives way to nothing, as it
     // inherits none of its texts.
+    // A set is asked for its wording only once it's known to give it, or where only its wording can tell. A British set
+    // that leaves a text to the English one isn't called for that text at all. Called anyway, every text among the
+    // values of a text was worded twice per level for a British user: 510 calls for a text nested 8 deep, where 8 do.
     internal string? FindWording(Type contract, FallbackLookup lookup, LocalizableText text)
     {
         ContractSet? found = null;
         string? wording = null;
+        var isWorded = false;
 
         foreach (var sets in lookup.Levels)
         {
             var candidates = sets.Of(contract);
+            ILocalizationSet? basis = null;
+            string? basisWording = null;
 
             if (found is not null)
             {
-                if (FindBase(candidates, found.Set) is not { } basis)
+                basis = FindBase(candidates, found.Set);
+
+                if (basis is null)
                     continue;
 
-                var wordsItself = found.WordsItselfOver(basis.GetType(), text)
-                                  ?? !String.Equals(text.Select(basis), wording, StringComparison.Ordinal);
+                var wordsItself = found.WordsItselfOver(basis.GetType(), text);
 
-                if (wordsItself)
-                    return wording;
+                if (wordsItself is null)
+                {
+                    if (!isWorded)
+                    {
+                        wording = text.Select(found.Set);
+                        isWorded = true;
+                    }
+
+                    basisWording = text.Select(basis);
+                    wordsItself = !String.Equals(basisWording, wording, StringComparison.Ordinal);
+                }
+
+                if (wordsItself is true)
+                    break;
             }
 
             // Null only before the first name with a set of the contract: a basis is one of the candidates.
-            if (FindLevelWording(candidates, text) is { } level)
-                (found, wording) = level;
+            if (FindLevelSet(candidates, text, out var levelWording, out var isLevelWorded) is not { } level)
+                continue;
+
+            found = level;
+            wording = levelWording;
+            isWorded = isLevelWorded;
+
+            // The basis was worded to compare it, so where it's the set of this name too, its wording is that one.
+            if (!isWorded && basisWording is not null && ReferenceEquals(level.Set, basis))
+            {
+                wording = basisWording;
+                isWorded = true;
+            }
         }
 
-        return wording;
+        if (found is null)
+            return null;
+
+        return isWorded ? wording : text.Select(found.Set);
     }
 
     /// <summary>
-    /// The wording the sets of a contract for one name give a text, and the set it comes from. That's the set registered
-    /// last that words the text itself rather than leaving it to the candidate it derives from, or that derives from
-    /// none. <see langword="null"/> when the name has no set of the contract.
+    /// The set of a contract that words a text for one name: the set registered last that words the text itself rather
+    /// than leaving it to the candidate it derives from, or that derives from none. <see langword="null"/> when the name
+    /// has no set of the contract.
     /// </summary>
-    private static (ContractSet Candidate, string Wording)? FindLevelWording(ContractSet[] candidates, LocalizableText text)
+    /// <param name="candidates">The sets of the contract for the name.</param>
+    /// <param name="text">The text.</param>
+    /// <param name="wording">The set's wording, where telling the set took it.</param>
+    /// <param name="isWorded">
+    /// Whether <paramref name="wording"/> holds the set's wording. It doesn't where the build's record told the set, so
+    /// that a set a less specific name overrides isn't called at all.
+    /// </param>
+    private static ContractSet? FindLevelSet(ContractSet[] candidates, LocalizableText text, out string? wording, out bool isWorded)
     {
+        wording = null;
+        isWorded = false;
+
         // Ends at the latest at the candidate deriving from no other, as no class derives from itself.
         for (var i = candidates.Length - 1; i >= 0; i--)
         {
@@ -261,19 +304,26 @@ public sealed partial class LocalizationRegistry
             // A set deriving from no other words every text itself. Told here, without a call, because nearly every
             // lookup ends at such a set, and in WebAssembly's interpreter a call cost every text about 40 ns.
             if (basis is null)
-                return (candidate, text.Select(set));
+                return candidate;
 
             // Asked of the build's record first, so that a set that leaves the text as it is isn't called at all.
             var wordsItself = candidate.WordsItselfOverBasis(text);
             if (wordsItself is false)
                 continue;
 
-            var wording = text.Select(set);
+            if (wordsItself is true)
+                return candidate;
 
-            if (wordsItself is null && String.Equals(text.Select(basis), wording, StringComparison.Ordinal))
+            // No record: only the wording tells, so it's kept for the caller.
+            var candidateWording = text.Select(set);
+
+            if (String.Equals(text.Select(basis), candidateWording, StringComparison.Ordinal))
                 continue;
 
-            return (candidate, wording);
+            wording = candidateWording;
+            isWorded = true;
+
+            return candidate;
         }
 
         return null;

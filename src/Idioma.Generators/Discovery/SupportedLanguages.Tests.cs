@@ -91,6 +91,23 @@ public sealed class SupportedLanguagesTests
     }
 
     [Test]
+    [Arguments("zh-TW", "zh-Hant-TW", true)]
+    [Arguments("zh-CN", "zh-Hans-CN", true)]
+    [Arguments("zh-HK", "ZH-HANT-HK", true)]
+    [Arguments("zh-Hant", "zh-Hant-TW", true)]
+    [Arguments("zh-CN", "zh-Hant-CN", false)] // Another script than zh-CN's
+    [Arguments("zh-TW", "zh-Hans-TW", false)]
+    [Arguments("zh-TW", "zh-Hant", false)]
+    public void ChineseRegionWithScript_ShouldBeServedByTheRegionWithoutIt(string provided, string requested, bool expected)
+    {
+        // Arrange & Act: at run time a text tries zh-TW right after zh-Hant-TW, as an Apple platform names the culture.
+        var serves = SupportedLanguages.Serves(provided, requested);
+
+        // Assert
+        serves.ShouldBe(expected);
+    }
+
+    [Test]
     public void EveryCulture_ShouldBeServedByEachOfItsParents()
     {
         // Arrange: what the build accepts (Serves) against the parents a text walks through at run time.

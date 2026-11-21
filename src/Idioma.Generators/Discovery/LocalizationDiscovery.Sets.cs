@@ -151,6 +151,8 @@ internal static partial class LocalizationDiscovery
             Depth: depth,
             UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
             RegistrationProblem: GetRegistrationProblem(type, ancestors, constructor),
+            IsObsoleteAsError: IsObsoleteAsError(type),
+            SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(type)),
             HasPublicParameterlessConstructor: Enumerable.Any(type.InstanceConstructors, static candidate => candidate is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }),
             IsExcluded: IsExcluded(type),
             Location: location,
@@ -165,6 +167,7 @@ internal static partial class LocalizationDiscovery
             ListsLocalizationSet: listsLocalizationSet,
             ContractNames: new EquatableArray<string>(GetPublicContractNames(type)),
             OwnContractNames: new EquatableArray<string>(GetOwnContractNames(type)),
+            ImplementsInternalContract: ImplementsInternalContract(type),
             AncestorNames: new EquatableArray<string>([.. ancestors.Select(static ancestor => ancestor.Type.ToDisplayString())]),
             BaseSetName: baseSet?.Name,
             BaseSetLanguage: baseSet is null ? null : GetLanguage(baseSet, [.. ancestors.Skip(1)], reader, cancellationToken),
@@ -189,6 +192,7 @@ internal static partial class LocalizationDiscovery
             Usings: usings,
             Enums: new EquatableArray<LocalizedEnum>(enums),
             TypeNamedLikeTexts: readsContract && language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
+            TypeNamedLikeContract: readsContract && language is not null ? FindTypeNamedLikeContract(type, language) : null,
             ReservedTexts: new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
             UndeclaredTexts: new EquatableArray<UndeclaredText>(listsLocalizationSet && readsContract ? GetUndeclaredTexts(type) : ImmutableArray<UndeclaredText>.Empty));
 
@@ -196,10 +200,10 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The type that has the name the generated class of a default-language set would get, as a message names it
-    /// (<c>the enum 'OrderStatus'</c>), or <see langword="null"/> when the name is free. <c>OrderStatusEn</c> next to
-    /// the enum <c>OrderStatus</c> is such a set: the generated class would be a second <c>OrderStatus</c>
-    /// (<c>CS0101</c>).
+    /// The type or namespace that has the name the generated class of a default-language set would get, as a message
+    /// names it (<c>the enum 'OrderStatus'</c>, <c>the namespace 'MyApp.Texts'</c>), or <see langword="null"/> when the
+    /// name is free. <c>OrderStatusEn</c> next to the enum <c>OrderStatus</c> is such a set: the generated class would
+    /// be a second <c>OrderStatus</c> (<c>CS0101</c>).
     /// </summary>
     // A static partial class of that name is the generated class itself, where a helper sits next to the texts. A type
     // with type parameters is another type, and so is one of another assembly, which the namespace of this class
@@ -215,6 +219,45 @@ internal static partial class LocalizationDiscovery
                 && other.DeclaringSyntaxReferences.All(reference => reference.GetSyntax(cancellationToken) is TypeDeclarationSyntax part && part.Modifiers.Any(SyntaxKind.PartialKeyword));
 
             if (isPartOfGeneratedClass)
+                continue;
+
+            var kind = other switch
+            {
+                { TypeKind: TypeKind.Enum } => "enum",
+                { TypeKind: TypeKind.Interface } => "interface",
+                { TypeKind: TypeKind.Delegate } => "delegate",
+                { IsRecord: true } => "record",
+                { TypeKind: TypeKind.Struct } => "struct",
+                _ => "class",
+            };
+
+            return $"the {kind} '{other.Name}'";
+        }
+
+        // A namespace of this compilation holds the name too, as the folder Texts next to TextsEn gives MyApp.Texts.
+        foreach (var other in type.ContainingNamespace.GetNamespaceMembers())
+        {
+            if (String.Equals(other.Name, textsName, StringComparison.Ordinal) && other.Locations.Any(static location => location.IsInSource))
+                return $"the namespace '{GetNamespaceName(other)}'";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The type that has the name the contract of a default-language set would get, as a message names it
+    /// (<c>the interface 'IShopLocalization'</c>), or <see langword="null"/> when the name is free. The generated
+    /// contract would be a second type of that name (<c>CS0101</c>). A contract written by hand isn't such a type: a set
+    /// that implements it starts no contract.
+    /// </summary>
+    private static string? FindTypeNamedLikeContract(INamedTypeSymbol type, string language)
+    {
+        if (DeriveBaseName(type.Name, language) is not { } textsName)
+            return null;
+
+        foreach (var other in type.ContainingNamespace.GetTypeMembers($"I{textsName}", arity: 0))
+        {
+            if (PackageNames.IsContract(other))
                 continue;
 
             var kind = other switch
@@ -398,6 +441,20 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
+    /// Whether the type implements a contract of another assembly that isn't public, which it can only see through
+    /// <c>InternalsVisibleTo</c>, as the set of a test project does for the internal contract of the library it tests.
+    /// Such a contract counts for none of the assemblies referencing this one, so it isn't among
+    /// <see cref="GetPublicContractNames"/>.
+    /// </summary>
+    private static bool ImplementsInternalContract(INamedTypeSymbol type)
+    {
+        var implementsInternalContract = type.AllInterfaces.Any(@interface => PackageNames.IsContract(@interface)
+                                                                              && @interface.DeclaredAccessibility is not Accessibility.Public
+                                                                              && !IsDeclaredIn(@interface, type.ContainingAssembly));
+        return implementsInternalContract;
+    }
+
+    /// <summary>
     /// The contracts written by hand in the type's own assembly (<see cref="PackageNames.IsContract"/>), whatever their
     /// accessibility. A contract the generator writes is not among them, as it does not exist in the input compilation.
     /// </summary>
@@ -435,6 +492,10 @@ internal static partial class LocalizationDiscovery
     /// </param>
     private static string? GetRegistrationProblem(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, IMethodSymbol? constructor)
     {
+        // Naming it is an error (CS0619), which no pragma turns off.
+        if (IsObsoleteAsError(type))
+            return ObsoleteAsErrorProblem;
+
         if (constructor is null)
             return "it has no parameterless constructor";
 
@@ -447,6 +508,57 @@ internal static partial class LocalizationDiscovery
             return "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LocalizationLanguageCode";
 
         return null;
+    }
+
+    /// <summary>
+    /// Why a set marked <c>[Obsolete]</c> as an error can't be registered, as the clause of a message.
+    /// </summary>
+    internal const string ObsoleteAsErrorProblem = "it's marked [Obsolete] as an error, and generated code can't name such a class";
+
+    /// <summary>
+    /// Whether the type is marked <c>[Obsolete]</c> as an error, as in <c>[Obsolete("Use another set", error: true)]</c>.
+    /// </summary>
+    private static bool IsObsoleteAsError(INamedTypeSymbol type)
+    {
+        var isObsoleteAsError = type.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass is { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } }
+            && attribute.ConstructorArguments is [_, { Value: true }]);
+
+        return isObsoleteAsError;
+    }
+
+    /// <summary>
+    /// The diagnostics that naming the type reports, other than <c>CS0612</c> and <c>CS0618</c>, which every generated
+    /// file turns off: the id of <c>[Experimental("SHOP001")]</c>, and the <c>DiagnosticId</c> of <c>[Obsolete]</c>.
+    /// The author of a set marked so can't act on them in generated code, and a build that treats warnings as errors
+    /// would stop at them.
+    /// </summary>
+    private static ImmutableArray<string> GetSuppressedDiagnostics(INamedTypeSymbol type)
+    {
+        var builder = ImmutableArray.CreateBuilder<string>();
+
+        foreach (var attribute in type.GetAttributes())
+        {
+            switch (attribute.AttributeClass)
+            {
+                case { Name: "ExperimentalAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
+                    when attribute.ConstructorArguments is [{ Value: string id }] && IsDiagnosticId(id):
+                    builder.Add(id);
+                    break;
+
+                case { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } }:
+                    foreach (var argument in attribute.NamedArguments)
+                        if (argument is { Key: "DiagnosticId", Value.Value: string id } && IsDiagnosticId(id))
+                            builder.Add(id);
+
+                    break;
+            }
+        }
+
+        return builder.ToImmutable();
+
+        // Written into a pragma, so only what a pragma can hold: letters, digits and underscores.
+        static bool IsDiagnosticId(string id) => id.Length > 0 && id.All(static c => c is '_' || Char.IsLetterOrDigit(c));
     }
 
     /// <summary>

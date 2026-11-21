@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Xml.Linq;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -60,5 +61,24 @@ public sealed class SupportedLanguagesAttributeTests
         // must update them in the same commit.
         typeof(SupportedLanguagesAttribute).FullName.ShouldBe("CodeChops.Idioma.SupportedLanguagesAttribute");
         parameters.Select(parameter => parameter.ParameterType).ShouldBe([typeof(string), typeof(string[])]);
+    }
+
+    [Test]
+    public void DocComment_ShouldNameEveryWayToWriteText()
+    {
+        // Arrange: the docs an IDE shows for the attribute, from the XML file the build writes next to the assembly.
+        var path = Path.ChangeExtension(typeof(SupportedLanguagesAttribute).Assembly.Location, ".xml");
+        var member = XDocument.Load(path)
+            .Descendants("member")
+            .Single(static member => String.Equals((string?)member.Attribute("name"), $"T:{typeof(SupportedLanguagesAttribute).FullName}", StringComparison.Ordinal));
+
+        // Act
+        var remarks = member.Element("remarks").ShouldNotBeNull().ToString();
+
+        // Assert: a set, an inline text, and an attribute on a member, each of which the attribute's languages hold.
+        remarks.ShouldContain("three ways");
+        remarks.ShouldContain("T:CodeChops.Idioma.ILocalizationSet");
+        remarks.ShouldContain("LocalizableText.Inline(");
+        remarks.ShouldContain("[Localized(");
     }
 }

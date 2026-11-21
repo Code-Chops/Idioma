@@ -624,6 +624,74 @@ public sealed class LocalizedMembersSourceTests
     }
 
     [Test]
+    public void EnumWithMarkedMembersAndASet_ShouldGetOneGetText()
+    {
+        // Arrange: a set of the enum gives it GetText, and so would its marked members, which made every call
+        // ambiguous (CS0121).
+        const string source = $$"""
+            {{Header}}
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Picked", nl: "Gepickt")]
+                Picked,
+
+                [Localized(en: "Delivered", nl: "Bezorgd")]
+                Delivered,
+            }
+
+            public sealed class ParcelStatusLocalizationEn : ILocalizationSet<ParcelStatus>, IParcelStatusLocalization
+            {
+                public string Picked => "Picked up";
+                public string Delivered => "Delivered";
+            }
+
+            public sealed class ParcelStatusLocalizationNl : ILocalizationSet<ParcelStatus>, IParcelStatusLocalization
+            {
+                public string Picked => "Opgehaald";
+                public string Delivered => "Bezorgd";
+            }
+
+            public static class Labels
+            {
+                public static LocalizableText Of(ParcelStatus status) => status.GetText();
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var texts = Texts(Run(source));
+
+        // Assert: the set's, and the member texts are still recorded for GetTextByMember.
+        errors.ShouldBeEmpty();
+        texts.ShouldNotBeNull().ShouldNotContain("ParcelStatusLocalizedExtensions");
+        texts.ShouldContain("\"Gepickt\"");
+    }
+
+    [Test]
+    public void MemberInKeywordNamespace_ShouldGetKeyWithoutTheAt()
+    {
+        // Arrange & Act
+        var texts = Texts(Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace @class.@event;
+
+            public class Model
+            {
+                [Localized(en: "Base", nl: "Basis")]
+                public string @base { get; } = "";
+            }
+            """));
+
+        // Assert: a key is a name, as the key of a set's text is.
+        texts.ShouldNotBeNull().ShouldContain("\"class.event.Model.base\"");
+        texts.ShouldNotContain("\"@class");
+    }
+
+    [Test]
     public void EditInFileOfMarkedMember_ShouldRewriteNoSource()
     {
         // Arrange & Act: an edit in the file of a marked member, which gives its attribute a new location.

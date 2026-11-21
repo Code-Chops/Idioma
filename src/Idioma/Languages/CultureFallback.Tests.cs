@@ -44,7 +44,7 @@ public sealed class CultureFallbackTests
     {
         // Arrange & Act & Assert
         Names(new FallbackInvariantParentCulture("nl-BE")).ShouldBe(["nl-BE", "nl"]);
-        Names(new FallbackInvariantParentCulture("zh-Hant-TW")).ShouldBe(["zh-Hant-TW", "zh-Hant", "zh"]);
+        Names(new FallbackInvariantParentCulture("zh-Hant-TW")).ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
         Names(new FallbackInvariantParentCulture("nl")).ShouldBe(["nl"]);
     }
 
@@ -52,7 +52,7 @@ public sealed class CultureFallbackTests
     public void Names_OfCultureName_ShouldDropSubtagsWithoutCreatingCulture()
     {
         // Arrange & Act & Assert: a language code, which under invariant globalization can't become a culture.
-        Names("zh-Hant-TW").ShouldBe(["zh-Hant-TW", "zh-Hant", "zh"]);
+        Names("zh-Hant-TW").ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
         Names("nl").ShouldBe(["nl"]);
         Should.Throw<ArgumentException>(() => Names(""));
     }
@@ -80,8 +80,37 @@ public sealed class CultureFallbackTests
         // Act
         var second = Names(new string("zh-Hant-TW"));
 
-        // Assert: the names that dropping a subtag gives are kept, so that a walk by name allocates nothing.
+        // Assert: the names that dropping a subtag or the script gives are kept, so that a walk by name allocates
+        // nothing.
         second[1].ShouldBeSameAs(first[1]);
         second[2].ShouldBeSameAs(first[2]);
+        second[3].ShouldBeSameAs(first[3]);
+    }
+
+    [Test]
+    public void Names_WithScript_ShouldTryNameWithoutScriptRightAfterIt()
+    {
+        // Arrange & Act & Assert: a platform can give a culture with its script, where an app declares the name without
+        // it. zh-TW writes in Hant (its parent culture), and pt-BR in Latin, so each is the same culture.
+        Names(CultureInfo.GetCultureInfo("zh-Hant-TW")).ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
+        Names(new CultureInfo("pt-Latn-BR"))[..2].ShouldBe(["pt-Latn-BR", "pt-BR"]);
+    }
+
+    [Test]
+    public void Names_WithScriptOfAnotherCulture_ShouldNotTryNameWithoutScript()
+    {
+        // Arrange & Act & Assert: zh-CN writes in Hans, not Hant, and sr-RS in Cyrillic, not Latin, which its month
+        // names show. Tried after the full name, they would give a user text in a script they didn't choose.
+        Names(CultureInfo.GetCultureInfo("zh-Hant-CN")).ShouldBe(["zh-Hant-CN", "zh-Hant", "zh"]);
+        Names(CultureInfo.GetCultureInfo("sr-Latn-RS")).ShouldBe(["sr-Latn-RS", "sr-Latn", "sr"]);
+        Names(CultureInfo.GetCultureInfo("sr-Cyrl-RS")).ShouldBe(["sr-Cyrl-RS", "sr-RS", "sr-Cyrl", "sr"]);
+    }
+
+    [Test]
+    public void Names_WithScriptAndNothingAfterIt_ShouldNotDropScript()
+    {
+        // Arrange & Act & Assert: without a script, zh-Hant would be zh, which is its parent anyway.
+        Names(CultureInfo.GetCultureInfo("zh-Hant")).ShouldBe(["zh-Hant", "zh"]);
+        Names("zh-Hant").ShouldBe(["zh-Hant", "zh"]);
     }
 }

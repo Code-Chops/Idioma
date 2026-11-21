@@ -4,9 +4,9 @@ namespace CodeChops.Idioma;
 /// Keeps the build from picking up a set or a member. A marked <see cref="ILocalizationSet">set</see> doesn't register
 /// itself, so it takes effect only once you pass it to
 /// <see cref="LocalizationRegistry.Register(ReadOnlySpan{ILocalizationSet})">LocalizationRegistry.Register</see>. A
-/// marked public property or method of the set of your default language isn't a text. The initializer of a marked
-/// property that holds a <see cref="LocalizableText"/> may hold wording that reads the same in every language,
-/// such as a name.
+/// marked public property or method of the set of your default language isn't a text. The initializer and the getter
+/// of a marked property that holds a <see cref="LocalizableText"/> may hold wording that reads the same in every
+/// language, such as a name.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -41,10 +41,11 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// <b>On a property that holds a text.</b> Mark a property whose wording reads the same in every language, such as a
-/// name. Its initializer may then hold that wording as a string:
-/// <c>[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = "Idioma";</c>. Without the
-/// attribute, that's build error <c>LOC500</c>. The build still checks what other code assigns to the property, so a
-/// marked component parameter still holds its callers to every language.
+/// name. Its initializer or its getter may then hold that wording as a string:
+/// <c>[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = "Idioma";</c>, or
+/// <c>=> "Idioma"</c>. Without the attribute, that's build error <c>LOC500</c>. The build still checks its setter and
+/// what other code assigns to the property, so a marked component parameter still holds its callers to every
+/// language.
 /// </para>
 /// </remarks>
 /// <example>

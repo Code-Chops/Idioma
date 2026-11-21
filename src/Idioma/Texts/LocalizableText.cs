@@ -33,8 +33,8 @@ namespace CodeChops.Idioma;
 /// <item>The wording for your app's default language. A culture your app doesn't declare starts here, even for a
 /// library's text that has that culture's language. So no screen ends up in two languages.</item>
 /// <item>The wording for the text's own default language, that of the project that wrote it. This is its
-/// <see cref="DefaultText"/>, unless a registered <see cref="ILocalizationSet">set</see> for that language rewords
-/// it.</item>
+/// <see cref="DefaultText"/>, which a registered <see cref="ILocalizationSet">set</see> for that language can
+/// reword.</item>
 /// </list>
 /// <para>
 /// To show the wording for another culture, such as the language of an email's recipient, call
@@ -104,7 +104,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
     public override string ToString()
     {
         if (this.HasOnlyDefaultText)
-            return this.DefaultText;
+            return this.OwnDefaultText;
 
         // A text among the values of a text being worded on this thread shows as that text does: for its culture, from
         // its sets, and with the format it chose for values.
@@ -232,7 +232,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
     internal string ToString(CultureInfo culture, LocalizationRegistry? registry, ImmutableArray<string> appLanguages)
     {
         if (this.HasOnlyDefaultText)
-            return this.DefaultText;
+            return this.OwnDefaultText;
 
         if (!this.TakesValues)
         {
@@ -252,20 +252,33 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
     }
 
     /// <summary>
-    /// The wording shown when the text has none for the user's language. That's the wording of the text's own default
-    /// language, or the only wording of a text without translations.
+    /// The wording in the text's own default language, or the only wording of a text without translations. A text
+    /// shows it last, when neither the user's language nor your app's default language has wording.
     /// </summary>
     /// <remarks>
-    /// A text of a set asks the set of its default language for it each time it's read. A text that takes values, such
-    /// as <c>ShopLocalization.Greeting(customer.Name)</c>, is worded with those values. A text among them shows in the
-    /// default language too.
+    /// <para>
+    /// A text of a set asks the sets of its default language for it each time it's read. So a set that rewords that
+    /// language gives this wording too, as it does for users: <c>MyShopLocalizationEn : ShopLocalizationEn</c> in your
+    /// app, or a set you registered yourself.
+    /// </para>
+    /// <para>
+    /// A text that takes values, such as <c>ShopLocalization.Greeting(customer.Name)</c>, is worded with those values. A
+    /// text among them shows in the default language too.
+    /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// When the set of the default language gives <see langword="null"/> as the wording. Return a string from it, such
     /// as an empty one where a value is missing. Also when the text takes values and that set has no language code
     /// (<c>LOC400</c>).
     /// </exception>
-    public string DefaultText => this._defaultText ?? this.WordDefaultText();
+    public string DefaultText => this._defaultText ?? this.WordDefaultText(LocalizationRegistry.Current);
+
+    /// <summary>
+    /// The wording of the text's own default language as the set it was declared with gives it, without the sets of a
+    /// registry. It's what a text shows when nothing else words it, also where a registry of its own has no set of
+    /// that language.
+    /// </summary>
+    private string OwnDefaultText => this._defaultText ?? this.WordDefaultText(registry: null);
     private readonly string? _defaultText; // Null only for a text of a set, which words its default wording itself (WordDefaultText).
 
     // A text made from a plain string, or declared by key alone: without translations of its own and without a
@@ -496,13 +509,13 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
 
     /// <summary>
     /// The wording this text shows for a culture none of its languages serves, for a copy that needs no sets. That's
-    /// the wording of the set registered for its own default language, else its <see cref="DefaultText"/>.
+    /// the wording of the set registered for its own default language, else that of the set it was declared with.
     /// </summary>
     internal string GetDefaultWording(LocalizationRegistry registry)
     {
         using var reader = this.EnterLanguage(this.DefaultLanguage, registry);
 
-        var defaultWording = this.FindDefaultTranslation(registry) ?? this.DefaultText;
+        var defaultWording = this.FindDefaultTranslation(registry) ?? this.OwnDefaultText;
         return defaultWording;
     }
 
@@ -568,7 +581,7 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
                ?? (showsCulture && lookup is not null ? this.FindTranslation(registry!, lookup) : null)
                ?? (appDefaultLanguage is null ? null : this.GetWording(appDefaultLanguage, registry))
                ?? (registry is null ? null : this.FindDefaultTranslation(registry))
-               ?? this.DefaultText;
+               ?? this.OwnDefaultText;
 
         return text;
     }
@@ -636,11 +649,15 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
     }
 
     /// <summary>
-    /// The default wording of a text of a set, which the set of its default language gives each time it's read.
+    /// The default wording of a text of a set, which the sets of its default language give each time it's read.
     /// </summary>
+    /// <param name="registry">
+    /// The sets that may reword the default language, or <see langword="null"/> for the wording of the set the text was
+    /// declared with alone.
+    /// </param>
     // Not kept once worded: a value is formatted for the culture of the moment, and a text the wording shows follows
     // the culture of its reader. Kept, the first reader's culture would stay in it for every reader after.
-    private string WordDefaultText()
+    private string WordDefaultText(LocalizationRegistry? registry)
     {
         var origin = this.Origin!;
         var set = origin.DefaultSet!;
@@ -649,7 +666,13 @@ public sealed partial class LocalizableText : IEquatable<LocalizableText>, IForm
         // From the sets of the whole app, where no text being worded gives others.
         using var scope = this.EnterLanguageUnlessServed(language, LocalizationRegistry.Current);
 
-        var wording = this.Select(set);
+        // A set that rewords the default language words it here as it does for a user, else the set it was declared
+        // with. Where the rewording gives null, that set's wording still stands.
+        var reworded = registry is null || language is null
+            ? null
+            : registry.FindWording(origin.Contract!, registry.ResolveLanguage(language), this);
+
+        var wording = reworded ?? this.Select(set);
 
         // A member of a set may hand on a value that's null at run time, such as a nickname from a database, though
         // it returns a string. Nothing is left to fall back to here, so the text says so rather than show null.

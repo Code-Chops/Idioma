@@ -69,7 +69,7 @@ The rest of this page sets up the parts the picker needs. A standalone Blazor We
 
 ### The culture endpoint on the server
 
-Every app with a server needs request localization, which gives each request the culture of its cookie, and the endpoint the picker calls. Add both to the server's `Program.cs`, before `app.MapRazorComponents`, with usings for `CodeChops.Idioma` and `Microsoft.AspNetCore.Localization`:
+Every app with a server needs request localization, which gives each request the culture of its cookie, and the endpoint the picker calls. Add both to the server's `Program.cs`, before `app.MapRazorComponents`, with usings for `CodeChops.Idioma`, `Microsoft.AspNetCore.Http.HttpResults` and `Microsoft.AspNetCore.Localization`:
 
 ```csharp
 app.UseRequestLocalization(options => options
@@ -85,8 +85,8 @@ app.MapGet("/culture/set", (string culture, string? returnUrl, HttpContext http)
             CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture)),
             new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // Without an expiry, the cookie ends with the browser session
 
-    // LocalRedirect refuses a URL to another site.
-    return returnUrl is null ? Results.NoContent() : Results.LocalRedirect(returnUrl);
+    // Only back to a page of this site, so the endpoint can't send a visitor elsewhere.
+    return returnUrl is not null && RedirectHttpResult.IsLocalUrl(returnUrl) ? Results.LocalRedirect(returnUrl) : Results.NoContent();
 });
 ```
 
