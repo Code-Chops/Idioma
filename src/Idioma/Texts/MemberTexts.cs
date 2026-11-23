@@ -2,17 +2,20 @@ using System.Reflection;
 
 namespace CodeChops.Idioma;
 
-// The half of LocalizableText for the texts of members: a property, a field, an enum member, or a type marked
-// [Localized]. A plain comment: the compiler merges the XML docs of every partial declaration, and the type's summary
-// lives in LocalizableText.cs.
-public sealed partial class LocalizableText
+/// <summary>
+/// Finds the texts of members marked <c>[Localized]</c>: a property, a field, an enum member, or a type. Each assembly
+/// records one function that gives a member's wording per language, and this class keeps what those functions find.
+/// <see cref="LocalizableText.GetTextByMember{T}(string)"/> and <see cref="LocalizableText.GetTextOfType{T}()"/> read
+/// from it.
+/// </summary>
+internal static class MemberTexts
 {
     /// <summary>
     /// What finds a member's text: one function per assembly that marks members <c>[Localized]</c>, and the texts
     /// found so far. Replaced as a whole when an assembly records its function, so that a member looked up before
     /// that isn't kept as one without a text.
     /// </summary>
-    private static MemberTextSources MemberTexts = new([]);
+    private static MemberTextSources Sources = new([]);
 
     /// <summary>
     /// The texts of the type this thread asked for last by a <see cref="Type"/>. A form asks for the labels of one
@@ -25,141 +28,40 @@ public sealed partial class LocalizableText
     private static TypeTexts? LastTextsByType;
 
     /// <summary>
-    /// The text of a member marked <c>[Localized]</c>, by the type that declares it and its name, or
-    /// <see langword="null"/> for a member without one.
-    /// <c>LocalizableText.GetTextByMember&lt;Address&gt;(nameof(Address.City))</c> gives the text of
-    /// <c>Address.City</c>.
+    /// The wording of a member of a type the code names, for the current UI culture, or <see langword="null"/> for a
+    /// member without a text.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A member is a property, a field, or a member of an enum. Mark it in the assembly that declares it:
-    /// <c>[Localized(en: "City", nl: "Plaats")]</c>. The source generator reads the wording as the assembly builds,
-    /// so nothing reads the attribute at run time.
-    /// </para>
-    /// <para>
-    /// A class without a text for the member gets that of its nearest base class. So an override without
-    /// <c>[Localized]</c> keeps the text of the property it overrides. An interface's texts aren't inherited.
-    /// </para>
-    /// <para>
-    /// The text is the same object on every call. Its <see cref="Key"/> is the member's name, and its
-    /// <see cref="FullKey"/> is the member's full name, such as <c>Shop.Domain.Address.City</c>.
-    /// </para>
-    /// <para>
-    /// For a value of an enum, <c>status.GetText()</c> gives its text without a name. For the text of a type itself,
-    /// call <see cref="GetTextOfType{T}()"/>.
-    /// </para>
-    /// </remarks>
-    /// <typeparam name="T">The type that declares the member, or one that derives from it.</typeparam>
-    /// <param name="memberName">The name of the member, in the same letter case, such as <c>nameof(Address.City)</c>.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="memberName"/> is <see langword="null"/>.</exception>
-    public static LocalizableText? GetTextByMember<T>(string memberName)
+    public static string? Find<T>(string memberName)
     {
-        ArgumentNullException.ThrowIfNull(memberName);
-
-        var text = FindTextsOf<T>().Find(memberName);
+        var text = FindTextsOf<T>().Find(memberName)?.Word();
         return text;
     }
 
     /// <summary>
-    /// The text of a member marked <c>[Localized]</c>, by a type your code only has at run time and the member's name,
-    /// or <see langword="null"/> for a member without one. Where your code knows the type, write
-    /// <see cref="GetTextByMember{T}(string)"/>.
+    /// The wording of a member of a type the code holds, for the current UI culture, or <see langword="null"/> for a
+    /// member without a text.
     /// </summary>
-    /// <remarks>
-    /// A type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of <c>Page&lt;T&gt;</c>.
-    /// </remarks>
-    /// <param name="type">The type that declares the member, or one that derives from it.</param>
-    /// <param name="memberName">The name of the member, in the same letter case.</param>
-    /// <exception cref="ArgumentNullException">
-    /// When <paramref name="type"/> or <paramref name="memberName"/> is <see langword="null"/>.
-    /// </exception>
-    public static LocalizableText? GetTextByMember(Type type, string memberName)
+    public static string? Find(Type type, string memberName)
     {
-        ArgumentNullException.ThrowIfNull(type);
-        ArgumentNullException.ThrowIfNull(memberName);
-
-        var text = FindTextsOf(type).Find(memberName);
+        var text = FindTextsOf(type).Find(memberName)?.Word();
         return text;
     }
 
     /// <summary>
-    /// The text of a member your code holds, such as the <see cref="PropertyInfo"/> of a form field, or
-    /// <see langword="null"/> for a member without one.
+    /// The wording of a type itself, for a type the code names, or <see langword="null"/> for a type without a text.
     /// </summary>
-    /// <remarks>
-    /// Only the member's name and the type that declares it are read. A <see cref="Type"/> is a member too, and gives
-    /// the text <see cref="GetTextOfType(Type)"/> gives.
-    /// </remarks>
-    /// <param name="member">A property, a field, a member of an enum, or a type.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="member"/> is <see langword="null"/>.</exception>
-    public static LocalizableText? GetTextByMember(MemberInfo member)
+    public static string? FindOwn<T>()
     {
-        ArgumentNullException.ThrowIfNull(member);
-
-        if (member is Type type)
-            return FindTextsOf(type).FindOwn();
-
-        var text = member.DeclaringType is { } declaringType
-            ? FindTextsOf(declaringType).Find(member.Name)
-            : null;
-
+        var text = FindTextsOf<T>().FindOwn()?.Word();
         return text;
     }
 
     /// <summary>
-    /// The text of a type marked <c>[Localized]</c> itself, such as the name of an enum, or <see langword="null"/>
-    /// for a type without one. <c>LocalizableText.GetTextOfType&lt;OrderStatus&gt;()</c> gives the text of
-    /// <c>OrderStatus</c>.
+    /// The wording of a type itself, for a type the code holds, or <see langword="null"/> for a type without a text.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A type's own text isn't inherited, so a class doesn't get the text of its base class.
-    /// </para>
-    /// <para>
-    /// The text is the same object on every call. Its <see cref="Key"/> is the type's name, and its
-    /// <see cref="FullKey"/> is the type's full name, such as <c>Shop.Domain.OrderStatus</c>.
-    /// </para>
-    /// </remarks>
-    /// <typeparam name="T">The type that is marked.</typeparam>
-    public static LocalizableText? GetTextOfType<T>()
+    public static string? FindOwn(Type type)
     {
-        var text = FindTextsOf<T>().FindOwn();
-        return text;
-    }
-
-    /// <summary>
-    /// The text of a type marked <c>[Localized]</c> itself, by a type your code only has at run time, or
-    /// <see langword="null"/> for a type without one. Where your code knows the type, write
-    /// <see cref="GetTextOfType{T}()"/>.
-    /// </summary>
-    /// <remarks>
-    /// A type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of <c>Page&lt;T&gt;</c>.
-    /// </remarks>
-    /// <param name="type">The type that is marked.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="type"/> is <see langword="null"/>.</exception>
-    public static LocalizableText? GetTextOfType(Type type)
-    {
-        ArgumentNullException.ThrowIfNull(type);
-
-        var text = FindTextsOf(type).FindOwn();
-        return text;
-    }
-
-    /// <summary>
-    /// Creates the text of a member marked <c>[Localized]</c>. <see cref="Internals.GeneratedCode.CreateMemberText"/>
-    /// calls this once per member, for the generated code that holds the text.
-    /// </summary>
-    internal static LocalizableText CreateMemberText(string fullKey, string key, ReadOnlySpan<(string Language, string Text)> wordings)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(fullKey);
-        ArgumentNullException.ThrowIfNull(key);
-
-        if (wordings.IsEmpty)
-            throw new ArgumentException($"The text '{fullKey}' needs a wording in its default language.", nameof(wordings));
-
-        var inline = FromGeneratedCode(wordings[0].Text, wordings);
-        var text = new LocalizableText(inline) { Origin = new MemberTextOrigin(fullKey, key) };
-
+        var text = FindTextsOf(type).FindOwn()?.Word();
         return text;
     }
 
@@ -167,9 +69,12 @@ public sealed partial class LocalizableText
     /// Adds the function that finds the texts of an assembly's members.
     /// <see cref="Internals.GeneratedCode.RecordMemberTexts"/> calls this when the assembly registers.
     /// </summary>
-    internal static void RecordMemberTexts(Func<Type, string?, LocalizableText?> find)
+    public static void Record(string[] languages, Func<Type, string?, string[]?> find)
     {
+        ArgumentNullException.ThrowIfNull(languages);
         ArgumentNullException.ThrowIfNull(find);
+
+        var finder = new MemberTextFinder(languages, find);
 
         // A new whole, without the texts found so far: a member looked up before its assembly registered was kept as
         // one without a text. A lookup that started on the old whole keeps what it finds there, where no one reads it.
@@ -177,10 +82,10 @@ public sealed partial class LocalizableText
 
         do
         {
-            current = Volatile.Read(ref MemberTexts);
-            next = new MemberTextSources([.. current.Finders, find]);
+            current = Volatile.Read(ref Sources);
+            next = new MemberTextSources([.. current.Finders, finder]);
         }
-        while (!ReferenceEquals(Interlocked.CompareExchange(ref MemberTexts, next, current), current));
+        while (!ReferenceEquals(Interlocked.CompareExchange(ref Sources, next, current), current));
     }
 
     /// <summary>
@@ -191,7 +96,7 @@ public sealed partial class LocalizableText
         var texts = TextsOf<T>.Value;
 
         // Found again when an assembly recorded its texts since: what was found before may lack one of them.
-        if (texts is null || !ReferenceEquals(texts.Sources, Volatile.Read(ref MemberTexts)))
+        if (texts is null || !ReferenceEquals(texts.Sources, Volatile.Read(ref Sources)))
             TextsOf<T>.Value = texts = FindTextsOf(typeof(T));
 
         return texts;
@@ -202,7 +107,7 @@ public sealed partial class LocalizableText
     /// </summary>
     private static TypeTexts FindTextsOf(Type type)
     {
-        var sources = Volatile.Read(ref MemberTexts);
+        var sources = Volatile.Read(ref Sources);
         var last = LastTextsByType;
 
         if (last is not null && ReferenceEquals(last.Type, type) && ReferenceEquals(last.Sources, sources))
@@ -229,11 +134,44 @@ public sealed partial class LocalizableText
     }
 
     /// <summary>
+    /// The function that finds the texts of one assembly's members, with the languages of that assembly, the default
+    /// first.
+    /// </summary>
+    private sealed class MemberTextFinder(string[] languages, Func<Type, string?, string[]?> find)
+    {
+        public string[] Languages { get; } = languages;
+
+        /// <summary>
+        /// Gives the wording of a member per language, in the order of <see cref="Languages"/>, or
+        /// <see langword="null"/> for what has no text.
+        /// </summary>
+        public Func<Type, string?, string[]?> Find { get; } = find;
+    }
+
+    /// <summary>
+    /// The text of one member: its wording per language of its assembly.
+    /// </summary>
+    private sealed class MemberText(string[] languages, string[] wordings)
+    {
+        /// <summary>
+        /// The wording for the current UI culture.
+        /// </summary>
+        public string Word()
+        {
+            var index = InlineLanguage.Find(languages);
+
+            // A wording per language, as the generator writes them. Fewer would be code written by hand.
+            var wording = wordings[index < wordings.Length ? index : 0];
+            return wording;
+        }
+    }
+
+    /// <summary>
     /// The functions that find a member's text, and the texts found so far, by type.
     /// </summary>
-    private sealed class MemberTextSources(Func<Type, string?, LocalizableText?>[] finders)
+    private sealed class MemberTextSources(MemberTextFinder[] finders)
     {
-        public Func<Type, string?, LocalizableText?>[] Finders { get; } = finders;
+        public MemberTextFinder[] Finders { get; } = finders;
 
         /// <summary>
         /// The texts found for each type that was asked for. A type with type arguments, such as
@@ -245,15 +183,15 @@ public sealed partial class LocalizableText
         /// Asks every function for the member of the type, and then of each class it derives from. A type's own text
         /// is asked of the type alone.
         /// </summary>
-        public LocalizableText? Find(Type type, string? member)
+        public MemberText? Find(Type type, string? member)
         {
             for (var current = type; current is not null && current != typeof(object); current = member is null ? null : current.BaseType)
             {
                 var definition = current.IsConstructedGenericType ? current.GetGenericTypeDefinition() : current;
 
-                foreach (var find in this.Finders)
-                    if (find(definition, member) is { } text)
-                        return text;
+                foreach (var finder in this.Finders)
+                    if (finder.Find(definition, member) is { Length: > 0 } wordings)
+                        return new MemberText(finder.Languages, wordings);
             }
 
             return null;
@@ -306,13 +244,13 @@ public sealed partial class LocalizableText
         // half of them. Two threads that add a name at once may lose one, which is then found anew.
         private volatile MemberTable _table = MemberTable.Empty;
 
-        private LocalizableText? _ownText;
+        private MemberText? _ownText;
         private volatile bool _hasOwnText;
 
         /// <summary>
         /// The text of the type itself.
         /// </summary>
-        public LocalizableText? FindOwn()
+        public MemberText? FindOwn()
         {
             if (this._hasOwnText)
                 return this._ownText;
@@ -328,14 +266,14 @@ public sealed partial class LocalizableText
         /// <summary>
         /// The text of a member, by its name.
         /// </summary>
-        public LocalizableText? Find(string member)
+        public MemberText? Find(string member)
         {
             var kept = this._table;
             var names = kept.Names;
             var mask = names.Length - 1;
 
-            // Written out here, as in FindOrCreateInline, because a call costs more than this in WebAssembly's
-            // interpreter. MemberTable.Hash is the same.
+            // Written out here, because a call costs more than this in WebAssembly's interpreter. MemberTable.Hash is
+            // the same.
             var length = member.Length;
             var hash = length is 0 ? 0 : (length * 31) + (member[0] * 7) + (member[length / 2] * 3) + member[length - 1];
 
@@ -359,15 +297,15 @@ public sealed partial class LocalizableText
     /// </summary>
     private sealed class MemberTable
     {
-        public static MemberTable Empty { get; } = new(new string?[8], new LocalizableText?[8], count: 0);
+        public static MemberTable Empty { get; } = new(new string?[8], new MemberText?[8], count: 0);
 
         // Two arrays, and not one of pairs: an array of a struct of two is code the runtime compiles when the app
         // starts, where arrays of objects are there already.
         public string?[] Names { get; }
-        public LocalizableText?[] Texts { get; }
+        public MemberText?[] Texts { get; }
         public int Count { get; }
 
-        private MemberTable(string?[] names, LocalizableText?[] texts, int count)
+        private MemberTable(string?[] names, MemberText?[] texts, int count)
         {
             this.Names = names;
             this.Texts = texts;
@@ -378,11 +316,11 @@ public sealed partial class LocalizableText
         /// This table with one name more. At most half of its places are taken, so that a search is short and always
         /// ends.
         /// </summary>
-        public MemberTable With(string name, LocalizableText? text)
+        public MemberTable With(string name, MemberText? text)
         {
             var size = (this.Count + 1) * 2 > this.Names.Length ? this.Names.Length * 2 : this.Names.Length;
             var names = new string?[size];
-            var texts = new LocalizableText?[size];
+            var texts = new MemberText?[size];
 
             for (var i = 0; i < this.Names.Length; i++)
                 if (this.Names[i] is { } kept)
@@ -393,7 +331,7 @@ public sealed partial class LocalizableText
             return new MemberTable(names, texts, this.Count + 1);
         }
 
-        private static void Put(string?[] names, LocalizableText?[] texts, string name, LocalizableText? text)
+        private static void Put(string?[] names, MemberText?[] texts, string name, MemberText? text)
         {
             var mask = names.Length - 1;
             var place = Hash(name) & mask;

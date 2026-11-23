@@ -30,8 +30,12 @@ public sealed class PackageNamesTests
             .Select(static field => (DiagnosticDescriptor)field.GetValue(null)!)
             .ToArray();
 
-        // Assert: all thirty codes, some of which two descriptors share.
-        descriptors.Select(static descriptor => descriptor.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(30);
+        // Assert: all twenty-nine codes, some of which two descriptors share. LOC303 and LOC500 are no longer
+        // reported, because a text is a string.
+        var codes = descriptors.Select(static descriptor => descriptor.Id).Distinct(StringComparer.Ordinal).ToArray();
+        codes.Length.ShouldBe(29);
+        codes.Contains("LOC303", StringComparer.Ordinal).ShouldBeFalse();
+        codes.Contains("LOC500", StringComparer.Ordinal).ShouldBeFalse();
 
         foreach (var descriptor in descriptors)
             descriptor.HelpLinkUri.ShouldBe(PackageNames.HelpLink(descriptor.Id), descriptor.Id);

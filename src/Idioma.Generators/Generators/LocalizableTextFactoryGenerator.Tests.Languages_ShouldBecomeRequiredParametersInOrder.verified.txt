@@ -6,28 +6,38 @@
 // the type, also by its full name in a file without a using for its namespace.
 
 /// <summary>
-/// Creates texts in every language of this assembly's <see cref="CodeChops.Idioma.SupportedLanguagesAttribute"/>.
+/// Writes texts in every language of this assembly's <see cref="CodeChops.Idioma.SupportedLanguagesAttribute"/>.
 /// </summary>
 [Microsoft.CodeAnalysis.EmbeddedAttribute]
 internal static class GeneratedLocalizableText
 {
+    // The languages, the default first, as the package picks one of them by its position. One array for
+    // every call, which the package tells apart by reference.
+    private static readonly string[] Languages = ["en", "nl", "de"];
+
     extension(CodeChops.Idioma.LocalizableText)
     {
         /// <summary>
         /// A text in every language this assembly supports: <c>LocalizableText.Inline(en: "...", nl: "...", de: "...")</c>.
-        /// It shows the wording for the current UI culture. A culture that none of them serves gets the wording in the app's
+        /// It gives the wording for the current UI culture. A culture that none of them serves gets the wording in the app's
         /// default language, else the <c>en</c> wording.
         /// </summary>
         /// <remarks>
         /// Name each argument after its language. An unnamed one is a build error (<c>LOC501</c>), because two swapped languages
         /// would go unnoticed. To include a value, write it into every language, as in <c>$"Hello, {name}!"</c>.
+        /// The string holds the wording of the moment it's made, so call this where you show the text.
         /// </remarks>
         /// <param name="en">The wording in <c>en</c>.</param>
         /// <param name="nl">The wording in <c>nl</c>.</param>
         /// <param name="de">The wording in <c>de</c>.</param>
-        public static CodeChops.Idioma.LocalizableText Inline(string en, string nl, string de)
+        public static string Inline(string en, string nl, string de)
         {
-            return CodeChops.Idioma.Internals.GeneratedCode.CreateText(en, ("en", en), ("nl", nl), ("de", de));
+            return CodeChops.Idioma.Internals.GeneratedCode.FindLanguage(Languages) switch
+            {
+                1 => nl ?? throw new System.ArgumentNullException(nameof(nl)),
+                2 => de ?? throw new System.ArgumentNullException(nameof(de)),
+                _ => en ?? throw new System.ArgumentNullException(nameof(en)),
+            };
         }
     }
 }

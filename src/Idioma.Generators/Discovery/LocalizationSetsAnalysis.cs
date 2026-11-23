@@ -535,7 +535,6 @@ internal sealed record LocalizationSetsAnalysis(
                 IsPublic: set.IsPublic,
                 ContractName: contractName,
                 TextsName: baseName,
-                KeyPrefix: GetKeyPrefix(set.Namespace, baseName),
                 Members: set.Texts,
                 Sets: new EquatableArray<SetLink>(links),
                 HasTexts: hasTexts,
@@ -936,21 +935,6 @@ internal sealed record LocalizationSetsAnalysis(
         var baseName = name.Length > 1 && name[0] == 'I' && Char.IsUpper(name[1]) ? name.Substring(1) : name;
         return baseName;
     }
-
-    /// <summary>
-    /// What the resource key of every text of a contract starts with: the full name of the generated class that holds
-    /// the texts, and a dot. <c>MyApp.Localization.ShopLocalization.</c> for <c>ShopLocalizationEn</c> in the namespace
-    /// <c>MyApp.Localization</c>, so that a key is the full name of its text
-    /// (<c>MyApp.Localization.ShopLocalization.Checkout</c>).
-    /// </summary>
-    // The full name, and not the class alone or a part of it: two sets of one name in different namespaces, or in two
-    // assemblies, then have keys of their own, as their generated classes have names of their own. Without the @ of an
-    // escaped keyword (namespace Shop.@event): a key is a name, not code.
-    private static string GetKeyPrefix(string @namespace, string baseName)
-    {
-        var prefix = @namespace.Length > 0 ? $"{@namespace.Replace("@", "")}.{baseName}." : $"{baseName}.";
-        return prefix;
-    }
 }
 
 /// <summary>
@@ -969,7 +953,6 @@ internal sealed record LocalizationContract(
     bool IsPublic,
     string ContractName,
     string TextsName,
-    string KeyPrefix,
     EquatableArray<LocalizationMember> Members,
     EquatableArray<SetLink> Sets,
     bool HasTexts,

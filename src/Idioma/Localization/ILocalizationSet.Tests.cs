@@ -93,6 +93,7 @@ public sealed class ILocalizationSetTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void LanguageCode_ShouldPreferCodeRecordedForSetOrSetItDerivesFrom()
     {
         // Arrange: what the generated registrar does for a set named after a declared code.
@@ -108,6 +109,7 @@ public sealed class ILocalizationSetTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void RecordSet_ShouldThrowForSecondCodeAndKeepFirst()
     {
         // Arrange & Act: a set's language must not change, so a second code is refused.
@@ -119,6 +121,7 @@ public sealed class ILocalizationSetTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void RecordSet_ShouldIgnoreSameCodeRecordedAgain()
     {
         // Arrange & Act: in another letter case too, which gives the same culture name.
@@ -140,6 +143,7 @@ public sealed class ILocalizationSetTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void RecordSet_ShouldWriteCodeAsCultureName()
     {
         // Arrange & Act

@@ -16,7 +16,7 @@ namespace CodeChops.Idioma.Generated
     {
         internal static void Register()
         {
-            CodeChops.Idioma.Internals.GeneratedCode.RecordMemberTexts(static (type, member) => OwnLocalizedMembers.Find(type, member));
+            CodeChops.Idioma.Internals.GeneratedCode.RecordMemberTexts(OwnLocalizedMembers.Languages, static (type, member) => OwnLocalizedMembers.Find(type, member));
         }
     }
 }
@@ -28,9 +28,20 @@ namespace CodeChops.Idioma.Generated
 file static class OwnLocalizedMembers
 {
     /// <summary>
-    /// The text of a member of a type, or the type's own text for a member that is <see langword="null"/>.
+    /// The languages of this assembly, the default first. Each text below has its wording in this order.
     /// </summary>
-    internal static CodeChops.Idioma.LocalizableText? Find(System.Type type, string? member)
+    internal static readonly string[] Languages = ["en", "nl"];
+
+    /// <summary>
+    /// The wording of a text for the current UI culture.
+    /// </summary>
+    internal static string Word(string[] wordings) => wordings[CodeChops.Idioma.Internals.GeneratedCode.FindLanguage(Languages)];
+
+    /// <summary>
+    /// The wording of a member of a type per language, in the order of <see cref="Languages"/>, or the type's own for a member that is
+    /// <see langword="null"/>.
+    /// </summary>
+    internal static string[]? Find(System.Type type, string? member)
     {
         if (type == typeof(Shop.Domain.Address))
         {
@@ -62,8 +73,8 @@ file static class OwnLocalizedMembers
 /// </summary>
 file static class LocalizedTexts0
 {
-    internal static readonly CodeChops.Idioma.LocalizableText Text0 = CodeChops.Idioma.Internals.GeneratedCode.CreateMemberText("Shop.Domain.Address.City", "City", ("en", "City"), ("nl", "Plaats"));
-    internal static readonly CodeChops.Idioma.LocalizableText Text1 = CodeChops.Idioma.Internals.GeneratedCode.CreateMemberText("Shop.Domain.Address.PostalCode", "PostalCode", ("en", "Postal code"), ("nl", "Postcode"));
+    internal static readonly string[] Text0 = ["City", "Plaats"];
+    internal static readonly string[] Text1 = ["Postal code", "Postcode"];
 }
 
 /// <summary>
@@ -71,15 +82,15 @@ file static class LocalizedTexts0
 /// </summary>
 file static class LocalizedTexts1
 {
-    internal static readonly CodeChops.Idioma.LocalizableText OwnText = CodeChops.Idioma.Internals.GeneratedCode.CreateMemberText("Shop.Domain.PackageStatus", "PackageStatus", ("en", "Status"), ("nl", "Status"));
-    internal static readonly CodeChops.Idioma.LocalizableText Text0 = CodeChops.Idioma.Internals.GeneratedCode.CreateMemberText("Shop.Domain.PackageStatus.Assigned", "Assigned", ("en", "Assigned"), ("nl", "Toegewezen"));
-    internal static readonly CodeChops.Idioma.LocalizableText Text1 = CodeChops.Idioma.Internals.GeneratedCode.CreateMemberText("Shop.Domain.PackageStatus.Picked", "Picked", ("en", "Picked"), ("nl", "Gepickt"));
+    internal static readonly string[] OwnText = ["Status", "Status"];
+    internal static readonly string[] Text0 = ["Assigned", "Toegewezen"];
+    internal static readonly string[] Text1 = ["Picked", "Gepickt"];
 
-    internal static CodeChops.Idioma.LocalizableText Get(Shop.Domain.PackageStatus value) => value switch
+    internal static string Get(Shop.Domain.PackageStatus value) => value switch
     {
-        Shop.Domain.PackageStatus.Assigned => Text0,
-        Shop.Domain.PackageStatus.Picked => Text1,
-        _ => CodeChops.Idioma.Internals.GeneratedCode.CreateUndefinedEnumText<Shop.Domain.PackageStatus>(value),
+        Shop.Domain.PackageStatus.Assigned => OwnLocalizedMembers.Word(Text0),
+        Shop.Domain.PackageStatus.Picked => OwnLocalizedMembers.Word(Text1),
+        _ => value.ToString(),
     };
 }
 
@@ -100,7 +111,7 @@ namespace Shop.Domain
             /// A value without such a member shows as <c>ToString()</c> writes it. That's a member that isn't marked, or a value that isn't a
             /// member, such as a combination of flags.
             /// </remarks>
-            public CodeChops.Idioma.LocalizableText GetText() => LocalizedTexts1.Get(value);
+            public string GetText() => LocalizedTexts1.Get(value);
         }
     }
 }

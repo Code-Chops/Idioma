@@ -80,7 +80,7 @@ public sealed class LocalizedMemberAnalyzerTests
 
         public static class Labels
         {
-            public static LocalizableText? Of(System.Type type, string member, System.Reflection.PropertyInfo property) => {{call}};
+            public static string? Of(System.Type type, string member, System.Reflection.PropertyInfo property) => {{call}};
         }
         """;
     #endregion
@@ -255,6 +255,33 @@ public sealed class LocalizedMemberAnalyzerTests
 
         // Assert
         diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task AttributeWrittenThroughAnAlias_ShouldReportLOC505()
+    {
+        // Arrange & Act: the attribute compiles under its alias, and the source generator finds it by its name alone.
+        var diagnostic = await SingleCannotRegisterAsync("""
+            using CodeChops.Idioma;
+            using Label = LocalizedAttribute;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace Shop.Domain;
+
+            public class Address
+            {
+                [Label(en: "City", nl: "Plaats")]
+                public string City { get; set; } = "";
+
+                [Localized(en: "Street", nl: "Straat")]
+                public string Street { get; set; } = "";
+            }
+            """);
+
+        // Assert
+        At(diagnostic).ShouldBe("""Label(en: "City", nl: "Plaats")""");
+        diagnostic.GetMessage().ShouldBe("The text of 'City' can't be registered because the attribute is written as 'Label', an alias the source generator doesn't follow, so it won't be found. Write it as [Localized].");
     }
 
     [Test]
@@ -549,9 +576,9 @@ public sealed class LocalizedMemberAnalyzerTests
 
             public static class Labels
             {
-                public static LocalizableText? Of<T>() => LocalizableText.GetTextByMember<T>("Name");
+                public static string? Of<T>() => LocalizableText.GetTextByMember<T>("Name");
 
-                public static LocalizableText? OfType<T>() => LocalizableText.GetTextOfType<T>();
+                public static string? OfType<T>() => LocalizableText.GetTextOfType<T>();
             }
             """);
 
@@ -587,9 +614,9 @@ public sealed class LocalizedMemberAnalyzerTests
 
             public static class Labels
             {
-                public static LocalizableText? City => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.City));
-                public static LocalizableText? Street => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.Street));
-                public static LocalizableText? Inherited => LocalizableText.GetTextByMember<Delivery>(nameof(Delivery.City));
+                public static string? City => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.City));
+                public static string? Street => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.Street));
+                public static string? Inherited => LocalizableText.GetTextByMember<Delivery>(nameof(Delivery.City));
             }
             """, [library]);
 
@@ -612,7 +639,7 @@ public sealed class LocalizedMemberAnalyzerTests
             public static class Labels
             {
             #pragma warning disable LOC504 // No label yet
-                public static LocalizableText? Street => LocalizableText.GetTextByMember<Address>(nameof(Address.Street));
+                public static string? Street => LocalizableText.GetTextByMember<Address>(nameof(Address.Street));
             #pragma warning restore LOC504
             }
             """);

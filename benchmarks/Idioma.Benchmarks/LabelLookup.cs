@@ -46,19 +46,19 @@ public class LabelLookup
     public string? Display_ReadFromProperty() => Checkout.GetCustomAttribute<DisplayAttribute>()!.GetName();
 
     [Benchmark]
-    public string Localized_PropertyByTypeAndName() => LocalizableText.GetTextByMember<LabelledOrder>(nameof(LabelledOrder.Checkout))!.ToString();
+    public string Localized_PropertyByTypeAndName() => LocalizableText.GetTextByMember<LabelledOrder>(nameof(LabelledOrder.Checkout))!;
 
     [Benchmark]
-    public string Localized_PropertyByPropertyInfo() => LocalizableText.GetTextByMember(Checkout)!.ToString();
+    public string Localized_PropertyByPropertyInfo() => LocalizableText.GetTextByMember(Checkout)!;
 
     [Benchmark]
-    public string Localized_Type() => LocalizableText.GetTextOfType<LabelledOrder>()!.ToString();
+    public string Localized_Type() => LocalizableText.GetTextOfType<LabelledOrder>()!;
 
     [Benchmark]
-    public string Localized_EnumValue() => this.parcelStatus.GetText().ToString();
+    public string Localized_EnumValue() => this.parcelStatus.GetText();
 
     [Benchmark]
-    public string SetOfEnum_EnumValue() => this.orderState.GetText().ToString();
+    public string SetOfEnum_EnumValue() => this.orderState.GetText();
 
     /// <summary>
     /// Throws when an approach shows other wording than expected for a Dutch user, so that no approach is timed doing

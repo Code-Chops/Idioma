@@ -41,10 +41,7 @@ public class TextLookup
     public string IdiomaSet_Checkout() => this.scenarios.IdiomaSetCheckout();
 
     [Benchmark, BenchmarkCategory(Checkout)]
-    public string IdiomaInlineInField_Checkout() => this.scenarios.IdiomaInlineInFieldCheckout();
-
-    [Benchmark, BenchmarkCategory(Checkout)]
-    public string IdiomaInlineInMarkup_Checkout() => this.scenarios.IdiomaInlineInMarkupCheckout();
+    public string IdiomaInline_Checkout() => this.scenarios.IdiomaInlineCheckout();
 
     [Benchmark, BenchmarkCategory(Checkout)]
     public string IdiomaAttribute_Checkout() => this.scenarios.IdiomaAttributeCheckout();
@@ -56,10 +53,7 @@ public class TextLookup
     public string IdiomaSet_Cart() => this.scenarios.IdiomaSetCart();
 
     [Benchmark, BenchmarkCategory(Cart)]
-    public string IdiomaInlineInField_Cart() => this.scenarios.IdiomaInlineInFieldCart();
-
-    [Benchmark, BenchmarkCategory(Cart)]
-    public string IdiomaInlineInMarkup_Cart() => this.scenarios.IdiomaInlineInMarkupCart();
+    public string IdiomaInline_Cart() => this.scenarios.IdiomaInlineCart();
 
     [Benchmark, BenchmarkCategory(Cart)]
     public string IdiomaAttribute_Cart() => this.scenarios.IdiomaAttributeCart();
@@ -71,10 +65,7 @@ public class TextLookup
     public string IdiomaSet_Greeting() => this.scenarios.IdiomaSetGreeting();
 
     [Benchmark, BenchmarkCategory(Greeting)]
-    public string IdiomaInlineInField_Greeting() => this.scenarios.IdiomaInlineInFieldGreeting();
-
-    [Benchmark, BenchmarkCategory(Greeting)]
-    public string IdiomaInlineInMarkup_Greeting() => this.scenarios.IdiomaInlineInMarkupGreeting();
+    public string IdiomaInline_Greeting() => this.scenarios.IdiomaInlineGreeting();
 }
 
 internal static class Localizers

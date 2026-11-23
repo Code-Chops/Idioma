@@ -49,8 +49,12 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
             }
             """;
 
-        // Act
-        var fixes = await FixAsync($"{Header}\n\n{set}");
+        // Act: written with the line endings of this file, as the expected source below is.
+        var fixes = await FixAsync($$"""
+            {{Header}}
+
+            {{set}}
+            """);
 
         // Assert: the texts implement the contract, and ToString() still overrides.
         var fix = fixes.ShouldHaveSingleItem();

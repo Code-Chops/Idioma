@@ -40,26 +40,26 @@ public interface IOrderStatusLocalization
 
 public static partial class OrderStatusLocalization
 {
-    public static LocalizableText Pending { get; } = ...; // Its key is "Pending"
-    public static LocalizableText Shipped { get; } = ...; // Its key is "Shipped"
+    public static string Pending => ...; // The wording of the set for the user's language
+    public static string Shipped => ...;
 
-    public static LocalizableText GetTextByValue(OrderStatus value) => value switch
+    public static string GetTextByValue(OrderStatus value) => value switch
     {
         OrderStatus.Pending => Pending,
         OrderStatus.Shipped => Shipped,
-        _ => ..., // A text that shows value.ToString()
+        _ => value.ToString(),
     };
 
     extension(OrderStatus value)
     {
-        public LocalizableText GetText() => GetTextByValue(value); // order.Status.GetText()
+        public string GetText() => GetTextByValue(value); // order.Status.GetText()
     }
 }
 ```
 
 The contract takes its members from the enum, and not only from the default-language set. So a member without a text is build error `CS0535` in every language, the default language too. Your IDE's "Implement interface" writes the missing properties.
 
-`GetTextByValue` returns the text the class already holds, so a call allocates nothing. The text follows the user's language like any other text. `order.Status.GetText()` gives the same text, and is in reach wherever the namespace of the set is.
+`GetTextByValue` gives the wording for the user's language, as the text itself does, and allocates nothing. `order.Status.GetText()` gives the same, and is in reach wherever the namespace of the set is.
 
 What else to know:
 
@@ -100,11 +100,11 @@ public static class ParcelStatusLocalizedExtensions
 {
     extension(ParcelStatus value)
     {
-        public LocalizableText GetText() => value switch
+        public string GetText() => value switch
         {
-            ParcelStatus.Picked => ...,    // en: Picked, nl: Gepickt. Its key is "Picked"
-            ParcelStatus.Delivered => ..., // en: Delivered, nl: Bezorgd. Its key is "Delivered"
-            _ => ...,                      // A text that shows value.ToString()
+            ParcelStatus.Picked => ...,    // en: Picked, nl: Gepickt
+            ParcelStatus.Delivered => ..., // en: Delivered, nl: Bezorgd
+            _ => value.ToString(),
         };
     }
 }

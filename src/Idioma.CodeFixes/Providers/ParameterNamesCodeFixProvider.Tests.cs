@@ -198,6 +198,20 @@ public sealed class ParameterNamesCodeFixProviderTests
     }
 
     [Test]
+    public async Task NamesTheOtherWayRoundOnParametersOfDifferentTypes_ShouldGetNoFix()
+    {
+        // Arrange & Act: the contract's names swapped over a number and a string. The body is written for the
+        // positions, so moving the names alone would show the shop where the count belongs.
+        var fixes = await FixAsync(Sets($$"""
+            {{DutchInvited}}
+            public string ItemsInCart(int shop, string count) => $"{shop} artikelen bij {count}";
+            """));
+
+        // Assert
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
     [Arguments("""public string ItemsInCart(int aantal, string shop) { var count = aantal; return $"{count} artikelen bij {shop}"; }""")]
     [Arguments("""public string ItemsInCart(int aantal, string shop) => $"{aantal} van {count} artikelen bij {shop}"; private int count = 3;""")]
     public async Task NewNameThatTheMethodUses_ShouldGetNoFix(string dutch)
@@ -269,7 +283,10 @@ public sealed class ParameterNamesCodeFixProviderTests
 
         // Assert
         var expected = Sets(
-            $"{DutchInvited}\n{DutchItemsInCart}",
+            $$"""
+            {{DutchInvited}}
+            {{DutchItemsInCart}}
+            """,
             """public override string ItemsInCart(int count, string shop) => $"{count} items in your basket at {shop}";""");
 
         fixedSource.ShouldBe(expected);

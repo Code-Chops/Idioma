@@ -22,8 +22,8 @@ namespace CodeChops.Idioma;
 /// <c>public class ShopLocalizationNl : ILocalizationSet, IShopLocalization</c>. A missing set is build error
 /// <c>LOC201</c>. A missing text is build error <c>CS0535</c>.</item>
 /// <item>Show a text through the generated class. Write <c>@ShopLocalization.Checkout</c> in markup, or
-/// <c>ShopLocalization.Checkout</c> wherever a <see cref="LocalizableText"/> or a <see cref="string"/> is
-/// expected.</item>
+/// <c>ShopLocalization.Checkout</c> wherever a <see cref="string"/> is expected. It gives the wording for the user's
+/// language at that moment, so read it where you show it.</item>
 /// </list>
 /// <para>
 /// Every set lists both interfaces, because the contract doesn't derive from this one. A set that lists only this
@@ -87,9 +87,6 @@ namespace CodeChops.Idioma;
 /// (<c>LOC301</c>).</item>
 /// <item>Every language uses every value the default wording shows (<c>LOC302</c>).</item>
 /// <item>A method the generated class can't repeat, such as a generic one, is build error <c>LOC300</c>.</item>
-/// <item>A text passed to a <see cref="string"/> parameter is build warning <c>LOC303</c>, because it keeps the wording
-/// of the language in use at the call. A parameter that takes a text is a <see cref="LocalizableText"/>, and your IDE
-/// changes its type in every set.</item>
 /// <item>A placeholder such as <c>{0}</c> in a wording is build warning <c>LOC502</c>, because nothing fills it in.
 /// Your IDE turns such a text into a method that takes the value.</item>
 /// </list>
@@ -99,9 +96,8 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// <b>Texts by key.</b> The generated class also gets the method <c>GetTextByKey</c>, for a text your code only knows by its
-/// name at run time: <c>ShopLocalization.GetTextByKey("Checkout")</c>. The key is the text's
-/// <see cref="LocalizableText.Key"/>. <c>GetTextByKey</c> returns the text, the same one as
-/// <c>ShopLocalization.Checkout</c>. A text with parameters takes its values after the key, as in
+/// name at run time: <c>ShopLocalization.GetTextByKey("Checkout")</c>. The key is the text's name, in the same letter
+/// case. <c>GetTextByKey</c> returns what <c>ShopLocalization.Checkout</c> returns. A text with parameters takes its values after the key, as in
 /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c>. A key no text has throws
 /// <see cref="KeyNotFoundException"/>. No text can be named <c>GetTextByKey</c> (<c>LOC205</c>).
 /// </para>

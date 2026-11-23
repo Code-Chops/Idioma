@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// Writes <c>LocalizableText.Inline</c> for the languages of <c>[assembly: SupportedLanguages(...)]</c>, one required
 /// parameter per language, so that leaving a language out is a compile error. It is a static extension on the one shared
-/// <c>LocalizableText</c>, because a type of its own per assembly could not cross into a library's API. It reports
+/// <c>LocalizableText</c>, so that every assembly writes a text the same way, whatever its languages. It reports
 /// <c>LOC101</c> for an invalid or repeated language, and still writes the factory for the valid ones, so that error
 /// stays the only one wherever no call names the language that is wrong. Next to the factory it writes the attribute
 /// <c>[Localized]</c>, with the same parameters, which puts a text on a member.
@@ -290,9 +290,15 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
     {
         var defaultParameter = SupportedLanguages.ToParameterName(codes[0]);
         var parameters = String.Join(", ", codes.Select(static code => $"string {SupportedLanguages.ToParameterName(code)}"));
-        // The default language too, under its own code: listed with a language that serves it (en-GB with en), it would
-        // otherwise resolve through that language's entry before reaching the default text.
-        var translations = String.Concat(codes.Select(static code => $", (\"{code}\", {SupportedLanguages.ToParameterName(code)})"));
+        var languages = String.Join(", ", codes.Select(static code => SymbolDisplay.FormatLiteral(code, quote: true)));
+
+        // The wording of the language the package picks, by its position among the languages. Only that wording is
+        // checked for null, because the others aren't read.
+        var wordings = codes.Skip(1).Select(static (code, index) =>
+        {
+            var parameter = SupportedLanguages.ToParameterName(code);
+            return $"                {index + 1} => {parameter} ?? throw new System.ArgumentNullException(nameof({parameter})),";
+        });
         var sample = String.Join(", ", codes.Select(static code => $"{SupportedLanguages.ToParameterName(code)}: \"...\""));
 
         var sb = new StringBuilder();
@@ -305,21 +311,26 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
             // the type, also by its full name in a file without a using for its namespace.
 
             /// <summary>
-            /// Creates texts in every language of this assembly's <see cref="{{PackageNames.SupportedLanguagesAttribute}}"/>.
+            /// Writes texts in every language of this assembly's <see cref="{{PackageNames.SupportedLanguagesAttribute}}"/>.
             /// </summary>
             [Microsoft.CodeAnalysis.EmbeddedAttribute]
             internal static class {{ClassName}}
             {
+                // The languages, the default first, as the package picks one of them by its position. One array for
+                // every call, which the package tells apart by reference.
+                private static readonly string[] Languages = [{{languages}}];
+
                 extension({{TextName}})
                 {
                     /// <summary>
                     /// A text in every language this assembly supports: <c>LocalizableText.Inline({{sample}})</c>.
-                    /// It shows the wording for the current UI culture. A culture that none of them serves gets the wording in the app's
+                    /// It gives the wording for the current UI culture. A culture that none of them serves gets the wording in the app's
                     /// default language, else the <c>{{codes[0]}}</c> wording.
                     /// </summary>
                     /// <remarks>
                     /// Name each argument after its language. An unnamed one is a build error (<c>LOC501</c>), because two swapped languages
                     /// would go unnoticed. To include a value, write it into every language, as in <c>$"Hello, {name}!"</c>.
+                    /// The string holds the wording of the moment it's made, so call this where you show the text.
                     /// </remarks>
             """);
 
@@ -330,9 +341,18 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
         }
 
         sb.AppendLine($$"""
-                    public static {{TextName}} Inline({{parameters}})
+                    public static string Inline({{parameters}})
                     {
-                        return {{PackageNames.GeneratedCode}}.CreateText({{defaultParameter}}{{translations}});
+                        return {{PackageNames.GeneratedCode}}.FindLanguage(Languages) switch
+                        {
+            """);
+
+        foreach (var wording in wordings)
+            sb.AppendLine(wording);
+
+        sb.AppendLine($$"""
+                            _ => {{defaultParameter}} ?? throw new System.ArgumentNullException(nameof({{defaultParameter}})),
+                        };
                     }
                 }
             }

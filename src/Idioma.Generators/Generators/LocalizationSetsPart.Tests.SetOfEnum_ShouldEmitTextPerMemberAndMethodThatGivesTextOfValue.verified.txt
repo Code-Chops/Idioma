@@ -9,10 +9,11 @@ using static CodeChops.Idioma.Internals.GeneratedCode;
 namespace TestApp;
 
 /// <summary>
-/// The texts of <see cref="OrderStatusLocalizationEn"/>, one <see cref="CodeChops.Idioma.LocalizableText"/> per text.
+/// The texts of <see cref="OrderStatusLocalizationEn"/>, one <see cref="string"/> per text.
 /// </summary>
 /// <remarks>
-/// Each text follows the current UI culture. <c>@OrderStatusLocalization.Pending</c> in markup shows the wording of the first of these:
+/// Each text gives the wording for the current UI culture at the moment it's read, so read it where you show it.
+/// <c>@OrderStatusLocalization.Pending</c> in markup shows the wording of the first of these:
 /// <list type="number">
 /// <item><description>The <see cref="IOrderStatusLocalization"/> set registered for the current UI culture.</description></item>
 /// <item><description>The set registered for the app's <see cref="CodeChops.Idioma.LocalizationRegistry.DefaultLanguage"/>.</description></item>
@@ -32,7 +33,7 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Pending">nl</see>: In behandeling</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Pending { get; } = CreateSetText<IOrderStatusLocalization>("TestApp.OrderStatusLocalization.Pending", static set => set.Pending, GetDefaultSet<OrderStatusLocalizationEn>);
+    public static string Pending => FindSet<IOrderStatusLocalization>(0, 2)?.Pending ?? WordSetText<IOrderStatusLocalization, OrderStatusLocalizationEn>(0, 2, "Pending", static set => set.Pending);
 
     /// <inheritdoc cref="OrderStatusLocalizationEn.Shipped"/>
     /// <remarks>
@@ -42,7 +43,7 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Shipped">nl</see>: Verzonden</description></item>
     /// </list>
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText Shipped { get; } = CreateSetText<IOrderStatusLocalization>("TestApp.OrderStatusLocalization.Shipped", static set => set.Shipped, GetDefaultSet<OrderStatusLocalizationEn>);
+    public static string Shipped => FindSet<IOrderStatusLocalization>(1, 2)?.Shipped ?? WordSetText<IOrderStatusLocalization, OrderStatusLocalizationEn>(1, 2, "Shipped", static set => set.Shipped);
 
     /// <summary>
     /// The text of a value of <see cref="OrderStatus"/>, such as <see cref="Pending"/> for <c>OrderStatus.Pending</c>.
@@ -50,7 +51,7 @@ public static partial class OrderStatusLocalization
     /// <remarks>
     /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
     /// </remarks>
-    public static CodeChops.Idioma.LocalizableText GetTextByValue(OrderStatus value) => TextsByValue<IOrderStatusLocalization>.Get(value);
+    public static string GetTextByValue(OrderStatus value) => TextsByValue<IOrderStatusLocalization>.Get(value);
 
     /// <param name="value">The value to give the text of.</param>
     extension(OrderStatus value)
@@ -61,18 +62,18 @@ public static partial class OrderStatusLocalization
         /// <remarks>
         /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
         /// </remarks>
-        public CodeChops.Idioma.LocalizableText GetText() => TextsByValue<IOrderStatusLocalization>.Get(value);
+        public string GetText() => TextsByValue<IOrderStatusLocalization>.Get(value);
     }
 
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Pending"</c>.
     /// </summary>
-    /// <param name="key">The <see cref="CodeChops.Idioma.LocalizableText.Key"/> of the text: its name, in the same letter case.</param>
-    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter, except a string for a LocalizableText.</param>
+    /// <param name="key">The key of the text: its name, in the same letter case.</param>
+    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
     /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
     /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
+    public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
     {
         "Pending" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
         "Shipped" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
@@ -97,11 +98,11 @@ public interface IOrderStatusLocalization
 
 file static class TextsByValue<TContract>
 {
-    internal static CodeChops.Idioma.LocalizableText Get(OrderStatus value) => value switch
+    internal static string Get(OrderStatus value) => value switch
     {
         OrderStatus.Pending => OrderStatusLocalization.Pending,
         OrderStatus.Shipped => OrderStatusLocalization.Shipped,
-        _ => CreateUndefinedEnumText<OrderStatus>(value),
+        _ => value.ToString(),
     };
 }
 #pragma warning restore CS0612, CS0618

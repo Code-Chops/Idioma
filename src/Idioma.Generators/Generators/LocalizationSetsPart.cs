@@ -7,11 +7,11 @@ namespace CodeChops.Idioma.Generators;
 /// (<c>IShopLocalization</c>, one <see cref="string"/> member per public string property, marked
 /// <c>[LocalizationContract]</c>), which the set lists itself, and the static partial class named after the set without
 /// its language suffix
-/// (<c>ShopLocalization</c>, one <c>LocalizableText</c> per member, with its full name as its full key, as in
-/// <c>MyApp.Localization.ShopLocalization.Checkout</c>, and worded by the set, and a method <c>GetTextByKey</c> that gives the
+/// (<c>ShopLocalization</c>, one <see cref="string"/> property per member, which gives the wording of the set of the
+/// user's language, and a method <c>GetTextByKey</c> that gives the
 /// text with a key, which is its name); the interface and the class take the set's accessibility. A public method of the set that returns a <see cref="string"/> and takes
 /// parameters is a text that takes values: the contract repeats it, and the class holds a method of its name and
-/// parameters that creates the <c>LocalizableText</c> with the values it is called with. A set that lists
+/// parameters that gives the wording for the values it is called with. A set that lists
 /// <c>ILocalizationSet&lt;TEnum&gt;</c> holds the texts of an enum: the contract gets a member for every member of
 /// the enum, and the class a method <c>GetTextByValue</c> that gives the text of a value, with an extension method
 /// <c>GetText</c> that gives a value its text itself, as in <c>order.Status.GetText()</c>. The class comes first in the
@@ -79,7 +79,7 @@ public static class LocalizationSetsPart
     /// </summary>
     private const int MaxWordingLength = 80;
 
-    // Shared with LocalizableTextFactoryGenerator and OneLanguageTextAnalyzer, which report [Localized] and
+    // Shared with LocalizableTextFactoryGenerator and UnnamedLanguageAnalyzer, which report [Localized] and
     // LocalizableText.Inline in an assembly without languages: all say that the attribute is missing.
 #pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
     private static readonly DiagnosticDescriptor NoLanguagesDeclaredRule = Error(
@@ -151,7 +151,7 @@ public static class LocalizationSetsPart
         UnsupportedTextDiagnosticId,
         "Method that can't be a text",
         "'{0}.{1}' is a public method that returns a string, which makes it a text with parameters, but {2}. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].",
-        "A public method of a default-language set that returns a string and takes parameters is a text with parameters. The generated class gets a method with the same name and parameters. It keeps the values and passes them to the set of the user's language when the text is shown. That only works for a method that isn't generic, has a name no other method in its set has, and takes at most 8 parameters, each by value and without a default. A method without parameters is no text, because a text without parameters is a property.");
+        "A public method of a default-language set that returns a string and takes parameters is a text with parameters. The generated class gets a method with the same name and parameters. It passes the values to the set of the user's language. That only works for a method that isn't generic, has a name no other method in its set has, and takes at most 8 parameters, each by value and without a default. A method without parameters is no text, because a text without parameters is a property.");
 
     /// <summary>
     /// Adds this part's steps to the pipeline of <see cref="LocalizationGenerator"/>.
@@ -360,7 +360,7 @@ public static class LocalizationSetsPart
         var sets = IndexSets(contract);
 
         // The framework's types are imported here, at the top of the file, and named by their name alone. So is what
-        // creates a text, which is called by its name alone. Inside the generated class a text stands before every
+        // words a text, which is called by its name alone. Inside the generated class a text stands before every
         // namespace of its name, so behind a text named CodeChops the package's namespace could not be reached to call
         // it. The pragma also covers a set marked [Obsolete] or [Experimental], whose texts read it for as long as it
         // exists.
@@ -513,10 +513,11 @@ public static class LocalizationSetsPart
     {
         sb.AppendLine($$"""
             /// <summary>
-            /// The texts of <see cref="{{className}}"/>, one <see cref="{{PackageNames.LocalizableText}}"/> per text.
+            /// The texts of <see cref="{{className}}"/>, one <see cref="string"/> per text.
             /// </summary>
             /// <remarks>
-            /// Each text follows the current UI culture. <c>@{{contract.TextsName}}.{{sampleMember}}</c> in markup shows the wording of the first of these:
+            /// Each text gives the wording for the current UI culture at the moment it's read, so read it where you show it.
+            /// <c>@{{contract.TextsName}}.{{sampleMember}}</c> in markup shows the wording of the first of these:
             /// <list type="number">
             /// <item><description>The <see cref="{{name}}"/> set registered for the current UI culture.</description></item>
             /// <item><description>The set registered for the app's <see cref="{{PackageNames.LocalizationRegistry}}.DefaultLanguage"/>.</description></item>
@@ -528,36 +529,41 @@ public static class LocalizationSetsPart
             {
             """);
 
-        // Nothing but the texts, so that a text can take any name but the class's own and those of the methods below (LOC205). Each key is written out
-        // in full, as in "MyApp.Localization.ShopLocalization.Checkout": a constant for the prefix would take a name
+        // Nothing but the texts, so that a text can take any name but the class's own and those of the methods below (LOC205). Each text
+        // passes its position among the texts and their number as literals: a constant for either would take a name
         // from the texts.
         for (var i = 0; i < texts.Length; i++)
         {
             var member = texts[i];
             var memberName = EscapeIdentifier(member.Name);
-            var keyLiteral = SymbolDisplay.FormatLiteral(contract.KeyPrefix + member.Name, quote: true);
+            var nameLiteral = SymbolDisplay.FormatLiteral(member.Name, quote: true);
 
             if (i > 0)
                 sb.AppendLine();
 
             AppendMemberDocs(sb, contract, sets, className, member);
 
+            // A text is worded on every read, by the set of the user's language. The package keeps that set per
+            // culture and per position (FindSet), so a read is a call of the set's own member. Where no set is kept
+            // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
+            // comment gives (WordSetText), which also creates the set of the default language when a text first needs
+            // it. Both are called with a type argument, so that no text can stand before them: a name with a type
+            // argument is not looked for among the texts.
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName} {{ get; }} = CreateSetText<{name}>({keyLiteral}, static set => set.{memberName}, GetDefaultSet<{className}>);");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => FindSet<{name}>({i}, {texts.Length})?.{memberName} ?? WordSetText<{name}, {className}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
-            // A text that takes values is created on every call, with the values it is called with: the text keeps
-            // them, each as its own type, and hands them to the set of the user's language when it is shown. So the
-            // set is picked by a function that is handed the values back and holds none itself: one function then
-            // serves every call, where one holding the values would be a new object per call. Its parameters repeat
-            // the names of the method's, which they shadow, and the set is named apart from them.
+            // A text that takes values hands them to the set's method. On the path that finds the wording, the set is
+            // picked by a function that is handed the values and holds none itself: one function then serves every
+            // call. Its parameters repeat the names of the method's, which they shadow, and the set is named apart
+            // from them.
             var types = String.Join(", ", member.Parameters.Select(parameter => RenderType(parameter.Type, contract.Namespace)));
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}{PackageNames.LocalizableText} {memberName}({RenderParameters(member, contract.Namespace)}) => CreateSetText<{name}, {types}>({keyLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), GetDefaultSet<{className}>(), {arguments});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({RenderParameters(member, contract.Namespace)}) => FindSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? WordSetText<{name}, {className}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
@@ -567,11 +573,9 @@ public static class LocalizationSetsPart
 
         AppendGet(sb, contract, name, textsName, texts);
 
-        // The end of the texts. The set every text takes its default wording from is the package's to create
-        // (GetDefaultSet), when a text first needs it. Created here, as this class is first used, a set whose
-        // constructor throws would fail the class for good, with an exception that names the class alone. It's called
-        // with a type argument, so that no text can stand before it: a name with a type argument is not looked for
-        // among the texts.
+        // The end of the texts. The set every text takes its default wording from is the package's to create, when a
+        // text first needs it. Created here, as this class is first used, a set whose constructor throws would fail
+        // the class for good, with an exception that names the class alone.
         sb.AppendLine("}");
     }
 
@@ -612,7 +616,7 @@ public static class LocalizationSetsPart
                 /// <remarks>
                 /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                 /// </remarks>
-                {{(@enum.IsPublic ? "public" : "internal")}} static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
+                {{(@enum.IsPublic ? "public" : "internal")}} static string {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
 
                 /// <param name="value">The value to give the text of.</param>
                 extension({{type}} value)
@@ -623,7 +627,7 @@ public static class LocalizationSetsPart
                     /// <remarks>
                     /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                     /// </remarks>
-                    {{(@enum.IsPublic ? "public" : "internal")}} {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
+                    {{(@enum.IsPublic ? "public" : "internal")}} string {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
                 }
             """);
 
@@ -631,7 +635,7 @@ public static class LocalizationSetsPart
             lookups.AppendLine();
 
         lookups.AppendLine($$"""
-                internal static {{PackageNames.LocalizableText}} Get({{type}} value) => value switch
+                internal static string Get({{type}} value) => value switch
                 {
             """);
 
@@ -640,7 +644,7 @@ public static class LocalizationSetsPart
             lookups.AppendLine($"        {type}.{EscapeIdentifier(member.Name)} => {textsName}.{EscapeIdentifier(member.Name)},");
 
         lookups.AppendLine($$"""
-                    _ => CreateUndefinedEnumText<{{type}}>(value),
+                    _ => value.ToString(),
                 };
             """);
     }
@@ -663,12 +667,12 @@ public static class LocalizationSetsPart
                 /// <summary>
                 /// The text with a key. The key is the name of the text{{example}}.
                 /// </summary>
-                /// <param name="key">The <see cref="{{PackageNames.LocalizableText}}.Key"/> of the text: its name, in the same letter case.</param>
-                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter, except a string for a LocalizableText.</param>
+                /// <param name="key">The key of the text: its name, in the same letter case.</param>
+                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
                 /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
                 /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
                 /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-                public static {{PackageNames.LocalizableText}} {{LocalizationSetsAnalysis.GetName}}(string key, params ReadOnlySpan<object?> values) => key switch
+                public static string {{LocalizationSetsAnalysis.GetName}}(string key, params ReadOnlySpan<object?> values) => key switch
                 {
             """);
 

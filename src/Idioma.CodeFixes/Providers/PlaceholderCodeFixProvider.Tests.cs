@@ -569,7 +569,7 @@ public sealed class PlaceholderCodeFixProviderTests
 
             public static class Texts
             {
-                public static LocalizableText Greeting => LocalizableText.Inline(en: "Hello, {0}!", nl: "Hallo!");
+                public static string Greeting => LocalizableText.Inline(en: "Hello, {0}!", nl: "Hallo!");
             }
             """;
 

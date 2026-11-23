@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using AotSmokeLibrary;
 using CodeChops.Idioma;
 
@@ -24,16 +22,8 @@ Expect("set for en-GB", british?.GetType().Name, nameof(ShopLocalizationEnGb));
 Expect("language code of the set for en-GB", (british as ILocalizationSet)?.LocalizationLanguageCode, "en-GB");
 Expect("language code of the set for nl", (LocalizationRegistry.Current.Find<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
 
-var orders = LocalizableText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
-
-// Written again, a plain inline text is the one created before, as markup needs that writes it on every render. It's
-// found by its string literals, which a published app must not take for new strings.
-var ordersAgain = LocalizableText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
-Expect("inline text written again", ReferenceEquals(orders, ordersAgain) ? "the text created before" : "another text", "the text created before");
-
-// A text that takes values, created once, before any of the cultures below is the current one: it words itself with
-// its values for whichever culture it is shown in.
-var items = ShopLocalization.ItemsInCart(3, "Idioma");
+// An inline text gives the wording of the moment it's read, so it's read in each culture below.
+static string Orders() => LocalizableText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
 
 // The wording for each culture, a culture of a language the app declares or not (de-DE gets the default language).
 (string Culture, string Cart, string Greeting, string Orders, string Grid, string Items, string Rows)[] cases =
@@ -50,41 +40,30 @@ foreach (var (culture, cart, greeting, order, grid, itemsInCart, rows) in cases)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
-    Expect($"{culture}: cart of the app's set", ShopLocalization.Cart.ToString(), cart);
-    Expect($"{culture}: greeting of the app's set", ShopLocalization.Greeting("Ada").ToString(), greeting);
-    Expect($"{culture}: inline text", orders.ToString(), order);
-    Expect($"{culture}: title of the library's set", GridLocalization.Title.ToString(), grid);
-    Expect($"{culture}: cart compared with its wording", ShopLocalization.Cart == cart ? cart : "not equal", cart);
-    Expect($"{culture}: text of the app's set that takes values", items.ToString(), itemsInCart);
-    Expect($"{culture}: text of the library's set that takes a value", GridLocalization.Rows(1).ToString(), rows);
+    Expect($"{culture}: cart of the app's set", ShopLocalization.Cart, cart);
+    Expect($"{culture}: greeting of the app's set", ShopLocalization.Greeting("Ada"), greeting);
+    Expect($"{culture}: inline text", Orders(), order);
+    Expect($"{culture}: title of the library's set", GridLocalization.Title, grid);
+    Expect($"{culture}: cart read a second time, from the set kept for the culture", ShopLocalization.Cart, cart);
+    Expect($"{culture}: text of the app's set that takes values", ShopLocalization.ItemsInCart(3, "Idioma"), itemsInCart);
+    Expect($"{culture}: text of the library's set that takes a value", GridLocalization.Rows(1), rows);
+    Expect($"{culture}: text by its key", ShopLocalization.GetTextByKey("Cart"), cart);
+    Expect($"{culture}: text by its key, with its values", ShopLocalization.GetTextByKey("ItemsInCart", 3, "Idioma"), itemsInCart);
 }
 
-Expect("values of a text that takes them", string.Join(",", items.Arguments), "3,Idioma");
-
-// For a culture that is passed, while another is the current one: the set words the text as for a user of that culture.
+// A text read once keeps the wording of that moment, whatever the culture is afterwards.
+CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("nl-NL");
+var dutchItems = ShopLocalization.ItemsInCart(3, "Idioma");
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
-Expect("text that takes values, for a culture that is passed", items.ToString(CultureInfo.GetCultureInfo("nl-NL")), "3 artikelen in je winkelwagen bij Idioma");
+Expect("text read for a Dutch user, shown later", dutchItems, "3 artikelen in je winkelwagen bij Idioma");
+
+// For a culture a provider gives, while the thread has another: the set words the text as for a user of that culture.
+LocalizationRegistry.CurrentUICultureProvider = static () => CultureInfo.GetCultureInfo("nl-NL");
+Expect("text that takes values, for a culture the provider gives", ShopLocalization.ItemsInCart(3, "Idioma"), "3 artikelen in je winkelwagen bij Idioma");
+Expect("text without values, for a culture the provider gives", ShopLocalization.Cart, "Winkelwagen");
+Expect("inline text, for a culture the provider gives", Orders(), "Bestellingen");
 Expect("the current UI culture after it", CultureInfo.CurrentUICulture.Name, "en");
-
-// A text through JSON, written by the System.Text.Json source generator, and read back in each language.
-CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
-var json = JsonSerializer.Serialize(new Panel(orders, ShopLocalization.Cart, items), SmokeJson.Default.Panel);
-
-if (!json.Contains("\"nl\":\"Winkelwagen\"", StringComparison.Ordinal) || !json.Contains("\"en-GB\":\"Basket\"", StringComparison.Ordinal))
-    failures.Add($"json: expected every wording of the cart, got {json}");
-
-if (!json.Contains("\"nl\":\"3 artikelen in je winkelwagen bij Idioma\"", StringComparison.Ordinal))
-    failures.Add($"json: expected every wording of the text that takes values, with its values, got {json}");
-
-foreach (var (culture, cart, _, order, _, itemsInCart, _) in cases.Where(static c => c.Culture is "en" or "en-GB" or "nl"))
-{
-    CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
-    var panel = JsonSerializer.Deserialize(json, SmokeJson.Default.Panel);
-
-    Expect($"{culture}: cart read back from json", panel?.Cart.ToString(), cart);
-    Expect($"{culture}: inline text read back from json", panel?.Title.ToString(), order);
-    Expect($"{culture}: text that takes values read back from json", panel?.Items.ToString(), itemsInCart);
-}
+LocalizationRegistry.CurrentUICultureProvider = null;
 
 // A text on a member, of the library and of the app. The build wrote each as code, and the app's registrar recorded
 // those of the library when the app started, so nothing reads an attribute here. An enum's value gives its text
@@ -101,21 +80,19 @@ foreach (var (culture, city, picked, status, surname, shipped) in memberCases)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
-    Expect($"{culture}: text of a property of the library", LocalizableText.GetTextByMember<Address>(nameof(Address.City))?.ToString(), city);
-    Expect($"{culture}: text of a property by a type held at run time", LocalizableText.GetTextByMember(typeof(Address), "City")?.ToString(), city);
-    Expect($"{culture}: text of a property the app holds", LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!)?.ToString(), city);
-    Expect($"{culture}: text of an override without one of its own", LocalizableText.GetTextByMember<BusinessAddress>(nameof(Address.City))?.ToString(), city);
-    Expect($"{culture}: text of an enum's value", ParcelStatus.Picked.GetText().ToString(), picked);
-    Expect($"{culture}: text of an enum's member by its name", LocalizableText.GetTextByMember(typeof(ParcelStatus), ParcelStatus.Picked.ToString())?.ToString(), picked);
-    Expect($"{culture}: text of an enum itself", LocalizableText.GetTextOfType<ParcelStatus>()?.ToString(), status);
-    Expect($"{culture}: text of a property of the app", LocalizableText.GetTextByMember<Customer>(nameof(Customer.Surname))?.ToString(), surname);
-    Expect($"{culture}: text of a value of an enum with a set", OrderStatus.Shipped.GetText().ToString(), shipped);
+    Expect($"{culture}: text of a property of the library", LocalizableText.GetTextByMember<Address>(nameof(Address.City)), city);
+    Expect($"{culture}: text of a property by a type held at run time", LocalizableText.GetTextByMember(typeof(Address), "City"), city);
+    Expect($"{culture}: text of a property the app holds", LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!), city);
+    Expect($"{culture}: text of an override without one of its own", LocalizableText.GetTextByMember<BusinessAddress>(nameof(Address.City)), city);
+    Expect($"{culture}: text of an enum's value", ParcelStatus.Picked.GetText(), picked);
+    Expect($"{culture}: text of an enum's member by its name", LocalizableText.GetTextByMember(typeof(ParcelStatus), ParcelStatus.Picked.ToString()), picked);
+    Expect($"{culture}: text of an enum itself", LocalizableText.GetTextOfType<ParcelStatus>(), status);
+    Expect($"{culture}: text of a property of the app", LocalizableText.GetTextByMember<Customer>(nameof(Customer.Surname)), surname);
+    Expect($"{culture}: text of a value of an enum with a set", OrderStatus.Shipped.GetText(), shipped);
 }
 
-Expect("text of a member that isn't marked", LocalizableText.GetTextByMember<Address>(nameof(Address.Unmarked))?.ToString() ?? "none", "none");
-Expect("text of an enum's value that isn't marked", ParcelStatus.Lost.GetText().ToString(), "Lost");
-Expect("key of a text on a member", LocalizableText.GetTextByMember<Address>(nameof(Address.City))?.FullKey, "AotSmokeLibrary.Address.City");
-Expect("text of a member asked for twice", ReferenceEquals(ParcelStatus.Picked.GetText(), LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked))) ? "the same text" : "another text", "the same text");
+Expect("text of a member that isn't marked", LocalizableText.GetTextByMember<Address>(nameof(Address.Unmarked)) ?? "none", "none");
+Expect("text of an enum's value that isn't marked", ParcelStatus.Lost.GetText(), "Lost");
 
 if (failures.Count > 0)
 {
@@ -188,7 +165,3 @@ public class OrderStatusLocalizationEnGb : OrderStatusLocalizationEn
     public override string Shipped => "Dispatched";
 }
 
-public sealed record Panel(LocalizableText Title, LocalizableText Cart, LocalizableText Items);
-
-[JsonSerializable(typeof(Panel))]
-public sealed partial class SmokeJson : JsonSerializerContext;

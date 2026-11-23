@@ -1,3 +1,5 @@
+using CodeChops.Idioma.Internals;
+
 namespace CodeChops.Idioma.Tests;
 
 // The tests of LocalizationRegistry.Registration.cs: the sets of the whole app with their two tiers, the app's
@@ -215,7 +217,10 @@ public sealed partial class LocalizationRegistryTests
         // Arrange: a registration builds the lookup tables anew for the next read, which every text of every user reads
         // without a lock, so reads and registrations run side by side. Two sets of one language and contract, which the
         // writer registers one after the other, so that either may be the last.
-        var text = LocalizableText.Create<IRegistryConcurrentLocalization>("Concurrent.Name", static set => set.Name, new RegistryConcurrentLocalizationEn());
+        // The text is read as a property of a generated class reads it, which keeps the set it found per registry.
+        static string Read() => GeneratedCode.FindSet<IRegistryConcurrentLocalization>(0, 1)?.Name
+            ?? GeneratedCode.WordSetText<IRegistryConcurrentLocalization, RegistryConcurrentLocalizationEn>(0, 1, "Name", static set => set.Name);
+
         var first = new RegistryConcurrentFirstLocalizationNl();
         var second = new RegistryConcurrentSecondLocalizationNl();
         var dutch = Culture("nl");
@@ -242,13 +247,14 @@ public sealed partial class LocalizationRegistryTests
         // Act
         var wrong = await Task.WhenAll(Enumerable.Range(start: 0, count: 4).Select(_ => Task.Run(() =>
         {
+            CultureInfo.CurrentUICulture = dutch;
             var problems = new List<string>();
 
             for (var i = 0; i < 50_000; i++)
             {
                 try
                 {
-                    var wording = text.ToString(dutch);
+                    var wording = Read();
                     var set = LocalizationRegistry.Current.Find<IRegistryConcurrentLocalization>(dutch);
 
                     if (wording is not ("Eerste" or "Tweede"))
@@ -274,10 +280,11 @@ public sealed partial class LocalizationRegistryTests
         wrong.SelectMany(static problems => problems).Distinct(StringComparer.Ordinal).ShouldBeEmpty();
         registrations.ShouldBeGreaterThan(0);
 
+        using var cultures = new TestHelpers.CulturesScope(dutch, dutch);
         LocalizationRegistry.Register(first);
-        text.ToString(dutch).ShouldBe("Eerste");
+        Read().ShouldBe("Eerste");
         LocalizationRegistry.Register(second);
-        text.ToString(dutch).ShouldBe("Tweede");
+        Read().ShouldBe("Tweede");
     }
 
     [Test]

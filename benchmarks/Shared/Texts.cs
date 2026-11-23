@@ -38,20 +38,12 @@ public class ShopLabels
     public string Cart { get; set; } = "";
 }
 
-// Created once and kept, as a component can keep an inline text in a field, so that its time is the lookup alone. The
-// value of Greeting is filled in once, so it shows the same name every time.
-public static class InlineTextsInField
+// Written in the call, as markup writes an inline text, so that it's called on every render. A plain text picks one of
+// its wordings. Greeting builds the wording of every language on each call, because C# evaluates each argument before
+// Inline picks one.
+public static class InlineTexts
 {
-    public static LocalizableText Checkout { get; } = LocalizableText.Inline(en: "Checkout", nl: "Afrekenen", enGb: "Checkout");
-    public static LocalizableText Cart { get; } = LocalizableText.Inline(en: "Cart", nl: "Winkelwagen", enGb: "Basket");
-    public static LocalizableText Greeting { get; } = LocalizableText.Inline(en: "Hello, Ada!", nl: "Hallo, Ada!", enGb: "Hello, Ada!");
-}
-
-// Written in the call, as markup writes an inline text, so that it's called on every render. Idioma finds a plain text it
-// created before, and creates Greeting again on every call, because its wording is a new string each time.
-public static class InlineTextsInMarkup
-{
-    public static LocalizableText Checkout => LocalizableText.Inline(en: "Checkout", nl: "Afrekenen", enGb: "Checkout");
-    public static LocalizableText Cart => LocalizableText.Inline(en: "Cart", nl: "Winkelwagen", enGb: "Basket");
-    public static LocalizableText Greeting(string name) => LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!", enGb: $"Hello, {name}!");
+    public static string Checkout => LocalizableText.Inline(en: "Checkout", nl: "Afrekenen", enGb: "Checkout");
+    public static string Cart => LocalizableText.Inline(en: "Cart", nl: "Winkelwagen", enGb: "Basket");
+    public static string Greeting(string name) => LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!", enGb: $"Hello, {name}!");
 }

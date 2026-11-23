@@ -16,7 +16,8 @@ root="$(cd "$here/../.." && pwd)"
 (cd "$root" && dotnet pack src/Idioma/Idioma.csproj -c Release -o artifacts -warnaserror)
 version="$(cd "$root" && dotnet msbuild src/Idioma/Idioma.csproj -getProperty:Version)"
 
-# A copy of the demos next to a nuget.config that knows the packed package, with a packages folder of its own. So a
+# A copy of the demos next to a nuget.config that knows the packed package by a relative path, which also works in Git
+# Bash on Windows, and takes the package from there alone. It has a packages folder of its own. So a
 # package of the same version, restored earlier from another build, can't stand in for the one packed now.
 work="$here/obj/demos"
 rm -rf "$work"
@@ -28,9 +29,18 @@ cat > "$work/nuget.config" <<CONFIG
 <configuration>
   <packageSources>
     <clear />
-    <add key="packed" value="$root/artifacts" />
+    <add key="packed" value="../../../../artifacts" />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
+  <!-- The package under test comes from the folder alone, never from nuget.org, where an older release of it lives. -->
+  <packageSourceMapping>
+    <packageSource key="packed">
+      <package pattern="CodeChops.Idioma" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+  </packageSourceMapping>
 </configuration>
 CONFIG
 

@@ -264,7 +264,7 @@ internal static class GeneratorTestHelper
     /// </summary>
     internal static Task<ImmutableArray<Diagnostic>> AnalyzeAsync(string source, params (string Path, string Text)[] files)
     {
-        return AnalyzeAsync(new OneLanguageTextAnalyzer(), source, [], files);
+        return AnalyzeAsync(new UnnamedLanguageAnalyzer(), source, [], files);
     }
 
     /// <summary>

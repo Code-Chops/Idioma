@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.Generators;
 internal static class TextParameters
 {
     /// <summary>
-    /// The most values a text takes, as the overloads of <c>GeneratedCode.CreateSetText</c> take them.
+    /// The most values a text takes, as the overloads of <c>GeneratedCode.WordSetText</c> take them.
     /// </summary>
     public const int MaxValues = 8;
 
@@ -107,14 +107,14 @@ internal static class TextParameters
     /// <c>LOC300</c> message, or <see langword="null"/> when nothing does.
     /// </summary>
     // Each of these would not compile in the generated class, or would compile into something else than the set says:
-    // the class repeats the parameters, keeps the values in the text, and hands them to the set of the user's language
-    // when the text is shown.
+    // the class repeats the parameters, and hands the values to the set of the user's language, through a function
+    // where it has to find that set first.
     public static string? FindProblem(IMethodSymbol method)
     {
         if (method.IsGenericMethod)
             return "it's generic";
 
-        // The generated class creates the text through an overload per number of values (GeneratedCode), which keeps
+        // The generated class words the text through an overload per number of values (GeneratedCode), which takes
         // each value as its own type.
         if (method.Parameters.Length > MaxValues)
             return $"it takes {method.Parameters.Length} values, and a text takes at most {MaxValues}";
@@ -125,7 +125,7 @@ internal static class TextParameters
         foreach (var parameter in method.Parameters)
         {
             if (parameter.RefKind is not RefKind.None)
-                return $"its parameter '{parameter.Name}' is passed by reference, and a text keeps its values until it's shown";
+                return $"its parameter '{parameter.Name}' is passed by reference, and the generated class passes each value on by value";
 
             if (parameter.IsParams)
                 return $"its parameter '{parameter.Name}' is a params parameter";

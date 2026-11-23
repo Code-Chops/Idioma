@@ -53,7 +53,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
 
         // Razor's output counts as generated code, and a text written in markup must be read there.
-        // OneLanguageTextAnalyzer.IsHandWritten leaves out the rest.
+        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
@@ -83,7 +83,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
         // By its name first, which binds nothing: nearly every attribute is another one.
         if (!LocalizedMembers.IsNamedLocalized(attribute)
             || attribute.ArgumentList is not { Arguments: var arguments }
-            || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree)
+            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree)
             || context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is not IMethodSymbol constructor
             || !LocalizedMembers.IsGeneratedAttribute(constructor.ContainingType, context.Compilation.Assembly))
         {
@@ -129,8 +129,8 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
     {
         var invocation = (IInvocationOperation)context.Operation;
 
-        if (!OneLanguageTextAnalyzer.IsFactory(invocation.TargetMethod)
-            || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
+        if (!UnnamedLanguageAnalyzer.IsFactory(invocation.TargetMethod)
+            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
         {
             return;
         }
@@ -163,7 +163,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
         var declaration = (MemberDeclarationSyntax)context.Node;
 
         // By its shape first, which binds nothing: a method without a body returns no wording.
-        if (!OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree)
+        if (!UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree)
             || declaration is MethodDeclarationSyntax { ExpressionBody: null, Body: null }
             || context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not { IsStatic: false, ContainingType: { TypeKind: TypeKind.Class } set } member
             || !set.AllInterfaces.Contains(localizationSet, SymbolEqualityComparer.Default)

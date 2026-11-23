@@ -22,13 +22,13 @@ public sealed class UnnamedLanguageCodeFixProviderTests
 
         public static class Texts
         {
-            public static LocalizableText Orders { get; } = {{text}};
+            public static string Orders => {{text}};
         }
         """;
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(string source)
     {
-        return CodeFixTestHelper.FixAfterGeneratorsAsync(new UnnamedLanguageCodeFixProvider(), new OneLanguageTextAnalyzer(), source);
+        return CodeFixTestHelper.FixAfterGeneratorsAsync(new UnnamedLanguageCodeFixProvider(), new UnnamedLanguageAnalyzer(), source);
     }
     #endregion
 

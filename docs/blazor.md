@@ -167,4 +167,22 @@ Dates and numbers follow the culture too, but they need its globalization data. 
 
 ## A text as a component parameter
 
-A text can be a parameter of a component with another render mode, such as an `InteractiveWebAssembly` component on a static page. Blazor passes it on as JSON, and the text still shows the user's language on the other side, even after a switch ([details](advanced-topics.md#texts-in-json)).
+A text is a `string`, so a component parameter that takes a text is a `string` too. It holds the wording of the moment its parent rendered. After a language switch, the parent renders again and passes the new wording.
+
+In an app that is interactive as a whole, [keying the layout on the culture](#showing-the-new-language-everywhere) covers parameters too. Blazor rebuilds every component inside the key, so each parent reads its texts again and passes the new wording on.
+
+A component with another render mode is different, such as an `InteractiveWebAssembly` component on a static page. It gets the wording the server made, and the server isn't asked again when the language switches in the browser. So the text stays in the old language until the next navigation. Read the text inside that component instead. Where the parent decides which text it is, pass what names the text and read it there:
+
+```razor
+@* The static page passes the key, not the wording *@
+<CartButton LabelKey="@nameof(ShopLocalization.Checkout)" />
+
+@* CartButton.razor, interactive *@
+<button>@ShopLocalization.GetTextByKey(LabelKey)</button>
+
+@code {
+    [Parameter, EditorRequired] public string LabelKey { get; set; } = "";
+}
+```
+
+A value of an enum works the same way, with `GetText()` in the component. A text kept outside the keyed content, such as in a scoped service, isn't rebuilt with the layout, so read it where you show it too.

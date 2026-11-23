@@ -4,6 +4,12 @@ Idioma shows most texts in less time than `IStringLocalizer`, which is the appro
 
 Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
+> These numbers were measured before a text became a `string`, and haven't been measured again yet. Three things on this page no longer hold:
+>
+> - The column "Inline, in a field". A text is the wording of the moment it's read, so there's no text to keep in a field.
+> - What a text with a parameter allocates (168 and 264 bytes), and the inline texts Idioma kept. A text with a parameter now allocates only the string its set makes, and no inline text is kept.
+> - The download sizes. Idioma no longer needs `System.Text.Json`, and holds less code of its own.
+
 ## In short
 
 - On .NET, a plain text of a set takes about 16.5 ns for a user of the default or the second language, where `IStringLocalizer` takes about 43 ns. It allocates nothing, where `IStringLocalizer` allocates 72 bytes.

@@ -1,23 +1,32 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using CodeChops.Idioma.Internals;
+using CodeChops.Idioma.Tests.TestHelpers;
 
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="GeneratedCode"/>: the names generated code calls it by, and that it is all generated code needs.
+/// The order a text of a set falls back in has its own tests, next to <c>LocalizationRegistry.Word</c>.
 /// </summary>
 public sealed class GeneratedCodeTests
 {
     #region Fixture
+    /// <summary>
+    /// A contract no other test uses, with a text per number of values. No set of it is registered, so every text is
+    /// worded by the set of the default language.
+    /// </summary>
     private interface IGeneratedCodeLocalization : ILocalizationSet
     {
+        string Checkout { get; }
         string Greeting(string name);
+        string Joined(string[] parts);
     }
 
     private sealed class GeneratedCodeLocalizationEn : IGeneratedCodeLocalization
     {
+        public string Checkout => "Checkout";
         public string Greeting(string name) => $"Hello, {name}!";
+        public string Joined(string[] parts) => String.Join('+', parts);
     }
 
     private interface IThrowingLocalization : ILocalizationSet
@@ -40,6 +49,45 @@ public sealed class GeneratedCodeTests
 
         public string Checkout => "Checkout";
     }
+
+    /// <summary>
+    /// A contract no other test uses, whose set of the default language counts how often it's created.
+    /// </summary>
+    private interface ILazyLocalization : ILocalizationSet
+    {
+        string Checkout { get; }
+    }
+
+    private sealed class LazyLocalizationEn : ILazyLocalization
+    {
+        public static int Created { get; private set; }
+
+        public LazyLocalizationEn() => Created++;
+
+        public string Checkout => "Checkout";
+    }
+
+    /// <summary>
+    /// A type a string converts to in code, which a value passed by a key doesn't.
+    /// </summary>
+    private sealed record Label(string Value)
+    {
+        public static implicit operator Label(string value) => new(value);
+    }
+
+    private static readonly string[] EnglishDutch = ["en", "nl"];
+    private static readonly string[] DutchEnglish = ["nl", "en"];
+    private static readonly string[] EnglishDutchBritish = ["en", "nl", "en-GB"];
+    private static readonly string[] FrenchGerman = ["fr", "de"];
+    private static readonly string[] UpperCase = ["EN", "NL", "EN-gb"];
+
+    private static int FindLanguageFor(string culture, string[] languages)
+    {
+        using var _ = new CulturesScope(culture);
+
+        var index = GeneratedCode.FindLanguage(languages);
+        return index;
+    }
     #endregion
 
     [Test]
@@ -54,24 +102,154 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["CreateText", "CreateSetText", "GetDefaultSet", "CreateUndefinedEnumText", "CreateMemberText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
+            ["FindLanguage", "FindSet", "FindSetForValues", "WordSetText", "RecordMemberTexts", "GetKeyedText", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
             ignoreOrder: true);
+    }
+
+    [Test]
+    public void WordSetText_ShouldHaveAnOverloadPerNumberOfValuesUpToEight()
+    {
+        // Arrange & Act
+        var typeParameters = typeof(GeneratedCode)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(static method => method.Name is nameof(GeneratedCode.WordSetText))
+            .Select(static method => method.GetGenericArguments().Length);
+
+        // Assert: the contract and the set of the default language, and then a type per value (LOC300 allows 8).
+        typeParameters.ShouldBe([2, 3, 4, 5, 6, 7, 8, 9, 10], ignoreOrder: true);
+    }
+
+    [Test]
+    [Arguments("nl-NL", 1)]
+    [Arguments("nl-BE", 1)]
+    [Arguments("nl", 1)]
+    [Arguments("en-US", 0)]
+    [Arguments("en-GB", 0)]
+    [Arguments("en", 0)]
+    public void FindLanguage_ShouldGiveThePositionOfTheLanguageOfTheCurrentUICulture(string culture, int expected)
+    {
+        // Arrange & Act
+        var index = FindLanguageFor(culture, EnglishDutch);
+
+        // Assert: the culture's own language, or else that of a culture above it.
+        index.ShouldBe(expected);
+    }
+
+    [Test]
+    public void FindLanguage_ShouldGiveARegionItsOwnWordingAndOtherRegionsThatOfTheLanguage()
+    {
+        // Arrange & Act & Assert: British English next to English. A language is matched in any letter case.
+        FindLanguageFor("en-GB", EnglishDutchBritish).ShouldBe(2);
+        FindLanguageFor("en-US", EnglishDutchBritish).ShouldBe(0);
+        FindLanguageFor("en", EnglishDutchBritish).ShouldBe(0);
+        FindLanguageFor("nl-BE", EnglishDutchBritish).ShouldBe(1);
+        FindLanguageFor("en-GB", UpperCase).ShouldBe(2);
+        FindLanguageFor("nl-NL", UpperCase).ShouldBe(1);
+    }
+
+    [Test]
+    public void FindLanguage_ForCultureTheAppDoesNotShow_ShouldGiveTheAppDefaultLanguageElseTheFirst()
+    {
+        // Arrange & Act & Assert: this app shows English and Dutch, and its default language is English. A German
+        // user gets English wherever it stands, also where the assembly has German, because the app's own texts are
+        // English for them too. An assembly without English gives its first language.
+        FindLanguageFor("de-DE", EnglishDutch).ShouldBe(0);
+        FindLanguageFor("de-DE", DutchEnglish).ShouldBe(1);
+        FindLanguageFor("de-DE", FrenchGerman).ShouldBe(0);
+        FindLanguageFor("", DutchEnglish).ShouldBe(1);
+
+        // A culture the app shows falls back the same way where the assembly lacks its language.
+        FindLanguageFor("nl-NL", FrenchGerman).ShouldBe(0);
+    }
+
+    [Test]
+    public void FindLanguage_WithTheSameArrayForAnotherCulture_ShouldPickAgain()
+    {
+        // Arrange & Act & Assert: the last pick is kept per thread, for the same languages and the same culture alone.
+        for (var round = 0; round < 3; round++)
+        {
+            FindLanguageFor("nl-NL", EnglishDutch).ShouldBe(1);
+            FindLanguageFor("nl-NL", DutchEnglish).ShouldBe(0);
+            FindLanguageFor("en-US", EnglishDutch).ShouldBe(0);
+            FindLanguageFor("en-US", DutchEnglish).ShouldBe(1);
+        }
+    }
+
+    [Test]
+    public void FindLanguage_InRegistryWithLanguagesOfItsOwn_ShouldFollowThoseLanguages()
+    {
+        // Arrange: registries apart from the app's, as a culture resolves in each.
+        var french = CultureInfo.GetCultureInfo("fr-FR");
+        var dutchFirst = LocalizationRegistry.Create([], "nl", "en").Resolve(french);
+        var britishFirst = LocalizationRegistry.Create([], "en-GB", "nl").Resolve(french);
+        var withoutLanguages = LocalizationRegistry.Create([]).Resolve(french);
+        var withFrench = LocalizationRegistry.Create([], "nl", "fr").Resolve(french);
+
+        // Act & Assert: the default language of the registry, or else a language above it, and the first language
+        // where the registry has no languages. A culture the registry shows gets its own.
+        InlineLanguage.Find(EnglishDutch, dutchFirst).ShouldBe(1);
+        InlineLanguage.Find(EnglishDutchBritish, britishFirst).ShouldBe(2);
+        InlineLanguage.Find(EnglishDutch, britishFirst).ShouldBe(0);
+        InlineLanguage.Find(DutchEnglish, britishFirst).ShouldBe(1);
+        InlineLanguage.Find(DutchEnglish, withoutLanguages).ShouldBe(0);
+        InlineLanguage.Find(FrenchGerman, withoutLanguages).ShouldBe(0);
+        InlineLanguage.Find(FrenchGerman, dutchFirst).ShouldBe(0);
+        InlineLanguage.Find(["de", "fr"], withFrench).ShouldBe(1);
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void FindLanguage_WithCurrentUICultureProvider_ShouldFollowItsCultureInPlaceOfCurrentUICulture()
+    {
+        // Arrange: the thread is American, and the app keeps a Dutch user's culture somewhere else.
+        using var _ = new CulturesScope("en-US");
+
+        // Act & Assert
+        using (new ProvidedCultureScope("nl-NL"))
+            GeneratedCode.FindLanguage(EnglishDutch).ShouldBe(1);
+
+        // A provider that gives no culture leaves the text on the current UI culture.
+        using (new ProvidedCultureScope(name: null))
+            GeneratedCode.FindLanguage(EnglishDutch).ShouldBe(0);
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void FindLanguage_ShouldAllocateNothing()
+    {
+        // Arrange: apart from the tests that register sets, which make the next read build the registry anew.
+        using var _ = new CulturesScope("nl-NL");
+
+        // Act: per 10,000 calls.
+        var allocated = GeneratedSetsTests.Allocated(static () => GeneratedCode.FindLanguage(EnglishDutch)) / 10_000;
+
+        // Assert
+        allocated.ShouldBe(0);
+    }
+
+    [Test]
+    public void FindLanguage_WithNull_ShouldThrowArgumentNullException()
+    {
+        // Arrange & Act & Assert
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.FindLanguage(null!)).ParamName.ShouldBe("languages");
     }
 
     [Test]
     public void GetKeyedText_ShouldGiveTheTextUnlessValuesWerePassed()
     {
         // Arrange
-        var text = LocalizableText.Keyed("Checkout", "Checkout");
+        const string text = "Checkout";
 
         // Act
         var given = GeneratedCode.GetKeyedText<IGeneratedCodeLocalization>(text, "Checkout", []);
         var exception = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedText<IGeneratedCodeLocalization>(text, "Checkout", ["Anna"]));
+        var two = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedText<IGeneratedCodeLocalization>(text, "Checkout", ["Anna", 3]));
 
         // Assert
         given.ShouldBeSameAs(text);
         exception.ParamName.ShouldBe("values");
         exception.Message.ShouldStartWith("The text 'Checkout' of 'IGeneratedCodeLocalization' takes no values, but 1 was passed.");
+        two.Message.ShouldStartWith("The text 'Checkout' of 'IGeneratedCodeLocalization' takes no values, but 2 were passed.");
     }
 
     [Test]
@@ -108,38 +286,34 @@ public sealed class GeneratedCodeTests
         // Assert
         otherType.ParamName.ShouldBe("values");
         otherType.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int64' for 'count', but a value of type 'System.Int32' was passed.");
+        otherType.Message.ShouldContain("Pass a value of that type, because a value isn't converted.");
         noValue.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', but null was passed.");
     }
 
     [Test]
-    public void GetKeyedValue_ForTextParameter_ShouldTakeStringAsCallDoes()
+    public void GetKeyedValue_ForStringParameter_ShouldGiveTheStringItself()
     {
-        // Arrange & Act: a string for a parameter that takes a text, as a key from a database comes with one, and a
-        // text and null, which pass as they are.
-        var cart = LocalizableText.FromGeneratedCode("Cart", ("en", "Cart"), ("nl", "Winkelwagen"));
-        var fromString = GeneratedCode.GetKeyedValue<LocalizableText>("Removed", ["Cart"], index: 0, count: 1, "what");
-        var fromText = GeneratedCode.GetKeyedValue<LocalizableText>("Removed", [cart], index: 0, count: 1, "what");
-        var fromNull = GeneratedCode.GetKeyedValue<LocalizableText?>("Removed", [null], index: 0, count: 1, "what");
+        // Arrange: a text among the values is a string, as every text is.
+        const string cart = "Cart";
 
-        // Assert: the string becomes a text with that one wording, as LocalizableText converts it in a call of the
-        // text's method.
-        fromString.DefaultText.ShouldBe("Cart");
-        fromString.ToString(CultureInfo.GetCultureInfo("nl")).ShouldBe("Cart");
-        fromText.ShouldBeSameAs(cart);
-        fromNull.ShouldBeNull();
+        // Act
+        var value = GeneratedCode.GetKeyedValue<string>("Removed", [cart], index: 0, count: 1, "what");
+
+        // Assert
+        value.ShouldBeSameAs(cart);
     }
 
     [Test]
-    public void GetKeyedValue_ForOtherParameter_ShouldStillRefuseString()
+    public void GetKeyedValue_ForOtherParameter_ShouldRefuseStringWithoutConvertingIt()
     {
-        // Arrange & Act: the one conversion is from a string to a text; a string for a number isn't parsed, and a text
-        // for a string isn't worded.
+        // Arrange & Act: a string for a number isn't parsed, and a string for a type it converts to in code isn't
+        // converted.
         var forNumber = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", ["3"], index: 0, count: 1, "count"));
-        var forString = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<string>("Greeting", [new LocalizableText("Anna")], index: 0, count: 1, "name"));
+        var forLabel = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<Label>("Removed", ["Cart"], index: 0, count: 1, "what"));
 
         // Assert
         forNumber.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', but a value of type 'System.String' was passed.");
-        forString.Message.ShouldStartWith("The text 'Greeting' takes a value of type 'System.String' for 'name', but a value of type 'CodeChops.Idioma.LocalizableText' was passed.");
+        forLabel.Message.ShouldStartWith($"The text 'Removed' takes a value of type '{typeof(Label)}' for 'what', but a value of type 'System.String' was passed.");
     }
 
     [Test]
@@ -155,21 +329,6 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
-    [Arguments(DayOfWeek.Friday, "Friday")]
-    [Arguments((DayOfWeek)42, "42")]
-    public void CreateUndefinedEnumText_ShouldShowValueAsToStringWritesIt(DayOfWeek value, string expected)
-    {
-        // Arrange & Act: as the method GetTextByValue of a generated class calls it, for a value none of its texts is named after.
-        var text = GeneratedCode.CreateUndefinedEnumText(value);
-
-        // Assert: the same in every language, and no text of a set.
-        text.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe(expected);
-        text.DefaultText.ShouldBe(expected);
-        text.Key.ShouldBeNull();
-        text.FullKey.ShouldBeNull();
-    }
-
-    [Test]
     public void Class_ShouldBeObsoleteAsWarning()
     {
         // Arrange & Act
@@ -182,20 +341,93 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
-    public void CreateSetText_WithArguments_ShouldGiveTextThatKeepsThem()
+    public void WordSetText_OfProperty_ShouldGiveWordingOfSetOfDefaultLanguageWhereNoSetIsRegistered()
     {
         // Arrange
+        using var _ = new CulturesScope("en-US");
+
+        // Act: as a property of the class the source generator writes calls it.
+        var wording = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, "Checkout", static set => set.Checkout);
+
+        // Assert
+        wording.ShouldBe("Checkout");
+    }
+
+    [Test]
+    public void WordSetText_WithOneValue_ShouldHandItToTheSet()
+    {
+        // Arrange
+        using var _ = new CulturesScope("en-US");
         const string name = "Anna";
 
         // Act: as a method of the class the source generator writes calls it.
-        var text = GeneratedCode.CreateSetText<IGeneratedCodeLocalization, string>("Shop.Greeting", static (set, value) => set.Greeting(value), new GeneratedCodeLocalizationEn(), name);
+        var wording = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);
 
         // Assert
-        text.Key.ShouldBe("Greeting");
-        text.FullKey.ShouldBe("Shop.Greeting");
-        text.Contract.ShouldBe(typeof(IGeneratedCodeLocalization));
-        text.DefaultText.ShouldBe("Hello, Anna!");
-        text.Arguments.ShouldBe(["Anna"]);
+        wording.ShouldBe("Hello, Anna!");
+    }
+
+    [Test]
+    public void WordSetText_WithTwoToEightValues_ShouldHandThemToTheSetInOrder()
+    {
+        // Arrange
+        using var _ = new CulturesScope("en-US");
+
+        // Act: an overload per number of values, up to the most a text takes.
+        var two = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string>(
+            2, 3, "Joined", static (set, a, b) => set.Joined([a, b]), "1", "2");
+        var three = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string>(
+            2, 3, "Joined", static (set, a, b, c) => set.Joined([a, b, c]), "1", "2", "3");
+        var four = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string>(
+            2, 3, "Joined", static (set, a, b, c, d) => set.Joined([a, b, c, d]), "1", "2", "3", "4");
+        var five = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string>(
+            2, 3, "Joined", static (set, a, b, c, d, e) => set.Joined([a, b, c, d, e]), "1", "2", "3", "4", "5");
+        var six = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string, string>(
+            2, 3, "Joined", static (set, a, b, c, d, e, f) => set.Joined([a, b, c, d, e, f]), "1", "2", "3", "4", "5", "6");
+        var seven = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string, string, string>(
+            2, 3, "Joined", static (set, a, b, c, d, e, f, g) => set.Joined([a, b, c, d, e, f, g]), "1", "2", "3", "4", "5", "6", "7");
+        var eight = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string, string, string, int>(
+            2, 3, "Joined", static (set, a, b, c, d, e, f, g, h) => set.Joined([a, b, c, d, e, f, g, h.ToString(CultureInfo.InvariantCulture)]), "1", "2", "3", "4", "5", "6", "7", 8);
+
+        // Assert
+        two.ShouldBe("1+2");
+        three.ShouldBe("1+2+3");
+        four.ShouldBe("1+2+3+4");
+        five.ShouldBe("1+2+3+4+5");
+        six.ShouldBe("1+2+3+4+5+6");
+        seven.ShouldBe("1+2+3+4+5+6+7");
+        eight.ShouldBe("1+2+3+4+5+6+7+8");
+    }
+
+    [Test]
+    public void WordSetText_ForPositionOutsideTheTexts_ShouldStillWordTheText()
+    {
+        // Arrange: a position no generated class passes, as code written by hand could.
+        using var _ = new CulturesScope("en-US");
+
+        // Act
+        var wording = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(7, 3, "Checkout", static set => set.Checkout);
+        var negative = GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(-1, 3, "Checkout", static set => set.Checkout);
+
+        // Assert: worded, and no set is kept or read outside the texts.
+        wording.ShouldBe("Checkout");
+        negative.ShouldBe("Checkout");
+        GeneratedCode.FindSet<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
+        GeneratedCode.FindSet<IGeneratedCodeLocalization>(-1, 3).ShouldBeNull();
+        GeneratedCode.FindSetForValues<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
+    }
+
+    [Test]
+    public void WordSetText_WithNull_ShouldThrowArgumentNullException()
+    {
+        // Arrange & Act & Assert: for a text without values and for one with.
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, null!, static set => set.Checkout))
+            .ParamName.ShouldBe("name");
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, "Checkout", null!));
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, null!, static (set, name) => set.Greeting(name), "Anna"))
+            .ParamName.ShouldBe("name");
+        Should.Throw<ArgumentNullException>(() => GeneratedCode.WordSetText<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, "Greeting", null!, "Anna"))
+            .ParamName.ShouldBe("selector");
     }
 
     [Test]
@@ -210,199 +442,42 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void SetOfDefaultLanguage_ShouldBeCreatedOnceWhenATextFirstNeedsIt()
+    {
+        // Arrange
+        using var _ = new CulturesScope("en-US");
+
+        // Act & Assert: asking for a kept set creates none.
+        GeneratedCode.FindSet<ILazyLocalization>(0, 1).ShouldBeNull();
+        LazyLocalizationEn.Created.ShouldBe(0);
+
+        // The first text that needs the set creates it, and every text after it reads the same one.
+        GeneratedCode.WordSetText<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
+        GeneratedCode.WordSetText<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
+        LazyLocalizationEn.Created.ShouldBe(1);
+        GeneratedCode.FindSet<ILazyLocalization>(0, 1).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
+    }
+
+    [Test]
     public void SetOfDefaultLanguageWhoseConstructorThrows_ShouldNotFailUntilATextNeedsIt()
     {
-        // Arrange & Act: as the class the source generator writes declares a text, when the class is first used.
-        var text = GeneratedCode.CreateSetText<IThrowingLocalization>("Shop.Checkout", static set => set.Checkout, GeneratedCode.GetDefaultSet<ThrowingLocalizationEn>);
+        // Arrange
+        using var _ = new CulturesScope("en-US");
 
-        // Assert: declaring the text creates no set, so the class is there for every text. What needs the set says
-        // which set threw, with the set's own exception inside, and so does every read after it.
+        // Act & Assert: asking for a kept set creates none, so the generated class is there for every text.
+        GeneratedCode.FindSet<IThrowingLocalization>(0, 1).ShouldBeNull();
         ThrowingLocalizationEn.Created.ShouldBe(0);
-        text.Key.ShouldBe("Checkout");
-        text.Contract.ShouldBe(typeof(IThrowingLocalization));
 
-        var first = Should.Throw<InvalidOperationException>(() => text.DefaultText);
-        var second = Should.Throw<InvalidOperationException>(() => text.DefaultLanguage);
+        // What needs the set says which set threw, with the set's own exception inside, and so does every read after
+        // it, which tries again.
+        var first = Should.Throw<InvalidOperationException>(() => GeneratedCode.WordSetText<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, "Checkout", static set => set.Checkout));
+        var second = Should.Throw<InvalidOperationException>(() => GeneratedCode.WordSetText<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, "Checkout", static set => set.Checkout));
 
         first.Message.ShouldContain(nameof(ThrowingLocalizationEn));
         first.InnerException.ShouldBeOfType<FormatException>().Message.ShouldBe("No shop name.");
         second.Message.ShouldBe(first.Message);
-    }
-
-    [Test]
-    public void CreateSetText_WithWhatGivesTheSet_ShouldWordItsDefaultTextWithThatSet()
-    {
-        // Arrange & Act
-        var text = GeneratedCode.CreateSetText<IGeneratedCodeLocalization, string>("Shop.Greeting", static (set, value) => set.Greeting(value), GeneratedCode.GetDefaultSet<GeneratedCodeLocalizationEn>(), "Anna");
-        var hint = GeneratedCode.CreateSetText<IGeneratedCodeLocalization>("Shop.Hint", static set => set.Greeting("you"), GeneratedCode.GetDefaultSet<GeneratedCodeLocalizationEn>);
-
-        // Assert: the language comes from the set's name, as for a set that is passed in.
-        text.DefaultText.ShouldBe("Hello, Anna!");
-        hint.DefaultText.ShouldBe("Hello, you!");
-        hint.DefaultLanguage.ShouldBe("en");
-    }
-
-    [Test]
-    public void CreateText_ShouldGiveTextWithItsTranslations()
-    {
-        // Arrange & Act
-        var text = GeneratedCode.CreateText("Orders", ("nl", "Bestellingen"));
-
-        // Assert
-        text.DefaultText.ShouldBe("Orders");
-        text.GetWording(new CultureInfo("nl-NL")).ShouldBe("Bestellingen");
-    }
-
-    [Test]
-    [Arguments("", "en")]
-    [Arguments("s", "")]
-    public void CreateText_ShouldTakeEmptyWordingInAnyLanguage(string english, string dutch)
-    {
-        // Arrange & Act: a suffix one language has and another lacks. The default language is no exception.
-        var text = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
-
-        // Assert
-        text.DefaultText.ShouldBe(english);
-        text.GetWording(new CultureInfo("nl-NL")).ShouldBe(dutch);
-    }
-
-    [Test]
-    public void CreateText_ShouldRefuseNullWording()
-    {
-        // Arrange, Act & Assert
-        Should.Throw<ArgumentNullException>(() => GeneratedCode.CreateText(null!, ("nl", "Bestellingen")));
-        Should.Throw<ArgumentNullException>(() => GeneratedCode.CreateText("Orders", ("nl", null!)));
-    }
-
-    [Test]
-    public void CreateText_WithSameStrings_ShouldGiveTextCreatedOnce()
-    {
-        // Arrange & Act: the same literals twice, as markup that writes LocalizableText.Inline does on every render.
-        var first = GeneratedCode.CreateText("Shipments", ("en", "Shipments"), ("nl", "Zendingen"));
-        var second = GeneratedCode.CreateText("Shipments", ("en", "Shipments"), ("nl", "Zendingen"));
-
-        // Assert
-        second.ShouldBeSameAs(first);
-    }
-
-    [Test]
-    public void CreateText_WithOtherTranslation_ShouldGiveTextOfItsOwn()
-    {
-        // Arrange & Act: the same English wording, and another Dutch one.
-        var dutch = new CultureInfo("nl-NL");
-        var deliveries = GeneratedCode.CreateText("Deliveries", ("en", "Deliveries"), ("nl", "Leveringen"));
-        var other = GeneratedCode.CreateText("Deliveries", ("en", "Deliveries"), ("nl", "Bezorgingen"));
-
-        // Assert
-        other.ShouldNotBeSameAs(deliveries);
-        deliveries.GetWording(dutch).ShouldBe("Leveringen");
-        other.GetWording(dutch).ShouldBe("Bezorgingen");
-    }
-
-    [Test]
-    public void CreateText_WithWordingMadeAtRunTime_ShouldShowItsOwnValue()
-    {
-        // Arrange: wording with a value, which is a new string on every call.
-        var dutch = new CultureInfo("nl-NL");
-        static LocalizableText Greeting(string name) =>
-            GeneratedCode.CreateText($"Hello, {name}!", ("en", $"Hello, {name}!"), ("nl", $"Hallo, {name}!"));
-
-        // Act
-        var ada = Greeting("Ada");
-        var bob = Greeting("Bob");
-
-        // Assert: each shows its own value, also where a later text took the slot of an earlier one.
-        ada.DefaultText.ShouldBe("Hello, Ada!");
-        ada.GetWording(dutch).ShouldBe("Hallo, Ada!");
-        bob.DefaultText.ShouldBe("Hello, Bob!");
-        bob.GetWording(dutch).ShouldBe("Hallo, Bob!");
-    }
-
-    [Test]
-    public void CreateText_WithWordingMadeAtRunTime_ShouldNotKeepIt()
-    {
-        // Arrange & Act: wording with a value, which is a new string on every call, so no later call could find it.
-        var wording = CreateAndForget("Ada");
-
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        // Assert: nothing holds the wording once its text is gone, so a user's name doesn't stay in memory.
-        wording.IsAlive.ShouldBeFalse();
-
-        // A method of its own, so that nothing of it holds the wording when the collector runs.
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        static WeakReference CreateAndForget(string name)
-        {
-            var english = $"Hello, {name}!";
-            _ = GeneratedCode.CreateText(english, ("en", english), ("nl", $"Hallo, {name}!"));
-
-            return new WeakReference(english);
-        }
-    }
-
-    [Test]
-    public void CreateText_WithOneWordingMadeAtRunTime_ShouldNotKeepIt()
-    {
-        // Arrange: a default wording that is a literal, and Dutch wording made at run time.
-        var dutch = String.Concat("Retour", "zendingen");
-
-        // Act: the same strings twice.
-        var first = GeneratedCode.CreateText("Returns", ("en", "Returns"), ("nl", dutch));
-        var second = GeneratedCode.CreateText("Returns", ("en", "Returns"), ("nl", dutch));
-
-        // Assert: the first wasn't kept, though its default wording is no new string.
-        second.ShouldNotBeSameAs(first);
-    }
-
-    [Test]
-    public void CreateText_WithSameStrings_ShouldAllocateNothingOnceKept()
-    {
-        // Arrange & Act: per 10,000 calls with the same literals.
-        var allocated = GeneratedSetsTests.Allocated(static () => GeneratedCode.CreateText("Invoices", ("en", "Invoices"), ("nl", "Facturen"))) / 10_000;
-
-        // Assert
-        allocated.ShouldBe(0);
-    }
-
-    [Test]
-    public void CreateText_WithWordingOnLargeObjectHeap_ShouldNotKeepTheText()
-    {
-        // Arrange: the runtime reports a string this large as old from the start, so it can't be told from a literal. It
-        // may hold a value, such as the body of an email, so its text isn't kept.
-        var english = new string('a', 60_000);
-        var dutch = new string('b', 60_000);
-
-        // Act
-        var first = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
-        var second = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
-
-        // Assert
-        second.ShouldNotBeSameAs(first);
-        second.ToString(CultureInfo.GetCultureInfo("nl")).ShouldBe(dutch);
-    }
-
-    [Test]
-    [Arguments(3_899, true)]
-    [Arguments(3_900, false)]
-    public void CreateText_WithOldWording_ShouldKeepTextOnlyBelowMonosLargeObjects(int length, bool isKept)
-    {
-        // Arrange: wording that outlived a collection, as a large string does on Mono from the start. Mono, which runs
-        // Blazor WebAssembly, puts an object of more than 8,000 bytes in its large object space, which it reports as
-        // old: a string of about 3,990 characters. So wording of 3,900 characters or more is never kept.
-        var english = new string('e', length);
-        var dutch = new string('n', length);
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        // Act
-        var first = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
-        var second = GeneratedCode.CreateText(english, ("en", english), ("nl", dutch));
-
-        // Assert
-        ReferenceEquals(first, second).ShouldBe(isKept);
-        second.ToString(CultureInfo.GetCultureInfo("nl")).ShouldBe(dutch);
+        ThrowingLocalizationEn.Created.ShouldBe(2);
+        GeneratedCode.FindSet<IThrowingLocalization>(0, 1).ShouldBeNull();
     }
 }

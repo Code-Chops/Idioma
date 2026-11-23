@@ -324,7 +324,10 @@ public sealed class HiddenTextCodeFixProviderTests
 
         // Assert
         var fix = fixes.Single(static fix => fix.Title.StartsWith("List", StringComparison.Ordinal));
-        fix.Sources[0].ShouldBe(english.Replace(": ShopLocalizationEn\n", ": ShopLocalizationEn, IShopLocalization\n", StringComparison.Ordinal));
+        fix.Sources[0].ShouldBe(english.Replace(
+            "public partial class ShopLocalizationEnGb : ShopLocalizationEn",
+            "public partial class ShopLocalizationEnGb : ShopLocalizationEn, IShopLocalization",
+            StringComparison.Ordinal));
         fix.Sources[1].ShouldBe(British);
     }
 

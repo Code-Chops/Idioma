@@ -20,9 +20,8 @@ namespace CodeChops.Idioma;
 /// as <c>Inline</c>. <see cref="LocalizableText.GetTextByMember{T}(string)"/> gives the text of a member.</item>
 /// </list>
 /// <para>
-/// With two or more languages listed, a plain string where a text is expected is a build error (<c>LOC500</c>). So a
-/// text can't end up in one language by accident. A value that isn't your wording, such as a customer's name, still
-/// converts to a text.
+/// Every text is a <see cref="string"/>: the wording for the user's language at the moment you read it. Read a text
+/// where you show it, because a string kept in a static field stays in the language of the first user.
 /// </para>
 /// <para>
 /// In an application, the first language is the fallback for every text, including the texts of the libraries it
@@ -41,15 +40,14 @@ namespace CodeChops.Idioma;
 /// your English.
 /// </para>
 /// <para>
-/// An assembly without this attribute has no texts of its own to translate. Its strings convert to texts as they are,
-/// and neither <c>LocalizableText.Inline</c> nor <c>[Localized]</c> exists there. It can still reword a library's set,
-/// or give a library's contract another language.
+/// An assembly without this attribute has no texts of its own to translate. Neither <c>LocalizableText.Inline</c> nor
+/// <c>[Localized]</c> exists there. It can still reword a library's set, or give a library's contract another
+/// language.
 /// </para>
 /// <para>
 /// The build reports each mistake with a code, such as <c>LOC201</c>.
 /// <see href="https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md">What the build rejects</see> lists
 /// every code with its fix.
-/// A test project that writes texts as plain strings can turn off <c>LOC500</c> with <c>NoWarn</c>.
 /// </para>
 /// </remarks>
 /// <example>
@@ -59,7 +57,7 @@ namespace CodeChops.Idioma;
 ///
 /// public static class ShopTexts
 /// {
-///     public static LocalizableText Checkout { get; } = LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
+///     public static string Checkout => LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
 /// }
 /// </code>
 /// </example>

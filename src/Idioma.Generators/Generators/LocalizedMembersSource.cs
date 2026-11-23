@@ -1,20 +1,14 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes the texts of the members marked <c>[Localized]</c> (<see cref="LocalizedMembers"/>): a
-/// <c>LocalizableText</c> per member, with the wording its attribute gives per language, and one function that finds
-/// a member's text by its type and name. The assembly's registrar records that function
+/// Writes the texts of the members marked <c>[Localized]</c> (<see cref="LocalizedMembers"/>): the
+/// wording of each member per language, as its attribute gives it, and one function that finds
+/// a member's wording by its type and name. The assembly's registrar records that function
 /// (<see cref="LocalizationRegistrationPart"/>, which also writes this file), so
 /// <c>LocalizableText.GetTextByMember</c> finds the text without reading an attribute at run time. For an enum with a
 /// marked member it also writes the extension method that gives a value its text: <c>status.GetText()</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Each text has a key, because its member gives it a name. Its full key is the member's full name, such as
-/// <c>Shop.Domain.Address.City</c>, and its key is the member's name. A type's own text has the type's full name and
-/// name. A type inside another is written with dots, and a type with type parameters keeps its arity
-/// (<c>Shop.Domain.Page`1.Items</c>), so that <c>Page</c> and <c>Page&lt;T&gt;</c> don't share keys.
-/// </para>
 /// <para>
 /// The code lies in one file, at the top level of the assembly. A type it can't name from there, which is a private
 /// or protected nested type or a file-local one, gets no text, and <c>LocalizedMemberAnalyzer</c> says so
@@ -72,7 +66,7 @@ internal static class LocalizedMembersSource
                 {
                     internal static void Register()
                     {
-                        {{PackageNames.GeneratedCode}}.RecordMemberTexts(static (type, member) => {{OwnMembersName}}.Find(type, member));
+                        {{PackageNames.GeneratedCode}}.RecordMemberTexts({{OwnMembersName}}.Languages, static (type, member) => {{OwnMembersName}}.Find(type, member));
                     }
                 }
             }
@@ -84,9 +78,20 @@ internal static class LocalizedMembersSource
             file static class {{OwnMembersName}}
             {
                 /// <summary>
-                /// The text of a member of a type, or the type's own text for a member that is <see langword="null"/>.
+                /// The languages of this assembly, the default first. Each text below has its wording in this order.
                 /// </summary>
-                internal static {{PackageNames.LocalizableText}}? Find(System.Type type, string? member)
+                internal static readonly string[] Languages = [{{String.Join(", ", model.Codes.Select(static code => SymbolDisplay.FormatLiteral(code, quote: true)))}}];
+
+                /// <summary>
+                /// The wording of a text for the current UI culture.
+                /// </summary>
+                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.FindLanguage(Languages)];
+
+                /// <summary>
+                /// The wording of a member of a type per language, in the order of <see cref="Languages"/>, or the type's own for a member that is
+                /// <see langword="null"/>.
+                /// </summary>
+                internal static string[]? Find(System.Type type, string? member)
                 {
             """);
 
@@ -136,7 +141,7 @@ internal static class LocalizedMembersSource
     }
 
     /// <summary>
-    /// Writes the class that holds the texts of one type, each created when the class is first used. For an enum it
+    /// Writes the class that holds the texts of one type, each with its wording per language. For an enum it
     /// also holds the text of each value, which the extension method gives.
     /// </summary>
     // The fields are numbered, and not named after their members: a field named like the start of a namespace would
@@ -157,19 +162,17 @@ internal static class LocalizedMembersSource
 
         foreach (var text in type.Texts)
         {
-            var fullKey = text.MemberName is null ? type.Key : $"{type.Key}.{text.MemberName}";
-            var key = text.MemberName ?? type.Name;
-            var wordings = String.Join(", ", model.Codes.Select((code, language) =>
-                $"({SymbolDisplay.FormatLiteral(code, quote: true)}, {SymbolDisplay.FormatLiteral(text.Wordings[language], quote: true)})"));
+            // The wording per language, in the order of the assembly's languages.
+            var wordings = String.Join(", ", model.Codes.Select((_, language) => SymbolDisplay.FormatLiteral(text.Wordings[language], quote: true)));
 
-            sb.AppendLine($"    internal static readonly {PackageNames.LocalizableText} {GetFieldName(text, ref number)} = {PackageNames.GeneratedCode}.CreateMemberText({SymbolDisplay.FormatLiteral(fullKey, quote: true)}, {SymbolDisplay.FormatLiteral(key, quote: true)}, {wordings});");
+            sb.AppendLine($"    internal static readonly string[] {GetFieldName(text, ref number)} = [{wordings}];");
         }
 
         if (type.Extension is not null)
         {
             sb.AppendLine($$"""
 
-                    internal static {{PackageNames.LocalizableText}} Get({{type.Reference}} value) => value switch
+                    internal static string Get({{type.Reference}} value) => value switch
                     {
                 """);
 
@@ -182,11 +185,11 @@ internal static class LocalizedMembersSource
                 var field = GetFieldName(text, ref number);
 
                 if (text.MemberName is not null && (text.EnumValue is null || values.Add(text.EnumValue)))
-                    sb.AppendLine($"        {type.Reference}.{LocalizationSetsPart.EscapeIdentifier(text.MemberName)} => {field},");
+                    sb.AppendLine($"        {type.Reference}.{LocalizationSetsPart.EscapeIdentifier(text.MemberName)} => {OwnMembersName}.Word({field}),");
             }
 
             sb.AppendLine($$"""
-                        _ => {{PackageNames.GeneratedCode}}.CreateUndefinedEnumText<{{type.Reference}}>(value),
+                        _ => value.ToString(),
                     };
                 """);
         }
@@ -230,7 +233,7 @@ internal static class LocalizedMembersSource
                     /// A value without such a member shows as <c>ToString()</c> writes it. That's a member that isn't marked, or a value that isn't a
                     /// member, such as a combination of flags.
                     /// </remarks>
-                    {{accessibility}} {{PackageNames.LocalizableText}} {{LocalizedMembers.ExtensionName}}() => {{TextsName}}{{index}}.Get(value);
+                    {{accessibility}} string {{LocalizedMembers.ExtensionName}}() => {{TextsName}}{{index}}.Get(value);
                 }
             }
             """;

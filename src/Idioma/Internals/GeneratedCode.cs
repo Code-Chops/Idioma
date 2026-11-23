@@ -20,46 +20,36 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// Creates a text with its translations, for the generated <c>LocalizableText.Inline</c>.
-    /// <c>LocalizableText.Inline</c> demands every language of
-    /// <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>.
+    /// Picks the wording of the generated <c>LocalizableText.Inline</c> for the current UI culture: the position,
+    /// among the languages of the assembly, of the one the text shows. <c>LocalizableText.Inline</c> demands every
+    /// language of <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, and returns the wording at that
+    /// position.
     /// </para>
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// A call with the same strings as an earlier one gets the text that call created, where it's still kept. The same
-    /// means the same string objects, not only the same characters. A string literal is the same object on every call,
-    /// so a call with literals finds its text. A text isn't kept when part of its wording is a new string, as wording
-    /// with a value is, because no later call could find it. Wording of 3,900 characters or more isn't kept either. A
-    /// string that outlived a garbage collection before the call is kept like a literal, also when it holds a value.
-    /// </para>
+    /// A culture with wording gets it, or else that of a culture above it. A culture none of the app's languages
+    /// serves gets the wording in the app's default language, else the first.
     /// </remarks>
-    /// <param name="defaultText">
-    /// The wording shown for every culture without a translation. It may be empty, as the wording of any other
-    /// language may.
+    /// <param name="languages">
+    /// The languages of the assembly, each a culture name such as <c>en</c> or <c>en-GB</c>, in any letter case, the
+    /// default language first. The generated code passes the same array on every call.
     /// </param>
-    /// <param name="translations">
-    /// The translations, each a language (a culture name such as <c>en</c> or <c>en-GB</c>, in any letter case) and its
-    /// wording. Each language is listed once.
-    /// </param>
-    /// <exception cref="ArgumentNullException">
-    /// When <paramref name="defaultText"/>, a language, or the wording of a language is <see langword="null"/>.
-    /// </exception>
+    /// <exception cref="ArgumentNullException">When <paramref name="languages"/> is <see langword="null"/>.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateText(string defaultText, params ReadOnlySpan<(string Language, string Text)> translations)
+    // An array, and not a span: the generated code passes the one array it keeps, which is told apart by reference.
+#pragma warning disable MA0109 // Consider adding an overload with a Span<T> or Memory<T>
+    public static int FindLanguage(string[] languages)
+#pragma warning restore MA0109
     {
-        var text = LocalizableText.FindOrCreateInline(defaultText, translations);
-        return text;
+        ArgumentNullException.ThrowIfNull(languages);
+
+        var index = InlineLanguage.Find(languages);
+        return index;
     }
 
     /// <summary>
-    /// <para>
-    /// Don't use this method directly! This code is called by source-generated code.
-    /// </para>
-    /// <para>
     /// The set of a contract's default language, which gives the texts of the generated class their default wording.
     /// It's one instance per set, created when a text first needs it.
-    /// </para>
     /// </summary>
     /// <remarks>
     /// The set isn't created as the generated class is first used. So a set whose constructor throws doesn't fail that
@@ -70,8 +60,7 @@ public static class GeneratedCode
     /// <exception cref="InvalidOperationException">
     /// When the set's constructor throws, with that exception inside. The message names the set.
     /// </exception>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TSet GetDefaultSet<TSet>()
+    internal static TSet GetDefaultSet<TSet>()
         where TSet : class, ILocalizationSet, new()
     {
         var set = DefaultSet<TSet>.Instance ?? DefaultSet<TSet>.Create();
@@ -118,85 +107,164 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// Declares a text of a localization contract, with its default wording taken from a set that is created when the
-    /// text first needs it. The generated class declares its texts this way:
+    /// The set that words a text without parameters for the current UI culture, or <see langword="null"/> where none
+    /// is kept yet. A property of the generated class reads its wording from it, and words the text with
+    /// <see cref="WordSetText{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/> otherwise:
     /// <code>
-    /// GeneratedCode.CreateSetText&lt;IShopLocalization&gt;("MyApp.Localization.ShopLocalization.Checkout",
-    ///     static set => set.Checkout, GeneratedCode.GetDefaultSet&lt;ShopLocalizationEn&gt;)
+    /// FindSet&lt;IShopLocalization&gt;(1, 3)?.Checkout
+    ///     ?? WordSetText&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, "Checkout", static set => set.Checkout)
     /// </code>
     /// </para>
     /// </summary>
     /// <remarks>
-    /// The generated class creates its texts as it's first used. A set created there would fail the class for good
-    /// when its constructor throws. So the text takes what gives the set, and asks it when it words its default
-    /// wording or reads its <see cref="LocalizableText.DefaultLanguage"/>.
+    /// The current UI culture is <see cref="CultureInfo.CurrentUICulture"/>, unless the app sets
+    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/>. Nothing is allocated.
+    /// </remarks>
+    /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
+    /// <param name="text">The position of the text among the texts of its generated class.</param>
+    /// <param name="count">The number of texts the generated class has.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static TContract? FindSet<TContract>(int text, int count)
+        where TContract : class
+    {
+        CultureInfo culture;
+        CultureInfo? provided = null;
+        var isAsked = false;
+
+        // Inside a text being worded, its culture, which a provider would otherwise override. Without a provider that
+        // culture is the thread's, so the scope isn't read.
+        if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
+        {
+            culture = CultureInfo.CurrentUICulture;
+        }
+        else if (WordingScope.Current is { } entered)
+        {
+            culture = entered;
+        }
+        else
+        {
+            provided = LocalizationRegistry.AskProvider(provider);
+            isAsked = true;
+            culture = provided ?? CultureInfo.CurrentUICulture;
+        }
+
+        var sets = ResolvedSets<TContract>.Find(culture, count).Sets;
+        var set = (uint)text < (uint)sets.Length ? sets[text] : null;
+
+        // WordSetText words the text next, and takes this answer rather than ask the provider again, which may read a
+        // request or a user's profile.
+        if (set is null && isAsked)
+            WordingScope.KeepProvidedCulture(provided);
+
+        return set;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// The set that words a text with parameters for the current UI culture, or <see langword="null"/> where none is
+    /// kept yet. A method of the generated class calls the set's method with its values, and words the text with
+    /// <c>WordSetText</c> otherwise:
+    /// <code>
+    /// FindSetForValues&lt;IShopLocalization&gt;(2, 3)?.Greeting(name)
+    ///     ?? WordSetText&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, "Greeting", static (set, name) => set.Greeting(name), name)
+    /// </code>
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// The set's method formats the values as it runs, for <see cref="CultureInfo.CurrentCulture"/>. Where
+    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/> gives a culture the thread doesn't have, this gives
+    /// <see langword="null"/>, and <c>WordSetText</c> runs the method in that culture.
+    /// </remarks>
+    /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
+    /// <param name="text">The position of the text among the texts of its generated class.</param>
+    /// <param name="count">The number of texts the generated class has.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static TContract? FindSetForValues<TContract>(int text, int count)
+        where TContract : class
+    {
+        CultureInfo culture;
+
+        if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
+        {
+            culture = CultureInfo.CurrentUICulture;
+        }
+        else if (WordingScope.Current is { } entered)
+        {
+            // Inside a text being worded, which set the thread's cultures for its own.
+            culture = entered;
+        }
+        else
+        {
+            var provided = LocalizationRegistry.AskProvider(provider);
+
+            // The method must run in the provided culture, which takes a scope where the thread has another.
+            // WordSetText enters it, with this answer of the provider.
+            if (provided is not null && (!ReferenceEquals(provided, CultureInfo.CurrentCulture) || !provided.Equals(CultureInfo.CurrentUICulture)))
+            {
+                WordingScope.KeepProvidedCulture(provided);
+                return null;
+            }
+
+            culture = provided ?? CultureInfo.CurrentUICulture;
+
+            var keptSets = ResolvedSets<TContract>.Find(culture, count).SetsForValues;
+            var keptSet = (uint)text < (uint)keptSets.Length ? keptSets[text] : null;
+
+            if (keptSet is null)
+                WordingScope.KeepProvidedCulture(provided);
+
+            return keptSet;
+        }
+
+        var sets = ResolvedSets<TContract>.Find(culture, count).SetsForValues;
+
+        var set = (uint)text < (uint)sets.Length ? sets[text] : null;
+        return set;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// The wording of a text of a localization contract for the current UI culture, for a text whose set
+    /// <see cref="FindSet{TContract}"/> doesn't hold. It finds the set that words the text, and keeps it where the same
+    /// set words the text on every call.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// The text gives the first wording it finds: that of the set for the current UI culture, then that of the set for
+    /// the app's default language, then that of the set for the language of <typeparamref name="TDefaultSet"/>, and
+    /// last that of <typeparamref name="TDefaultSet"/> itself, which is created when a text first needs it.
     /// </remarks>
     /// <typeparam name="TContract">
     /// The contract the text belongs to. Every registered set implementing it provides the text.
     /// </typeparam>
-    /// <param name="key">The name of this text in a resource file.</param>
+    /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
+    /// <param name="text">The position of the text among the texts of its generated class.</param>
+    /// <param name="count">The number of texts the generated class has.</param>
+    /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="selector">Picks the text from a set.</param>
-    /// <param name="defaultSet">
-    /// Gives the set that supplies the default wording, the contract's set of the default language. It implements
-    /// <typeparamref name="TContract"/>.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// When <paramref name="key"/> is empty or white-space. Pass the name the text has in the resource file.
-    /// </exception>
     /// <exception cref="ArgumentNullException">
-    /// When <paramref name="key"/>, <paramref name="selector"/>, or <paramref name="defaultSet"/> is
-    /// <see langword="null"/>.
-    /// </exception>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract>(string key, Func<TContract, string> selector, Func<ILocalizationSet> defaultSet)
-        where TContract : class
-    {
-        var text = LocalizableText.Create(key, selector, defaultSet);
-        return text;
-    }
-
-    /// <summary>
-    /// <para>
-    /// Don't use this method directly! This code is called by source-generated code.
-    /// </para>
-    /// <para>
-    /// Declares a text of a localization contract, with its default wording taken from a set that exists already:
-    /// <code>
-    /// GeneratedCode.CreateSetText&lt;IShopLocalization&gt;("MyApp.Localization.ShopLocalization.Checkout",
-    ///     static set => set.Checkout, new ShopLocalizationEn())
-    /// </code>
-    /// The generated class passes what gives the set instead
-    /// (<see cref="CreateSetText{TContract}(string, Func{TContract, string}, Func{ILocalizationSet})"/>).
-    /// </para>
-    /// </summary>
-    /// <typeparam name="TContract">
-    /// The contract the text belongs to. Every registered set implementing it provides the text.
-    /// </typeparam>
-    /// <param name="key">The name of this text in a resource file.</param>
-    /// <param name="selector">Picks the text from a set.</param>
-    /// <param name="defaultSet">
-    /// The set that supplies the default wording, the contract's set of the default language. It implements
-    /// <typeparamref name="TContract"/>.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// When <paramref name="key"/> is empty or white-space. Pass the name the text has in the resource file. Also when
-    /// <paramref name="defaultSet"/> doesn't implement <typeparamref name="TContract"/>.
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// When <paramref name="key"/>, <paramref name="selector"/>, or <paramref name="defaultSet"/> is
-    /// <see langword="null"/>.
+    /// When <paramref name="name"/> or <paramref name="selector"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// When <paramref name="defaultSet"/> has no language code, because its name doesn't end in one, and it doesn't
-    /// implement <see cref="ILocalizationSet.LocalizationLanguageCode"/>. Name the set after its language (<c>ShopLocalizationEn</c>),
-    /// or implement that property.
+    /// When every set gives <see langword="null"/> as the wording. Return a string from the set of the default
+    /// language, such as an empty one where a value is missing. Also when the constructor of that set throws, or it has
+    /// no language code (<c>LOC400</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract>(string key, Func<TContract, string> selector, ILocalizationSet defaultSet)
+    public static string WordSetText<TContract, TDefaultSet>(int text, int count, string name, Func<TContract, string?> selector)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var text = LocalizableText.Create(key, selector, defaultSet);
-        return text;
+        ArgumentNullException.ThrowIfNull(selector);
+
+        var wording = Word<TContract, TDefaultSet>(text, count, name, selector, takesValues: false);
+        return wording;
     }
 
     /// <summary>
@@ -204,269 +272,187 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// Declares a text of a localization contract that takes values, with its default wording taken from a set. A
-    /// method of the generated class creates its text this way, on every call, with an overload per number of values:
-    /// <c>GeneratedCode.CreateSetText&lt;IShopLocalization, string&gt;("MyApp.Localization.ShopLocalization.Greeting",
-    /// static (set, name) => set.Greeting(name), GeneratedCode.GetDefaultSet&lt;ShopLocalizationEn&gt;(),
-    /// name)</c>.
-    /// <see cref="GetDefaultSet{TSet}"/> gives one instance of the set, which it creates at the first call.
+    /// The wording of a text of a localization contract that takes values, for the current UI culture, for a text whose
+    /// set <see cref="FindSetForValues{TContract}"/> doesn't give. There's an overload per number of values.
     /// </para>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The text keeps each value as its own type, so a number isn't boxed until something reads
-    /// <see cref="LocalizableText.Arguments"/>. A text takes at most 8 values (<c>LOC300</c>).
+    /// The set's method runs in the culture the text is worded for. Where
+    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/> gives a culture, the values are formatted for that
+    /// culture too. A text takes at most 8 values (<c>LOC300</c>).
     /// </para>
     /// <para>
-    /// The set's language code isn't read here. A set without one throws <see cref="InvalidOperationException"/>
-    /// when the text's <see cref="LocalizableText.DefaultLanguage"/> is read, such as when the text falls back to its
-    /// default wording. The build warns about such a set with <c>LOC400</c>.
-    /// </para>
-    /// <para>
-    /// The key isn't checked for being blank, and the set isn't checked for implementing
-    /// <typeparamref name="TContract"/>, because a text that takes values is created on every call. The generated class
-    /// always passes a key and a set that are valid.
+    /// The text falls back as a text without parameters does
+    /// (<see cref="WordSetText{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/>).
     /// </para>
     /// </remarks>
     /// <typeparam name="TContract">
     /// The contract (interface) the text belongs to. Every registered set implementing it provides the text.
     /// </typeparam>
+    /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
     /// <typeparam name="TValue1">The type of the first value.</typeparam>
-    /// <param name="key">The name of this text in a resource file.</param>
+    /// <param name="text">The position of the text among the texts of its generated class.</param>
+    /// <param name="count">The number of texts the generated class has.</param>
+    /// <param name="name">The name of the text, such as <c>Greeting</c>.</param>
     /// <param name="selector">
-    /// Picks the text from a set of the contract, with the values the text keeps. It's handed those values, so it holds
-    /// none itself and one delegate serves every call.
+    /// Picks the text from a set of the contract, with the values. It's handed those values, so it holds none itself
+    /// and one delegate serves every call.
     /// </param>
-    /// <param name="defaultSet">
-    /// The set that supplies the default wording, the contract's set of the default language. It implements
-    /// <typeparamref name="TContract"/>.
-    /// </param>
-    /// <param name="value1">The first value: the first of the text's <see cref="LocalizableText.Arguments"/>.</param>
+    /// <param name="value1">The first value.</param>
     /// <exception cref="ArgumentNullException">
-    /// When <paramref name="key"/>, <paramref name="selector"/>, or <paramref name="defaultSet"/> is
-    /// <see langword="null"/>.
+    /// When <paramref name="name"/> or <paramref name="selector"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// When every set gives <see langword="null"/> as the wording. Also when the constructor of the set of the default
+    /// language throws, or that set has no language code (<c>LOC400</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1>(
-        string key,
-        Func<TContract, TValue1, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1>(
+        int text, int count, string name,
+        Func<TContract, TValue1, string?> selector,
         TValue1 value1)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.Item1),
-            defaultSet: defaultSet,
-            values: new ValueTuple<TValue1>(value1));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2>(
-        string key,
-        Func<TContract, TValue1, TValue2, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, string?> selector,
         TValue1 value1, TValue2 value2)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2),
-            defaultSet: defaultSet,
-            values: (value1, value2));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2, TValue3>(
-        string key,
-        Func<TContract, TValue1, TValue2, TValue3, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2, TValue3>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, TValue3, string?> selector,
         TValue1 value1, TValue2 value2, TValue3 value3)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2, values.value3),
-            defaultSet: defaultSet,
-            values: (value1, value2, value3));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4>(
-        string key,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, TValue3, TValue4, string?> selector,
         TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2, values.value3, values.value4),
-            defaultSet: defaultSet,
-            values: (value1, value2, value3, value4));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5>(
-        string key,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, string?> selector,
         TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2, values.value3, values.value4, values.value5),
-            defaultSet: defaultSet,
-            values: (value1, value2, value3, value4, value5));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6>(
-        string key,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, string?> selector,
         TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2, values.value3, values.value4, values.value5, values.value6),
-            defaultSet: defaultSet,
-            values: (value1, value2, value3, value4, value5, value6));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5, value6), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7>(
-        string key,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, string?> selector,
         TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2, values.value3, values.value4, values.value5, values.value6, values.value7),
-            defaultSet: defaultSet,
-            values: (value1, value2, value3, value4, value5, value6, value7));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5, value6, value7), takesValues: true);
+        return wording;
     }
 
-    /// <inheritdoc cref="CreateSetText{TContract, TValue1}(string, Func{TContract, TValue1, string}, ILocalizationSet, TValue1)"/>
+    /// <inheritdoc cref="WordSetText{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateSetText<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8>(
-        string key,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8, string> selector,
-        ILocalizationSet defaultSet,
+    public static string WordSetText<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8>(
+        int text, int count, string name,
+        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8, string?> selector,
         TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7, TValue8 value8)
         where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var origin = SetTextWithValuesOrigin.Of(
-            key: key,
-            contract: typeof(TContract),
-            selector: selector,
-            callSelector: static (select, set, values) => select((TContract)set, values.value1, values.value2, values.value3, values.value4, values.value5, values.value6, values.value7, values.value8),
-            defaultSet: defaultSet,
-            values: (value1, value2, value3, value4, value5, value6, value7, value8));
+        ArgumentNullException.ThrowIfNull(selector);
 
-        var text = LocalizableText.Create(origin);
-        return text;
+        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5, value6, value7, value8), takesValues: true);
+        return wording;
     }
 
     /// <summary>
-    /// <para>
-    /// Don't use this method directly! This code is called by source-generated code.
-    /// </para>
-    /// <para>
-    /// Creates the text of an enum value that isn't a member of its enum, such as a combination of flags. The method
-    /// <c>GetTextByValue</c> of a generated class calls this for a value that no text of its
-    /// <see cref="ILocalizationSet{TEnum}">set</see> is named after.
-    /// </para>
+    /// Words a text of a contract for the reader of this thread, from the sets of the whole app. Every
+    /// <c>WordSetText</c> ends here.
     /// </summary>
-    /// <remarks>
-    /// The text shows the value as <see cref="Enum.ToString()"/> writes it, in every language. That's its number, or
-    /// the names of its flags.
-    /// </remarks>
-    /// <typeparam name="TEnum">The enum.</typeparam>
-    /// <param name="value">The value.</param>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateUndefinedEnumText<TEnum>(TEnum value)
-        where TEnum : struct, Enum
+    private static string Word<TContract, TDefaultSet>(int text, int count, string name, Func<TContract, string?> select, bool takesValues)
+        where TContract : class
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var text = new LocalizableText(value.ToString());
-        return text;
-    }
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(select);
 
-    /// <summary>
-    /// <para>
-    /// Don't use this method directly! This code is called by source-generated code.
-    /// </para>
-    /// <para>
-    /// Creates the text of a member marked <c>[Localized]</c>, such as a property or a member of an enum. The
-    /// generated code holds the text, so this is called once per member.
-    /// </para>
-    /// </summary>
-    /// <param name="fullKey">
-    /// The full name of the member, such as <c>Shop.Domain.Address.City</c>. It's the text's
-    /// <see cref="LocalizableText.FullKey"/>.
-    /// </param>
-    /// <param name="key">The name of the member, such as <c>City</c>. It's the text's <see cref="LocalizableText.Key"/>.</param>
-    /// <param name="wordings">
-    /// The wording per language, the default language first. Each is a language (a culture name such as <c>en</c> or
-    /// <c>en-GB</c>) and its wording.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// When <paramref name="fullKey"/> is empty or white-space, or <paramref name="wordings"/> is empty.
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// When <paramref name="fullKey"/>, <paramref name="key"/>, a language, or the wording of a language is
-    /// <see langword="null"/>.
-    /// </exception>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText CreateMemberText(string fullKey, string key, params ReadOnlySpan<(string Language, string Text)> wordings)
-    {
-        var text = LocalizableText.CreateMemberText(fullKey, key, wordings);
-        return text;
+        var culture = WordingScope.FindReaderCulture(out var providedCulture, takesKept: true);
+        var resolved = ResolvedSets<TContract>.Find(culture, count);
+        var lookup = resolved.Lookup;
+
+        var wording = lookup.Registry.Word(
+            lookup,
+            culture,
+            valuesCulture: providedCulture,
+            name,
+            select,
+            getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
+            takesValues,
+            resolved,
+            text);
+
+        return wording;
     }
 
     /// <summary>
@@ -478,16 +464,24 @@ public static class GeneratedCode
     /// <c>LocalizableText.GetTextByMember</c> finds them. The assembly's generated registrar calls this once.
     /// </para>
     /// </summary>
-    /// <param name="find">
-    /// Gives the text of a member by the type that declares it and the member's name, or the type's own text for a
-    /// name that is <see langword="null"/>. It gives <see langword="null"/> for what has no text. A type with type
-    /// parameters is passed as its definition.
+    /// <param name="languages">
+    /// The languages of the assembly, each a culture name such as <c>en</c> or <c>en-GB</c>, the default language
+    /// first.
     /// </param>
-    /// <exception cref="ArgumentNullException">When <paramref name="find"/> is <see langword="null"/>.</exception>
+    /// <param name="find">
+    /// Gives the wording of a member per language, in the order of <paramref name="languages"/>, by the type that
+    /// declares the member and the member's name, or the type's own wording for a name that is <see langword="null"/>.
+    /// It gives <see langword="null"/> for what has no text. A type with type parameters is passed as its definition.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="languages"/> or <paramref name="find"/> is <see langword="null"/>.
+    /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RecordMemberTexts(Func<Type, string?, LocalizableText?> find)
+#pragma warning disable MA0109 // Consider adding an overload with a Span<T> or Memory<T> - The languages are kept.
+    public static void RecordMemberTexts(string[] languages, Func<Type, string?, string[]?> find)
+#pragma warning restore MA0109
     {
-        LocalizableText.RecordMemberTexts(find);
+        MemberTexts.Record(languages, find);
     }
 
     /// <summary>
@@ -500,14 +494,14 @@ public static class GeneratedCode
     /// </para>
     /// </summary>
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
-    /// <param name="text">The text the key names.</param>
-    /// <param name="key">The key the text was asked for by. See <see cref="LocalizableText.Key"/>.</param>
+    /// <param name="text">The wording of the text the key names.</param>
+    /// <param name="key">The key the text was asked for by, which is its name.</param>
     /// <param name="values">The values that were passed.</param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="values"/> holds a value, because the text takes none.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static LocalizableText GetKeyedText<TContract>(LocalizableText text, string key, ReadOnlySpan<object?> values)
+    public static string GetKeyedText<TContract>(string text, string key, ReadOnlySpan<object?> values)
         where TContract : class
     {
         if (!values.IsEmpty)
@@ -527,24 +521,18 @@ public static class GeneratedCode
     /// </para>
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// A value isn't converted, with one exception. A <see cref="string"/> for a parameter of type
-    /// <see cref="LocalizableText"/> becomes a text with that one wording, as it does in a call of the text's method.
-    /// </para>
-    /// <para>
-    /// So an <see cref="int"/> isn't accepted for a parameter of type <see cref="long"/>. <see langword="null"/> is
-    /// accepted for a parameter whose type allows it.
-    /// </para>
+    /// A value isn't converted. So an <see cref="int"/> isn't accepted for a parameter of type <see cref="long"/>.
+    /// <see langword="null"/> is accepted for a parameter whose type allows it.
     /// </remarks>
     /// <typeparam name="TValue">The type of the parameter.</typeparam>
-    /// <param name="key">The key the text was asked for by. See <see cref="LocalizableText.Key"/>.</param>
+    /// <param name="key">The key the text was asked for by, which is its name.</param>
     /// <param name="values">The values that were passed, in the order of the parameters.</param>
     /// <param name="index">The position of the parameter.</param>
     /// <param name="count">The number of parameters the text has.</param>
     /// <param name="parameterName">The name of the parameter.</param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="values"/> doesn't hold one value per parameter, or the value at
-    /// <paramref name="index"/> isn't of type <typeparamref name="TValue"/>, nor a string for a text.
+    /// <paramref name="index"/> isn't of type <typeparamref name="TValue"/>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static TValue GetKeyedValue<TValue>(string key, ReadOnlySpan<object?> values, int index, int count, string parameterName)
@@ -559,11 +547,6 @@ public static class GeneratedCode
 
         if (value is null && default(TValue) is null)
             return default!;
-
-        // The one conversion a call of the text's method makes itself, so a key from a database can come with the
-        // string it has. Past the type test above, so a value of the right type pays nothing for it.
-        if (value is string wording && typeof(TValue) == typeof(LocalizableText))
-            return (TValue)(object)new LocalizableText(wording);
 
         var passed = value is null ? "null was" : $"a value of type '{value.GetType()}' was";
 

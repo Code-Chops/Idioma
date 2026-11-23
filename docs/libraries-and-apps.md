@@ -84,8 +84,4 @@ A library allows this by leaving its sets unsealed and its texts `virtual`, as i
 
 ## An assembly without languages
 
-An assembly without `[assembly: SupportedLanguages]` has no texts of its own to translate. Its plain strings work as texts, and it has no `LocalizableText.Inline`, no `[Localized]` and no contract of its own. It can still reword a library's set, or give a library's contract another language.
-
-```csharp
-public LocalizableText Title { get; } = "Orders"; // Compiles here, where it is LOC500 in an assembly with two languages
-```
+An assembly without `[assembly: SupportedLanguages]` has no texts of its own to translate. It has no `LocalizableText.Inline`, no `[Localized]` and no contract of its own. It can still reword a library's set, or give a library's contract another language.

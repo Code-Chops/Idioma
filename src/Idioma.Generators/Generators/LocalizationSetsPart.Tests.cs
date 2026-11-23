@@ -77,7 +77,7 @@ public sealed class LocalizationSetsPartTests
 
         public static class InlineTexts
         {
-            public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+            public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
         }
         """);
 
@@ -376,7 +376,7 @@ public sealed class LocalizationSetsPartTests
 
             public static class Usage
             {
-                public static LocalizableText Text { get; } = ScopeLocalization.Scope(scoped: "all");
+                public static string Text => ScopeLocalization.Scope(scoped: "all");
             }
             """;
 
@@ -781,15 +781,15 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    [Arguments("ShopLocalizationEn", "IShopLocalization", "ShopLocalization", "TestApp.ShopLocalization.")]
-    [Arguments("ShopTextsEn", "IShopTexts", "ShopTexts", "TestApp.ShopTexts.")]
-    [Arguments("LocalizationEn", "ILocalization", "Localization", "TestApp.Localization.")]
-    [Arguments("LocalizationSetEn", "ILocalizationSet", "LocalizationSet", "TestApp.LocalizationSet.")]
-    public void Names_ShouldDeriveFromClassName(string className, string contract, string texts, string keyPrefix)
+    [Arguments("ShopLocalizationEn", "IShopLocalization", "ShopLocalization")]
+    [Arguments("ShopTextsEn", "IShopTexts", "ShopTexts")]
+    [Arguments("LocalizationEn", "ILocalization", "Localization")]
+    [Arguments("LocalizationSetEn", "ILocalizationSet", "LocalizationSet")]
+    public void Names_ShouldDeriveFromClassName(string className, string contract, string texts)
     {
-        // Arrange & Act: a key starts with the full name of the generated class, as that class is named, a trailing
-        // "Localization" included. The last set gets a contract named as the library's own interface is, so each set
-        // lists its contract by its full name.
+        // Arrange & Act: the generated class is named as the set is, without its language, a trailing "Localization"
+        // included. The last set gets a contract named as the library's own interface is, so each set lists its
+        // contract by its full name.
         var text = ContractText(Run($$"""
             using CodeChops.Idioma;
 
@@ -806,18 +806,18 @@ public sealed class LocalizationSetsPartTests
         // Assert
         text.ShouldContain($"public interface {contract}{Environment.NewLine}");
         text.ShouldContain($"public static partial class {texts}");
-        text.ShouldContain($"CreateSetText<{contract}>(\"{keyPrefix}Checkout\",");
+        text.ShouldContain($"public static string Checkout => FindSet<{contract}>(0, 1)?.Checkout ?? WordSetText<{contract}, {className}>(0, 1, \"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
-    [Arguments("namespace TestApp;", "TestApp.ShopLocalization.Checkout")]
-    [Arguments("namespace TestApp.Orders;", "TestApp.Orders.ShopLocalization.Checkout")]
-    [Arguments("namespace TestApp.@event;", "TestApp.event.ShopLocalization.Checkout")]
-    [Arguments("", "ShopLocalization.Checkout")]
-    public void Key_ShouldBeFullNameOfGeneratedText(string @namespace, string key)
+    [Arguments("namespace TestApp;")]
+    [Arguments("namespace TestApp.Orders;")]
+    [Arguments("namespace TestApp.@event;")]
+    [Arguments("")]
+    public void Text_ShouldPassItsNameAndItsPositionWhateverItsNamespace(string @namespace)
     {
-        // Arrange & Act: a key is a name and not code, so a namespace part named like a keyword comes without its @,
-        // and a set in the global namespace has a key without a namespace.
+        // Arrange & Act: a text is told from the others by its name alone, which is its key, in a namespace named
+        // like a keyword and in the global namespace too.
         var text = ContractText(Run($$"""
             using CodeChops.Idioma;
 
@@ -832,11 +832,11 @@ public sealed class LocalizationSetsPartTests
             """));
 
         // Assert
-        text.ShouldContain($"CreateSetText<IShopLocalization>(\"{key}\",");
+        text.ShouldContain("public static string Checkout => FindSet<IShopLocalization>(0, 1)?.Checkout ?? WordSetText<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
-    public void TextsOfOneNameInSetsOfOneName_ShouldGetKeysOfTheirOwn()
+    public void TextsOfOneNameInSetsOfOneName_ShouldEachBeWordedByTheirOwnContract()
     {
         // Arrange & Act: two sets of one name in two namespaces, and a third whose name differs from theirs only in a
         // trailing "Localization", each with a text named Checkout.
@@ -867,13 +867,16 @@ public sealed class LocalizationSetsPartTests
             }
             """);
 
-        // Assert: a resource file can then provide the wording of one of them, and not of all three at once.
+        // Assert: each text names its own contract and set, in its own namespace, so a set of one never words another.
         var generated = result.Results.ShouldHaveSingleItem().GeneratedSources;
         string Contract(string set) => generated.Single(source => String.Equals(source.HintName, $"{set}.Localization.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
-        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("(\"TestApp.Orders.ShopLocalization.Checkout\",");
-        Contract("TestApp.Orders.ShopEn").ShouldContain("(\"TestApp.Orders.Shop.Checkout\",");
-        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("(\"TestApp.Billing.ShopLocalization.Checkout\",");
+        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("namespace TestApp.Orders;");
+        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("WordSetText<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Orders.ShopEn").ShouldContain("namespace TestApp.Orders;");
+        Contract("TestApp.Orders.ShopEn").ShouldContain("WordSetText<IShop, ShopEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("namespace TestApp.Billing;");
+        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("WordSetText<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\",");
     }
 
     [Test]
@@ -1034,7 +1037,7 @@ public sealed class LocalizationSetsPartTests
         var generated = result.Results.ShouldHaveSingleItem().GeneratedSources;
         var text = generated.Single(source => source.HintName is "ShopLocalizationEn.Localization.g.cs").SourceText.ToString();
         text.ShouldNotContain("namespace ");
-        text.ShouldContain(" GetDefaultSet<ShopLocalizationEn>);");
+        text.ShouldContain("WordSetText<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
         generated.Single(source => source.HintName is "LocalizationSets.g.cs").SourceText.ToString().ShouldContain("LocalizationSetAttribute(\"IShopLocalization\", \"en\")");
     }
 
@@ -1055,7 +1058,8 @@ public sealed class LocalizationSetsPartTests
         // Assert
         text.ShouldContain("public interface IShopLocalization");
         text.ShouldContain("public static partial class ShopLocalization");
-        text.ShouldNotContain("CreateSetText<");
+        text.ShouldNotContain("FindSet<");
+        text.ShouldNotContain("WordSetText<");
     }
 
     [Test]
@@ -1118,17 +1122,17 @@ public sealed class LocalizationSetsPartTests
     [Test]
     [Arguments("namespace Checkout;", "Checkout")]
     [Arguments("namespace Orders.Texts;", "Orders")]
-    [Arguments("", "GetDefaultSet")]
+    [Arguments("", "WordSetText")]
     [Arguments("namespace TestApp;", "CodeChops")]
-    [Arguments("namespace TestApp;", "CreateSetText")]
-    [Arguments("namespace TestApp;", "GetDefaultSet")]
-    [Arguments("namespace TestApp;", "ResourceKeyPrefix")]
+    [Arguments("namespace TestApp;", "FindSet")]
+    [Arguments("namespace TestApp;", "WordSetText")]
+    [Arguments("namespace TestApp;", "GetKeyedText")]
     public void TextNamedLikeNameGeneratedClassWrites_ShouldCompileWithResolvedCrefs(string @namespace, string text)
     {
         // Arrange: inside the generated class a text stands before every namespace and type of its name. So the class
-        // names the set behind the defaults without its namespace, and asks for it with a type argument, which neither
-        // a text named like the namespace nor one named GetDefaultSet stands before. It calls what creates a text by
-        // its name alone, without the package's namespace, which a text named CodeChops would stand before.
+        // names the set behind the defaults without its namespace, as a type argument, which a text named like the
+        // namespace doesn't stand before. It calls what finds a set and what words a text by name alone, with a type
+        // argument, without the package's namespace, which a text named CodeChops would stand before.
         var source = $$"""
             using CodeChops.Idioma;
 
@@ -1191,7 +1195,7 @@ public sealed class LocalizationSetsPartTests
 
                 public static class InlineTexts
                 {
-                    public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                    public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
                 }
             }
             """;
@@ -1286,8 +1290,8 @@ public sealed class LocalizationSetsPartTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
 
         // Assert
-        text.ShouldContain("public static new CodeChops.Idioma.LocalizableText Equals { get; }");
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText Contains { get; }");
+        text.ShouldContain("public static new string Equals => FindSet<IFilterLocalization>(");
+        text.ShouldContain("public static string Contains => FindSet<IFilterLocalization>(");
         warnings.ShouldBeEmpty();
         errors.ShouldBeEmpty();
     }
@@ -3312,7 +3316,7 @@ public sealed class LocalizationSetsPartTests
 
             public static class MixedTexts
             {
-                public static LocalizableText Orders { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 
@@ -3401,7 +3405,7 @@ public sealed class LocalizationSetsPartTests
         var text = ContractText(Run(ShopSets));
         var usings = text.Split('\n').Where(static line => line.StartsWith("using ", StringComparison.Ordinal)).Select(static line => line.TrimEnd()).ToArray();
 
-        // Assert: the namespaces of what the method that gives a text by its key names, and what creates a text.
+        // Assert: the namespaces of what the method that gives a text by its key names, and what words a text.
         usings.ShouldBe(["using System;", "using System.Collections.Generic;", "using static CodeChops.Idioma.Internals.GeneratedCode;"]);
     }
 
@@ -3558,8 +3562,8 @@ public sealed class LocalizationSetsPartTests
     [Arguments("public ShopLocalizationEn(string shop) { } public string Checkout => \"Checkout\";", "it has no parameterless constructor")]
     public void DefaultSetGeneratedCodeCannotCreate_ShouldReportLOC200AsItsOnlyError(string members, string expectedReason)
     {
-        // Arrange & Act: the generated texts create the set through GeneratedCode.GetDefaultSet<TSet>, which takes a
-        // public parameterless constructor (CS0310) and no member left to set (CS9040). With every generator at work.
+        // Arrange & Act: the generated texts name the set as a type argument of GeneratedCode.WordSetText, which takes
+        // a public parameterless constructor (CS0310) and no member left to set (CS9040). With every generator at work.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
             using CodeChops.Idioma;
 
@@ -3784,7 +3788,7 @@ public sealed class LocalizationSetsPartTests
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopLocalizationEn");
         diagnostic.Properties.ShouldNotContainKey(LocalizationSetsPart.SuggestedNameProperty);
         DiagnosticIds(result).ShouldBe(["LOC200"]);
-        ContractText(result).ShouldContain("GetDefaultSet<ShopLocalizationEN>)");
+        ContractText(result).ShouldContain("WordSetText<IShopLocalization, ShopLocalizationEN>(");
         errors.Select(static error => error.Id).ShouldBe(["LOC200"]);
     }
 
@@ -4427,15 +4431,14 @@ public sealed class LocalizationSetsPartTests
         var text = ContractText(Run(GreetingSets));
 
         // Assert: the contract repeats the method, which is what holds every language to its parameters, and records
-        // on it the values its wording shows. The class creates the text on every call, with the values it is called
-        // with.
+        // on it the values its wording shows. The class hands the values it is called with to the set, on every call.
         text.ShouldContain("    string Greeting(string name);");
         text.ShouldContain("    string ItemsInCart(int count, string shop);");
         ShownValues(text, "Greeting").ShouldBe(["name"]);
         ShownValues(text, "ItemsInCart").ShouldBe(["count", "shop"]);
-        text.ShouldContain("LocalizableText Greeting(string name) =>");
-        text.ShouldContain("""public static CodeChops.Idioma.LocalizableText Greeting(string name) => CreateSetText<IShopLocalization, string>("TestApp.ShopLocalization.Greeting", static (set, name) => set.Greeting(name), GetDefaultSet<ShopLocalizationEn>(), name);""");
-        text.ShouldContain("""public static CodeChops.Idioma.LocalizableText ItemsInCart(int count, string shop) => CreateSetText<IShopLocalization, int, string>("TestApp.ShopLocalization.ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), GetDefaultSet<ShopLocalizationEn>(), count, shop);""");
+        text.ShouldContain("string Greeting(string name) =>");
+        text.ShouldContain("""public static string Greeting(string name) => FindSetForValues<IShopLocalization>(1, 3)?.Greeting(name) ?? WordSetText<IShopLocalization, ShopLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);""");
+        text.ShouldContain("""public static string ItemsInCart(int count, string shop) => FindSetForValues<IShopLocalization>(2, 3)?.ItemsInCart(count, shop) ?? WordSetText<IShopLocalization, ShopLocalizationEn, int, string>(2, 3, "ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), count, shop);""");
     }
 
     [Test]
@@ -4890,7 +4893,9 @@ public sealed class LocalizationSetsPartTests
         text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
         text.ShouldContain("    string Delegates(System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
-        text.ShouldContain("LocalizableText @event(string @class, int @int) => CreateSetText<IShopLocalization, string, int>(\"TestApp.ShopLocalization.event\", static (set, @class, @int) => set.@event(@class, @int), GetDefaultSet<ShopLocalizationEn>(), @class, @int);");
+        text.ShouldContain("public static string @event(string @class, int @int) => FindSetForValues<IShopLocalization>(");
+        text.ShouldContain(")?.@event(@class, @int) ?? WordSetText<IShopLocalization, ShopLocalizationEn, string, int>(");
+        text.ShouldContain(", \"event\", static (set, @class, @int) => set.@event(@class, @int), @class, @int);");
     }
 
     [Test]
@@ -4934,8 +4939,10 @@ public sealed class LocalizationSetsPartTests
         const string methods = """
             public string Paired(string set, string set_) => set + set_;
             public string Valued(string values, int values_) => values + values_;
-            public string CreateSetText(string DefaultSet, string Instance) => DefaultSet + Instance;
-            public string DefaultSet(string CreateSetText) => CreateSetText;
+            public string WordSetText(string FindSet, string FindSetForValues) => FindSet + FindSetForValues;
+            public string FindSetForValues(string WordSetText) => WordSetText;
+            public string FindSet => "Find";
+            public string GetKeyedValue(string GetKeyedText) => GetKeyedText;
             public string Name => "Name";
             public string Named(string Name) => Name;
             public string System(DateOnly date) => $"{date}";
@@ -5112,10 +5119,10 @@ public sealed class LocalizationSetsPartTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
 
         // Assert
-        text.ShouldContain("public static new CodeChops.Idioma.LocalizableText Equals(object? other)");
-        text.ShouldContain("public static new CodeChops.Idioma.LocalizableText ReferenceEquals(object? left, object? right)");
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText ToString(string format)");
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetHashCode(int seed)");
+        text.ShouldContain("public static new string Equals(object? other)");
+        text.ShouldContain("public static new string ReferenceEquals(object? left, object? right)");
+        text.ShouldContain("public static string ToString(string format)");
+        text.ShouldContain("public static string GetHashCode(int seed)");
         warnings.ShouldBeEmpty();
         errors.ShouldBeEmpty();
     }
@@ -5308,7 +5315,7 @@ public sealed class LocalizationSetsPartTests
         ShownValues(text, "Shadowed").ShouldBeEmpty();
         ShownValues(text, "Mixed").ShouldBe(["name"]);
         text.ShouldContain("    string Mixed(Salutation salutation, string name);");
-        text.ShouldContain("LocalizableText Shown(string name) =>");
+        text.ShouldContain("string Shown(string name) =>");
         text.ShouldNotContain("ShownValue] ");
     }
 
@@ -5540,8 +5547,8 @@ public sealed class LocalizationSetsPartTests
         // Assert
         string[] members = ["string Caption { get; }", "string Delivered { get; }", "string Pending { get; }", "string Shipped { get; }"];
         members.Select(member => text.IndexOf(member, StringComparison.Ordinal)).ShouldBeInOrder();
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText Caption { get; }");
-        text.ShouldContain("\"TestApp.OrderStatusLocalization.Shipped\"");
+        text.ShouldContain("public static string Caption => FindSet<IOrderStatusLocalization>(0, 4)?.Caption");
+        text.ShouldContain("public static string Shipped => FindSet<IOrderStatusLocalization>(3, 4)?.Shipped");
     }
 
     [Test]
@@ -5609,7 +5616,7 @@ public sealed class LocalizationSetsPartTests
                     public string Shipped => "Shipped";
                     public string OrderStatus => "Order status";
                     public string value => "Value";
-                    public string CreateUndefinedEnumText => "Unknown";
+                    public string WordSetText => "Unknown";
                     public string TextsByValue => "Texts by value";
                     public string System => "System";
                 }
@@ -5622,10 +5629,10 @@ public sealed class LocalizationSetsPartTests
 
                 public static class Usage
                 {
-                    public static LocalizableText Status { get; } = OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped);
-                    internal static LocalizableText Speed { get; } = SpeedLocalization.GetTextByValue(Shipping.Speed.@default);
-                    public static LocalizableText StatusOfValue { get; } = OrderStatus.Shipped.GetText();
-                    internal static LocalizableText SpeedOfValue { get; } = Shipping.Speed.@default.GetText();
+                    public static string Status => OrderStatusLocalization.GetTextByValue(OrderStatus.Shipped);
+                    internal static string Speed => SpeedLocalization.GetTextByValue(Shipping.Speed.@default);
+                    public static string StatusOfValue => OrderStatus.Shipped.GetText();
+                    internal static string SpeedOfValue => Shipping.Speed.@default.GetText();
                 }
             }
             """;
@@ -5640,10 +5647,10 @@ public sealed class LocalizationSetsPartTests
         errors.ShouldBeEmpty();
         warnings.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
-        contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Domain.Orders.OrderStatus value)"));
-        contracts.ShouldContain(static contract => contract.Contains("internal static CodeChops.Idioma.LocalizableText GetTextByValue(Shipping.Speed value)"));
-        contracts.ShouldContain(static contract => contract.Contains("extension(Domain.Orders.OrderStatus value)") && contract.Contains("        public CodeChops.Idioma.LocalizableText GetText() =>"));
-        contracts.ShouldContain(static contract => contract.Contains("extension(Shipping.Speed value)") && contract.Contains("        internal CodeChops.Idioma.LocalizableText GetText() =>"));
+        contracts.ShouldContain(static contract => contract.Contains("public static string GetTextByValue(Domain.Orders.OrderStatus value)"));
+        contracts.ShouldContain(static contract => contract.Contains("internal static string GetTextByValue(Shipping.Speed value)"));
+        contracts.ShouldContain(static contract => contract.Contains("extension(Domain.Orders.OrderStatus value)") && contract.Contains("        public string GetText() =>"));
+        contracts.ShouldContain(static contract => contract.Contains("extension(Shipping.Speed value)") && contract.Contains("        internal string GetText() =>"));
     }
 
     [Test]
@@ -5727,7 +5734,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         errors.ShouldBeEmpty();
-        ContractText(Run(source)).ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue { get; }");
+        ContractText(Run(source)).ShouldContain("public static string GetTextByValue => FindSet<IShopLocalization>(");
     }
 
     [Test]
@@ -5780,7 +5787,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         errors.ShouldBeEmpty();
-        ContractText(Run(source)).ShouldContain("public static CodeChops.Idioma.LocalizableText GetText { get; }");
+        ContractText(Run(source)).ShouldContain("public static string GetText => FindSet<IShopLocalization>(");
     }
 
     [Test]
@@ -5893,10 +5900,10 @@ public sealed class LocalizationSetsPartTests
 
             public static class Usage
             {
-                public static LocalizableText Size { get; } = OptionLocalization.GetTextByValue(TestApp.Size.Unknown);
-                public static LocalizableText Colour { get; } = OptionLocalization.GetTextByValue(TestApp.Colour.Unknown);
-                public static LocalizableText SizeOfValue { get; } = TestApp.Size.Unknown.GetText();
-                public static LocalizableText ColourOfValue { get; } = TestApp.Colour.Unknown.GetText();
+                public static string Size => OptionLocalization.GetTextByValue(TestApp.Size.Unknown);
+                public static string Colour => OptionLocalization.GetTextByValue(TestApp.Colour.Unknown);
+                public static string SizeOfValue => TestApp.Size.Unknown.GetText();
+                public static string ColourOfValue => TestApp.Colour.Unknown.GetText();
             }
             """;
 
@@ -5906,12 +5913,12 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         errors.ShouldBeEmpty();
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Colour value) => TextsByValue<IOptionLocalization>.Get(value);");
-        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Colour value) => value switch");
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Size value) => TextsByValue<IOptionLocalization>.Get(value);");
+        text.ShouldContain("public static string GetTextByValue(Colour value) => TextsByValue<IOptionLocalization>.Get(value);");
+        text.ShouldContain("    internal static string Get(Colour value) => value switch");
+        text.ShouldContain("public static string GetTextByValue(Size value) => TextsByValue<IOptionLocalization>.Get(value);");
         text.ShouldContain("    extension(Colour value)");
         text.ShouldContain("    extension(Size value)");
-        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Size value) => value switch");
+        text.ShouldContain("    internal static string Get(Size value) => value switch");
         text.ShouldContain("        Colour.Unknown => OptionLocalization.Unknown,");
         text.ShouldContain("        Size.Unknown => OptionLocalization.Unknown,");
         text.Split("    string Unknown { get; }").Length.ShouldBe(2);
@@ -5943,10 +5950,10 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         errors.ShouldBeEmpty();
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(System.MidpointRounding value) => TextsByValue<IMidpointRoundingLocalization>.Get(value);");
-        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(System.MidpointRounding value) => value switch");
+        text.ShouldContain("public static string GetTextByValue(System.MidpointRounding value) => TextsByValue<IMidpointRoundingLocalization>.Get(value);");
+        text.ShouldContain("    internal static string Get(System.MidpointRounding value) => value switch");
         text.ShouldContain("        System.MidpointRounding.ToEven => MidpointRoundingLocalization.ToEven,");
-        text.ShouldContain("        _ => CreateUndefinedEnumText<System.MidpointRounding>(value),");
+        text.ShouldContain("        _ => value.ToString(),");
     }
     #endregion
 
@@ -5958,7 +5965,7 @@ public sealed class LocalizationSetsPartTests
         var text = ContractText(Run(GreetingSets));
 
         // Assert: an arm per text, by its name. A text that takes values takes each from the values passed.
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch");
+        text.ShouldContain("public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch");
         text.ShouldContain("        \"Checkout\" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),");
         text.ShouldContain("        \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\"), GetKeyedValue<string>(key, values, 1, 2, \"shop\")),");
         text.ShouldContain("        _ => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");
@@ -5998,9 +6005,9 @@ public sealed class LocalizationSetsPartTests
 
                 public static class Usage
                 {
-                    public static LocalizableText Key { get; } = OptionLocalization.GetTextByKey("key");
-                    public static LocalizableText Event { get; } = OptionLocalization.GetTextByKey("event");
-                    public static LocalizableText Status { get; } = OptionLocalization.GetTextByKey("Status", OrderStatus.Pending, null);
+                    public static string Key => OptionLocalization.GetTextByKey("key");
+                    public static string Event => OptionLocalization.GetTextByKey("event");
+                    public static string Status => OptionLocalization.GetTextByKey("Status", OrderStatus.Pending, null);
                 }
             }
             """;

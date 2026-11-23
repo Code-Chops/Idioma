@@ -23,7 +23,7 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
         /// </summary>
         public static class Texts
         {
-            public static CodeChops.Idioma.LocalizableText Orders { get; } = CodeChops.Idioma.LocalizableText.Inline({{arguments}});
+            public static string Orders => CodeChops.Idioma.LocalizableText.Inline({{arguments}});
         }
         """;
 
@@ -39,7 +39,7 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(string source)
     {
-        return CodeFixTestHelper.FixAfterGeneratorsAsync(new NoLanguagesDeclaredCodeFixProvider(), new OneLanguageTextAnalyzer(), source);
+        return CodeFixTestHelper.FixAfterGeneratorsAsync(new NoLanguagesDeclaredCodeFixProvider(), new UnnamedLanguageAnalyzer(), source);
     }
 
     /// <summary>
@@ -80,9 +80,10 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
         const string arguments = "en: \"Orders\", nl: \"Bestellingen\"";
         var fixes = await FixAsync(Inline(arguments, usings: ""));
 
-        // Assert
+        // Assert: with the line endings of the file, which are those of this one.
+        var newLine = Inline(arguments).Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var source = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
-        source.ShouldBe(Inline(arguments, "[assembly: CodeChops.Idioma.SupportedLanguages(\"en\", \"nl\")]\n\n", usings: ""));
+        source.ShouldBe(Inline(arguments, $"[assembly: CodeChops.Idioma.SupportedLanguages(\"en\", \"nl\")]{newLine}{newLine}", usings: ""));
         await ShouldReportNothingAsync(source);
     }
 

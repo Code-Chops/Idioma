@@ -4,9 +4,7 @@ namespace CodeChops.Idioma;
 /// Keeps the build from picking up a set or a member. A marked <see cref="ILocalizationSet">set</see> doesn't register
 /// itself, so it takes effect only once you pass it to
 /// <see cref="LocalizationRegistry.Register(ReadOnlySpan{ILocalizationSet})">LocalizationRegistry.Register</see>. A
-/// marked public property or method of the set of your default language isn't a text. The initializer and the getter
-/// of a marked property that holds a <see cref="LocalizableText"/> may hold wording that reads the same in every
-/// language, such as a name.
+/// marked public property or method of the set of your default language isn't a text.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,14 +37,6 @@ namespace CodeChops.Idioma;
 /// <para>
 /// The attribute isn't inherited. A set that derives from an excluded set is registered automatically, like any other.
 /// </para>
-/// <para>
-/// <b>On a property that holds a text.</b> Mark a property whose wording reads the same in every language, such as a
-/// name. Its initializer or its getter may then hold that wording as a string:
-/// <c>[ExcludeFromLocalizationDiscovery] public static LocalizableText Brand { get; } = "Idioma";</c>, or
-/// <c>=> "Idioma"</c>. Without the attribute, that's build error <c>LOC500</c>. The build still checks its setter and
-/// what other code assigns to the property, so a marked component parameter still holds its callers to every
-/// language.
-/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -72,7 +62,7 @@ namespace CodeChops.Idioma;
 /// }
 /// </code>
 /// </example>
-// The source generator and the check for LOC500 locate this type by its metadata-name string, so renaming it or
-// changing its namespace silently disables the exclusion.
+// The source generator locates this type by its metadata-name string, so renaming it or changing its namespace
+// silently disables the exclusion.
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method, Inherited = false)]
 public sealed class ExcludeFromLocalizationDiscoveryAttribute : Attribute;

@@ -44,6 +44,11 @@ internal static class LocalizedMembers
     public const string ExtensionName = LocalizationSetsAnalysis.ExtensionName;
 
     /// <summary>
+    /// What the name of the class that holds the extension method of an enum ends in.
+    /// </summary>
+    public const string ExtensionHolderSuffix = "LocalizedExtensions";
+
+    /// <summary>
     /// The namespace of the class that records an assembly's member texts, which is that of its registrar.
     /// </summary>
     public const string RecorderNamespace = PackageNames.Namespace + ".Generated";
@@ -361,7 +366,7 @@ internal static class LocalizedMembers
             enumMember = new LocalizedMemberEnum(
                 Namespace: @namespace,
                 Name: String.Join(".", chain.Select(static part => LocalizationSetsPart.EscapeIdentifier(part.Name))),
-                HolderName: String.Join("_", chain.Select(static part => part.Name)) + "LocalizedExtensions",
+                HolderName: String.Join("_", chain.Select(static part => part.Name)) + ExtensionHolderSuffix,
                 IsPublic: chain.All(static part => part.DeclaredAccessibility is Accessibility.Public),
                 CanExtend: !isInGenericType,
                 Ordinal: field is null ? -1 : type.GetMembers().OfType<IFieldSymbol>().ToImmutableArray().IndexOf(field, SymbolEqualityComparer.Default),

@@ -109,6 +109,17 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
 
         if (IsOrderOf(names, expected))
         {
+            // Only among parameters of one type. Moving a name leaves the body as it is, so each use then reads the
+            // parameter of its name. Where the types differ, the body was written for the positions, and the wording
+            // would show each value in the place of another.
+            var movedTypes = parameters
+                .Where((_, index) => !String.Equals(names[index], expected[index], StringComparison.Ordinal))
+                .Select(static parameter => parameter.Type?.ToString())
+                .Distinct(StringComparer.Ordinal);
+
+            if (movedTypes.Count() > 1)
+                return null;
+
             for (var i = 0; i < parameters.Count; i++)
                 renamed.Add(parameters[i].Identifier, expected[i]);
 

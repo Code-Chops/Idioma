@@ -3,7 +3,7 @@
 Idioma turns translation mistakes into build errors. Each message names what's wrong and what to change:
 
 ```text
-error LOC500: This text is in one language, but this assembly supports en, nl. Write it as LocalizableText.Inline(en: "...", nl: "...").
+error LOC302: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', but the default wording of 'IShopLocalization.Greeting' shows it. Use 'name' in every language, or users of 'nl' won't see it.
 ```
 
 This page lists every code, grouped by subject, with an example and the fix. Your IDE offers a fix for the codes marked *(code fix)*.
@@ -37,18 +37,17 @@ The first digit of a code names its subject. The subjects follow the order of th
 | [`LOC300`](#loc300)                                 | A public method that can't be a text                    |
 | [`LOC301`](#loc301) (code fix)                      | A parameter named differently than in the contract      |
 | [`LOC302`](#loc302)                                 | A value that a translation never uses                   |
-| [`LOC303`](#loc303) (warning, code fix)             | A text passed to a `string` parameter of a text         |
 | **[Registration](#registration)**                   |                                                         |
 | [`LOC400`](#loc400) (warning)                       | A set that can't be registered automatically            |
 | [`LOC401`](#loc401) (code fix)                      | A `LocalizationLanguageCode` that implements nothing    |
 | [`LOC402`](#loc402)                                 | A `LocalizationLanguageCode` that isn't a culture name  |
 | **[Wording](#wording)**                             |                                                         |
-| [`LOC500`](#loc500) (code fix)                      | Wording written in one language                         |
 | [`LOC501`](#loc501) (code fix)                      | A language argument without its name                    |
 | [`LOC502`](#loc502) (warning, code fix)             | A placeholder such as `{0}` in a wording                |
 | [`LOC503`](#loc503) (warning, code fix)             | An enum member without a label next to members with one |
 | [`LOC504`](#loc504)                                 | A text asked of a member or a type that has none        |
 | [`LOC505`](#loc505) (warning)                       | A `[Localized]` text that won't be found                |
+| [`LOC506`](#loc506) (warning)                       | A text kept in a static field or property               |
 | **[Libraries](#libraries)**                         |                                                         |
 | [`LOC600`](#loc600) (code fix)                      | A library without a set for one of your languages       |
 | [`LOC601`](#loc601) (warning)                       | A library whose inline texts lack one of your languages |
@@ -333,7 +332,7 @@ A public method of the default-language set that returns a `string` is a text wi
 - shares its name with another method of the set
 - takes more than eight parameters
 - has a parameter that is passed by reference, is `params`, has a default value, or is `dynamic`
-- has a parameter of a type a text can't keep until it's shown, such as a pointer or a span
+- has a parameter of a type the generated class can't pass on, such as a pointer or a span
 - has the name of an enum member, in a [set of an enum](enums.md#a-set-of-the-enum), where the text of a member is a property
 
 A method that can't become a property isn't reported: an override such as `ToString()`, or a method that another interface of the set asks for.
@@ -349,7 +348,7 @@ public string Invited(string guest, string host) => $"{host} has invited {guest}
 
 Use the same parameter names in every language.
 
-The IDE fix gives every parameter the contract's name. When the set has the contract's names in another order, the fix moves the names and leaves the body as it is. Each use then reads the parameter of its name, so the example above becomes `Invited(string host, string guest) => $"{host} has invited {guest}"`. A rename doesn't help here, because it renames the uses too and keeps the swap.
+The IDE fix gives every parameter the contract's name. When the set has the contract's names in another order, on parameters of one type, the fix moves the names and leaves the body as it is. Each use then reads the parameter of its name, so the example above becomes `Invited(string host, string guest) => $"{host} has invited {guest}"`. A rename doesn't help here, because it renames the uses too and keeps the swap. Swapped names on parameters of different types get no fix, because the body was written for the positions.
 
 When a name is one the contract doesn't have, as `aantal` for `count`, the fix renames it along with its uses and its doc comments. There's no fix when:
 
@@ -380,30 +379,6 @@ A value is a local variable, a parameter, or a field or property of your own ass
 - a wording that calls a local function or a delegate, which may read the value
 - a wording that reads a local variable declared with the value or assigned it, as in `var name = user.Name;`
 - a wording that reads a local variable the build can't follow, such as one from a pattern, a deconstruction or `out var`
-
-### LOC303
-
-A text is passed to a `string` parameter of a text with parameters. This is a warning:
-
-```csharp
-public string PressToPay(string button) => $"Press {button} to pay"; // In ShopLocalizationEn
-
-ShopLocalization.PressToPay(ShopLocalization.Checkout) // LOC303
-```
-
-Give the parameter the type `LocalizableText` in every set:
-
-```csharp
-public string PressToPay(LocalizableText button) => $"Press {button} to pay";
-```
-
-The text becomes a string at the call, in the language in use at that moment. The text around it gets its wording when it's shown. So a text kept in a static field, or shown with `ToString(culture)`, mixes two languages: Dutch users see "Druk op Checkout om te betalen". A `LocalizableText` parameter keeps the text, which then shows in the language of the wording around it.
-
-To keep the wording of the moment on purpose, call `ToString()` on the text. The build then reports nothing.
-
-The IDE fix changes the parameter's type in every set of your project at once. A call that passes a value, such as a customer's name, still compiles, because a string converts to a text. A call that passes wording written in the source, as in `PressToPay("Enter")`, becomes `LOC500`, because that wording is in one language. A text of a library gets no fix, because your project can't change the library's sets.
-
-An inline text gets no warning for a text in its wording, because it fills its values in at once ([details](advanced-topics.md#texts-with-parameters)).
 
 ## Registration
 
@@ -443,42 +418,6 @@ A set's `LocalizationLanguageCode` isn't a culture name, such as `"en_GB"`. Regi
 This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which would throw where you register it.
 
 ## Wording
-
-### LOC500
-
-A text is written in one language, so users of every other language would see it in that language too. These are all LOC500:
-
-```csharp
-Title = "Orders";
-Title = $"Order {number}";
-Title = "Order " + number;
-Title = flag ? "Yes" : "No";
-Title += " (draft)";
-```
-
-A `const` counts too, and so does the same in Razor. Write the text as `LocalizableText.Inline(en: "...", nl: "...")`, or in a set.
-
-Any letter counts, so a name, a unit, or an abbreviation is reported too: `Title = "Idioma"` and `Title = $"{distance} km"` are LOC500. When it reads the same in every language, write the same wording for each: `LocalizableText.Inline(en: "Idioma", nl: "Idioma")`.
-
-Or keep it in a property marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't check that property's initializer or getter:
-
-```csharp
-[ExcludeFromLocalizationDiscovery] // Reads the same in every language
-public static LocalizableText Brand { get; } = "Idioma";
-```
-
-The attribute covers the initializer and the getter, as in `public static LocalizableText Brand => "Idioma";`. Its setter and what other code assigns to the property are still checked, so a marked component parameter still holds its callers to every language.
-
-A lookup by wording is LOC500 too, as in `texts.Contains("Orders")` or `counts["Orders"]` on a collection of texts. Two texts are equal when they show the same wording for the user ([Equality](advanced-topics.md#equality)), so the lookup only finds "Orders" for English users. Look the text up by itself instead: `texts.Contains(ShopLocalization.Orders)`.
-
-The IDE fix writes the wording as an inline text in your default language: `Title = "Orders";` becomes `Title = LocalizableText.Inline(en: "Orders");`. The compiler then names each language the call lacks (`CS7036`), so you write each translation yourself. The fix doesn't copy the wording into the other languages, because the text would then compile untranslated. "Fix all" writes every wording of a file or a project at once, which helps when you add a second language. There's no fix for:
-
-- wording added to a text, as in `Title += " (draft)";`
-- a `const`, whose wording is written where it's declared
-- a lookup by wording, which should look the text up by itself
-- the wording of `LocalizableText.Keyed`
-
-LOC500 starts with your second language, because one language has nothing to be translated into. See also [what still converts](#what-still-converts).
 
 ### LOC501
 
@@ -574,6 +513,7 @@ A member marked `[Localized]` has a text that can't be registered, so `Localizab
 - It's written in the `@code` of a `.razor` file. The source generator can't read what Razor generates, so write the type in a C# file.
 - The attribute is on an indexer, which has no name to find a text by. Remove it.
 - The attribute is on the field behind a property, as in `[field: Localized(...)]`. Write it without `field:`.
+- The attribute is written through an alias, as after `using Label = LocalizedAttribute;`. The source generator finds the attribute by its name, so write it as `[Localized]`.
 
 ```text
 warning LOC505: The text of 'Line.Article' can't be registered because generated code can't name 'Line', which is private, so it won't be found. Make 'Line' internal or public.
@@ -581,41 +521,58 @@ warning LOC505: The text of 'Line.Article' can't be registered because generated
 
 See [attributes](attributes.md).
 
-### What still converts
+### LOC506
 
-A value that isn't wording of yours still converts to a text, because it has nothing to translate:
+A text is read in the initializer of a static field or a static property. This is a warning:
 
 ```csharp
-Title = customer.Name;     // A value read at run time
-Title = $"{first} {last}"; // Values alone, without wording
-Title = "-";               // No letters
-Title = "1234";
+private static readonly string Label = ShopLocalization.Checkout; // LOC506
+public static string Title { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen"); // LOC506
 ```
+
+A text is the wording for the user's language at the moment it's read. A static initializer runs once, so it keeps the wording of whoever used the class first. On a server, every user then sees that language. Read the text where you show it:
+
+```csharp
+private static string Label => ShopLocalization.Checkout;
+public static string Title => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+```
+
+```text
+warning LOC506: 'ShopLocalization.Checkout' is read once, when 'Label' is initialized, so every user gets the wording of the first user's language. Read the text where you show it, such as in a property written with '=>'.
+```
+
+What counts as a text:
+
+- a member of a generated class, such as `ShopLocalization.Checkout` or `ShopLocalization.GetTextByKey("Checkout")`
+- `LocalizableText.Inline`, `LocalizableText.GetTextByMember` and `LocalizableText.GetTextOfType`
+- `GetText()` on a value of an enum
+
+A text inside a lambda gets no warning, because it's read when the lambda runs: `static readonly Func<string> Label = () => ShopLocalization.Checkout;`. Neither does a text an instance field keeps, which lives as long as its object. So a text kept in a singleton, a cache or a local variable that outlives the request still compiles ([What the build misses](#what-the-build-misses)).
 
 ### What the build misses
 
-The build misses three things. First, it can't tell such a value from wording kept in a local variable, a field or a property, or returned by a method, so those compile too:
+The build doesn't see three things.
+
+First, wording written as a plain string compiles, and every user sees it in that one language:
 
 ```csharp
-private static readonly string Heading = "Orders";
-
-var title = "Orders";
-Title = title;      // Wording, but the build sees a variable
-Title = Heading;    // Wording, but the build sees a field, as it would a property
-Title = GetTitle(); // Wording, but the build sees a method call
+Title = "Orders"; // English, for every user
 ```
 
-A `const` is the exception, because the build reads its value. It's LOC500.
+Write it as `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or in a set.
 
-Second, plain text in Razor markup, such as `<h1>Orders</h1>`, isn't a text at all, so the build doesn't see it either. Write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
+Second, plain text in Razor markup, such as `<h1>Orders</h1>`, isn't a text either. Write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
 
-Third, a text kept as a `string` compiles, and holds the wording of the moment it was made:
+Third, a text that's kept outside a static initializer holds the wording of the moment it was read. The build reports a static field or property ([LOC506](#loc506)), and nothing else:
 
 ```csharp
-private static readonly string Label = ShopLocalization.Checkout; // Stays in the language of the first user
+public sealed class Menu // Registered as a singleton
+{
+    private readonly string label = ShopLocalization.Checkout; // Stays in the language of the first user
+}
 ```
 
-Keep the `LocalizableText` instead, and convert it where you show it ([Show a text](../README.md#show-a-text)).
+Read the text where you show it instead ([details](../README.md#read-a-text-where-you-show-it)).
 
 ## Libraries
 

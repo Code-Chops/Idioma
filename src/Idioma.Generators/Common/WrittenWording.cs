@@ -23,7 +23,7 @@ namespace CodeChops.Idioma.Generators;
 /// <item>A string in a condition, in a local function, or in a lambda.</item>
 /// </list>
 /// </remarks>
-// The shapes OneLanguageTextAnalyzer.HoldsWording counts as wording, so that LOC500 and LOC502 read the same strings.
+// A constant, an interpolation, a concatenation, a conditional, a coalesce, and a switch count as wording written in the source.
 internal static class WrittenWording
 {
     /// <summary>

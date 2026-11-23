@@ -94,6 +94,17 @@ public sealed class LocalizationRegistrationPartTests
         }
     }
 
+    /// <summary>
+    /// The wording a text of a generated class gives a user of a culture.
+    /// </summary>
+    private static string ReadText(Type texts, string name, string culture)
+    {
+        using var _ = new CulturesScope(culture);
+
+        var wording = (string)texts.GetProperty(name)!.GetValue(null)!;
+        return wording;
+    }
+
     private static GeneratorDriverRunResult Run(string source, params MetadataReference[] references)
     {
         return GeneratorTestHelper.Run(LocalizationParts.Registration(), source, references);
@@ -1188,7 +1199,7 @@ public sealed class LocalizationRegistrationPartTests
 
             public static partial class ShopLocalization
             {
-                public static string Shout() => Checkout.ToString().ToUpperInvariant();
+                public static string Shout() => Checkout.ToUpperInvariant();
             }
             """;
 
@@ -1571,9 +1582,9 @@ public sealed class LocalizationRegistrationPartTests
         // Assert: read as the app declaring German sees it; this test process declares only en and nl itself, so its
         // own app languages would send de-DE to English.
         context.Assemblies.ShouldContain(assembly => String.Equals(assembly.GetName().Name, "UnusedAddOn", StringComparison.Ordinal));
-        var texts = context.LoadFromAssemblyName(new AssemblyName("UnusedAddOnLibrary")).GetType("UnusedAddOnLibrary.AddOnShopLocalization")!;
-        var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        checkout.ToString(CultureInfo.GetCultureInfo("de-DE"), LocalizationRegistry.Current, appLanguages: ["en", "nl", "de"]).ShouldBe("Zur Kasse");
+        var contract = context.LoadFromAssemblyName(new AssemblyName("UnusedAddOnLibrary")).GetType("UnusedAddOnLibrary.IAddOnShopLocalization")!;
+        var german = LocalizationRegistry.Current.Find(contract, CultureInfo.GetCultureInfo("de-DE")).ShouldNotBeNull();
+        contract.GetProperty("Checkout")!.GetValue(german).ShouldBe("Zur Kasse");
     }
 
     [Test]
@@ -1627,8 +1638,7 @@ public sealed class LocalizationRegistrationPartTests
         // Assert
         context.Assemblies.ShouldNotContain(assembly => String.Equals(assembly.GetName().Name, "AbsentLibrary", StringComparison.Ordinal));
         var texts = appAssembly.GetType("AbsentLibraryApp.AbsentAppLocalization")!;
-        var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        checkout.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Afrekenen");
+        ReadText(texts, "Checkout", "nl-NL").ShouldBe("Afrekenen");
     }
 
     [Test]
@@ -1666,7 +1676,7 @@ public sealed class LocalizationRegistrationPartTests
 
             public static class Reader
             {
-                public static string ReadDutchCheckout() => LateLibrary.LateLocalization.Checkout.ToString(CultureInfo.GetCultureInfo("nl-NL"));
+                public static string ReadCheckout() => LateLibrary.LateLocalization.Checkout;
             }
             """, MetadataReference.CreateFromImage(library));
         var images = new Dictionary<string, byte[]>(StringComparer.Ordinal)
@@ -1680,7 +1690,10 @@ public sealed class LocalizationRegistrationPartTests
 
         // Act: the library arrives, and the app's code calls into it for the first time.
         images["LateLibrary"] = library;
-        var checkout = (string)appAssembly.GetType("LateLibraryApp.Reader")!.GetMethod("ReadDutchCheckout")!.Invoke(obj: null, parameters: null)!;
+        string checkout;
+
+        using (new CulturesScope("nl-NL"))
+            checkout = (string)appAssembly.GetType("LateLibraryApp.Reader")!.GetMethod("ReadCheckout")!.Invoke(obj: null, parameters: null)!;
 
         // Assert: the library's own registrar ran with its code, so its Dutch set words the text.
         checkout.ShouldBe("Afrekenen");
@@ -1744,8 +1757,7 @@ public sealed class LocalizationRegistrationPartTests
 
         // Assert
         var texts = assembly.GetType("AbstractBaseLibrary.BaseShopLocalization")!;
-        var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        checkout.ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Afrekenen");
+        ReadText(texts, "Checkout", "nl-NL").ShouldBe("Afrekenen");
     }
 
     [Test]
@@ -1793,10 +1805,8 @@ public sealed class LocalizationRegistrationPartTests
         rewording.LocalizationLanguageCode.ShouldBe("nl-BE");
 
         var texts = assembly.GetType("RegionalNameLibrary.ShopLocalization")!;
-        var checkout = (LocalizableText)texts.GetProperty("Checkout")!.GetValue(null)!;
-        var total = (LocalizableText)texts.GetProperty("Total")!.GetValue(null)!;
-        checkout.ToString(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Betalen");
-        total.ToString(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe("Totaal");
+        ReadText(texts, "Checkout", "nl-BE").ShouldBe("Betalen");
+        ReadText(texts, "Total", "nl-BE").ShouldBe("Totaal");
     }
 
     [Test]

@@ -75,7 +75,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
 
         // Razor's output counts as generated code, and a member marked in markup must be caught there.
-        // OneLanguageTextAnalyzer.IsHandWritten leaves out the rest.
+        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
@@ -116,7 +116,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
         if (method.Name is not (GetTextByMemberName or GetTextOfTypeName)
             || !SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
-            || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
+            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
         {
             return;
         }
@@ -243,6 +243,18 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     {
         var attribute = (AttributeSyntax)context.Node;
 
+        if (IsWrittenThroughAlias(attribute, context))
+        {
+            var subject = LocalizedMembers.FindMarked(attribute, context.SemanticModel, context.CancellationToken) is [var aliased, ..]
+                ? aliased.Name
+                : attribute.Name.ToString();
+
+            context.ReportDiagnostic(Diagnostic.Create(CannotRegisterRule, attribute.GetLocation(), subject,
+                $"the attribute is written as '{attribute.Name}', an alias the source generator doesn't follow", $"Write it as [{LocalizedMembers.AttributeName}]"));
+
+            return;
+        }
+
         if (!IsGeneratedAttribute(attribute, context))
             return;
 
@@ -301,7 +313,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     {
         var declaration = (EnumDeclarationSyntax)context.Node;
 
-        if (!OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree))
+        if (!UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree))
             return;
 
         var marked = new List<EnumMemberDeclarationSyntax>();
@@ -350,13 +362,51 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
+    /// Whether an attribute is the generated <c>[Localized]</c> under another name, as after
+    /// <c>using L = LocalizedAttribute;</c>. The source generator finds the attribute by its name, so such a member
+    /// compiles and gets no text.
+    /// </summary>
+    // By the using directives of its file first, which binds nothing: nearly no attribute is written through an alias.
+    // An alias that another file declares with 'global using' isn't followed.
+    private static bool IsWrittenThroughAlias(AttributeSyntax attribute, SyntaxNodeAnalysisContext context)
+    {
+        if (attribute.Name is not IdentifierNameSyntax { Identifier.ValueText: var name }
+            || LocalizedMembers.IsNamedLocalized(attribute)
+            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
+        {
+            return false;
+        }
+
+        var isAlias = false;
+
+        for (SyntaxNode? node = attribute; node is not null && !isAlias; node = node.Parent)
+        {
+            var usings = node switch
+            {
+                CompilationUnitSyntax unit => unit.Usings,
+                BaseNamespaceDeclarationSyntax @namespace => @namespace.Usings,
+                _ => default,
+            };
+
+            foreach (var directive in usings)
+                isAlias |= directive.Alias is { Name.Identifier.ValueText: var alias } && String.Equals(alias, name, StringComparison.Ordinal);
+        }
+
+        var isWrittenThroughAlias = isAlias
+                                    && context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is IMethodSymbol constructor
+                                    && LocalizedMembers.IsGeneratedAttribute(constructor.ContainingType, context.Compilation.Assembly);
+
+        return isWrittenThroughAlias;
+    }
+
+    /// <summary>
     /// Whether an attribute is the generated <c>[Localized]</c>, in code that is the user's own. Also one whose
     /// arguments don't compile, such as one that leaves a language out: its member is marked all the same.
     /// </summary>
     private static bool IsGeneratedAttribute(AttributeSyntax attribute, SyntaxNodeAnalysisContext context)
     {
         // By its name first, which binds nothing: nearly every attribute is another one.
-        if (!LocalizedMembers.IsNamedLocalized(attribute) || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
+        if (!LocalizedMembers.IsNamedLocalized(attribute) || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
             return false;
 
         var symbol = context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken);

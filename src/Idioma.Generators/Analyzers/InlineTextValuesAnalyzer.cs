@@ -61,7 +61,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
 
         // Razor's output counts as generated code, and a text written in markup must be read there.
-        // OneLanguageTextAnalyzer.IsHandWritten leaves out the rest.
+        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
@@ -93,8 +93,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         var invocation = (IInvocationOperation)context.Operation;
 
         // By the name of the method first, which costs nothing: nearly every call is another one.
-        if (!OneLanguageTextAnalyzer.IsFactory(invocation.TargetMethod)
-            || !OneLanguageTextAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree)
+        if (!UnnamedLanguageAnalyzer.IsFactory(invocation.TargetMethod)
+            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree)
             || invocation.Syntax.ContainsDiagnostics)
         {
             return;

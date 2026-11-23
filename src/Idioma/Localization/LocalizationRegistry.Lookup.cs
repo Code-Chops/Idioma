@@ -157,7 +157,7 @@ public sealed partial class LocalizationRegistry
             var appLanguages = registry.AppLanguages;
 
             this.Culture = culture;
-            this.ShowsCulture = appLanguages.IsDefaultOrEmpty || LocalizableText.IsServed(culture, appLanguages);
+            this.ShowsCulture = appLanguages.IsDefaultOrEmpty || IsServed(culture, appLanguages);
         }
 
         /// <summary>
@@ -167,11 +167,56 @@ public sealed partial class LocalizationRegistry
         public bool IsServedBy(string language)
         {
             foreach (var name in this.Names)
-                if (LocalizableText.IsLanguageOrRegion(name, language))
+                if (IsLanguageOrRegion(name, language))
                     return true;
 
             return false;
         }
+
+        // Per contract, the sets found so far for its texts (ResolvedSets<TContract>). An object, because the
+        // contract is a type argument only where it's asked for.
+        private ConcurrentDictionary<Type, object> ResolvedByContract { get; } = new();
+
+        /// <summary>
+        /// The sets found so far for the texts of a contract, for a reader of this culture. See
+        /// <see cref="ResolvedSets{TContract}"/>.
+        /// </summary>
+        /// <param name="count">The number of texts the contract has.</param>
+        public ResolvedSets<TContract> GetResolvedSets<TContract>(int count)
+            where TContract : class
+        {
+            var resolved = this.ResolvedByContract.TryGetValue(typeof(TContract), out var known)
+                ? known
+                : this.ResolvedByContract.GetOrAdd(typeof(TContract), new ResolvedSets<TContract>(this, count));
+
+            return (ResolvedSets<TContract>)resolved;
+        }
+    }
+
+    /// <summary>
+    /// Whether a culture name is a language or a region of it, such as <c>en</c> or <c>en-GB</c> for <c>en</c>.
+    /// </summary>
+    internal static bool IsLanguageOrRegion(string name, string language)
+    {
+        var result = name.StartsWith(language, StringComparison.OrdinalIgnoreCase) && (name.Length == language.Length || name[language.Length] is '-');
+        return result;
+    }
+
+    /// <summary>
+    /// Whether one of the app's languages serves a culture. It does when the culture, or one it falls back to, is that
+    /// language or a region of it.
+    /// </summary>
+    internal static bool IsServed(CultureInfo culture, ImmutableArray<string> appLanguages)
+    {
+        // The names the lookups walk, so that this gate and the lookups agree on which language serves a culture, also
+        // under invariant globalization, where en-GB (if it can be created: PredefinedCulturesOnly off) has no parent
+        // culture and en still serves it.
+        foreach (var name in new CultureFallback(culture))
+            foreach (var language in appLanguages)
+                if (IsLanguageOrRegion(name, language))
+                    return true;
+
+        return false;
     }
 
     /// <summary>
@@ -206,24 +251,36 @@ public sealed partial class LocalizationRegistry
     /// a less specific name it derives from, the text takes the wording of that name instead, and so on up. So a set that
     /// rewords a language reaches the regional sets built on that language, for every text they leave as it was.
     /// </summary>
-    /// <param name="contract">The contract the text belongs to.</param>
+    /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
     /// <param name="lookup">
     /// The culture or language to look in, from <see cref="Resolve"/> or <see cref="ResolveLanguage"/>.
     /// </param>
-    /// <param name="text">The text, which a set of the contract words (<see cref="LocalizableText.Select"/>).</param>
+    /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
+    /// <param name="select">Gives the text as a set of the contract words it.</param>
+    /// <param name="set">The set that gave the wording, or <see langword="null"/> when none did.</param>
+    /// <param name="isToldByRecord">
+    /// Whether the build's record alone told which set words the text, without comparing wordings. The same set then
+    /// words the text on every call, so a caller may keep it.
+    /// </param>
     // Which texts a set words itself comes from the build's record of its class (RecordSet), not from reflection, which
     // the trimmer can't see. A set the build has no record of, such as a nested one registered by hand, is compared by
     // wording instead: it gives way where it words the text as the set it derives from does. A set deriving from no
     // other set of its name, or a regional set deriving from no set of its language, gives way to nothing, as it
     // inherits none of its texts.
     // A set is asked for its wording only once it's known to give it, or where only its wording can tell. A British set
-    // that leaves a text to the English one isn't called for that text at all. Called anyway, every text among the
-    // values of a text was worded twice per level for a British user: 510 calls for a text nested 8 deep, where 8 do.
-    internal string? FindWording(Type contract, FallbackLookup lookup, LocalizableText text)
+    // that leaves a text to the English one isn't called for that text at all. Called anyway, a text that a wording
+    // shows was worded twice per level for a British user.
+    internal string? FindWording<TContract>(FallbackLookup lookup, string name, Func<TContract, string?> select,
+        out TContract? set, out bool isToldByRecord)
+        where TContract : class
     {
+        var contract = typeof(TContract);
         ContractSet? found = null;
         string? wording = null;
         var isWorded = false;
+
+        set = null;
+        isToldByRecord = true;
 
         foreach (var sets in lookup.Levels)
         {
@@ -238,17 +295,19 @@ public sealed partial class LocalizationRegistry
                 if (basis is null)
                     continue;
 
-                var wordsItself = found.WordsItselfOver(basis.GetType(), text);
+                var wordsItself = found.WordsItselfOver(basis.GetType(), name);
 
                 if (wordsItself is null)
                 {
+                    isToldByRecord = false;
+
                     if (!isWorded)
                     {
-                        wording = text.Select(found.Set);
+                        wording = select((TContract)found.Set);
                         isWorded = true;
                     }
 
-                    basisWording = text.Select(basis);
+                    basisWording = select((TContract)basis);
                     wordsItself = !String.Equals(basisWording, wording, StringComparison.Ordinal);
                 }
 
@@ -257,7 +316,7 @@ public sealed partial class LocalizationRegistry
             }
 
             // Null only before the first name with a set of the contract: a basis is one of the candidates.
-            if (FindLevelSet(candidates, text, out var levelWording, out var isLevelWorded) is not { } level)
+            if (FindLevelSet(candidates, name, select, out var levelWording, out var isLevelWorded, ref isToldByRecord) is not { } level)
                 continue;
 
             found = level;
@@ -275,7 +334,9 @@ public sealed partial class LocalizationRegistry
         if (found is null)
             return null;
 
-        return isWorded ? wording : text.Select(found.Set);
+        set = (TContract)found.Set;
+
+        return isWorded ? wording : select(set);
     }
 
     /// <summary>
@@ -284,13 +345,17 @@ public sealed partial class LocalizationRegistry
     /// has no set of the contract.
     /// </summary>
     /// <param name="candidates">The sets of the contract for the name.</param>
-    /// <param name="text">The text.</param>
+    /// <param name="name">The name of the text.</param>
+    /// <param name="select">Gives the text as a set of the contract words it.</param>
     /// <param name="wording">The set's wording, where telling the set took it.</param>
     /// <param name="isWorded">
     /// Whether <paramref name="wording"/> holds the set's wording. It doesn't where the build's record told the set, so
     /// that a set a less specific name overrides isn't called at all.
     /// </param>
-    private static ContractSet? FindLevelSet(ContractSet[] candidates, LocalizableText text, out string? wording, out bool isWorded)
+    /// <param name="isToldByRecord">Set to <see langword="false"/> where a wording was compared to tell the set.</param>
+    private static ContractSet? FindLevelSet<TContract>(ContractSet[] candidates, string name, Func<TContract, string?> select,
+        out string? wording, out bool isWorded, ref bool isToldByRecord)
+        where TContract : class
     {
         wording = null;
         isWorded = false;
@@ -307,7 +372,7 @@ public sealed partial class LocalizationRegistry
                 return candidate;
 
             // Asked of the build's record first, so that a set that leaves the text as it is isn't called at all.
-            var wordsItself = candidate.WordsItselfOverBasis(text);
+            var wordsItself = candidate.WordsItselfOverBasis(name);
             if (wordsItself is false)
                 continue;
 
@@ -315,9 +380,11 @@ public sealed partial class LocalizationRegistry
                 return candidate;
 
             // No record: only the wording tells, so it's kept for the caller.
-            var candidateWording = text.Select(set);
+            isToldByRecord = false;
 
-            if (String.Equals(text.Select(basis), candidateWording, StringComparison.Ordinal))
+            var candidateWording = select((TContract)set);
+
+            if (String.Equals(select((TContract)basis), candidateWording, StringComparison.Ordinal))
                 continue;
 
             wording = candidateWording;
@@ -400,9 +467,9 @@ public sealed partial class LocalizationRegistry
         /// Whether the set words a text itself rather than leaving it to <see cref="Basis"/>, for a set that has one.
         /// See <see cref="WordsItselfOver"/>.
         /// </summary>
-        public bool? WordsItselfOverBasis(LocalizableText text)
+        public bool? WordsItselfOverBasis(string name)
         {
-            var wordsItself = this.WordsItselfOver(this.BasisType!, text);
+            var wordsItself = this.WordsItselfOver(this.BasisType!, name);
             return wordsItself;
         }
 
@@ -411,11 +478,9 @@ public sealed partial class LocalizationRegistry
         /// the build recorded it: the set's class, or a class between it and that one, words the text.
         /// <see langword="null"/> where one of those classes has no record, such as a nested one the build didn't see.
         /// </summary>
-        public bool? WordsItselfOver(Type basisType, LocalizableText text)
+        public bool? WordsItselfOver(Type basisType, string name)
         {
-            var name = text.Name;
-
-            if (name.IsEmpty)
+            if (name.Length is 0)
                 return null;
 
             var classes = this.Classes;

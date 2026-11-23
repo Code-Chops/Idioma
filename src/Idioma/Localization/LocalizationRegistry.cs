@@ -84,8 +84,12 @@ public sealed partial class LocalizationRegistry
     /// </para>
     /// <para>
     /// A text that takes values, such as <c>ShopLocalization.Total(amount)</c>, formats them for the same culture, so
-    /// a date or a number reads as the user writes it. <see cref="LocalizableText.ToString(CultureInfo)"/> still shows
-    /// the wording for the culture you pass.
+    /// a date or a number reads as the user writes it.
+    /// </para>
+    /// <para>
+    /// With a provider set, changing <see cref="CultureInfo.CurrentUICulture"/> doesn't change the language of a text.
+    /// To get a wording in another language, such as that of an email's recipient, wrap the block that reads the
+    /// texts in <see cref="UseCulture"/>, which wins over the provider.
     /// </para>
     /// </remarks>
     /// <example>
@@ -96,6 +100,40 @@ public sealed partial class LocalizationRegistry
     /// </example>
     // ReSharper disable once InconsistentNaming - Same casing as CultureInfo.CurrentUICulture.
     public static Func<CultureInfo?>? CurrentUICultureProvider { get; set; }
+
+    /// <summary>
+    /// Makes a culture the one every text follows until the scope is disposed, such as the culture of an email's
+    /// recipient. Wrap the block that reads the texts: <c>using (LocalizationRegistry.UseCulture(dutch)) { ... }</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The culture chooses the wording and formats dates and numbers, and it wins over
+    /// <see cref="CurrentUICultureProvider"/>. The scope follows your code across an <see langword="await"/>. See
+    /// <see cref="CultureScope"/>.
+    /// </para>
+    /// <para>
+    /// Entering a scope copies the execution context. So wrap a block of texts, not each text.
+    /// </para>
+    /// </remarks>
+    /// <param name="culture">The culture texts follow inside the scope.</param>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    public static CultureScope UseCulture(CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var scope = new CultureScope(culture);
+        return scope;
+    }
+
+    /// <summary>
+    /// The culture a provider gives for the code that runs now: that of the <see cref="CultureScope"/> it's in, or
+    /// else what the provider answers.
+    /// </summary>
+    internal static CultureInfo? AskProvider(Func<CultureInfo?> provider)
+    {
+        var culture = CultureScope.Current ?? provider();
+        return culture;
+    }
 
     /// <summary>
     /// The sets of this registry, in the order they apply. For one contract and language, a later set wins for every
@@ -147,14 +185,9 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Read a text's wording from it with <see cref="LocalizableText.ToString(CultureInfo, LocalizationRegistry)"/>. To
-    /// add sets to your whole app, use <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> instead.
-    /// </para>
-    /// <para>
-    /// The registry stands apart from your app's languages too. A text read from it shows every language the registry
-    /// has a set for, and a culture without wording gets the text's own default language. To give the registry
-    /// languages of its own, pass them to
-    /// <see cref="Create(IEnumerable{ILocalizationSet}, string, ReadOnlySpan{string})"/>.
+    /// Read a set from it with <see cref="Find{TContract}(CultureInfo)"/>. The texts of a generated class, such as
+    /// <c>ShopLocalization.Checkout</c>, always read <see cref="Current"/>. To add sets to your whole app, use
+    /// <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> instead.
     /// </para>
     /// </remarks>
     /// <param name="sets">
@@ -201,7 +234,9 @@ public sealed partial class LocalizationRegistry
     /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
-    public static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, string defaultLanguage,
+    // Internal: no public member reads a text from a registry of your own, so its languages would change nothing a
+    // caller can see. The tests of the fallback order read through LocalizationRegistry.Word.
+    internal static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, string defaultLanguage,
         params ReadOnlySpan<string> otherLanguages)
     {
         ArgumentNullException.ThrowIfNull(sets);
@@ -322,8 +357,8 @@ public sealed partial class LocalizationRegistry
     /// <para>
     /// The set's wording isn't always what a user sees, because a text can take its wording from another set. For
     /// example, a rewording registered for <c>en</c> also shows for <c>en-GB</c>, for the texts the <c>en-GB</c> set
-    /// doesn't change. This method still returns the <c>en-GB</c> set. For the wording a user of the culture sees, call
-    /// <see cref="LocalizableText.ToString(CultureInfo)"/> on the text instead.
+    /// doesn't change. This method still returns the <c>en-GB</c> set. For the wording a user of the culture sees, read
+    /// the text of the generated class inside <see cref="UseCulture"/>.
     /// </para>
     /// </remarks>
     /// <typeparam name="TContract">The contract the set implements, such as <c>IShopLocalization</c>.</typeparam>

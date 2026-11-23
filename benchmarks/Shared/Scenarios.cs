@@ -21,25 +21,22 @@ internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
     public static IReadOnlyList<string> Cultures { get; } = ["en", "nl", "en-GB"];
 
     // IStringLocalizer comes first, because Microsoft recommends it, so every other approach is compared with it. An
-    // inline text comes twice: kept in a field, and written in markup, which calls it on every render. A text written as
-    // an attribute is found by its member first, and has no text with a value.
+    // inline text is written in the call, as markup writes it on every render. A text written as an attribute is found
+    // by its member first, and has no text with a value.
 
     public string LocalizerCheckout() => localizer["Checkout"].Value;
-    public string IdiomaSetCheckout() => ShopLocalization.Checkout.ToString();
-    public string IdiomaInlineInFieldCheckout() => InlineTextsInField.Checkout.ToString();
-    public string IdiomaInlineInMarkupCheckout() => InlineTextsInMarkup.Checkout.ToString();
-    public string IdiomaAttributeCheckout() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))!.ToString();
+    public string IdiomaSetCheckout() => ShopLocalization.Checkout;
+    public string IdiomaInlineCheckout() => InlineTexts.Checkout;
+    public string IdiomaAttributeCheckout() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))!;
 
     public string LocalizerCart() => localizer["Cart"].Value;
-    public string IdiomaSetCart() => ShopLocalization.Cart.ToString();
-    public string IdiomaInlineInFieldCart() => InlineTextsInField.Cart.ToString();
-    public string IdiomaInlineInMarkupCart() => InlineTextsInMarkup.Cart.ToString();
-    public string IdiomaAttributeCart() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Cart))!.ToString();
+    public string IdiomaSetCart() => ShopLocalization.Cart;
+    public string IdiomaInlineCart() => InlineTexts.Cart;
+    public string IdiomaAttributeCart() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Cart))!;
 
     public string LocalizerGreeting() => localizer["Greeting", this.name].Value;
-    public string IdiomaSetGreeting() => ShopLocalization.Greeting(this.name).ToString();
-    public string IdiomaInlineInFieldGreeting() => InlineTextsInField.Greeting.ToString();
-    public string IdiomaInlineInMarkupGreeting() => InlineTextsInMarkup.Greeting(this.name).ToString();
+    public string IdiomaSetGreeting() => ShopLocalization.Greeting(this.name);
+    public string IdiomaInlineGreeting() => InlineTexts.Greeting(this.name);
 
     /// <summary>
     /// Every scenario by text and approach, for a runner without BenchmarkDotNet.
@@ -48,18 +45,15 @@ internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
     [
         new("Checkout", "IStringLocalizer", this.LocalizerCheckout),
         new("Checkout", "Idioma set", this.IdiomaSetCheckout),
-        new("Checkout", "Idioma inline, in a field", this.IdiomaInlineInFieldCheckout),
-        new("Checkout", "Idioma inline, in markup", this.IdiomaInlineInMarkupCheckout),
+        new("Checkout", "Idioma inline", this.IdiomaInlineCheckout),
         new("Checkout", "Idioma attribute", this.IdiomaAttributeCheckout),
         new("Cart", "IStringLocalizer", this.LocalizerCart),
         new("Cart", "Idioma set", this.IdiomaSetCart),
-        new("Cart", "Idioma inline, in a field", this.IdiomaInlineInFieldCart),
-        new("Cart", "Idioma inline, in markup", this.IdiomaInlineInMarkupCart),
+        new("Cart", "Idioma inline", this.IdiomaInlineCart),
         new("Cart", "Idioma attribute", this.IdiomaAttributeCart),
         new("Greeting(name)", "IStringLocalizer", this.LocalizerGreeting),
         new("Greeting(name)", "Idioma set", this.IdiomaSetGreeting),
-        new("Greeting(name)", "Idioma inline, in a field", this.IdiomaInlineInFieldGreeting),
-        new("Greeting(name)", "Idioma inline, in markup", this.IdiomaInlineInMarkupGreeting),
+        new("Greeting(name)", "Idioma inline", this.IdiomaInlineGreeting),
     ];
 
     /// <summary>

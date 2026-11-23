@@ -12,14 +12,14 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <c>[Localized("City", "Plaats")]</c>.
 /// </summary>
 /// <remarks>
-/// The diagnostic carries the language of each argument (<see cref="OneLanguageTextAnalyzer.ParameterNamesProperty"/>),
+/// The diagnostic carries the language of each argument (<see cref="UnnamedLanguageAnalyzer.ParameterNamesProperty"/>),
 /// so the fix names them as they are, and never swaps two.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(UnnamedLanguageCodeFixProvider))]
 [Shared]
 public sealed class UnnamedLanguageCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [OneLanguageTextAnalyzer.UnnamedLanguageDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [UnnamedLanguageAnalyzer.UnnamedLanguageDiagnosticId];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -40,7 +40,7 @@ public sealed class UnnamedLanguageCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            if (!diagnostic.Properties.TryGetValue(OneLanguageTextAnalyzer.ParameterNamesProperty, out var value) || value is null)
+            if (!diagnostic.Properties.TryGetValue(UnnamedLanguageAnalyzer.ParameterNamesProperty, out var value) || value is null)
                 continue;
 
             var names = value.Split(',');

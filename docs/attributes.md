@@ -10,11 +10,11 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 - `GetTextByMember<Address>(nameof(Address.City))` is for a type your code knows.
 - `GetTextByMember(type, "City")` is for a type your code only has at run time.
-- `GetTextByMember(property)` is for a member your code holds, such as the `PropertyInfo` of a form field. Only its name and the type that declares it are read. A form can fall back to the property's name: `LocalizableText label = LocalizableText.GetTextByMember(property) ?? property.Name;`.
+- `GetTextByMember(property)` is for a member your code holds, such as the `PropertyInfo` of a form field. Only its name and the type that declares it are read. A form can fall back to the property's name: `string label = LocalizableText.GetTextByMember(property) ?? property.Name;`.
 
 `LocalizableText.GetTextOfType` gives the text of a type itself, the same way: `GetTextOfType<Address>()`, or `GetTextOfType(type)` for a type your code only has at run time.
 
-Each gives `null` where there's no text, and the same text on every call. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC504` when the member has no text ([details](build-errors.md#loc504)).
+Each gives `null` where there's no text. The `string` is the wording for the user's language at the call, so read it where you show it. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC504` when the member has no text ([details](build-errors.md#loc504)).
 
 A member of an enum has a text the same way, and a value of the enum gives it with `GetText()` ([Enums](enums.md#an-attribute-on-each-member)).
 
@@ -23,11 +23,11 @@ A member of an enum has a text the same way, and a value of the enum gives it wi
 The source generator reads each `[Localized]` as the project builds, and writes the text as code. For `Address.City` in the namespace `Shop.Domain`, in outline:
 
 ```csharp
-// One text per marked member, created when first asked for
-LocalizableText city = ...; // en: City, nl: Plaats. Its key is "City"
+// The wording of each marked member, in the order of the assembly's languages (en, nl)
+string[] city = ["City", "Plaats"];
 
 // One function per assembly, which the assembly's registrar records
-static LocalizableText? Find(Type type, string? member)
+static string[]? Find(Type type, string? member)
 {
     if (type == typeof(Shop.Domain.Address))
         return member switch { "City" => city, _ => null };
@@ -38,12 +38,11 @@ static LocalizableText? Find(Type type, string? member)
 
 So nothing reads the attribute at run time, and no assembly is scanned. The attribute itself isn't part of the compiled assembly, because its wording would be stored there a second time.
 
-`GetTextByMember` and `GetTextOfType` ask the recorded functions, and keep the answer.
+`GetTextByMember` and `GetTextOfType` ask the recorded functions, keep the answer, and give the wording for the user's language.
 
 ## What else to know
 
-- **The key.** The text's `Key` is the member's name, `City`. Its `FullKey` is the member's full name, `Shop.Domain.Address.City`. A type's own text has the type's name and full name. A type inside another is written with dots, and a type with type parameters keeps its arity (``Shop.Domain.Page`1.Items``), so `Page` and `Page<T>` don't share keys.
-- **Inherited members.** A class without a text for a member gets that of its nearest base class. So an override without `[Localized]` keeps the text of the property it overrides, with that property's key. A type's own text isn't inherited, and neither are the texts of an interface.
+- **Inherited members.** A class without a text for a member gets that of its nearest base class. So an override without `[Localized]` keeps the text of the property it overrides. A type's own text isn't inherited, and neither are the texts of an interface.
 - **Types with type arguments.** `Page<Order>` gives the texts of `Page<T>`.
 - **No values.** An attribute takes constants, so the wording can't show a value. Write a text with a value as a method of a set. A placeholder such as `{0}` gets warning `LOC502`.
 - **A type the generated code can't name.** A member of a private or protected nested type, or of a file-local type, gets no text (`LOC505`). Make the type internal or public.

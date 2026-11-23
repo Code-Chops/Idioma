@@ -143,10 +143,10 @@ Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class wi
 An inline text is written where you use it, in markup or in C#. It suits a text you use once:
 
 ```csharp
-public LocalizableText Title { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+public string Title => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
 ```
 
-`Inline` takes one argument per language you declared, so leaving out a translation doesn't compile.
+`Inline` takes one argument per language you declared, so leaving out a translation doesn't compile. It returns the wording for the user's language, so write the property with `=>`. A property with an initializer keeps the wording of the first user.
 
 To include a value, write it into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC302`).
 
@@ -196,11 +196,18 @@ To show a text written as an attribute, ask for it by its type and the name of i
 </label>
 ```
 
-All three show the wording for the user's language in markup, in string interpolation, or as a `string`, as in `string label = ShopLocalization.Checkout;`.
+All three give a `string`: the wording for the user's language at the moment you read the text. So they work in markup, in string interpolation, and wherever a `string` is expected, as in `string label = ShopLocalization.Checkout;`.
 
-Every text is a `LocalizableText`. Use that type when your own code stores or accepts a text, as `Title` above does.
+#### Read a text where you show it
 
-A `string` made from a text keeps the wording of that moment. So keep the `LocalizableText` in a static field, a cache or a view model, and convert it where you show it. On a server, a `string` in a static field shows every user the language of the first one.
+A text doesn't follow a later change of language, because it's a `string`. Don't keep it in a static field, a cache or a view model that outlives one request. On a server, a `string` in a static field shows every user the language of the first one:
+
+```csharp
+static readonly string Frozen = ShopLocalization.Checkout; // The first user's language, for every user
+static string Label => ShopLocalization.Checkout;          // Each user's own language
+```
+
+The build warns about a text in the initializer of a static field or property (`LOC506`).
 
 ### The user's language
 
@@ -208,14 +215,17 @@ The user's language is `CultureInfo.CurrentUICulture`.
 A desktop or console app starts with the language of the user's system, and a Blazor WebAssembly app with that of the browser.
 
 > An ASP.NET Core app needs request localization, as in `app.UseRequestLocalization([.. LocalizationRegistry.SupportedLanguages])`,
-> which sets the language for each request. Without it, every user gets the language of the server.
+> which sets the language for each request. Without it, every user gets the language of the server. The [ASP.NET Core page](https://github.com/Code-Chops/Idioma/blob/main/docs/aspnet-core.md) has the rest.
 
 Users whose language you don't support see your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order)).
 
-To get the wording in another language, such as that of an email's recipient, pass its culture to `ToString`:
+To get the wording in another language, such as that of an email's recipient, wrap the block that reads the texts in `LocalizationRegistry.UseCulture` ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#another-language)):
 
 ```csharp
-string dutch = ShopLocalization.Checkout.ToString(CultureInfo.GetCultureInfo("nl"));
+using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl")))
+{
+    string dutch = ShopLocalization.Checkout;
+}
 ```
 
 An app that keeps the user's language somewhere else, such as in a user profile, sets `LocalizationRegistry.CurrentUICultureProvider` once at startup. Every text then follows the culture it returns ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#the-current-culture)):
@@ -244,11 +254,7 @@ error LOC302: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', bu
 
 A placeholder such as `{0}` gets build warning `LOC502`, because nothing fills it in. Your IDE turns such a text into a method that takes the value.
 
-`ToString` with a culture other than the user's also formats the values for that culture:
-
-```csharp
-string greeting = ShopLocalization.Greeting(customer.Name).ToString(CultureInfo.GetCultureInfo("nl-NL"));
-```
+The values are formatted for `CultureInfo.CurrentCulture`, as in any interpolated string.
 
 ### Plurals
 
@@ -292,7 +298,7 @@ A member you add to the enum later is a build error in every language until it h
 
 - When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can let a resource file override it ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
 - When your translators work in a translation tool, which reads files such as XLIFF.
-- When an attribute of .NET such as `[Required]` or `[Display]` has to take a text directly. An attribute takes only constants, so it reads your texts through a small class of `string` properties ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)). Those attributes don't read a label you write with `[Localized]`.
+- When an attribute of .NET such as `[Required]` or `[Display]` has to read a label you write with `[Localized]`. Those attributes read only a text of a set, by its name ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)).
 - When your app targets .NET 9 or earlier, or can't move to C# 14.
 
 ## Documentation
@@ -301,10 +307,11 @@ The docs cover the rest, a page per subject:
 
 - [Enums](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md): a [set of an enum](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md#a-set-of-the-enum), or [an attribute on each member](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md#an-attribute-on-each-member).
 - [Attributes](https://github.com/Code-Chops/Idioma/blob/main/docs/attributes.md): labels in a form, a table or an export, written with `[Localized]`, and [finding them by their member](https://github.com/Code-Chops/Idioma/blob/main/docs/attributes.md#finding-a-text-by-its-member).
-- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): [which wording a user sees](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order), [getting a text by its key](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key), [equality](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#equality), registering a set by hand, testing with sets of your own, and what the source generator writes.
+- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): [which wording a user sees](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order), [getting a text by its key](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key), registering a set by hand, [testing](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#testing), and what the source generator writes.
 - [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md): how a set's name gives its language, and [regional variants](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md#regional-variants) such as British English.
 - [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): writing a library, and [changing a text of a library](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#changing-a-text-of-a-library) in your app.
 - [Translating your texts](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md): with an AI coding assistant, and reviewing each language in a pull request.
+- [ASP.NET Core](https://github.com/Code-Chops/Idioma/blob/main/docs/aspnet-core.md): the language of a request, labels and validation messages, and what to watch on a server.
 - [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): a language picker for every render mode, dates and numbers, and a text as a component parameter.
 - [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning, by its code.
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, and keeping a resource file as an override.

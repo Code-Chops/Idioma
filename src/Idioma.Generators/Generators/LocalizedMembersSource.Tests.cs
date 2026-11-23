@@ -189,13 +189,13 @@ public sealed class LocalizedMembersSourceTests
 
                 public static class Usage
                 {
-                    public static LocalizableText Small { get; } = Size.Small.GetText();
-                    public static LocalizableText Open { get; } = Order.Status.Open.GetText();
-                    internal static LocalizableText Fast { get; } = Speed.Quick.GetText();
-                    public static LocalizableText? City { get; } = LocalizableText.GetTextByMember<Address>(nameof(Address.City));
+                    public static string Small => Size.Small.GetText();
+                    public static string Open => Order.Status.Open.GetText();
+                    internal static string Fast => Speed.Quick.GetText();
+                    public static string? City => LocalizableText.GetTextByMember<Address>(nameof(Address.City));
 
                     // As docs/attributes.md shows it: the label of a property, or else its name.
-                    public static LocalizableText Label(System.Reflection.PropertyInfo property) => LocalizableText.GetTextByMember(property) ?? property.Name;
+                    public static string Label(System.Reflection.PropertyInfo property) => LocalizableText.GetTextByMember(property) ?? property.Name;
                 }
             }
             """;
@@ -206,19 +206,23 @@ public sealed class LocalizedMembersSourceTests
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
         var text = Texts(Run(source))!;
 
-        // Assert: a type inside another is named with dots, and a type with type parameters by its definition. Its key
-        // keeps the arity. An enum inside such a type gets no extension method, and its texts are still found.
+        // Assert: a type inside another is named with dots, and a type with type parameters by its definition. An
+        // enum inside such a type gets no extension method, and its texts are still found. Each text is its wording
+        // per language, in the order of the assembly's languages.
         errors.ShouldBeEmpty();
         warnings.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
         text.ShouldContain("if (type == typeof(Shop.Domain.Order.Line))");
         text.ShouldContain("if (type == typeof(Shop.Domain.Page<>))");
         text.ShouldContain("if (type == typeof(Shop.Domain.Page<>.Kind))");
-        text.ShouldContain("CreateMemberText(\"Shop.Domain.Page`1.Items\", \"Items\", (\"en\", \"Items\"), (\"nl\", \"Regels\"), (\"en-GB\", \"Items\"));");
-        text.ShouldContain("CreateMemberText(\"Shop.Domain.Order.Line.Article\", \"Article\",");
-        text.ShouldContain("CreateMemberText(\"Shop.Domain.Address\", \"Address\",");
-        text.ShouldContain("CreateMemberText(\"Size\", \"Size\",");
-        text.ShouldContain("CreateMemberText(\"Shop.Domain.Line.Quantity\", \"Quantity\",");
+        text.ShouldContain("internal static readonly string[] Languages = [\"en\", \"nl\", \"en-GB\"];");
+        text.ShouldContain("internal static readonly string[] Text0 = [\"Items\", \"Regels\", \"Items\"];");
+        text.ShouldContain(" = [\"Article\", \"Artikel\", \"Article\"];");
+        text.ShouldContain("internal static readonly string[] OwnText = [\"Address\", \"Adres\", \"Address\"];");
+        text.ShouldContain("internal static readonly string[] OwnText = [\"Size\", \"Maat\", \"Size\"];");
+        text.ShouldContain(" = [\"Quantity\", \"Aantal\", \"Quantity\"];");
+        text.ShouldContain(" = [\"Color\", \"Kleur\", \"Colour\"];");
+        text.ShouldNotContain("CreateMemberText");
         text.ShouldContain("\"Width\" =>");
         text.ShouldContain("\"Height\" =>");
         text.ShouldContain("\"class\" =>");
@@ -353,8 +357,8 @@ public sealed class LocalizedMembersSourceTests
             """))!;
 
         // Assert: a quote is escaped as C# writes it.
-        text.ShouldContain("CreateMemberText(\"Shop.Domain.Address.City\", \"City\", (\"en\", \"City\"), (\"nl\", \"Plaats\"));");
-        text.ShouldContain("""("en", "He said \"hi\""), ("nl", "Hij zei \"hoi\"")""");
+        text.ShouldContain("internal static readonly string[] Text0 = [\"City\", \"Plaats\"];");
+        text.ShouldContain("""internal static readonly string[] Text1 = ["He said \"hi\"", "Hij zei \"hoi\""];""");
     }
 
     [Test]
@@ -372,7 +376,7 @@ public sealed class LocalizedMembersSourceTests
             """))!;
 
         // Assert
-        text.ShouldContain("(\"en\", \"City\"), (\"nl\", \"Plaats\")");
+        text.ShouldContain("internal static readonly string[] Text0 = [\"City\", \"Plaats\"];");
     }
 
     [Test]
@@ -507,7 +511,7 @@ public sealed class LocalizedMembersSourceTests
         var text = Texts(Run(source));
 
         // Assert
-        text.ShouldNotBeNull().ShouldContain("CreateMemberText(\"Shop.Domain.Address.City\", \"City\", (\"en\", \"City\"), (\"nl\", \"Plaats\"));");
+        text.ShouldNotBeNull().ShouldContain("internal static readonly string[] Text0 = [\"City\", \"Plaats\"];");
         GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
     }
 
@@ -557,7 +561,7 @@ public sealed class LocalizedMembersSourceTests
                 [Localized(en: "City", nl: "Plaats")]
                 public string City { get; } = "";
 
-                public static LocalizableText Title { get; } = LocalizableText.Inline(en: "Address", nl: "Adres");
+                public static string Title => LocalizableText.Inline(en: "Address", nl: "Adres");
             }
             """;
 
@@ -618,6 +622,7 @@ public sealed class LocalizedMembersSourceTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void TextOfMemberOfALibrary_ShouldBeFoundBeforeAnyCodeOfTheLibraryRan()
     {
         // Arrange: an app that references a library with a marked member, as a form reads the label of a property of
@@ -656,9 +661,8 @@ public sealed class LocalizedMembersSourceTests
         var address = context.LoadFromAssemblyName(new AssemblyName("EarlyMemberLibrary")).GetType("EarlyMemberLibrary.Address")!;
 
         // Assert
-        var text = LocalizableText.GetTextByMember(address.GetProperty("City")!);
-        text.ShouldNotBeNull().ToString(CultureInfo.GetCultureInfo("nl-NL")).ShouldBe("Plaats");
-        text.FullKey.ShouldBe("EarlyMemberLibrary.Address.City");
+        using var _ = new CulturesScope("nl-NL");
+        LocalizableText.GetTextByMember(address.GetProperty("City")!).ShouldBe("Plaats");
     }
 
     [Test]
@@ -692,7 +696,7 @@ public sealed class LocalizedMembersSourceTests
 
             public static class Labels
             {
-                public static LocalizableText Of(ParcelStatus status) => status.GetText();
+                public static string Of(ParcelStatus status) => status.GetText();
             }
             """;
 
@@ -707,7 +711,7 @@ public sealed class LocalizedMembersSourceTests
     }
 
     [Test]
-    public void MemberInKeywordNamespace_ShouldGetKeyWithoutTheAt()
+    public void MemberInKeywordNamespace_ShouldBeFoundByItsNameWithoutTheAt()
     {
         // Arrange & Act
         var texts = Texts(Run("""
@@ -724,9 +728,10 @@ public sealed class LocalizedMembersSourceTests
             }
             """));
 
-        // Assert: a key is a name, as the key of a set's text is.
-        texts.ShouldNotBeNull().ShouldContain("\"class.event.Model.base\"");
-        texts.ShouldNotContain("\"@class");
+        // Assert: the type is named as code names it, and the member by its name, without the @.
+        texts.ShouldNotBeNull().ShouldContain("if (type == typeof(@class.@event.Model))");
+        texts.ShouldContain("\"base\" =>");
+        texts.ShouldNotContain("\"@base\"");
     }
 
     [Test]

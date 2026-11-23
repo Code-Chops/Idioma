@@ -13,7 +13,7 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 | An entry, `<data name="Checkout">`                                 | A property, `public string Checkout => "Checkout";`                             |
 | `localizer["Checkout"]`, or `Shop.Checkout` of the generated class | `ShopLocalization.Checkout`                                                     |
 | `localizer["Greeting", customer.Name]`, with a `{0}` placeholder   | `ShopLocalization.Greeting(customer.Name)`, a method with a parameter per value |
-| `ResourceType = typeof(Shop)` in a validation or display attribute | A class of `string` properties that reads your texts                            |
+| `ResourceType = typeof(Shop)` in a validation or display attribute | `ResourceType = typeof(ShopLocalization)`                                        |
 | `AddLocalization()` and an injected `IStringLocalizer<Shop>`       | Nothing to register or inject                                                   |
 | A mistyped key shows as the key itself                             | A mistyped name doesn't compile                                                 |
 | An entry missing from `Shop.nl.resx` falls back to the default     | A text missing from `ShopLocalizationNl` doesn't compile                        |
@@ -32,62 +32,52 @@ You can move one resource file at a time, because the two work side by side:
 
 ## Validation and display attributes
 
-Name your texts in an attribute such as `[Required]` or `[Display]` through a class of static `string` properties. An attribute takes only constants, so `[Required(ErrorMessage = ShopLocalization.NameRequired)]` doesn't compile. These attributes do read a static `string` property by its name, as they read the class resx generates:
+An attribute such as `[Required]` or `[Display]` takes only constants, so `[Required(ErrorMessage = ShopLocalization.NameRequired)]` doesn't compile. These attributes do read a public static `string` property by its name, as they read the class resx generates. Each text of a generated class is such a property, so name the generated class:
 
 ```csharp
-public static class FormTexts
-{
-    public static string Name => ShopLocalization.Name;
-    public static string NameRequired => ShopLocalization.NameRequired;
-}
-
 public class Customer
 {
-    [Display(Name = nameof(FormTexts.Name), ResourceType = typeof(FormTexts))]
-    [Required(ErrorMessageResourceName = nameof(FormTexts.NameRequired), ErrorMessageResourceType = typeof(FormTexts))]
+    [Display(Name = nameof(ShopLocalization.Name), ResourceType = typeof(ShopLocalization))]
+    [Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]
     public string? Name { get; set; }
 }
 ```
 
-Each property converts its text when the attribute reads it, so the label and the message follow the user's language. The attribute can't name `ShopLocalization` itself, because its texts are `LocalizableText` and the attribute asks for a `string`.
+The attribute reads the property each time it needs the wording, so the label and the message follow the user's language. The set has to be public, because these attributes read only a public class.
 
 A message can show the field's label as `{0}`, as in `"Enter {0}"`, because the attribute fills it in. In a set, that wording gets warning `LOC502`. Turn it off around the text with `#pragma warning disable LOC502`.
 
-Code of your own that shows a property's label needs no such class. Mark the property `[Localized(en: "Name", nl: "Naam")]`, and read the label with `LocalizableText.GetTextByMember` ([Write an attribute](../README.md#write-an-attribute)). `[Display]` and the validation attributes don't read that label.
+Code of your own that shows a property's label can keep the label on the property. Mark the property `[Localized(en: "Name", nl: "Naam")]`, and read the label with `LocalizableText.GetTextByMember` ([Write an attribute](../README.md#write-an-attribute)). `[Display]` and the validation attributes don't read that label.
 
 ## Keeping a resource file as an override
 
-Each text of a set carries a full key, which is its full name: `MyApp.Localization.ShopLocalization.Checkout` for `ShopLocalization.Checkout` in the namespace `MyApp.Localization`. The package itself never reads it. An app can still let a resource file or a database override a wording through `IStringLocalizer`. Use this when a wording has to change without a rebuild, such as when translators edit a resource file. An extension method on the localizer asks it for the key first, and shows the text where there's no entry:
+An app can let a resource file or a database override a wording through `IStringLocalizer`. Use this when a wording has to change without a rebuild, such as when translators edit a resource file. The key of a text is its name. An extension method on the localizer asks it for that key first, and gives the text where there's no entry:
 
 ```csharp
 public static class LocalizerExtensions
 {
-    public static string Show(this IStringLocalizer localizer, LocalizableText text)
+    public static string Show(this IStringLocalizer localizer, string key, string text)
     {
-        if (text.FullKey is null)
-            return text;
-
-        var found = localizer[text.FullKey];
+        var found = localizer[key];
 
         return found.ResourceNotFound ? text : found.Value;
     }
 }
 ```
 
-An inline text has no key, so `Show` gives its wording. To give a value of your own a key, create it with `LocalizableText.Keyed("Customer.Name", customer.Name)`. It shows `customer.Name` where no resource file has the entry.
+`localizer.Show(nameof(ShopLocalization.Checkout), ShopLocalization.Checkout)` gives the wording of the entry `Checkout` where a resource file has one, and the text's own wording where none has. With `nameof`, the key follows the text when you rename it.
 
-`localizer.Show(ShopLocalization.Checkout)` gives the wording of the entry `MyApp.Localization.ShopLocalization.Checkout` where a resource file has one, and the text's own wording where none has.
+Two classes can each have a text named `Checkout`. So give each class a resource file of its own, as `IStringLocalizer<Shop>` does, or put the class in the key: `"ShopLocalization.Checkout"`.
 
-A text also has a `Key`, which is its name alone: `Checkout`. Use it in place of `FullKey` where each class has a resource file of its own, as with `IStringLocalizer<Shop>`, whose entries are named `Checkout` and `Cart`. Two classes can each have a text with that key, so it doesn't suit a file they share.
+Call `Show` wherever a resource file may override a wording, also in Razor markup: `@localizer.Show(nameof(ShopLocalization.Checkout), ShopLocalization.Checkout)`. A component gets the localizer with `@inject IStringLocalizer<Shop> localizer`. Markup such as `@ShopLocalization.Checkout` doesn't ask the localizer, so a wording shown that way ignores the resource file.
 
-Call `Show` wherever a resource file may override a wording, also in Razor markup: `@localizer.Show(ShopLocalization.Checkout)`. A component gets the localizer with `@inject IStringLocalizer<Shop> localizer`. Markup such as `@ShopLocalization.Checkout` and string interpolation show a text through `ToString()`, which doesn't ask the localizer. So a wording shown that way ignores the resource file.
-
-A text that takes values carries them as its `Arguments`, in the order of its parameters. Its entry writes them as placeholders, `{0} items in your cart at {1}` for `ItemsInCart(count, shop)`, and the last line of `Show` fills them in:
+For a text that takes values, the entry writes them as placeholders: `{0} items in your cart at {1}` for `ItemsInCart(count, shop)`. Fill them in where there's an entry:
 
 ```csharp
-return found.ResourceNotFound ? text : string.Format(found.Value, text.Arguments.AsSpan());
+var found = localizer[nameof(ShopLocalization.ItemsInCart)];
+
+string items = found.ResourceNotFound
+    ? ShopLocalization.ItemsInCart(count, shop)
+    : string.Format(found.Value, count, shop);
 ```
-
-Such a text loses its key when it travels through JSON, as a Blazor component parameter can. It's read back with its values filled in and without its `Arguments`, so `Show` gives that wording.
-
 Such an entry has one wording for every value. The method, by contrast, can choose between wordings.
