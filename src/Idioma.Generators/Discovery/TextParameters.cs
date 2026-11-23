@@ -134,7 +134,7 @@ internal static class TextParameters
                 return $"its parameter '{parameter.Name}' has a default value, which another language's set could give another value";
 
             if (parameter.Type is { IsRefLikeType: true } or IPointerTypeSymbol or IFunctionPointerTypeSymbol)
-                return $"its parameter '{parameter.Name}' is of a type a text can't keep until it's shown: a pointer, or a ref struct such as a span";
+                return $"its parameter '{parameter.Name}' is of a type the generated class can't pass on: a pointer, or a ref struct such as a span";
 
             if (parameter.Type.TypeKind is TypeKind.Dynamic)
                 return $"its parameter '{parameter.Name}' is dynamic";

@@ -79,7 +79,9 @@ public sealed partial class LocalizationRegistry
     /// <remarks>
     /// <para>
     /// Set it once, at startup. It applies to every text of your app, including the texts of the libraries it uses.
-    /// The function runs each time a text is shown, so keep it fast. When it returns <see langword="null"/>, the text
+    /// The function runs each time a text is read, so keep it fast, and have it return the same
+    /// <see cref="CultureInfo"/> object for the same language, as <see cref="CultureInfo.GetCultureInfo(string)"/> does.
+    /// A text finds its set fastest for a culture object it has seen before. When it returns <see langword="null"/>, the text
     /// follows <see cref="CultureInfo.CurrentUICulture"/> for that call.
     /// </para>
     /// <para>

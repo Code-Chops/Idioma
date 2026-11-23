@@ -13,7 +13,7 @@
     <!-- The version of the package, here for every project: the generator and the code fixes ship inside the package,
          and an IDE or a compiler server that has loaded them from one version of it tells them from those of the next
          by their assembly version. Without it both stood at 1.0.0.0 in every package. -->
-    <Version>0.9.0</Version>
+    <Version>0.10.0</Version>
   </PropertyGroup>
 
   <!-- A build on CI is deterministic, so the package's symbols map to the sources on GitHub (Source Link). -->

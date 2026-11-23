@@ -4636,8 +4636,8 @@ public sealed class LocalizationSetsPartTests
     [Arguments("public string Greeting(out string name) => name = \"\";", "its parameter 'name' is passed by reference")]
     [Arguments("public string Greeting(params string[] names) => \"\";", "its parameter 'names' is a params parameter")]
     [Arguments("public string Greeting(string name = \"you\") => name;", "its parameter 'name' has a default value")]
-    [Arguments("public string Greeting(System.ReadOnlySpan<char> name) => name.ToString();", "its parameter 'name' is of a type a text can't keep")]
-    [Arguments("public unsafe string Greeting(int* count) => \"\";", "its parameter 'count' is of a type a text can't keep")]
+    [Arguments("public string Greeting(System.ReadOnlySpan<char> name) => name.ToString();", "its parameter 'name' is of a type the generated class can't pass on")]
+    [Arguments("public unsafe string Greeting(int* count) => \"\";", "its parameter 'count' is of a type the generated class can't pass on")]
     [Arguments("public string Greeting(dynamic name) => \"\";", "its parameter 'name' is dynamic")]
     [Arguments("public string Greeting(int a, int b, int c, int d, int e, int f, int g, int h, int i) => \"\";", "it takes 9 values, and a text takes at most 8")]
     public void MethodThatCannotBeAText_ShouldReportLOC300AtItAndEmitNoTextForIt(string method, string expectedReason)
