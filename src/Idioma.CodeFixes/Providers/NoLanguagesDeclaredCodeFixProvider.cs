@@ -33,7 +33,7 @@ public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
     /// </summary>
     private const string AttributeName = "SupportedLanguages";
 
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsGenerator.NoLanguagesDeclaredDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId];
 
     public override FixAllProvider? GetFixAllProvider() => null;
 

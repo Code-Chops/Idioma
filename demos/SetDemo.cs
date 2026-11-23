@@ -9,10 +9,7 @@ using CodeChops.Idioma;
 foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
-    Console.WriteLine($"{culture}:");
-    Console.WriteLine($"{ShopLocalization.Greeting("Max")} {ShopLocalization.ItemsInCart(2)}.");
-    Console.WriteLine($"{ShopLocalization.Checkout}");
-    Console.WriteLine();
+    Console.WriteLine($"{culture}: {ShopLocalization.Greeting("Max")} {ShopLocalization.ItemsInCart(2)}. {ShopLocalization.GoToCheckout}");
 }
 
 // English: the default. The source generator writes two types from this set:
@@ -20,7 +17,7 @@ foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
 // - the class ShopLocalization, which shows the texts.
 public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
 {
-    public string Checkout => "Checkout";
+    public string GoToCheckout => "Go to checkout";
     public string Greeting(string name) => $"Hello, {name}!";
 
     // Idioma has no plural rules. Each language writes its own conditions in C#.
@@ -40,7 +37,7 @@ public class ShopLocalizationEnGb : ShopLocalizationEn
 // Dutch. Delete a text here, or the {name} in Greeting, and it doesn't build.
 public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
 {
-    public string Checkout => "Afrekenen";
+    public string GoToCheckout => "Naar afrekenen";
     public string Greeting(string name) => $"Hallo, {name}!";
 
     public string ItemsInCart(int count) => count is 1

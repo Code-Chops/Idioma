@@ -17,7 +17,7 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class MissingContractCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsGenerator.MissingContractDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.MissingContractDiagnosticId];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -30,7 +30,7 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            if (!diagnostic.Properties.TryGetValue(LocalizationSetsGenerator.SuggestedNameProperty, out var name) || name is null)
+            if (!diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var name) || name is null)
                 continue;
 
             context.RegisterCodeFix(

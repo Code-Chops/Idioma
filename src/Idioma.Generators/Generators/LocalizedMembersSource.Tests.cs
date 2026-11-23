@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="LocalizedMembersSource"/>, as <see cref="LocalizationRegistrationGenerator"/> writes it: a
+/// Tests for <see cref="LocalizedMembersSource"/>, as <see cref="LocalizationRegistrationPart"/> writes it: a
 /// member marked <c>[Localized]</c> gets a text written as code, with its full name as its key, the assembly gets one
 /// function that finds a member's text, and an enum with a marked member gets <c>GetText()</c>.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class LocalizedMembersSourceTests
         namespace Shop.Domain;
         """;
 
-    private static GeneratorDriverRunResult Run(string source) => GeneratorTestHelper.Run(new LocalizationRegistrationGenerator(), source);
+    private static GeneratorDriverRunResult Run(string source) => GeneratorTestHelper.Run(LocalizationParts.Registration(), source);
 
     /// <summary>
     /// The registrar, or <see langword="null"/> when none is written.
@@ -194,7 +194,7 @@ public sealed class LocalizedMembersSourceTests
                     internal static LocalizableText Fast { get; } = Speed.Quick.GetText();
                     public static LocalizableText? City { get; } = LocalizableText.GetTextByMember<Address>(nameof(Address.City));
 
-                    // As the README shows it: the label of a property, or else its name.
+                    // As docs/attributes.md shows it: the label of a property, or else its name.
                     public static LocalizableText Label(System.Reflection.PropertyInfo property) => LocalizableText.GetTextByMember(property) ?? property.Name;
                 }
             }
@@ -610,7 +610,7 @@ public sealed class LocalizedMembersSourceTests
             """);
 
         // Act
-        var result = GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", library);
+        var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", library);
         var registrar = result.Results.ShouldHaveSingleItem().GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
 
         // Assert
@@ -733,7 +733,7 @@ public sealed class LocalizedMembersSourceTests
     public void EditInFileOfMarkedMember_ShouldRewriteNoSource()
     {
         // Arrange & Act: an edit in the file of a marked member, which gives its attribute a new location.
-        var (run, _) = GeneratorTestHelper.RunAcrossEditInSameFile(new LocalizationRegistrationGenerator(), $$"""
+        var (run, _) = GeneratorTestHelper.RunAcrossEditInSameFile(LocalizationParts.Registration(), $$"""
             {{Header}}
 
             public class Address

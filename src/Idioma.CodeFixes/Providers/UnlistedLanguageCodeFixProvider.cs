@@ -14,7 +14,7 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <para>
 /// A set whose name ends in a longer code adds that code, which its name then gives it: <c>en-GB</c> for
 /// <c>ShopLocalizationEnGb</c>. The diagnostic carries the language to add
-/// (<see cref="LocalizationSetsGenerator.SuggestedNameProperty"/>).
+/// (<see cref="LocalizationSetsPart.SuggestedNameProperty"/>).
 /// </para>
 /// <para>
 /// Every other contract then lacks a set of that language, which <c>LOC201</c> reports, and which its fix adds. The
@@ -28,7 +28,7 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsGenerator.UnlistedLanguageDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.UnlistedLanguageDiagnosticId];
 
     public override FixAllProvider? GetFixAllProvider() => null;
 
@@ -49,7 +49,7 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
         foreach (var diagnostic in context.Diagnostics)
         {
             // Listed since the diagnostic was reported.
-            if (!diagnostic.Properties.TryGetValue(LocalizationSetsGenerator.SuggestedNameProperty, out var language)
+            if (!diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var language)
                 || language is null
                 || listed.Contains(language, StringComparer.OrdinalIgnoreCase))
             {

@@ -1,13 +1,16 @@
 # Advanced topics
 
-The [getting started guide](../README.md#getting-started) covers what most apps write. This page covers the rest, most important first. It explains what happens behind the texts you write: the fallback order, texts with parameters, enums, attributes on members, when two texts are equal, what the source generator writes, how sets register, and how a text travels through JSON. It also covers the tasks the guide leaves out:
+The [getting started guide](../README.md#getting-started) covers what most apps write. This page explains what happens behind the texts you write, and covers the tasks the guide leaves out:
 
-- [keeping a public method of a set from becoming a text](#texts-with-parameters)
-- [registering a set by hand](#registration), such as one that takes a constructor argument
-- [testing with sets of your own](#reading-sets-yourself)
-- [writing a contract yourself](#a-contract-you-write-yourself)
+- [Fallback order](#fallback-order): which wording a user sees, and [where the user's culture comes from](#the-current-culture)
+- [Texts with parameters](#texts-with-parameters): what a call creates, and keeping a public method of a set from becoming a text
+- [Equality](#equality): when two texts are equal, and a collection that outlives a language switch
+- [What the source generator writes](#what-the-source-generator-writes), and [getting a text by its key](#getting-a-text-by-its-key)
+- [Registration](#registration): how sets register, and registering a set by hand
+- [Reading sets yourself](#reading-sets-yourself): testing with sets of your own, and [writing a contract yourself](#a-contract-you-write-yourself)
+- [Texts in JSON](#texts-in-json): how a text travels, such as to a Blazor component
 
-Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), and [performance](performance.md).
+Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
 ## Fallback order
 
@@ -17,7 +20,7 @@ A text follows `CultureInfo.CurrentUICulture` and shows the first wording it fin
 2. The wording for the app's default language, which is the first language it declares. Library texts fall back to it too, so no screen ends up in two languages. A culture that none of the app's languages serves starts here, even when a library has its language. For example, an app declaring `("en", "fr")` shows a Dutch user a library's texts in English, like its own.
 3. The wording for the default language of the project that wrote the text.
 
-In an app declaring `("en", "nl", "en-GB")`, whose British set words the cart as "Basket":
+In an app declaring `("en", "nl", "en-GB")`, whose British set calls the cart "Basket":
 
 | The user's culture | `ShopLocalization.Cart` shows | Because                                            |
 |--------------------|-------------------------------|----------------------------------------------------|
@@ -76,7 +79,7 @@ public static partial class ShopLocalization
 }
 ```
 
-Each call creates a text that keeps the values as its `Arguments` and words itself with them when it's shown. A call allocates the text and its values, and nothing more until the text is shown. Because it's worded when shown, it follows the user's language like any other text. One created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its name, without its parameters. Two such texts are equal when they read the same ([Equality](#equality)).
+Each call creates a text that keeps the values as its `Arguments`, and fills them into its wording when it's shown. A call allocates the text and its values, and nothing more until the text is shown. Because its wording is made when it's shown, it follows the user's language like any other text. One created for an English user and shown to a Dutch one reads in Dutch, and `ToString(culture)` gives the wording of the culture you pass. Its key is its name, without its parameters. Two such texts are equal when they read the same ([Equality](#equality)).
 
 Write a text without values as a property, because a method without parameters isn't a text. The build rejects such a method in the default-language set (`LOC300`), unless it's an override such as `ToString()` or implements an interface member.
 
@@ -110,126 +113,10 @@ What else to know:
   };
   ```
 
-- **Formatting values.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. When you pass `ToString` a culture other than the current UI culture, the text is worded as for a user of that culture. Its values are formatted for that culture too, so a date or a number reads as the recipient of an email writes it.
+- **Formatting values.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. When you pass `ToString` a culture other than the current UI culture, the text shows the wording for a user of that culture. Its values are formatted for that culture too, so a date or a number reads as the recipient of an email writes it.
 - **A text as a value.** Give a parameter that takes a text the type `LocalizableText`, as in `Greeting(LocalizableText name)`. The value then shows its wording in the same culture as the text around it. A text passed to a `string` parameter becomes a string at the call, so it keeps the wording of the language in use at that moment. `ShopLocalization.Greeting(ShopLocalization.Checkout).ToString(dutch)` then shows "Hallo, Checkout!" on an English thread, so the build warns about such a call (`LOC303`).
 - **Inline texts.** An inline text takes a value as you write it and fills it in at once, in every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC302`). A text among those values is filled in at once too, in the language in use at that moment. For a wording that holds another text and outlives the request, write a text of a set with a `LocalizableText` parameter.
 - **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC502`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in.
-
-## Enums
-
-A set that lists `ILocalizationSet<TEnum>` in place of `ILocalizationSet` holds the texts of an enum ([an example](../README.md#enums)). The generator adds every member of the enum to the contract, as a property named after the member. The generated class gets a text per member, a method `GetTextByValue` that gives the text of a value, and an extension method `GetText` that gives a value its text itself:
-
-```csharp
-public interface IOrderStatusLocalization
-{
-    string Pending { get; }
-    string Shipped { get; }
-}
-
-public static partial class OrderStatusLocalization
-{
-    public static LocalizableText Pending { get; } = ...; // Its key is "Pending"
-    public static LocalizableText Shipped { get; } = ...; // Its key is "Shipped"
-
-    public static LocalizableText GetTextByValue(OrderStatus value) => value switch
-    {
-        OrderStatus.Pending => Pending,
-        OrderStatus.Shipped => Shipped,
-        _ => ..., // A text that shows value.ToString()
-    };
-
-    extension(OrderStatus value)
-    {
-        public LocalizableText GetText() => GetTextByValue(value); // order.Status.GetText()
-    }
-}
-```
-
-The contract takes its members from the enum, and not only from the default-language set. So a member without a text is build error `CS0535` in every language, the default language too. Your IDE's "Implement interface" writes the missing properties.
-
-`GetTextByValue` returns the text the class already holds, so a call allocates nothing. The text follows the user's language like any other text. `order.Status.GetText()` gives the same text, and is in reach wherever the namespace of the set is.
-
-What else to know:
-
-- **Other languages.** Only the default-language set needs `ILocalizationSet<TEnum>`, because the contract comes from it. A set of another language may list `ILocalizationSet` instead. The build suggests the generic one for a missing language (`LOC201`).
-- **Other texts.** The set can hold texts that aren't members, such as a caption for the enum. A text that takes values works too, as long as it doesn't have the name of a member.
-- **A member's text is a property.** It takes no values, because `GetTextByValue` has none to give it. A method with the name of a member is build error `LOC300`.
-- **The names `GetTextByValue` and `GetText`.** No text of such a set can have either name, because the generated methods have them (`LOC205`).
-- **By name.** `GetTextByKey` takes the name of a member as its key: `OrderStatusLocalization.GetTextByKey("Shipped")`.
-- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart.
-- **A value that isn't a member.** `GetTextByValue` shows it as `ToString()` writes it, in every language. For a combination of flags, that's the names of the flags, as in `Read, Write`. For any other value, it's the number.
-- **Accessibility.** `GetTextByValue` and `GetText` are public for a public enum, and internal for an internal one.
-- **More than one enum.** A set that lists `ILocalizationSet<TEnum>` for two enums holds the texts of both, and gets a `GetTextByValue` and a `GetText` for each. Two members with the same name share a text.
-- **Two sets of one enum.** Each set gives the enum a `GetText`. Where the namespaces of both are in reach, the call is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
-- **A set and `[Localized]` members.** An enum that has a set in its own assembly gets its `GetText` from the set alone, also while its members are still marked. `GetTextByMember` still finds the texts of the marked members.
-
-An enum can also get its texts from `[Localized]` on its members ([Attributes on members](#attributes-on-members)). [Enums](../README.md#enums) in the README compares the two. For a library's enum, a set has two more advantages. An app can add a language to it, and reword a text the library made `virtual`. Neither is possible for a text written as an attribute.
-
-## Attributes on members
-
-`[Localized]` is the third way to write a text, next to a set and an inline text ([an example](../README.md#write-an-attribute)). It puts a text on the member it names, which is a property, a field, a member of an enum, or a type. That suits a label. Such a text carries its own wording in every language, as an inline text does, and it belongs to no set.
-
-The source generator reads each `[Localized]` as the project builds, and writes the text as code. For `Address.City` and the enum `ParcelStatus` in the namespace `Shop.Domain`, in outline:
-
-```csharp
-// One text per marked member, created when first asked for
-LocalizableText city = ...;   // en: City, nl: Plaats. Its key is "City"
-LocalizableText picked = ...; // en: Picked, nl: Gepickt. Its key is "Picked"
-
-// One function per assembly, which the assembly's registrar records
-static LocalizableText? Find(Type type, string? member)
-{
-    if (type == typeof(Shop.Domain.Address))
-        return member switch { "City" => city, _ => null };
-
-    if (type == typeof(Shop.Domain.ParcelStatus))
-        return member switch { "Picked" => picked, _ => null };
-
-    return null;
-}
-
-// For an enum with a marked member, in the enum's namespace
-public static class ParcelStatusLocalizedExtensions
-{
-    extension(ParcelStatus value)
-    {
-        public LocalizableText GetText() => value switch
-        {
-            ParcelStatus.Picked => picked,
-            _ => ..., // A text that shows value.ToString()
-        };
-    }
-}
-```
-
-So nothing reads the attribute at run time, and no assembly is scanned. The attribute itself isn't part of the compiled assembly, because its wording would be stored there a second time.
-
-`LocalizableText.GetTextByMember` asks the recorded functions, and keeps the answer:
-
-- `GetTextByMember<Address>(nameof(Address.City))` is for a type your code knows.
-- `GetTextByMember(type, "City")` is for a type your code only has at run time.
-- `GetTextByMember(property)` is for a member your code holds, such as the `PropertyInfo` of a form field. Only its name and the type that declares it are read.
-
-`LocalizableText.GetTextOfType` gives the text of a type itself, the same way: `GetTextOfType<ParcelStatus>()`, or `GetTextOfType(type)` for a type your code only has at run time.
-
-Each gives `null` where there's no text, and the same text on every call. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC504` when the member has no text ([details](build-errors.md#loc504)).
-
-What else to know:
-
-- **The key.** The text's `Key` is the member's name, `City`. Its `FullKey` is the member's full name, `Shop.Domain.Address.City`. A type's own text has the type's name and full name. A type inside another is written with dots, and a type with type parameters keeps its arity (``Shop.Domain.Page`1.Items``), so `Page` and `Page<T>` don't share keys.
-- **Inherited members.** A class without a text for a member gets that of its nearest base class. So an override without `[Localized]` keeps the text of the property it overrides, with that property's key. A type's own text isn't inherited, and neither are the texts of an interface.
-- **Types with type arguments.** `Page<Order>` gives the texts of `Page<T>`.
-- **A value of an enum.** `status.GetText()` gives the text of its member. Of two members with the same value, the first gives the text. An enum inside a type with type parameters gets no `GetText()`, and `GetTextByMember` still finds its texts.
-- **A member of an enum without `[Localized]`.** It shows its name, in every language. The build warns about it when other members of the enum are marked (`LOC503`), because that's usually a member added later. An enum with a text of its own and no marked member gets no warning, because its values may never be shown.
-- **No values.** An attribute takes constants, so the wording can't show a value. Write a text with a value as a method of a set. A placeholder such as `{0}` gets warning `LOC502`.
-- **A type the generated code can't name.** A member of a private or protected nested type, or of a file-local type, gets no text (`LOC505`). Make the type internal or public.
-- **Markup.** A member marked `[Localized]` in the `@code` of a `.razor` file gets no text either (`LOC505`), because the source generator can't read what Razor generates. Write the type in a C# file.
-- **An indexer, and the field behind a property.** Neither has a text to find, so `[Localized]` on an indexer, or written as `[field: Localized]` on a property, gets `LOC505` too.
-- **Registration.** A text is found once its assembly's registrar ran ([Registration](#registration)). An app that declares its languages calls the registrar of every assembly it references when it starts. So the label of a library's property is there before any code of the library ran.
-- **Libraries.** No app can add a language to a text a library writes as an attribute, because it carries its wording itself, as an inline text does. An app with a language the library lacks gets warning `LOC601`, which counts such texts among the library's inline texts.
-- **An attribute of your own named `Localized`.** The generated attribute lies in the global namespace, and C# decides which of the two a member gets:
-  - Yours wins when it lies in a namespace or type around the member, or behind a `using` written inside a namespace. Such a member is yours, and gets no text.
-  - The generated one wins over yours when only a `using` at the top of the file, or a `global using`, brings yours in reach. Such a member gets its text.
 
 ## Equality
 
@@ -267,7 +154,7 @@ A string only equals another string. So `object.Equals(text, "Afrekenen")` is tr
 
 ## What the source generator writes
 
-`LocalizableText.Inline` gets one required parameter per declared language, named after it: `enGb` for `en-GB`. The attribute `[Localized]` gets the same parameters ([Attributes on members](#attributes-on-members)).
+`LocalizableText.Inline` gets one required parameter per declared language, named after it: `enGb` for `en-GB`. The attribute `[Localized]` gets the same parameters ([Attributes](attributes.md)).
 
 From the default-language set, `ShopLocalizationEn` in the namespace `MyApp.Localization`, the generator writes the contract `IShopLocalization` and the generated class `ShopLocalization`. In outline:
 
@@ -298,7 +185,7 @@ The contract takes the texts the default-language set declares itself, overrides
 
 Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
 
-Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only the method `GetTextByKey`, and `GetTextByValue` and `GetText` in a [set of an enum](#enums). So a text can take any name except those and the name of the class itself (`LOC205`).
+Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only the method `GetTextByKey`, and `GetTextByValue` and `GetText` in a [set of an enum](enums.md#a-set-of-the-enum). So a text can take any name except those and the name of the class itself (`LOC205`).
 
 Each generated text is a `LocalizableText` with two keys:
 
@@ -309,14 +196,15 @@ The package never reads the full key. It's for an app or library that also looks
 
 ### Getting a text by its key
 
-`GetTextByKey` gives the text with a key ([an example](../README.md#get-a-text-by-its-key)). It's for a key your code only has at run time, such as one from a database. Where you know the text, write `ShopLocalization.Checkout`, which the build checks.
+`GetTextByKey` gives the text with a key. It's for a key your code only has at run time, such as one from a database. Where you know the text, write `ShopLocalization.Checkout`, which the build checks.
 
 ```csharp
-public static LocalizableText GetTextByKey(string key, params ReadOnlySpan<object?> values)
+LocalizableText cart = ShopLocalization.GetTextByKey("Cart"); // The same text as ShopLocalization.Cart
+string dutch = cart.ToString(CultureInfo.GetCultureInfo("nl"));
 ```
 
 - **The key.** It's the name of the text, in the same letter case. A key no text has throws `KeyNotFoundException`, and so does a full key.
-- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. A string for a `LocalizableText` parameter is the exception: it becomes a text, as it does in a call of the method itself. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many.
+- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. A string for a `LocalizableText` parameter is the exception. It becomes a text, as it does in a call of the method itself. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many.
 - **The result.** It's the text, a `LocalizableText`. For a text without parameters, it's the one the class already holds, so a call allocates nothing. Show it for another culture with `ToString(culture)`, as any text.
 
 ## Registration
@@ -325,7 +213,7 @@ Every set is registered automatically. When an app starts, it registers the sets
 
 The source generator writes the code that does this. It's a class named after your assembly, `LocalizationRegistrar_MyApp` for `MyApp`, in the namespace `CodeChops.Idioma.Generated`. The class is public in an assembly that has sets or texts written as attributes, and in an app that declares languages, so an app that references the assembly can register them at startup. It's hidden from autocomplete, but it's still public API. So a library that tracks its public API, such as with Microsoft's public API analyzers, lists the registrar next to the contract and the generated class of every public set.
 
-The texts of members marked `[Localized]` are recorded the same way, by the same generated code ([Attributes on members](#attributes-on-members)).
+The texts of members marked `[Localized]` are recorded the same way, by the same generated code ([Attributes](attributes.md#what-the-source-generator-writes)).
 
 A set is registered by its type, and created when the first text is shown. So a set whose constructor throws doesn't stop your app from starting. The first text shown throws an `InvalidOperationException` that names the set, with the set's own exception inside, and so does every text after it.
 
@@ -409,6 +297,6 @@ Read back, a text:
 
 A text written with `LocalizableText.Inline` travels without a `key`. A text on a member travels with its full key, such as `Shop.Domain.Address.City`. A text without translations, such as a customer's name, travels as its wording alone: `"Ada"`.
 
-A text that takes values is written with its values filled in, in every language: `"nl":"3 artikelen in je winkelwagen bij Idioma"`. A text among its values is worded in each language too. A date or a number is formatted as for the user the text is written for, in every language, because a language doesn't say which region its reader lives in. With `CurrentUICultureProvider` set, that's the culture it gives. Read back, it shows that wording and no longer has its `Arguments`. It travels without its key too, because a resource file entry found by the key would have no values to fill in.
+A text that takes values is written with its values filled in, in every language: `"nl":"3 artikelen in je winkelwagen bij Idioma"`. A text among its values gets the wording of each language too. A date or a number is formatted as for the user the text is written for, in every language, because a language doesn't say which region its reader lives in. With `CurrentUICultureProvider` set, that's the culture it gives. Read back, it shows that wording and no longer has its `Arguments`. It travels without its key too, because a resource file entry found by the key would have no values to fill in.
 
 A JSON string reads as a text too, with that one wording for every culture. So JSON you write by hand, such as a settings file, can hold `"title": "Orders"`.

@@ -20,7 +20,7 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class UnmappedLanguageCodeCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationRegistrationGenerator.UnmappedLanguageCodeDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 

@@ -82,11 +82,11 @@ public static partial class OrderStatusLocalization
 
 /// <summary>
 /// The contract of <see cref="OrderStatusLocalizationEn"/>, with one member per text.
-/// Every language in <c>[assembly: SupportedLanguages]</c> has a set that implements it next to <see cref="CodeChops.Idioma.ILocalizationSet"/>, named with its language as suffix.
+/// Every language in <c>[assembly: SupportedLanguages]</c> has a set that implements it next to <c>ILocalizationSet&lt;OrderStatus&gt;</c>, named with its language as suffix.
 /// A language without a set, or a set without a text, is a build error rather than a fallback at run time.
 /// Each set is registered automatically, so there's nothing to register.
 /// </summary>
-[CodeChops.Idioma.Internals.LocalizationContract]
+[CodeChops.Idioma.Internals.LocalizationContract(typeof(OrderStatus))]
 public interface IOrderStatusLocalization
 {
     /// <inheritdoc cref="OrderStatusLocalization.Pending"/>

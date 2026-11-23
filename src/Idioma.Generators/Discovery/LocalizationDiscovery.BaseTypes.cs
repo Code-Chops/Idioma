@@ -124,11 +124,11 @@ internal static partial class LocalizationDiscovery
         foreach (var contract in question.Contracts)
         {
             var separator = contract.LastIndexOf('.');
-            var name = LocalizationSetsGenerator.EscapeIdentifier(contract.Substring(separator + 1));
+            var name = LocalizationSetsPart.EscapeIdentifier(contract.Substring(separator + 1));
 
             standIns.AppendLine(separator < 0
                 ? $"interface {name} {{ }}"
-                : $"namespace {String.Join(".", contract.Substring(0, separator).Split('.').Select(LocalizationSetsGenerator.EscapeIdentifier))} {{ interface {name} {{ }} }}");
+                : $"namespace {String.Join(".", contract.Substring(0, separator).Split('.').Select(LocalizationSetsPart.EscapeIdentifier))} {{ interface {name} {{ }} }}");
         }
 
         var options = compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions;

@@ -41,8 +41,8 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
 
     public override ImmutableArray<string> FixableDiagnosticIds { get; } =
     [
-        LocalizationSetsGenerator.MissingLanguageDiagnosticId,
-        LocalizationSetsGenerator.LibraryMissingLanguageDiagnosticId,
+        LocalizationSetsPart.MissingLanguageDiagnosticId,
+        LocalizationSetsPart.LibraryMissingLanguageDiagnosticId,
     ];
 
     // Its own: the batch fixer merges changes to documents, and this fix adds documents.
@@ -183,14 +183,14 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
         /// </summary>
         public static async Task<NewSet?> ReadAsync(Document document, Compilation compilation, Diagnostic diagnostic, CancellationToken cancellationToken)
         {
-            if (!diagnostic.Properties.TryGetValue(LocalizationSetsGenerator.SuggestedNameProperty, out var name) || name is null
-                || !diagnostic.Properties.TryGetValue(LocalizationSetsGenerator.SuggestedDeclarationProperty, out var declaration) || declaration is null)
+            if (!diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var name) || name is null
+                || !diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedDeclarationProperty, out var declaration) || declaration is null)
             {
                 return null;
             }
 
             // A set of a library's contract has no namespace of its own, so it takes that of the app.
-            if (!diagnostic.Properties.TryGetValue(LocalizationSetsGenerator.SuggestedNamespaceProperty, out var @namespace) || @namespace is null)
+            if (!diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNamespaceProperty, out var @namespace) || @namespace is null)
                 @namespace = await FindNamespaceAsync(document, cancellationToken).ConfigureAwait(false);
 
             var fileName = $"{name}.cs";
@@ -327,15 +327,9 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
             var cancellationToken = fixAllContext.CancellationToken;
             var sets = new List<NewSet>();
 
-            var projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
-
-            foreach (var project in projects)
+            foreach (var (project, diagnostics) in await CodeFixSupport.GetFixAllDiagnosticsAsync(fixAllContext).ConfigureAwait(false))
             {
-                var diagnostics = fixAllContext is { Scope: FixAllScope.Document, Document: { } scoped }
-                    ? await fixAllContext.GetDocumentDiagnosticsAsync(scoped).ConfigureAwait(false)
-                    : await fixAllContext.GetAllDiagnosticsAsync(project).ConfigureAwait(false);
-
-                if (diagnostics.IsEmpty || await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false) is not { } compilation)
+                if (await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false) is not { } compilation)
                     continue;
 
                 foreach (var diagnostic in diagnostics)

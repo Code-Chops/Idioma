@@ -12,6 +12,8 @@ CodeChops.Idioma.Internals.LocalizableTextJsonConverter
 CodeChops.Idioma.Internals.LocalizableTextJsonConverter.LocalizableTextJsonConverter() -> void
 CodeChops.Idioma.Internals.LocalizationContractAttribute
 CodeChops.Idioma.Internals.LocalizationContractAttribute.LocalizationContractAttribute() -> void
+CodeChops.Idioma.Internals.LocalizationContractAttribute.Enums.get -> System.Collections.Generic.IReadOnlyList<System.Type!>!
+CodeChops.Idioma.Internals.LocalizationContractAttribute.LocalizationContractAttribute(params System.Type![]! enums) -> void
 CodeChops.Idioma.Internals.LocalizationSetAttribute
 CodeChops.Idioma.Internals.LocalizationSetAttribute.Contract.get -> string!
 CodeChops.Idioma.Internals.LocalizationSetAttribute.Language.get -> string!

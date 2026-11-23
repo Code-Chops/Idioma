@@ -6,7 +6,7 @@ using CodeChops.Idioma;
 [assembly: SupportedLanguages(defaultLanguage: "en", "nl")]
 
 // The text of ParcelStatus itself, from the attribute on the enum. It's looked up once.
-var parcelCaption = LocalizableText.GetTextOfType<ParcelStatus>();
+var parcelStatus = LocalizableText.GetTextOfType<ParcelStatus>();
 
 // The supported languages, and German, which isn't one of them. A German user sees English, the default.
 foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
@@ -14,13 +14,13 @@ foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
     // Either way, a value of the enum gives its text with GetText().
-    Console.WriteLine($"{culture}: {OrderStatus.Shipped.GetText()}, {parcelCaption}: {ParcelStatus.Delivered.GetText()}");
+    Console.WriteLine($"{culture}: {OrderStatus.Shipped.GetText()}, {parcelStatus}: {ParcelStatus.Delivered.GetText()}");
 }
 
 // An enum gets its texts in one of two ways.
 public enum OrderStatus { Pending, Shipped }
 
-// 1. A set of the enum. It's a set like any other, with a text for each member of the enum as well.
+// 1. A set of the enum. It's a set like any other, with a text for each member of the enum.
 // English: the default.
 public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
 {

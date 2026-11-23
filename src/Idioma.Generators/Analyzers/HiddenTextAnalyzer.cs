@@ -72,7 +72,7 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
 
         foreach (var contract in set.AllInterfaces)
         {
-            if (!IsContract(contract, localizationSet))
+            if (!PackageNames.IsContract(contract))
                 continue;
 
             ImmutableDictionary<string, string?>? properties = null;
@@ -130,11 +130,5 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
         };
 
         return hides;
-    }
-
-    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol localizationSet)
-    {
-        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, localizationSet) && PackageNames.IsContract(@interface);
-        return isContract;
     }
 }

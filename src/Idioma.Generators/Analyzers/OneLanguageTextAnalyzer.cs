@@ -27,9 +27,9 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     public const string UnnamedLanguageDiagnosticId = "LOC501";
 
     /// <summary>
-    /// The code a set in an assembly without languages gets too (<see cref="LocalizationSetsGenerator"/>).
+    /// The code a set in an assembly without languages gets too (<see cref="LocalizationSetsPart"/>).
     /// </summary>
-    public const string NoLanguagesDeclaredDiagnosticId = LocalizationSetsGenerator.NoLanguagesDeclaredDiagnosticId;
+    public const string NoLanguagesDeclaredDiagnosticId = LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId;
 
     /// <summary>
     /// The property of <c>LOC501</c> that holds the language of each argument of the call or the attribute, in the
@@ -107,20 +107,29 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         var languages = String.Join(", ", codes);
         var sample = String.Join(", ", codes.Select(static code => $"{SupportedLanguages.ToParameterName(code)}: \"...\""));
 
-        context.RegisterOperationAction(c => AnalyzeInvocation(c, sample), OperationKind.Invocation);
-        context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, sample), SyntaxKind.Attribute);
-
-        // One language has nothing to be translated into.
-        if (codes.Length < 2)
-            return;
+        // One language has nothing to be translated into, so wording in one language is no mistake then.
+        var checksWording = codes.Length >= 2;
 
         // Null in a package without the attribute, where no property is left alone.
-        var excluded = context.Compilation.GetTypeByMetadataName(PackageNames.ExcludeFromLocalizationDiscoveryAttribute);
+        var excluded = checksWording ? context.Compilation.GetTypeByMetadataName(PackageNames.ExcludeFromLocalizationDiscoveryAttribute) : null;
+
+        // One action for every call in the compilation: the names of the factory's arguments, and the wording of Keyed.
+        context.RegisterOperationAction(c =>
+        {
+            AnalyzeInvocation(c, sample);
+
+            if (checksWording)
+                AnalyzeKeyed(c, text, excluded, languages, sample);
+        }, OperationKind.Invocation);
+
+        context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, sample), SyntaxKind.Attribute);
+
+        if (!checksWording)
+            return;
 
         context.RegisterOperationAction(c => AnalyzeConversion(c, text, excluded, languages, sample), OperationKind.Conversion);
         context.RegisterOperationAction(c => AnalyzeCompoundAssignment(c, text, excluded, languages, sample), OperationKind.CompoundAssignment);
         context.RegisterOperationAction(c => AnalyzeCreation(c, text, excluded, languages, sample), OperationKind.ObjectCreation);
-        context.RegisterOperationAction(c => AnalyzeKeyed(c, text, excluded, languages, sample), OperationKind.Invocation);
     }
 
     /// <summary>
@@ -206,8 +215,8 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         if (conversion.OperatorMethod is { Parameters.Length: 1 } method
             && SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
             && method.Parameters[0].Type.SpecialType is SpecialType.System_String
-            && IsChecked(context, excluded)
-            && HoldsWording(conversion.Operand))
+            && HoldsWording(conversion.Operand)
+            && IsChecked(context, excluded))
         {
             context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, conversion.Syntax.GetLocation(), languages, sample));
         }
@@ -226,8 +235,8 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
         if (assignment.OutConversion.MethodSymbol is { Parameters.Length: 1 } method
             && SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
             && method.Parameters[0].Type.SpecialType is SpecialType.System_String
-            && IsChecked(context, excluded)
-            && HoldsWording(assignment.Value))
+            && HoldsWording(assignment.Value)
+            && IsChecked(context, excluded))
         {
             context.ReportDiagnostic(Diagnostic.Create(OneLanguageRule, assignment.Value.Syntax.GetLocation(), languages, sample));
         }
@@ -268,7 +277,7 @@ public sealed class OneLanguageTextAnalyzer : DiagnosticAnalyzer
     {
         var wording = arguments.FirstOrDefault(static argument => String.Equals(argument.Parameter?.Name, "defaultText", StringComparison.Ordinal));
 
-        var isWordingWritten = wording is not null && IsChecked(context, excluded) && HoldsWording(wording.Value);
+        var isWordingWritten = wording is not null && HoldsWording(wording.Value) && IsChecked(context, excluded);
         return isWordingWritten;
     }
 

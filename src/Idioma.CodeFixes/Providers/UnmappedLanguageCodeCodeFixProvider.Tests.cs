@@ -35,7 +35,7 @@ public sealed class UnmappedLanguageCodeCodeFixProviderTests
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(params string[] sources)
     {
-        return CodeFixTestHelper.FixAsync(new UnmappedLanguageCodeCodeFixProvider(), new LocalizationRegistrationGenerator(), sources);
+        return CodeFixTestHelper.FixAsync(new UnmappedLanguageCodeCodeFixProvider(), LocalizationParts.Registration(), sources);
     }
 
     /// <summary>
@@ -44,8 +44,8 @@ public sealed class UnmappedLanguageCodeCodeFixProviderTests
     /// </summary>
     private static void ShouldReportNothing(params string[] sources)
     {
-        GeneratorTestHelper.RunOverFiles(new LocalizationRegistrationGenerator(), sources).Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
-        GeneratorTestHelper.RunOverFiles(new LocalizationSetsGenerator(), sources).Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+        GeneratorTestHelper.RunOverFiles(LocalizationParts.Registration(), sources).Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+        GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), sources).Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
     }
     #endregion
 

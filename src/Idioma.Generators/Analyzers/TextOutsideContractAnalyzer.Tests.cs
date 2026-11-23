@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="TextOutsideContractAnalyzer"/>: a set has no text that its contract doesn't have, because no
-/// user would see it.
+/// user would see it, and a set of an enum has no text that isn't a member, because <c>GetText()</c> never gives it.
 /// </summary>
 public sealed class TextOutsideContractAnalyzerTests
 {
@@ -30,6 +30,31 @@ public sealed class TextOutsideContractAnalyzerTests
         public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
         {
             public string Total => "Totaal";
+        }
+        """);
+
+    /// <summary>
+    /// A library with a set of its enum, which has a text that isn't a member: one an app's set of it has to implement.
+    /// </summary>
+    private static MetadataReference StatusLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("OutsideStatusLibrary", """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en", "nl")]
+
+        namespace StatusLibrary;
+
+        public enum OrderStatus { Pending }
+
+        public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+        {
+            public string Pending => "Pending";
+            public string Caption => "Order status";
+        }
+
+        public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+        {
+            public string Pending => "In behandeling";
+            public string Caption => "Bestelstatus";
         }
         """);
 
@@ -133,13 +158,170 @@ public sealed class TextOutsideContractAnalyzerTests
     }
 
     [Test]
-    public async Task TextOnlyInDutchSetOfEnum_ShouldReportLOC209()
+    public async Task TextOnlyInDutchSetOfEnum_ShouldReportLOC210InPlaceOfLOC209()
     {
-        // Arrange & Act
+        // Arrange & Act: adding it to the English set would make it a text that isn't a member there.
         var diagnostics = await AnalyzeAsync(EnumSets("""public string Shipped => "Shipped";""", """public string Lost { get; } = "Kwijt";"""));
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'OrderStatusLocalizationNl.Lost' isn't a text of 'IOrderStatusLocalization', so users of 'nl' won't see it. Add 'Lost' to the default-language set, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC210");
+        diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationNl.Lost' isn't a member of 'OrderStatus', so GetText() never gives it. Add 'Lost' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
+    }
+
+    [Test]
+    [Arguments("""public string Caption => "Order status";""", """public string Caption => "Bestelstatus";""", "Caption")]
+    [Arguments("""public string Orders(int count) => $"{count} orders";""", """public string Orders(int count) => $"{count} bestellingen";""", "Orders")]
+    public async Task TextThatIsNoMemberInSetsOfEnum_ShouldReportLOC210InEachSet(string english, string dutch, string text)
+    {
+        // Arrange & Act: the contract has the text, because the English set declares it.
+        var diagnostics = await AnalyzeAsync(EnumSets($"""public string Shipped => "Shipped"; {english}""", dutch));
+
+        // Assert
+        diagnostics.Length.ShouldBe(2);
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC210" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        diagnostics.Select(static diagnostic => diagnostic.GetMessage()).OrderBy(static message => message, StringComparer.Ordinal).ShouldBe([
+            $"'OrderStatusLocalizationEn.{text}' isn't a member of 'OrderStatus', so GetText() never gives it. Add '{text}' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.",
+            $"'OrderStatusLocalizationNl.{text}' isn't a member of 'OrderStatus', so GetText() never gives it. Add '{text}' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.",
+        ]);
+        diagnostics.ShouldAllBe(diagnostic => At(diagnostic).StartsWith(text, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task TextThatIsNoMemberOfEitherEnum_ShouldNameBoth()
+    {
+        // Arrange & Act
+        var diagnostics = await AnalyzeAsync("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending }
+            public enum PaymentStatus { Paid }
+
+            public class StatusLocalizationEn : ILocalizationSet<OrderStatus>, ILocalizationSet<PaymentStatus>, IStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Paid => "Paid";
+                public string Caption => "Status";
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'StatusLocalizationEn.Caption' isn't a member of 'OrderStatus' or 'PaymentStatus', so GetText() never gives it. Add 'Caption' to 'OrderStatus' or 'PaymentStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
+    }
+
+    [Test]
+    public async Task TextThatIsNoMemberOfEnumOfAnotherAssembly_ShouldAdviseToMoveIt()
+    {
+        // Arrange & Act: DayOfWeek can't get a member.
+        var diagnostics = await AnalyzeAsync("""
+            using System;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public class DayLocalizationEn : ILocalizationSet<DayOfWeek>, IDayLocalization
+            {
+                public string Sunday => "Sunday";
+                public string Monday => "Monday";
+                public string Tuesday => "Tuesday";
+                public string Wednesday => "Wednesday";
+                public string Thursday => "Thursday";
+                public string Friday => "Friday";
+                public string Saturday => "Saturday";
+                public string Caption => "Day";
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'DayLocalizationEn.Caption' isn't a member of 'DayOfWeek', so GetText() never gives it. Move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
+    }
+
+    [Test]
+    public async Task AppSetOfLibraryEnum_ShouldReportOnlyTextOutsideLibraryContract()
+    {
+        // Arrange & Act: the library's contract has Caption, which the app's set has to implement.
+        var diagnostics = await AnalyzeAsync("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace TestApp;
+
+            public sealed class OrderStatusLocalizationDe : ILocalizationSet<StatusLibrary.OrderStatus>, StatusLibrary.IOrderStatusLocalization
+            {
+                public string Pending => "In Bearbeitung";
+                public string Caption => "Bestellstatus";
+                public string Lost => "Verloren";
+            }
+            """, StatusLibrary);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'OrderStatusLocalizationDe.Lost' isn't a member of 'OrderStatus', so GetText() never gives it. Move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
+    }
+
+    [Test]
+    public async Task BritishSetOfEnumOverridingTextThatIsNoMember_ShouldReportItInEnglishSetOnly()
+    {
+        // Arrange & Act
+        var diagnostics = await AnalyzeAsync("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "en-GB")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending }
+
+            public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public virtual string Caption => "Order status";
+            }
+
+            public class OrderStatusLocalizationEnGb : OrderStatusLocalizationEn
+            {
+                public override string Caption => "Order state";
+            }
+            """);
+
+        // Assert
+        var diagnostic = diagnostics.ShouldHaveSingleItem();
+        diagnostic.GetMessage().ShouldStartWith("'OrderStatusLocalizationEn.Caption' isn't a member of 'OrderStatus'");
+    }
+
+    [Test]
+    public async Task TextThatIsNoMemberOverridingBaseThatIsNoSet_ShouldReportLOC210()
+    {
+        // Arrange & Act: the base isn't a set, so nothing reports the text where it's declared.
+        var diagnostics = await AnalyzeAsync("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending }
+
+            public abstract class StatusTexts
+            {
+                public abstract string Caption { get; }
+            }
+
+            public class OrderStatusLocalizationEn : StatusTexts, ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public override string Caption => "Order status";
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldStartWith("'OrderStatusLocalizationEn.Caption' isn't a member of 'OrderStatus'");
     }
 
     [Test]
@@ -236,8 +418,9 @@ public sealed class TextOutsideContractAnalyzerTests
     [Test]
     [Arguments("""public string Shipped => "Shipped";""", "")]
     [Arguments("""public string Shipped(string carrier) => $"Shipped by {carrier}";""", "")] // LOC300: a member's text takes no values
-    [Arguments("""public string Shipped => "Shipped"; public string Caption => "Order status";""", """public string Caption => "Bestelstatus";""")]
-    public async Task SetOfEnumWithTextsOfTheContract_ShouldReportNothing(string english, string dutch)
+    [Arguments("""public string Shipped => "Shipped"; [ExcludeFromLocalizationDiscovery] public string Helper => "";""", "")]
+    [Arguments("""public string Shipped => "Shipped"; public string GetText => "Text";""", """public string GetText => "Tekst";""")] // LOC205
+    public async Task SetOfEnumWithTextsOfItsMembersOrNoText_ShouldReportNothing(string english, string dutch)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(EnumSets(english, dutch));

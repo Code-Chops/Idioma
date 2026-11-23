@@ -20,8 +20,8 @@ namespace CodeChops.Idioma.Generators;
 /// out of the compiled assembly.
 /// </para>
 /// <para>
-/// One generator reads the members (<see cref="LocalizationRegistrationGenerator"/>), because a generator binds every
-/// attribute of that name again on each edit. What it reads holds no location, so that an edit that only moves an
+/// One part of one generator reads the members (<see cref="LocalizationRegistrationPart"/>), because a generator
+/// binds every attribute of that name again on each edit. What it reads holds no location, so that an edit that only moves an
 /// attribute leaves every step after it as it was. <c>LocalizedMemberAnalyzer</c> reports a member that gets no text.
 /// </para>
 /// </remarks>
@@ -65,13 +65,16 @@ internal static class LocalizedMembers
     /// The texts to generate: every member whose attribute gives a wording for each language of the assembly, grouped
     /// by type.
     /// </summary>
-    public static IncrementalValueProvider<LocalizedMembersModel> ReadModel(IncrementalGeneratorInitializationContext context)
+    /// <param name="context">The generator's context, for the attributes and the assembly's name.</param>
+    /// <param name="languages">The languages the assembly declares (<see cref="SupportedLanguages.Read"/>).</param>
+    public static IncrementalValueProvider<LocalizedMembersModel> ReadModel(IncrementalGeneratorInitializationContext context,
+        IncrementalValueProvider<DeclaredLanguages?> languages)
     {
-        var languages = SupportedLanguages.Read(context).Select(static (languages, _) => languages?.Codes ?? default);
+        var codes = languages.Select(static (languages, _) => languages?.Codes ?? default);
         var assemblyName = context.CompilationProvider.Select(static (compilation, _) => compilation.AssemblyName);
 
         return Read(context)
-            .Combine(languages)
+            .Combine(codes)
             .Combine(assemblyName)
             .Select(static (data, _) => BuildModel(data.Left.Left, data.Left.Right, data.Right));
     }
@@ -345,7 +348,7 @@ internal static class LocalizedMembers
 
         // As code names the type: Shop.Domain.Page<> for a typeof, where a type with type parameters has no other name.
         var reference = prefix + String.Join(".", chain.Select(static part =>
-            LocalizationSetsGenerator.EscapeIdentifier(part.Name) + (part.Arity > 0 ? $"<{new string(',', part.Arity - 1)}>" : "")));
+            LocalizationSetsPart.EscapeIdentifier(part.Name) + (part.Arity > 0 ? $"<{new string(',', part.Arity - 1)}>" : "")));
 
         var isMember = symbol is not INamedTypeSymbol;
 
@@ -357,7 +360,7 @@ internal static class LocalizedMembers
 
             enumMember = new LocalizedMemberEnum(
                 Namespace: @namespace,
-                Name: String.Join(".", chain.Select(static part => LocalizationSetsGenerator.EscapeIdentifier(part.Name))),
+                Name: String.Join(".", chain.Select(static part => LocalizationSetsPart.EscapeIdentifier(part.Name))),
                 HolderName: String.Join("_", chain.Select(static part => part.Name)) + "LocalizedExtensions",
                 IsPublic: chain.All(static part => part.DeclaredAccessibility is Accessibility.Public),
                 CanExtend: !isInGenericType,

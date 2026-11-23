@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -74,13 +75,11 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         if (codes.Length < 2)
             return;
 
-        // Per block of code, so that the writes of a method are found once for all its inline texts, and not once per
-        // text. Razor writes all the markup of a page in one method, which may hold thousands of them.
-        context.RegisterOperationBlockStartAction(block =>
-        {
-            var writes = new BlockWrites();
-            block.RegisterOperationAction(c => AnalyzeInvocation(c, codes, writes), OperationKind.Invocation);
-        });
+        // Per tree of operations, so that the writes of a method are found once for all its inline texts, and not once
+        // per text. Razor writes all the markup of a page in one method, which may hold thousands of them.
+        var writes = new TreeWrites();
+
+        context.RegisterOperationAction(c => AnalyzeInvocation(c, codes, writes), OperationKind.Invocation);
     }
 
     /// <summary>
@@ -88,8 +87,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     /// </summary>
     /// <param name="context">The invocation.</param>
     /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>
-    /// <param name="writes">What the block of code the call stands in writes its local variables with.</param>
-    private static void AnalyzeInvocation(OperationAnalysisContext context, ImmutableArray<string> codes, BlockWrites writes)
+    /// <param name="writes">What the code the call stands in writes its local variables with.</param>
+    private static void AnalyzeInvocation(OperationAnalysisContext context, ImmutableArray<string> codes, TreeWrites writes)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
@@ -294,8 +293,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// What the wording of a language reads, and whether it calls code that may read more.
     /// </summary>
-    /// <param name="blockWrites">What the block of code the call stands in writes its local variables with.</param>
-    private sealed class Reads(BlockWrites blockWrites)
+    /// <param name="treeWrites">What the code the call stands in writes its local variables with.</param>
+    private sealed class Reads(TreeWrites treeWrites)
     {
         /// <summary>
         /// The local variables, parameters, fields, and properties read, also those read where a local variable that is
@@ -404,7 +403,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         /// </summary>
         private void AddWrites(ILocalSymbol local, IOperation read, CancellationToken cancellationToken)
         {
-            var writes = this.Writes ??= blockWrites.Find(read, cancellationToken);
+            var writes = this.Writes ??= treeWrites.Find(read, cancellationToken);
 
             foreach (var value in writes.AssignedTo(local))
                 this.Add(value, cancellationToken);
@@ -434,15 +433,16 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The <see cref="Writes"/> of each operation tree in one operation block, by its root: the body of a method, or an
+    /// The <see cref="Writes"/> of each operation tree of a compilation, by its root: the body of a method, or an
     /// initializer.
     /// </summary>
-    // One per block, so nothing is shared between two blocks or two compilations. The writes of a tree are found when a
-    // wording first reads a local variable in it, so a block without inline texts isn't searched.
-    private sealed class BlockWrites
+    // One per compilation, so nothing is shared between two of them, and an entry goes when its tree does. The writes of
+    // a tree are found when a wording first reads a local variable in it, so a tree without inline texts isn't searched,
+    // and nothing is allocated for it.
+    private sealed class TreeWrites
     {
-        // By reference, because an operation doesn't override Equals. Nearly every block holds one tree.
-        private Dictionary<IOperation, Writes> ByRoot { get; } = new();
+        // By reference, because an operation doesn't override Equals. Safe to use from several threads.
+        private ConditionalWeakTable<IOperation, Writes> ByRoot { get; } = new();
 
         /// <summary>
         /// What the code around an operation writes its local variables with.
@@ -453,14 +453,9 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
             while (root.Parent is { } parent)
                 root = parent;
 
-            // The lock is for a host that would analyze the operations of one block on two threads.
-            lock (this.ByRoot)
-            {
-                if (!this.ByRoot.TryGetValue(root, out var writes))
-                    this.ByRoot[root] = writes = Writes.Find(root, cancellationToken);
-
-                return writes;
-            }
+            // Two threads that find the writes of one tree at once each find them, and the first to finish is kept.
+            var writes = this.ByRoot.GetValue(root, tree => Writes.Find(tree, cancellationToken));
+            return writes;
         }
     }
 

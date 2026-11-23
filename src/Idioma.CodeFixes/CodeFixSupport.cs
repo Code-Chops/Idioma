@@ -31,6 +31,28 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
+    /// The diagnostics a "Fix all" covers, with the project of each: those of the document, of the project, or of every
+    /// project of the solution. A project without such a diagnostic is left out.
+    /// </summary>
+    public static async Task<List<(Project Project, ImmutableArray<Diagnostic> Diagnostics)>> GetFixAllDiagnosticsAsync(FixAllContext fixAllContext)
+    {
+        var found = new List<(Project Project, ImmutableArray<Diagnostic> Diagnostics)>();
+        var projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
+
+        foreach (var project in projects)
+        {
+            var diagnostics = fixAllContext is { Scope: FixAllScope.Document, Document: { } scoped }
+                ? await fixAllContext.GetDocumentDiagnosticsAsync(scoped).ConfigureAwait(false)
+                : await fixAllContext.GetAllDiagnosticsAsync(project).ConfigureAwait(false);
+
+            if (!diagnostics.IsEmpty)
+                found.Add((project, diagnostics));
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// The top-level classes of a namespace and of the namespaces inside it. A set is a top-level class.
     /// </summary>
     public static IEnumerable<INamedTypeSymbol> GetClasses(INamespaceSymbol @namespace)

@@ -24,10 +24,43 @@ public sealed class LocalizationContractAttributeTests
     public void Metadata_ShouldMatchWhatGeneratorWritesAndReads()
     {
         // Arrange & Act
-        var constructor = typeof(LocalizationContractAttribute).GetConstructors().ShouldHaveSingleItem();
+        var constructors = typeof(LocalizationContractAttribute).GetConstructors()
+            .Select(static constructor => constructor.GetParameters().Select(static parameter => parameter.ParameterType).ToArray())
+            .OrderBy(static parameters => parameters.Length)
+            .ToArray();
 
-        // Assert: the generator writes the attribute by this name without arguments, and the build matches it by name.
+        // Assert: the generator writes the attribute by this name, without arguments or with the enums of a set of an
+        // enum, and the build matches it by name and reads the enums by position.
         typeof(LocalizationContractAttribute).FullName.ShouldBe("CodeChops.Idioma.Internals.LocalizationContractAttribute");
-        constructor.GetParameters().ShouldBeEmpty();
+        constructors.Length.ShouldBe(2);
+        constructors[0].ShouldBeEmpty();
+        constructors[1].ShouldBe([typeof(Type[])]);
+    }
+
+    [Test]
+    public void Constructor_WithEnums_ShouldKeepThem()
+    {
+        // Act
+        var attribute = new LocalizationContractAttribute(typeof(DayOfWeek), typeof(StringComparison));
+
+        // Assert
+        attribute.Enums.ShouldBe([typeof(DayOfWeek), typeof(StringComparison)]);
+    }
+
+    [Test]
+    public void Constructor_WithoutEnums_ShouldHaveNone()
+    {
+        // Act
+        var attribute = new LocalizationContractAttribute();
+
+        // Assert
+        attribute.Enums.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void Constructor_WithNull_ShouldThrow()
+    {
+        // Act & Assert
+        Should.Throw<ArgumentNullException>(() => new LocalizationContractAttribute(null!));
     }
 }

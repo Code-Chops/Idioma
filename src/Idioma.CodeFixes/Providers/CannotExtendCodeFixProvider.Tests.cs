@@ -24,12 +24,12 @@ public sealed class CannotExtendCodeFixProviderTests
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(params string[] sources)
     {
-        return CodeFixTestHelper.FixAsync(new CannotExtendCodeFixProvider(), new LocalizationSetsGenerator(), sources);
+        return CodeFixTestHelper.FixAsync(new CannotExtendCodeFixProvider(), LocalizationParts.Sets(), sources);
     }
 
     private static void ShouldBeExtended(params string[] sources)
     {
-        var run = GeneratorTestHelper.RunOverFiles(new LocalizationSetsGenerator(), sources).Results.ShouldHaveSingleItem();
+        var run = GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), sources).Results.ShouldHaveSingleItem();
 
         run.Diagnostics.ShouldBeEmpty();
         run.GeneratedSources.ShouldNotBeEmpty();

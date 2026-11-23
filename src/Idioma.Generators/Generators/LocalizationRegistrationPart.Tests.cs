@@ -8,11 +8,11 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="LocalizationRegistrationGenerator"/>: which sets are registered automatically, in which tier
+/// Tests for <see cref="LocalizationRegistrationPart"/>: which sets are registered automatically, in which tier
 /// and order, what the build says about a set that can't be, which referenced registrars an assembly calls first, and
 /// that the generated code compiles and runs.
 /// </summary>
-public sealed class LocalizationRegistrationGeneratorTests
+public sealed class LocalizationRegistrationPartTests
 {
     #region Fixture
     private const string ShopContract = """
@@ -96,7 +96,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
     private static GeneratorDriverRunResult Run(string source, params MetadataReference[] references)
     {
-        return GeneratorTestHelper.Run(new LocalizationRegistrationGenerator(), source, references);
+        return GeneratorTestHelper.Run(LocalizationParts.Registration(), source, references);
     }
 
     private static string GeneratedText(GeneratorDriverRunResult result)
@@ -361,7 +361,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     [Test]
     public void SetOfContractGeneratedInSameCompilation_IsDiscoveredAsDefault()
     {
-        // Arrange: IShopLocalization is written by LocalizationSetsGenerator from the default-language set, so it does
+        // Arrange: IShopLocalization is written by LocalizationSetsPart from the default-language set, so it does
         // not exist in the compilation this generator sees; the Dutch set's base type binds to an error type named after
         // it. The set naming a type that no generator writes stays out (it is a compile error anyway).
         const string source = """
@@ -600,7 +600,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         // Assert
         var run = result.Results.ShouldHaveSingleItem();
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.CannotRegisterDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizationRegistrationPart.CannotRegisterDiagnosticId);
         diagnostic.Id.ShouldBe("LOC400");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldContain("TestApp.ShopLocalizationDe");
@@ -990,7 +990,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.UnmappedLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationUk' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing");
         diagnostic.GetMessage().ShouldContain("'class ShopLocalizationUk : ShopLocalizationEn, ILocalizationSet'");
@@ -1017,7 +1017,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.UnmappedLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId);
     }
 
     [Test]
@@ -1093,8 +1093,8 @@ public sealed class LocalizationRegistrationGeneratorTests
         var run = result.Results.ShouldHaveSingleItem();
         run.Diagnostics.Select(diagnostic => diagnostic.Id).Order(StringComparer.Ordinal).ShouldBe(
         [
-            LocalizationRegistrationGenerator.CannotRegisterDiagnosticId,
-            LocalizationRegistrationGenerator.UnmappedLanguageCodeDiagnosticId,
+            LocalizationRegistrationPart.CannotRegisterDiagnosticId,
+            LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId,
         ]);
         run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString().ShouldNotContain("new TestApp.ShopLocalizationBritish2(");
     }
@@ -1213,7 +1213,7 @@ public sealed class LocalizationRegistrationGeneratorTests
             """);
 
         // Act
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", library));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", library));
 
         // Assert
         text.ShouldContain("RegisterReferenced(\"My-App.Shop\", static () => CodeChops.Idioma.Generated.LocalizationRegistrar_My_App_Shop.Register());");
@@ -1223,7 +1223,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public Task ApplicationReferencingAssemblyWithSets_CallsItsRegistrarFirst()
     {
         // Arrange & Act: an app without sets or languages of its own still registers what it references, used or not.
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", SetsLibrary));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary));
 
         // Assert: and, declaring no languages, it leaves every text its own default language.
         text.ShouldNotContain("RegisterLanguages");
@@ -1235,7 +1235,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public Task ApplicationDeclaringLanguages_RegistersItsLanguagesFirst()
     {
         // Arrange & Act
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), """
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("nl", "en")]
@@ -1256,7 +1256,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: no sets and no references; its own inline texts need nothing, but those of a library it loads
         // later fall back to its default language, also for a culture it does not declare.
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), """
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("nl-BE", "en")]
@@ -1291,7 +1291,7 @@ public sealed class LocalizationRegistrationGeneratorTests
             """);
 
         // Act
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", client));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", client));
 
         // Assert
         text.ShouldContain("RegisterReferenced(\"LanguagesClient\", static () => CodeChops.Idioma.Generated.LocalizationRegistrar_LanguagesClient.Register());");
@@ -1328,13 +1328,13 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: an Android app builds as a library, as it has no Main, so only the Android SDK's own property
         // tells it from one.
-        var text = GeneratedText(GeneratorTestHelper.RunWithBuildProperties(new LocalizationRegistrationGenerator(), """
+        var text = GeneratedText(GeneratorTestHelper.RunWithBuildProperties(LocalizationParts.Registration(), """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("nl", "en")]
 
             namespace TestApp;
-            """, [], (LocalizationRegistrationGenerator.AndroidApplicationProperty, "true")));
+            """, [], (LocalizationRegistrationPart.AndroidApplicationProperty, "true")));
 
         // Assert: as for an application built as an executable, by a registrar a host referencing it can call.
         text.ShouldContain("public static class LocalizationRegistrar_TestAssembly");
@@ -1346,10 +1346,10 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: no sets and no languages of its own, like the plain library below, which emits nothing.
         var text = GeneratedText(GeneratorTestHelper.RunWithBuildProperties(
-            new LocalizationRegistrationGenerator(),
+            LocalizationParts.Registration(),
             "namespace TestApp;",
             [SetsLibrary],
-            (LocalizationRegistrationGenerator.AndroidApplicationProperty, "true")));
+            (LocalizationRegistrationPart.AndroidApplicationProperty, "true")));
 
         // Assert
         text.ShouldContain("RegisterReferenced(\"SetsLibrary\", static () => CodeChops.Idioma.Generated.LocalizationRegistrar_SetsLibrary.Register());");
@@ -1361,13 +1361,13 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void AndroidLibraryDeclaringLanguages_RegistersNoLanguages(string androidApplication)
     {
         // Arrange & Act: every Android project has the property, and a library has it false.
-        var result = GeneratorTestHelper.RunWithBuildProperties(new LocalizationRegistrationGenerator(), """
+        var result = GeneratorTestHelper.RunWithBuildProperties(LocalizationParts.Registration(), """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("nl", "en")]
 
             namespace TestApp;
-            """, [], (LocalizationRegistrationGenerator.AndroidApplicationProperty, androidApplication));
+            """, [], (LocalizationRegistrationPart.AndroidApplicationProperty, androidApplication));
 
         // Assert: nothing to register, as for any library that only declares languages.
         ShouldEmitNothing(result);
@@ -1378,7 +1378,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: code without the alias can't name the registrar, so the assembly registers its sets when it
         // loads, which its use under the alias makes it do.
-        var result = GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", SetsLibrary.WithAliases(["SetsAlias"]));
+        var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary.WithAliases(["SetsAlias"]));
 
         // Assert: nothing else to register, so no registrar at all.
         ShouldEmitNothing(result);
@@ -1388,7 +1388,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void ApplicationReferencingAssemblyUnderExternAliasAndGlobal_CallsItsRegistrar()
     {
         // Arrange & Act
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", SetsLibrary.WithAliases(["SetsAlias", "global"])));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary.WithAliases(["SetsAlias", "global"])));
 
         // Assert
         text.ShouldContain("LocalizationRegistrar_SetsLibrary.Register());");
@@ -1431,7 +1431,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.CannotRegisterDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizationRegistrationPart.CannotRegisterDiagnosticId);
         diagnostic.GetMessage().ShouldContain(expectedName);
         diagnostic.GetMessage().ShouldContain(expectedReason);
         diagnostic.GetMessage().ShouldContain("[ExcludeFromLocalizationDiscovery]");
@@ -1511,7 +1511,7 @@ public sealed class LocalizationRegistrationGeneratorTests
             """, SetsLibrary);
 
         // Act
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", SetsLibrary, languagesOnly));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary, languagesOnly));
 
         // Assert
         text.ShouldContain("LocalizationRegistrar_SetsLibrary.Register());");
@@ -1692,7 +1692,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         // Arrange & Act: the WebAssembly runtime remembers a call into an assembly that was not there, and refuses
         // every later use of that assembly from the calling one, also once it has loaded lazily. Seen in a browser: a
         // lookup by name that fails leaves nothing behind, and a call that fails does.
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), "namespace TestApp;", SetsLibrary));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary));
 
         // Assert: the lookup comes first, inside the same try, so a missing assembly skips the call.
         var guard = text.Substring(text.IndexOf("private static void RegisterReferenced(string assemblyName, System.Action register)", StringComparison.Ordinal));
@@ -1880,7 +1880,7 @@ public sealed class LocalizationRegistrationGeneratorTests
 
         // Assert: at the property that holds the code.
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizationRegistrationGenerator.InvalidLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizationRegistrationPart.InvalidLanguageCodeDiagnosticId);
         diagnostic.Id.ShouldBe("LOC402");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldStartWith($"'ShopLocalizationBritish' gives \"{expectedCode}\" as its LocalizationLanguageCode, which isn't a culture name");
@@ -2196,7 +2196,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void ApplicationWithInvalidDefaultLanguage_RegistersNoLanguages(string languages)
     {
         // Arrange & Act: the first valid language must not become the app's default, at run time either.
-        var result = GeneratorTestHelper.RunAsApplication(new LocalizationRegistrationGenerator(), $$"""
+        var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), $$"""
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages({{languages}})]
@@ -2248,7 +2248,7 @@ public sealed class LocalizationRegistrationGeneratorTests
             """;
 
         // Act
-        var text = GeneratedText(GeneratorTestHelper.RunOverFiles(new LocalizationRegistrationGenerator(), first, second));
+        var text = GeneratedText(GeneratorTestHelper.RunOverFiles(LocalizationParts.Registration(), first, second));
 
         // Assert
         text.Split('\n').Count(line => line.Contains("new TestApp.ShopLocalizationNl()", StringComparison.Ordinal)).ShouldBe(1);
@@ -2368,7 +2368,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: the same driver runs over a re-parsed copy of the file (the IDE edit scenario that surfaces
         // stale cached symbols).
-        var result = GeneratorTestHelper.RunAcrossEdit(new LocalizationRegistrationGenerator(), $$"""
+        var result = GeneratorTestHelper.RunAcrossEdit(LocalizationParts.Registration(), $$"""
             {{ShopContract}}
 
             public sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization
@@ -2385,7 +2385,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     public void UnrelatedEdit_ShouldLeaveGeneratorFullyCached()
     {
         // Arrange & Act: editing a file that declares no sets must not re-run the output step (lag on every keystroke).
-        var reasons = GeneratorTestHelper.GetOutputReasonsAfterUnrelatedEdit(new LocalizationRegistrationGenerator(), $$"""
+        var reasons = GeneratorTestHelper.GetOutputReasonsAfterUnrelatedEdit(LocalizationParts.Registration(), $$"""
             {{ShopContract}}
 
             public sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization
@@ -2404,7 +2404,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: discovery reads every set again on every edit, in any file. The registrar records the names of
         // the texts a derived set words, and writes nothing from a wording.
-        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(new LocalizationRegistrationGenerator(), LocalizationDiscovery.TrackingName, """
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RecordTrackingName, """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en", "en-GB")]
@@ -2444,7 +2444,7 @@ public sealed class LocalizationRegistrationGeneratorTests
         // Arrange & Act: a member that hides a text words nothing, because the contract calls the member it hides
         // (LOC207). Recorded, it would keep the registry from a rewording of English. A set that lists the contract again
         // maps the contract to its own member, which then words the text.
-        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(new LocalizationRegistrationGenerator(), LocalizationDiscovery.TrackingName, """
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RecordTrackingName, """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en", "en-GB", "en-AU")]
@@ -2479,7 +2479,7 @@ public sealed class LocalizationRegistrationGeneratorTests
     {
         // Arrange & Act: a set that registers, one that can't and is reported, and an edit in their file which moves
         // nothing.
-        var (run, edited) = GeneratorTestHelper.RunAcrossEditInSameFile(new LocalizationRegistrationGenerator(), $$"""
+        var (run, edited) = GeneratorTestHelper.RunAcrossEditInSameFile(LocalizationParts.Registration(), $$"""
             {{ShopContract}}
 
             public sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization

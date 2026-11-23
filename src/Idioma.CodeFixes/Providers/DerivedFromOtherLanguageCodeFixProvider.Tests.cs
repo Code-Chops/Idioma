@@ -30,7 +30,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(params string[] sources)
     {
-        return CodeFixTestHelper.FixWithGeneratedCodeAsync(new DerivedFromOtherLanguageCodeFixProvider(), new LocalizationSetsGenerator(), sources);
+        return CodeFixTestHelper.FixWithGeneratedCodeAsync(new DerivedFromOtherLanguageCodeFixProvider(), LocalizationParts.Sets(), sources);
     }
     #endregion
 

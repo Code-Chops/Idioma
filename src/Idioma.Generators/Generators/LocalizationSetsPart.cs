@@ -20,13 +20,17 @@ namespace CodeChops.Idioma.Generators;
 /// member of the contract inherits the doc comment of its text.
 /// </summary>
 /// <remarks>
+/// <para>
 /// It also records every set of a public contract in an assembly attribute, so that the build of an assembly referencing
 /// this one can tell which languages exist without searching its types, and reports the languages referenced libraries
 /// leave open. The generator sees the compilation before its own output is added, so the interfaces of a set are exactly
 /// the handwritten ones.
+/// </para>
+/// <para>
+/// It's a part of <see cref="LocalizationGenerator"/>, which reads the sets once for this part and the registrar's.
+/// </para>
 /// </remarks>
-[Generator(LanguageNames.CSharp)]
-public sealed class LocalizationSetsGenerator : IIncrementalGenerator
+public static class LocalizationSetsPart
 {
     public const string NoLanguagesDeclaredDiagnosticId = "LOC100";
     public const string CannotExtendDiagnosticId = "LOC200";
@@ -149,16 +153,18 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         "'{0}.{1}' is a public method that returns a string, which makes it a text with parameters, but {2}. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].",
         "A public method of a default-language set that returns a string and takes parameters is a text with parameters. The generated class gets a method with the same name and parameters. It keeps the values and passes them to the set of the user's language when the text is shown. That only works for a method that isn't generic, has a name no other method in its set has, and takes at most 8 parameters, each by value and without a default. A method without parameters is no text, because a text without parameters is a property.");
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    /// <summary>
+    /// Adds this part's steps to the pipeline of <see cref="LocalizationGenerator"/>.
+    /// </summary>
+    internal static void Initialize(IncrementalGeneratorInitializationContext context, LocalizationInputs inputs)
     {
-        var languages = SupportedLanguages.Read(context);
-        var discovery = LocalizationDiscovery.Read(context, DiscoveredTexts.OfContract);
-        var bindings = LocalizationDiscovery.BindContracts(context, discovery, languages);
+        var languages = inputs.Languages;
+        var bindings = inputs.Bindings;
 
         // No code below C# 14, which LOC102 reports. What is found about the sets is reported all the same.
-        var compiles = LanguageVersionCheck.Read(context);
+        var compiles = inputs.Compiles;
 
-        var analysis = discovery
+        var analysis = inputs.ContractDiscovery
             .Combine(languages)
             .Combine(bindings)
             .Select(static (data, cancellationToken) => LocalizationSetsAnalysis.Analyze(
@@ -256,6 +262,8 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                 continue;
 
             var sets = ImmutableArray.CreateBuilder<ProvidedLocalizationSet>();
+            var setsOfEnums = ImmutableArray.CreateBuilder<ReferencedSetOfEnum>();
+            var read = new HashSet<string>(StringComparer.Ordinal);
             var hasInlineTexts = false;
 
             foreach (var attribute in assembly.GetAttributes())
@@ -268,6 +276,9 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                     && attribute.ConstructorArguments[1].Value is string language)
                 {
                     sets.Add(new ProvidedLocalizationSet(contract, language));
+
+                    if (read.Add(contract) && ReadSetOfEnum(assembly, contract, compilation) is { } setOfEnum)
+                        setsOfEnums.Add(setOfEnum);
                 }
                 else if (String.Equals(name, PackageNames.InlineTextsAttribute, StringComparison.Ordinal))
                 {
@@ -283,7 +294,8 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
                     assembly.Identity.Name,
                     new EquatableArray<string>(languages),
                     new EquatableArray<ProvidedLocalizationSet>(sets.ToImmutable()),
-                    hasInlineTexts));
+                    hasInlineTexts,
+                    new EquatableArray<ReferencedSetOfEnum>(setsOfEnums.ToImmutable())));
             }
         }
 
@@ -294,16 +306,39 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         return referencedLocalization;
     }
 
+    /// <summary>
+    /// A referenced contract of an enum, with what a set of it lists in place of <c>ILocalizationSet</c>:
+    /// <c>ILocalizationSet&lt;Lib.OrderStatus&gt;</c>, by the enum's full name. <see langword="null"/> for a contract of
+    /// no enum, and for one whose enums this assembly can't name, as an internal enum of the library.
+    /// </summary>
+    private static ReferencedSetOfEnum? ReadSetOfEnum(IAssemblySymbol assembly, string contract, Compilation compilation)
+    {
+        if (assembly.GetTypeByMetadataName(contract) is not { } type)
+            return null;
+
+        var enums = PackageNames.GetContractEnums(type)
+            .Where(@enum => compilation.IsSymbolAccessibleWithin(@enum, compilation.Assembly))
+            .ToArray();
+
+        if (enums.Length is 0)
+            return null;
+
+        var setInterface = String.Join(", ", enums.Select(static @enum =>
+            $"{SupportedLanguages.SetInterface}<{@enum.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted))}>"));
+
+        return new ReferencedSetOfEnum(contract, setInterface);
+    }
+
     private static string GenerateProvidedSets(EquatableArray<ProvidedLocalizationSet> sets)
     {
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
-        sb.AppendLine($"#pragma warning disable {LocalizationRegistrationGenerator.ObsoleteWarnings} // Only generated code applies LocalizationSet.");
+        sb.AppendLine($"#pragma warning disable {LocalizationRegistrationPart.ObsoleteWarnings} // Only generated code applies LocalizationSet.");
 
         foreach (var set in sets)
             sb.AppendLine($"[assembly: {PackageNames.LocalizationSetAttribute}({SymbolDisplay.FormatLiteral(set.Contract, quote: true)}, {SymbolDisplay.FormatLiteral(set.Language, quote: true)})]");
 
-        sb.AppendLine($"#pragma warning restore {LocalizationRegistrationGenerator.ObsoleteWarnings}");
+        sb.AppendLine($"#pragma warning restore {LocalizationRegistrationPart.ObsoleteWarnings}");
 
         return sb.ToString();
     }
@@ -329,7 +364,7 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         // namespace of its name, so behind a text named CodeChops the package's namespace could not be reached to call
         // it. The pragma also covers a set marked [Obsolete] or [Experimental], whose texts read it for as long as it
         // exists.
-        var warnings = LocalizationRegistrationGenerator.WithSuppressed(LocalizationRegistrationGenerator.ObsoleteWarnings, contract.SuppressedDiagnostics);
+        var warnings = LocalizationRegistrationPart.WithSuppressed(LocalizationRegistrationPart.ObsoleteWarnings, contract.SuppressedDiagnostics);
         var sb = new StringBuilder();
         sb.AppendLine($"""
             // <auto-generated/>
@@ -384,15 +419,23 @@ public sealed class LocalizationSetsGenerator : IIncrementalGenerator
         if (contract.HasTexts)
             inheritingDocs.UnionWith(texts.Select(static text => text.Name));
 
-        // The contract, which every set lists itself.
+        // The contract, which every set lists itself. The contract of a set of an enum names its enums, which each set
+        // lists as ILocalizationSet<TEnum> (LOC211).
+        var setInterface = contract.Enums.Length is 0
+            ? $"<see cref=\"{PackageNames.LocalizationSet}\"/>"
+            : $"<c>{EscapeXml(String.Join(", ", contract.Enums.Select(@enum => $"{SupportedLanguages.SetInterface}<{RenderType(@enum.Type, contract.Namespace)}>")))}</c>";
+        var marker = contract.Enums.Length is 0
+            ? $"{PackageNames.InternalsNamespace}.LocalizationContract"
+            : $"{PackageNames.InternalsNamespace}.LocalizationContract({String.Join(", ", contract.Enums.Select(@enum => $"typeof({RenderType(@enum.Type, contract.Namespace)})"))})";
+
         sb.AppendLine($$"""
             /// <summary>
             /// The contract of <see cref="{{className}}"/>, with one member per text.
-            /// Every language in <c>[assembly: SupportedLanguages]</c> has a set that implements it next to <see cref="{{PackageNames.LocalizationSet}}"/>, named with its language as suffix.
+            /// Every language in <c>[assembly: SupportedLanguages]</c> has a set that implements it next to {{setInterface}}, named with its language as suffix.
             /// A language without a set, or a set without a text, is a build error rather than a fallback at run time.
             /// Each set is registered automatically, so there's nothing to register.
             /// </summary>
-            [{{PackageNames.InternalsNamespace}}.LocalizationContract]
+            [{{marker}}]
             {{accessibility}} interface {{name}}
             {
             """);

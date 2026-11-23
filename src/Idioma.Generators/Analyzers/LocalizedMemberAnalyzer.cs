@@ -212,8 +212,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         var where = SymbolEqualityComparer.Default.Equals(declared.ContainingType, type) ? declared.Name : $"{declared.ContainingType.Name}.{declared.Name}";
         return (subject, $"Mark '{where}' {sample}");
 
-        bool UsesIdioma(IAssemblySymbol assembly) => usesIdioma.GetOrAdd(assembly, static assembly => assembly.Modules.Any(static module =>
-            module.ReferencedAssemblies.Any(static identity => String.Equals(identity.Name, PackageNames.Assembly, StringComparison.Ordinal))));
+        bool UsesIdioma(IAssemblySymbol assembly) => usesIdioma.GetOrAdd(assembly, LocalizationDiscovery.ReferencesPackage);
 
         static string OfOtherAssembly(INamedTypeSymbol type) =>
             $"'{type.Name}' is a type of '{type.ContainingAssembly.Name}', which doesn't use Idioma, so it has no texts written as attributes";

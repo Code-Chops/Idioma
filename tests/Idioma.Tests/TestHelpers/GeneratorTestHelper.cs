@@ -380,8 +380,7 @@ internal static class GeneratorTestHelper
             generators:
             [
                 new LocalizableTextFactoryGenerator().AsSourceGenerator(),
-                new LocalizationSetsGenerator().AsSourceGenerator(),
-                new LocalizationRegistrationGenerator().AsSourceGenerator(),
+                new LocalizationGenerator().AsSourceGenerator(),
             ],
             parseOptions: parseOptions);
     }

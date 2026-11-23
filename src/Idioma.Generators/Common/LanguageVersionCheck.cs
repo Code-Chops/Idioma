@@ -19,9 +19,11 @@ internal static class LanguageVersionCheck
     /// <summary>
     /// Whether code generated for this assembly compiles: it declares no languages, or it compiles with C# 14 or later.
     /// </summary>
-    public static IncrementalValueProvider<bool> Read(IncrementalGeneratorInitializationContext context)
+    /// <param name="context">The generator's context, for the version of C#.</param>
+    /// <param name="languages">The languages the assembly declares (<see cref="SupportedLanguages.Read"/>).</param>
+    public static IncrementalValueProvider<bool> Read(IncrementalGeneratorInitializationContext context, IncrementalValueProvider<DeclaredLanguages?> languages)
     {
-        var provider = SupportedLanguages.Read(context)
+        var provider = languages
             .Select(static (languages, _) => languages is { Codes.Length: > 0 })
             .Combine(context.ParseOptionsProvider.Select(static (options, _) => !IsTooOld(options)))
             .Select(static (data, _) => !data.Left || data.Right);

@@ -10,7 +10,7 @@ A library can use Idioma for its own texts, as an app does. It declares its lang
 
 In the examples, the library is `Shop`. Its contract is `Shop.IShopLocalization`, and its English set is `ShopLocalizationEn`.
 
-Other subjects have a page of their own: [language codes](language-codes.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
+Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
 ## Writing a library
 

@@ -27,7 +27,7 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class DerivedFromOtherLanguageCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsGenerator.DerivedFromOtherLanguageDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 

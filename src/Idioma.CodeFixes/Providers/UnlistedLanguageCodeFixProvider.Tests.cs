@@ -36,7 +36,7 @@ public sealed class UnlistedLanguageCodeFixProviderTests
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(params string[] sources)
     {
-        return CodeFixTestHelper.FixAsync(new UnlistedLanguageCodeFixProvider(), new LocalizationSetsGenerator(), sources);
+        return CodeFixTestHelper.FixAsync(new UnlistedLanguageCodeFixProvider(), LocalizationParts.Sets(), sources);
     }
     #endregion
 

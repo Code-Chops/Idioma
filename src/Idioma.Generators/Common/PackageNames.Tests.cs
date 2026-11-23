@@ -30,8 +30,8 @@ public sealed class PackageNamesTests
             .Select(static field => (DiagnosticDescriptor)field.GetValue(null)!)
             .ToArray();
 
-        // Assert: all twenty-eight codes, some of which two descriptors share.
-        descriptors.Select(static descriptor => descriptor.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(28);
+        // Assert: all thirty codes, some of which two descriptors share.
+        descriptors.Select(static descriptor => descriptor.Id).Distinct(StringComparer.Ordinal).Count().ShouldBe(30);
 
         foreach (var descriptor in descriptors)
             descriptor.HelpLinkUri.ShouldBe(PackageNames.HelpLink(descriptor.Id), descriptor.Id);

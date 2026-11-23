@@ -271,11 +271,13 @@ public interface ILocalizationSet
 /// <c>GetTextByValue</c> gives the text of the first one.</item>
 /// <item><c>GetTextByValue</c> shows a value that isn't a member, such as a combination of flags, as
 /// <see cref="Enum.ToString()"/> writes it.</item>
-/// <item>The set can hold other texts too, such as a caption for the enum itself.</item>
+/// <item>A text that isn't a member is build warning <c>LOC210</c>, because <c>GetTextByValue</c> never gives it. Write a
+/// caption for the enum in a set of its own.</item>
 /// </list>
 /// <para>
-/// Only the default-language set needs this interface, because the contract comes from it. A set of another language
-/// may list <see cref="ILocalizationSet"/> instead.
+/// Every set of the enum lists this interface, in every language, so each set shows which enum it words. A set that
+/// lists <see cref="ILocalizationSet"/> in its place is build warning <c>LOC211</c>, and so is one that lists an enum
+/// its contract has no texts of.
 /// </para>
 /// </remarks>
 /// <example>

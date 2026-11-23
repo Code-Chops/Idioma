@@ -8,7 +8,7 @@ In a Blazor or Razor project, add three namespaces to `_Imports.razor`: Idioma's
 @using MyApp.Localization
 ```
 
-Other subjects have a page of their own: [language codes](language-codes.md), [libraries that use Idioma](libraries-and-apps.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
+Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
 ## A language picker
 
@@ -135,7 +135,7 @@ This also needs all globalization data, because the app can start in a culture o
 
 ## A browser language the app doesn't have
 
-When none of your app's languages serves the browser's language, make the default language the UI culture. A German visitor of an app in English and Dutch sees English texts either way. But with English as the UI culture, a text with parameters shows faster. Its set's method runs in the language it words. With German as the UI culture, Idioma switches the UI culture to English each time such a text is shown.
+When none of your app's languages serves the browser's language, make the default language the UI culture. A German visitor of an app in English and Dutch sees English texts either way, but a text with parameters then shows faster. The method of a set always runs with a UI culture of the set's own language. So with German as the UI culture, Idioma switches the UI culture to English while each such method runs.
 
 Add this to the `Program.cs` of the WebAssembly project, with usings for `System.Globalization` and `CodeChops.Idioma`. Put it right before the host runs: before `await host.RunAsync();` with the code of [Remembering the choice](#remembering-the-choice), or before `await builder.Build().RunAsync();` without it.
 

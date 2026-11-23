@@ -17,17 +17,31 @@ internal static class ContractTexts
     /// </remarks>
     /// <param name="member">The property or method.</param>
     /// <param name="set">The class that declares the member.</param>
-    /// <param name="localizationSet"><c>ILocalizationSet</c>, which is no contract itself.</param>
-    public static bool ImplementsText(ISymbol member, INamedTypeSymbol set, INamedTypeSymbol localizationSet)
+    public static bool ImplementsText(ISymbol member, INamedTypeSymbol set)
     {
-        // The part of a partial member that implements it, which holds the wording, stands for the part that declares
-        // it. The set names that part as the implementation of a text.
-        member = member switch
-        {
-            IMethodSymbol { PartialDefinitionPart: { } method } => method,
-            IPropertySymbol { PartialDefinitionPart: { } property } => property,
-            _ => member,
-        };
+        if (FindImplementedTexts(member, set).Any())
+            return true;
+
+        // A property by the name of a text that takes values, which the set doesn't implement: the wording of that text,
+        // written as the default language wrote it before it took values.
+        var isWordingOfMethod = GetDeclaringPart(member) is IPropertySymbol { DeclaredAccessibility: Accessibility.Public, ExplicitInterfaceImplementations.IsEmpty: true } property
+                                && set.AllInterfaces
+                                    .Where(PackageNames.IsContract)
+                                    .SelectMany(contract => contract.GetMembers(property.Name))
+                                    .Any(text => text is IMethodSymbol && set.FindImplementationForInterfaceMember(text) is null);
+
+        return isWordingOfMethod;
+    }
+
+    /// <summary>
+    /// The texts of the contracts a property or method of a set implements, or overrides the implementation of: those it
+    /// implements explicitly, else those the set implements through it.
+    /// </summary>
+    /// <param name="member">The property or method.</param>
+    /// <param name="set">The class that declares the member.</param>
+    public static IEnumerable<ISymbol> FindImplementedTexts(ISymbol member, INamedTypeSymbol set)
+    {
+        member = GetDeclaringPart(member);
 
         var explicitly = member switch
         {
@@ -37,30 +51,35 @@ internal static class ContractTexts
         };
 
         if (!explicitly.IsEmpty)
-            return explicitly.Any(text => IsContract(text.ContainingType, localizationSet));
+            return explicitly.Where(static text => PackageNames.IsContract(text.ContainingType));
 
         if (member.DeclaredAccessibility is not Accessibility.Public)
-            return false;
+            return [];
 
-        // Asked of the set which member implements the text, and not told by the name alone.
-        foreach (var contract in set.AllInterfaces)
+        // Asked of the set which member implements the text, and not told by the name alone: a method of the same name
+        // with other parameters implements nothing.
+        var implementedTexts = set.AllInterfaces
+            .Where(PackageNames.IsContract)
+            .SelectMany(contract => contract.GetMembers(member.Name))
+            .Where(text => IsOrOverrides(member, set.FindImplementationForInterfaceMember(text)));
+
+        return implementedTexts;
+    }
+
+    /// <summary>
+    /// The part of a partial member that declares it, for the part that implements it, which holds the wording. The set
+    /// names the declaring part as the implementation of a text.
+    /// </summary>
+    private static ISymbol GetDeclaringPart(ISymbol member)
+    {
+        var declaringPart = member switch
         {
-            if (!IsContract(contract, localizationSet))
-                continue;
+            IMethodSymbol { PartialDefinitionPart: { } method } => method,
+            IPropertySymbol { PartialDefinitionPart: { } property } => property,
+            _ => member,
+        };
 
-            foreach (var text in contract.GetMembers(member.Name))
-            {
-                if (IsOrOverrides(member, set.FindImplementationForInterfaceMember(text)))
-                    return true;
-
-                // A property by the name of a text that takes values, which the set doesn't implement: the wording of
-                // that text, written as the default language wrote it before it took values.
-                if (member is IPropertySymbol && text is IMethodSymbol && set.FindImplementationForInterfaceMember(text) is null)
-                    return true;
-            }
-        }
-
-        return false;
+        return declaringPart;
     }
 
     /// <summary>
@@ -81,11 +100,5 @@ internal static class ContractTexts
         }
 
         return false;
-    }
-
-    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol localizationSet)
-    {
-        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, localizationSet) && PackageNames.IsContract(@interface);
-        return isContract;
     }
 }

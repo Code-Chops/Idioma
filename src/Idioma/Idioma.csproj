@@ -116,12 +116,12 @@ The details have a page per subject under docs/, which the README links to. New 
     on main, as they fetch the latest package, which the demos on main are written for.
 
     The badge that opens a codespace is packed as a plain link: nuget.org shows images of a few hosts only, and
-    github.com/codespaces is not among them.
+    github.com/codespaces is not among them. The NuGet badge is left out, because nuget.org shows the version itself.
   -->
   <Target Name="WritePackageReadme" BeforeTargets="_GetPackageFiles">
     <PropertyGroup>
       <PackageReadmePath>$(IntermediateOutputPath)README.md</PackageReadmePath>
-      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/').Replace('[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)]', '[Open in GitHub Codespaces]'))</PackageReadmeText>
+      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/').Replace('[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)]', '[Open in GitHub Codespaces]').Replace('[![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)', ''))</PackageReadmeText>
     </PropertyGroup>
 
     <!-- A README that links to the details in another way would be packed with its links still on main. -->

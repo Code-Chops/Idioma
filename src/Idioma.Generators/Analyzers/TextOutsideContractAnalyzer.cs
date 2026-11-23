@@ -4,7 +4,8 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reports a text of a set that its contract doesn't have (<c>LOC209</c>), such as a Dutch text that the
-/// default-language set lacks.
+/// default-language set lacks. In a set of an enum, it reports a text that isn't a member of the enum instead
+/// (<c>LOC210</c>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -13,26 +14,42 @@ namespace CodeChops.Idioma.Generators;
 /// may have members that its interfaces don't.
 /// </para>
 /// <para>
+/// A set of an enum lists <c>ILocalizationSet&lt;TEnum&gt;</c>, and has a text for each member of the enum and no
+/// other. <c>GetText()</c> never gives a text of another name. Such a text is usually left over from a member that was
+/// removed, or names a member that was never added. It's reported in every set that lists the interface, the
+/// default-language set too, because the contract has the text then.
+/// </para>
+/// <para>
 /// A member is a text by the shape discovery reads a text by: a public string property, or a method of the shape of a
-/// text that takes values. These aren't reported:
+/// text that takes values. A member marked <c>[ExcludeFromLocalizationDiscovery]</c> isn't reported, and neither is a
+/// method that can't be a text (<c>LOC300</c>).
+/// </para>
+/// <para>
+/// <c>LOC209</c> doesn't report these:
 /// </para>
 /// <list type="bullet">
-/// <item>A member marked <c>[ExcludeFromLocalizationDiscovery]</c>, and a method that can't be a text
-/// (<c>LOC300</c>).</item>
 /// <item>A member of the name of a member of an interface the set implements. What's wrong with it is reported
 /// elsewhere: a member that hides a text (<c>LOC207</c>), a property named like a text that takes values
-/// (<c>LOC502</c>), or a method with other parameters (<c>CS0535</c>).</item>
+/// (<c>LOC502</c>), or a method with other parameters (<c>CS0535</c>). So the default-language set isn't reported,
+/// because its contract has each text it declares.</item>
 /// <item>A member of the name of a member of a class the set derives from. It overrides or hides that member, which is
 /// reported where it's declared.</item>
 /// </list>
 /// <para>
-/// So the default-language set isn't reported, because its contract has each text it declares.
+/// <c>LOC210</c> doesn't report these, which are still checked for <c>LOC209</c>:
 /// </para>
+/// <list type="bullet">
+/// <item>A text with a name the generated class takes (<c>LOC205</c>).</item>
+/// <item>A text of a contract of another assembly, which the set has to implement.</item>
+/// <item>A member of the name of a member of a set of an enum the set derives from, which is reported there. A class
+/// that isn't such a set isn't analyzed, so a text it declares is reported where it's overridden.</item>
+/// </list>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
 {
     public const string TextOutsideContractDiagnosticId = "LOC209";
+    public const string TextOutsideEnumDiagnosticId = "LOC210";
 
     private const string ExcludeAdvice = "or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text";
 
@@ -46,7 +63,17 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
         description: "The contract is written from the texts of the default-language set. A text that only another language declares isn't in it, so no generated text reads it, and no user sees its wording. Add it to the default-language set, so that every language words it. A set of a library's contract can't add a text to it, so remove the text there. Mark a member that isn't a text [ExcludeFromLocalizationDiscovery].",
         helpLinkUri: PackageNames.HelpLink(TextOutsideContractDiagnosticId));
 
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [TextOutsideContractRule];
+    private static readonly DiagnosticDescriptor TextOutsideEnumRule = new(
+        id: TextOutsideEnumDiagnosticId,
+        title: "Text of a set of an enum that isn't a member",
+        messageFormat: "'{0}.{1}' isn't a member of {2}, so GetText() never gives it. {3}.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "A set of an enum (ILocalizationSet<TEnum>) has a text for each member of the enum, and no other. GetText() never gives a text of another name. Such a text is usually left over from a member that was removed, or names a member that was never added. Add the member to the enum, or move the text to a set of its own. Mark a member that isn't a text [ExcludeFromLocalizationDiscovery].",
+        helpLinkUri: PackageNames.HelpLink(TextOutsideEnumDiagnosticId));
+
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [TextOutsideContractRule, TextOutsideEnumRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -74,10 +101,12 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
         }
 
         // The contract the message names, which is the first the set implements. A set without one is LOC204.
-        var contract = set.AllInterfaces.FirstOrDefault(@interface => IsContract(@interface, localizationSet));
+        var contract = set.AllInterfaces.FirstOrDefault(PackageNames.IsContract);
 
         if (contract is null)
             return;
+
+        var enums = GetEnums(set);
 
         // Read once, and only for a set that has a text to report.
         HashSet<string>? interfaceMembers = null;
@@ -87,6 +116,21 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
         {
             if (!IsText(member))
                 continue;
+
+            // A text of a set of an enum that isn't a member is reported as such, also where the contract has it, and
+            // in place of LOC209.
+            if (enums.Length > 0 && !IsMemberOfAny(enums, member.Name) && IsOutsideEnums(set, member.Name, contract, context.Compilation))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    TextOutsideEnumRule,
+                    member.Locations[0],
+                    set.Name,
+                    member.Name,
+                    JoinNames(enums),
+                    AdviseOnEnums(enums, member.Name, context.Compilation)));
+
+                continue;
+            }
 
             interfaceMembers ??= new HashSet<string>(set.AllInterfaces.SelectMany(static @interface => @interface.MemberNames), StringComparer.Ordinal);
 
@@ -138,6 +182,90 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
+    /// The enums a set has the texts of, one for each <c>ILocalizationSet&lt;TEnum&gt;</c> it implements, by name. An
+    /// argument that binds to no enum, as one another generator writes, is left out.
+    /// </summary>
+    private static ImmutableArray<INamedTypeSymbol> GetEnums(INamedTypeSymbol set)
+    {
+        var enums = set.AllInterfaces
+            .Where(PackageNames.IsLocalizationSetOfEnum)
+            .Select(static setOfEnum => setOfEnum.TypeArguments[0])
+            .OfType<INamedTypeSymbol>()
+            .Where(static type => type.TypeKind is TypeKind.Enum)
+            .OrderBy(static @enum => @enum.Name, StringComparer.Ordinal)
+            .ToImmutableArray();
+
+        return enums;
+    }
+
+    private static bool IsMemberOfAny(ImmutableArray<INamedTypeSymbol> enums, string name)
+    {
+        var isMember = enums.Any(@enum => @enum.GetMembers(name).Any(static member => member is IFieldSymbol { HasConstantValue: true }));
+        return isMember;
+    }
+
+    /// <summary>
+    /// Whether a text of a set of an enum that isn't a member is reported here. Another code reports a name the
+    /// generated class takes (<c>LOC205</c>). A text of a contract of another assembly is that assembly's, and the set
+    /// has to implement it. A set of an enum the set derives from reports a text it declares, which the set overrides or
+    /// hides. A class that isn't such a set isn't analyzed, so its text is reported where it's overridden.
+    /// </summary>
+    private static bool IsOutsideEnums(INamedTypeSymbol set, string name, INamedTypeSymbol contract, Compilation compilation)
+    {
+        var textsName = LocalizationSetsAnalysis.GetContractBaseName(contract.Name);
+
+        if (LocalizationSetsAnalysis.IsReservedTextName(name, textsName, hasLookup: true))
+            return false;
+
+        foreach (var @interface in set.AllInterfaces)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(@interface.ContainingAssembly, compilation.Assembly)
+                && PackageNames.IsContract(@interface)
+                && @interface.MemberNames.Contains(name, StringComparer.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        for (var current = set.BaseType; current is not null && current.SpecialType is not SpecialType.System_Object; current = current.BaseType)
+        {
+            if (current.GetMembers(name).Length > 0 && GetEnums(current).Length > 0)
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The names of enums as a message lists them: <c>'OrderStatus'</c>, or <c>'OrderStatus' or 'PaymentStatus'</c>.
+    /// </summary>
+    private static string JoinNames(IReadOnlyList<INamedTypeSymbol> enums)
+    {
+        var names = enums.Select(static @enum => $"'{@enum.Name}'").ToArray();
+
+        var joined = names.Length is 1
+            ? names[0]
+            : $"{String.Join(", ", names, 0, names.Length - 1)} or {names[^1]}";
+
+        return joined;
+    }
+
+    /// <summary>
+    /// What to do about a text of a set of an enum that isn't a member, as the last sentence of the message. An enum of
+    /// another assembly, such as <c>DayOfWeek</c>, can't get a member, so the text can only move.
+    /// </summary>
+    private static string AdviseOnEnums(ImmutableArray<INamedTypeSymbol> enums, string text, Compilation compilation)
+    {
+        var own = enums.Where(@enum => SymbolEqualityComparer.Default.Equals(@enum.ContainingAssembly, compilation.Assembly)).ToArray();
+
+        var advice = own.Length > 0
+            ? $"Add '{text}' to {JoinNames(own)}, move it to a set of its own, {ExcludeAdvice}"
+            : $"Move it to a set of its own, {ExcludeAdvice}";
+
+        return advice;
+    }
+
+    /// <summary>
     /// What to do, as the last sentence of the message. A text goes in the default-language set, which a generated
     /// contract is written from, or in a contract written by hand. A set can't add a text to a contract of another
     /// assembly.
@@ -152,11 +280,5 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
             : $"Add '{text}' to '{contract.Name}', {ExcludeAdvice}";
 
         return advice;
-    }
-
-    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol localizationSet)
-    {
-        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, localizationSet) && PackageNames.IsContract(@interface);
-        return isContract;
     }
 }

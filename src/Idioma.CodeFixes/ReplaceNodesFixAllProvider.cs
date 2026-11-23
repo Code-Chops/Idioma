@@ -25,14 +25,8 @@ internal sealed class ReplaceNodesFixAllProvider<TNode>(string title, string equ
         var cancellationToken = fixAllContext.CancellationToken;
         var replaced = new Dictionary<TNode, TNode>();
 
-        var projects = fixAllContext.Scope is FixAllScope.Solution ? fixAllContext.Solution.Projects : [fixAllContext.Project];
-
-        foreach (var project in projects)
+        foreach (var (project, diagnostics) in await CodeFixSupport.GetFixAllDiagnosticsAsync(fixAllContext).ConfigureAwait(false))
         {
-            var diagnostics = fixAllContext is { Scope: FixAllScope.Document, Document: { } scoped }
-                ? await fixAllContext.GetDocumentDiagnosticsAsync(scoped).ConfigureAwait(false)
-                : await fixAllContext.GetAllDiagnosticsAsync(project).ConfigureAwait(false);
-
             foreach (var diagnostic in diagnostics)
             {
                 if (CodeFixSupport.FindDocument(project, diagnostic) is not { } document

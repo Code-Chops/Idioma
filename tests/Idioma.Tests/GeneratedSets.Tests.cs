@@ -105,7 +105,8 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
-    /// The texts of an enum: one per member, and one that is no member.
+    /// The texts of an enum: one per member, and one that is no member, which the build warns about (LOC210) and which
+    /// still works.
     /// </summary>
     public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
     {
@@ -113,7 +114,9 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         public virtual string Shipped => "Shipped";
         public virtual string Delivered => "Delivered";
         public virtual string Arrived => "Arrived";
+#pragma warning disable LOC210
         public virtual string Caption => "Order status";
+#pragma warning restore LOC210
     }
 
     public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
@@ -122,7 +125,9 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         public string Shipped => "Verzonden";
         public string Delivered => "Bezorgd";
         public string Arrived => "Aangekomen";
+#pragma warning disable LOC210
         public string Caption => "Bestelstatus";
+#pragma warning restore LOC210
     }
 
     /// <summary>

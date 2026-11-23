@@ -63,7 +63,7 @@ public sealed class TextSetterAnalyzer : DiagnosticAnalyzer
         if (setter.Parent?.Parent is not PropertyDeclarationSyntax declaration
             || context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not { IsStatic: false, ContainingType: { TypeKind: TypeKind.Class } set } property
             || !set.AllInterfaces.Contains(localizationSet, SymbolEqualityComparer.Default)
-            || !ContractTexts.ImplementsText(property, set, localizationSet))
+            || !ContractTexts.ImplementsText(property, set))
         {
             return;
         }

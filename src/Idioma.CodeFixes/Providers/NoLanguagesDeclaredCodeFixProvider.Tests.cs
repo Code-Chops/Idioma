@@ -148,7 +148,7 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await CodeFixTestHelper.FixAsync(new NoLanguagesDeclaredCodeFixProvider(), new LocalizationSetsGenerator(), source);
+        var fixes = await CodeFixTestHelper.FixAsync(new NoLanguagesDeclaredCodeFixProvider(), LocalizationParts.Sets(), source);
 
         // Assert
         fixes.ShouldBeEmpty();

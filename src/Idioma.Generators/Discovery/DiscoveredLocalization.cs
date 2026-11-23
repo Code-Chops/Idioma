@@ -53,7 +53,7 @@ namespace CodeChops.Idioma.Generators;
 /// </para>
 /// <list type="bullet">
 /// <item><see cref="OwnTexts"/> are the texts its own class words, for a set deriving from another. The registrar
-/// records them, and only its discovery reads them (<see cref="DiscoveredTexts.OfRecord"/>).</item>
+/// records them, and only its part of the generator reads them (<see cref="DiscoveredTexts.OfRecord"/>).</item>
 /// <item><see cref="Texts"/> are the texts of a set listing <c>ILocalizationSet</c>, and
 /// <see cref="UnsupportedTexts"/> its methods that have the shape of a text but can't be one. <see cref="Usings"/>
 /// are the using directives its contract repeats, for a text that takes a value of a type another generator
@@ -71,7 +71,7 @@ namespace CodeChops.Idioma.Generators;
 /// written. Most sets have none.</item>
 /// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
 /// which its contract leaves out (<c>LOC208</c>). Most sets have none.</item>
-/// <item>These are read only for the generator that writes the contracts
+/// <item>These are read only for the part of the generator that writes the contracts
 /// (<see cref="DiscoveredTexts.OfContract"/>).</item>
 /// </list>
 /// </remarks>
@@ -361,7 +361,8 @@ internal readonly record struct Discovery(
     EquatableArray<UnextendableSet> UnextendableSets);
 
 /// <summary>
-/// Which texts of a set discovery reads. It reads them again on every edit, so each generator asks for what it uses.
+/// Which texts of a set discovery reads. It reads them again on every edit, so each part of the generator asks for what
+/// it uses.
 /// </summary>
 internal enum DiscoveredTexts
 {
@@ -381,8 +382,9 @@ internal enum DiscoveredTexts
     OfRecord,
 
     /// <summary>
-    /// What both generators read, as discovery reads a class once for the two of them. Each gets its own part of it
-    /// (<see cref="LocalizationDiscovery.ForGenerator"/>), so neither sees what changes only for the other.
+    /// What both parts of the generator read, as discovery reads a class once for the two of them. Each gets its own
+    /// share of it (<see cref="LocalizationDiscovery.ForPart(DiscoveredLocalization, DiscoveredTexts)"/>), so neither sees
+    /// what changes only for the other.
     /// </summary>
     OfBoth,
 }

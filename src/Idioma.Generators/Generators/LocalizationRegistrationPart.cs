@@ -35,9 +35,11 @@ namespace CodeChops.Idioma.Generators;
 /// first. An application is an assembly built as an executable, or an Android app, which the Android SDK builds as a
 /// library and marks with its <c>AndroidApplication</c> property.
 /// </para>
+/// <para>
+/// It's a part of <see cref="LocalizationGenerator"/>, which reads the sets once for this part and the contracts'.
+/// </para>
 /// </remarks>
-[Generator(LanguageNames.CSharp)]
-public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
+public static class LocalizationRegistrationPart
 {
     public const string CannotRegisterDiagnosticId = "LOC400";
     public const string UnmappedLanguageCodeDiagnosticId = "LOC401";
@@ -103,11 +105,14 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         description: "A set is registered under its language code, which is matched against the user's UI culture. A culture name is two to eight letters, optionally followed by parts of letters or digits after a hyphen each, as in en, en-GB, or zh-Hans. A code that isn't one matches no culture, so the registry refuses the set, and the generated registration, which runs when the assembly loads, would throw. Reported in every assembly, with or without [assembly: SupportedLanguages]. Also reported for a set marked [ExcludeFromLocalizationDiscovery], which throws where it's registered by hand.",
         helpLinkUri: PackageNames.HelpLink(InvalidLanguageCodeDiagnosticId));
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    /// <summary>
+    /// Adds this part's steps to the pipeline of <see cref="LocalizationGenerator"/>.
+    /// </summary>
+    internal static void Initialize(IncrementalGeneratorInitializationContext context, LocalizationInputs inputs)
     {
-        var languages = SupportedLanguages.Read(context);
-        var discovery = LocalizationDiscovery.Read(context, DiscoveredTexts.OfRecord);
-        var bindings = LocalizationDiscovery.BindContracts(context, discovery, languages);
+        var languages = inputs.Languages;
+        var discovery = inputs.RecordDiscovery;
+        var bindings = inputs.Bindings;
 
         // Every set, an excluded one included. Discovery finds only classes that implement ILocalizationSet.
         var allSets = discovery.Select(static (discovery, _) => discovery.Sets);
@@ -175,8 +180,8 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
             .Combine(isAndroidApplication)
             .Select(static (data, _) => data.Right ? data.Left with { IsApplication = true } : data.Left);
 
-        // The texts of members marked [Localized]. Read here alone, and not by a generator of their own, because
-        // every attribute of that name is bound again on each edit.
+        // The texts of members marked [Localized]. Read here alone, and not by a part or a generator of their own,
+        // because every attribute of that name is bound again on each edit.
         // An enum that a set holds the texts of gets its GetText from that set's generated class alone.
         var enumsWithSets = allSets.Select(static (sets, _) => new EquatableArray<string>(sets
             .SelectMany(static set => set.Enums)
@@ -185,7 +190,7 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
             .OrderBy(static name => name, StringComparer.Ordinal)
             .ToImmutableArray()));
 
-        var members = LocalizedMembers.ReadModel(context)
+        var members = LocalizedMembers.ReadModel(context, languages)
             .Combine(enumsWithSets)
             .Select(static (data, _) => LocalizedMembers.WithoutExtensionsOf(data.Left, data.Right));
 
@@ -253,7 +258,7 @@ public sealed class LocalizationRegistrationGenerator : IIncrementalGenerator
         });
 
         // No code below C# 14, which LOC102 reports. What is found about the sets is reported all the same.
-        var compiles = LanguageVersionCheck.Read(context);
+        var compiles = inputs.Compiles;
 
         context.RegisterSourceOutput(members.WhereItCompiles(compiles), static (context, model) =>
         {

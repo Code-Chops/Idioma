@@ -117,7 +117,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         // values where its body uses them. So LOC301 is reported at the declaring part alone.
         var declaringPart = method.PartialDefinitionPart;
 
-        foreach (var text in FindImplementedTexts(declaringPart ?? method, set, localizationSet))
+        foreach (var text in ContractTexts.FindImplementedTexts(method, set).OfType<IMethodSymbol>())
         {
             var reported = false;
 
@@ -209,46 +209,5 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
 
         var isShown = shown is not null && parameter.Ordinal < shown.Length && shown[parameter.Ordinal];
         return isShown;
-    }
-
-    /// <summary>
-    /// The texts of the contracts a set's method implements or overrides the implementation of: those it implements
-    /// explicitly, else those the set implements through it.
-    /// </summary>
-    private static IEnumerable<IMethodSymbol> FindImplementedTexts(IMethodSymbol method, INamedTypeSymbol set, INamedTypeSymbol localizationSet)
-    {
-        if (!method.ExplicitInterfaceImplementations.IsEmpty)
-            return method.ExplicitInterfaceImplementations.Where(text => IsContract(text.ContainingType, localizationSet));
-
-        if (method.DeclaredAccessibility is not Accessibility.Public)
-            return [];
-
-        // Asked of the set which method implements the text, and not told by the name: a method of the same name with
-        // other parameters implements nothing.
-        var implementedTexts = set.AllInterfaces
-            .Where(@interface => IsContract(@interface, localizationSet))
-            .SelectMany(contract => contract.GetMembers(method.Name).OfType<IMethodSymbol>())
-            .Where(text => IsOrOverrides(method, set.FindImplementationForInterfaceMember(text)));
-
-        return implementedTexts;
-    }
-
-    /// <summary>
-    /// Whether a method is the one that implements a text, or overrides it. A set deriving from another names the
-    /// method of that set as the implementation, and its own method is what words the text.
-    /// </summary>
-    private static bool IsOrOverrides(IMethodSymbol method, ISymbol? implementation)
-    {
-        for (var current = method; current is not null; current = current.OverriddenMethod)
-            if (SymbolEqualityComparer.Default.Equals(current, implementation))
-                return true;
-
-        return false;
-    }
-
-    private static bool IsContract(INamedTypeSymbol @interface, INamedTypeSymbol localizationSet)
-    {
-        var isContract = !SymbolEqualityComparer.Default.Equals(@interface, localizationSet) && PackageNames.IsContract(@interface);
-        return isContract;
     }
 }

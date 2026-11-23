@@ -8,12 +8,15 @@
   </Folder>
   <Folder Name="/Docs/">
     <File Path="docs/advanced-topics.md" />
+    <File Path="docs/attributes.md" />
     <File Path="docs/blazor.md" />
     <File Path="docs/build-errors.md" />
     <File Path="docs/coming-from-resx.md" />
+    <File Path="docs/enums.md" />
     <File Path="docs/language-codes.md" />
     <File Path="docs/libraries-and-apps.md" />
     <File Path="docs/performance.md" />
+    <File Path="docs/translating.md" />
     <File Path="README.md" />
   </Folder>
   <Folder Name="/Solution Items/">

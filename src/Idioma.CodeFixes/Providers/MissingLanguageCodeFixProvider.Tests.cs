@@ -66,7 +66,7 @@ public sealed class MissingLanguageCodeFixProviderTests
 
     private static void ShouldReportNothing(params string[] sources)
     {
-        var run = GeneratorTestHelper.RunOverFiles(new LocalizationSetsGenerator(), sources).Results.ShouldHaveSingleItem();
+        var run = GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), sources).Results.ShouldHaveSingleItem();
 
         run.Diagnostics.ShouldBeEmpty();
     }
@@ -81,7 +81,7 @@ public sealed class MissingLanguageCodeFixProviderTests
         var source = Source("\"en\", \"nl\", \"de\"", accessibility);
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), source);
 
         // Assert: a file of its own next to the default-language set, as accessible as it, and the language is no longer
         // missing. Its texts are the compiler's to name (CS0535), not the generator's.
@@ -113,7 +113,7 @@ public sealed class MissingLanguageCodeFixProviderTests
         var source = Source("\"en\", \"nl\", \"en-GB\"");
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), source);
 
         // Assert: it keeps the English wording for every text it doesn't override, and needs no using of its own.
         var (_, text) = fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem();
@@ -136,7 +136,7 @@ public sealed class MissingLanguageCodeFixProviderTests
         var source = Source("\"en\", \"nl\", \"de\"");
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), source,
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), source,
             "global using CodeChops.Idioma;");
 
         // Assert
@@ -150,7 +150,7 @@ public sealed class MissingLanguageCodeFixProviderTests
         var source = Source("\"en\", \"nl\", \"de\", \"fr\", \"en-GB\"");
 
         // Act
-        var (sources, added) = await CodeFixTestHelper.FixAllWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [], source);
+        var (sources, added) = await CodeFixTestHelper.FixAllWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), [], source);
 
         // Assert: a file each, and no language is missing after it.
         sources.ShouldHaveSingleItem().ShouldBe(source);
@@ -175,7 +175,7 @@ public sealed class MissingLanguageCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), [ShopLibrary], source);
 
         // Assert: the set the message names, next to the file that lists the languages. It names the contract with a
         // using of its namespace.
@@ -197,7 +197,7 @@ public sealed class MissingLanguageCodeFixProviderTests
             """);
 
         // The library's language is no longer missing. The texts the set lacks are the compiler's to name (CS0535).
-        var run = GeneratorTestHelper.RunOverFiles(new LocalizationSetsGenerator(), [ShopLibrary], source, text).Results.ShouldHaveSingleItem();
+        var run = GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), [ShopLibrary], source, text).Results.ShouldHaveSingleItem();
         run.Diagnostics.ShouldBeEmpty();
     }
 
@@ -212,7 +212,7 @@ public sealed class MissingLanguageCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), [ShopLibrary], source);
 
         // Assert
         fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text.ShouldBe("""
@@ -242,7 +242,7 @@ public sealed class MissingLanguageCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), [ShopLibrary], source);
 
         // Assert: a using at the top of the file reads the library's namespace from the global namespace.
         var text = fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text;
@@ -279,7 +279,7 @@ public sealed class MissingLanguageCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), [ShopLibrary], source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), [ShopLibrary], source);
 
         // Assert
         fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text.ShouldBe("""
@@ -308,7 +308,7 @@ public sealed class MissingLanguageCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), new LocalizationSetsGenerator(), source);
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), source);
 
         // Assert
         fixes.ShouldBeEmpty();

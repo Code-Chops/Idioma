@@ -29,12 +29,12 @@ public sealed class MissingContractCodeFixProviderTests
 
     private static Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixAsync(params string[] sources)
     {
-        return CodeFixTestHelper.FixAsync(new MissingContractCodeFixProvider(), new LocalizationSetsGenerator(), sources);
+        return CodeFixTestHelper.FixAsync(new MissingContractCodeFixProvider(), LocalizationParts.Sets(), sources);
     }
 
     private static void ShouldReportNothing(params string[] sources)
     {
-        var run = GeneratorTestHelper.RunOverFiles(new LocalizationSetsGenerator(), sources).Results.ShouldHaveSingleItem();
+        var run = GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), sources).Results.ShouldHaveSingleItem();
 
         run.Diagnostics.ShouldBeEmpty();
     }

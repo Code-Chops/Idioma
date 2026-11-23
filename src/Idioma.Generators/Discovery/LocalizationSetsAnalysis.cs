@@ -231,6 +231,12 @@ internal sealed record LocalizationSetsAnalysis(
             if (IsServed(referencedSets, contract, ProvidedLocalizationSet.UnreadableLanguage) || IsServed(ownSets, contract, ProvidedLocalizationSet.UnreadableLanguage))
                 continue;
 
+            // ILocalizationSet<TEnum> for the contract of an enum, which every set of it lists (LOC211).
+            var setInterface = references
+                .SelectMany(static reference => reference.SetsOfEnums)
+                .FirstOrDefault(setOfEnum => String.Equals(setOfEnum.Contract, contract, StringComparison.Ordinal))
+                .SetInterface ?? SupportedLanguages.SetInterface;
+
             foreach (var code in declared.Codes)
             {
                 if (IsServed(referencedSets, contract, code) || IsServed(ownSets, contract, code))
@@ -239,14 +245,14 @@ internal sealed record LocalizationSetsAnalysis(
                 // The contract by its full name, each part as code writes it. The set lies wherever the app keeps it, so
                 // the fix chooses its namespace.
                 var setName = SuggestSetName(contract, code);
-                var writtenContract = String.Join(".", contract.Split('.').Select(LocalizationSetsGenerator.EscapeIdentifier));
+                var writtenContract = String.Join(".", contract.Split('.').Select(LocalizationSetsPart.EscapeIdentifier));
 
                 findings.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.LibraryMissingLanguage,
                     declared.Location,
-                    new EquatableArray<string>([contract, code, SupportedLanguages.SuggestSet(setName, contract)]),
+                    new EquatableArray<string>([contract, code, SupportedLanguages.SuggestSet(setName, contract, setInterface)]),
                     SuggestedName: setName,
-                    NewSet: new NewLocalizationSet(Namespace: null, $"public class {setName} : {SupportedLanguages.SetInterface}, {writtenContract}")));
+                    NewSet: new NewLocalizationSet(Namespace: null, $"public class {setName} : {setInterface}, {writtenContract}")));
             }
         }
 
@@ -879,7 +885,7 @@ internal sealed record LocalizationSetsAnalysis(
         // lies in another namespace than the new set.
         var keyword = above.IsRecord ? "record" : "class";
         var baseClass = String.Equals(above.Namespace, @namespace, StringComparison.Ordinal)
-            ? LocalizationSetsGenerator.EscapeIdentifier(above.Name)
+            ? LocalizationSetsPart.EscapeIdentifier(above.Name)
             : above.FullyQualifiedName;
 
         var suggestion = $"'{keyword} {setName} : {above.Name}', which keeps the wording of '{above.Language}' for every text it doesn't override";
@@ -923,7 +929,7 @@ internal sealed record LocalizationSetsAnalysis(
     /// The name a contract's sets share before their language suffix: <c>GridLocalization</c> for
     /// <c>Lib.IGridLocalization</c>.
     /// </summary>
-    private static string GetContractBaseName(string contract)
+    internal static string GetContractBaseName(string contract)
     {
         var name = contract.Substring(contract.LastIndexOf('.') + 1);
 
@@ -1010,7 +1016,17 @@ internal readonly record struct ReferencedLocalization(
     string AssemblyName,
     EquatableArray<string> Languages,
     EquatableArray<ProvidedLocalizationSet> Sets,
-    bool HasInlineTexts);
+    bool HasInlineTexts,
+    EquatableArray<ReferencedSetOfEnum> SetsOfEnums);
+
+/// <summary>
+/// A public contract of a referenced assembly that holds the texts of an enum, with what each of its sets lists in place
+/// of <c>ILocalizationSet</c>, such as <c>ILocalizationSet&lt;Lib.OrderStatus&gt;</c> (<c>LOC211</c>). The set an app
+/// adds for it (<c>LOC600</c>) lists that too.
+/// </summary>
+internal readonly record struct ReferencedSetOfEnum(
+    string Contract,
+    string SetInterface);
 
 /// <summary>
 /// A diagnostic to report: which rule, where, and the arguments of its message. A finding a name resolves carries it,
@@ -1037,7 +1053,7 @@ internal readonly record struct NewLocalizationSet(
     string Declaration);
 
 /// <summary>
-/// The rules <see cref="LocalizationSetsGenerator"/> reports.
+/// The rules <see cref="LocalizationSetsPart"/> reports.
 /// </summary>
 internal enum LocalizationSetsRule
 {

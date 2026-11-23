@@ -5,12 +5,12 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="LocalizationSetsGenerator"/>: a partial <see cref="ILocalizationSet"/> class named after the default
+/// Tests for <see cref="LocalizationSetsPart"/>: a partial <see cref="ILocalizationSet"/> class named after the default
 /// language yields its contract, the partial declaration implementing it, and the static class holding the texts, with
 /// crefs to every translation; every language of <c>[assembly: SupportedLanguages]</c> must have a set, in its own
 /// assembly and in the libraries it references.
 /// </summary>
-public sealed class LocalizationSetsGeneratorTests
+public sealed class LocalizationSetsPartTests
 {
     #region Fixture
     private const string Header = """
@@ -109,7 +109,7 @@ public sealed class LocalizationSetsGeneratorTests
 
     private static GeneratorDriverRunResult Run(string source, params MetadataReference[] references)
     {
-        return GeneratorTestHelper.Run(new LocalizationSetsGenerator(), source, references);
+        return GeneratorTestHelper.Run(LocalizationParts.Sets(), source, references);
     }
 
     private static string RecordedSets(GeneratorDriverRunResult result)
@@ -464,7 +464,7 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void RegionalSetLeavingTextAsItsLanguageWordsIt_ShouldBeLinkedAtSetOfItsLanguage()
     {
-        // Arrange: a British set with wording of its own for one text, as the README writes it.
+        // Arrange: a British set with wording of its own for one text, as docs/language-codes.md writes it.
         const string source = """
             using CodeChops.Idioma;
 
@@ -1232,7 +1232,7 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         var error = errors.ShouldHaveSingleItem();
-        error.Id.ShouldBe(LocalizationSetsGenerator.ReservedTextNameDiagnosticId);
+        error.Id.ShouldBe(LocalizationSetsPart.ReservedTextNameDiagnosticId);
         error.Id.ShouldBe("LOC205");
         error.GetMessage().ShouldContain($"'OptionLocalizationEn' has a text named '{name}'");
         error.GetMessage().ShouldContain($"'OptionLocalization.{name}' isn't generated");
@@ -1358,7 +1358,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.NoLanguagesDeclaredDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId);
         diagnostic.Id.ShouldBe("LOC100");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationEn'");
@@ -1412,7 +1412,7 @@ public sealed class LocalizationSetsGeneratorTests
         var result = Run(source);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.CannotExtendDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
         diagnostic.Id.ShouldBe("LOC200");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalization");
@@ -1647,7 +1647,7 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert: the error names the language and the fix, at the set; the contract still comes, so it stays the only
         // error.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         diagnostic.Id.ShouldBe("LOC201");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalization' has no set for 'nl'");
@@ -1674,7 +1674,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: the name alone gives a set nl-BE, as the assembly declares it.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldContain("Add 'class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization'.");
     }
 
@@ -1697,7 +1697,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'TestApp.IGridLocalization' has no set for 'nl'");
         diagnostic.GetMessage().ShouldContain("Add 'class GridLocalizationNl : ILocalizationSet, IGridLocalization'.");
@@ -1893,7 +1893,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         var recorded = RecordedSets(result);
         recorded.ShouldContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
         recorded.ShouldNotContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
@@ -1917,7 +1917,7 @@ public sealed class LocalizationSetsGeneratorTests
         var otherNamespace = expectedNamespace is "Shop.Admin" ? "Shop.Checkout" : "Shop.Admin";
 
         // Act
-        var result = GeneratorTestHelper.RunOverFiles(new LocalizationSetsGenerator(), TwoShops, dutchSet);
+        var result = GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), TwoShops, dutchSet);
 
         // Assert
         var recorded = RecordedSets(result);
@@ -1931,7 +1931,7 @@ public sealed class LocalizationSetsGeneratorTests
     {
         // Arrange & Act: the global using lives in a file of its own, as an SDK's implicit usings do.
         var result = GeneratorTestHelper.RunOverFiles(
-            new LocalizationSetsGenerator(),
+            LocalizationParts.Sets(),
             TwoShops,
             "global using Shop.Admin;",
             "namespace Other;\npublic sealed class ShopLocalizationNl : CodeChops.Idioma.ILocalizationSet, IShopLocalization;");
@@ -1989,7 +1989,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: the set to add derives from the English one, so that it holds only the texts that differ.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("'ShopLocalization' has no set for 'en-GB', which [assembly: SupportedLanguages] requires. Add 'class ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
     }
@@ -2054,7 +2054,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var message = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("has no set for 'en-GB'");
         message.ShouldEndWith(advice);
     }
@@ -2084,7 +2084,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var message = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldEndWith("Add 'class ShopLocalizationZhHansCn : ShopLocalizationZhHans', which keeps the wording of 'zh-Hans' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
     }
 
@@ -2116,7 +2116,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var message = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("'TestApp.IGridLocalization' has no set for 'en-GB'");
         message.ShouldEndWith("Add 'class GridLocalizationEnGb : GridLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
     }
@@ -2140,7 +2140,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnlistedLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
         diagnostic.Id.ShouldBe("LOC202");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationDe' is a set for 'de'");
@@ -2258,7 +2258,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: list the code, or implement it.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnlistedLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationNlBe' is a set for 'be'");
         diagnostic.GetMessage().ShouldContain("If it's meant for 'nl-BE', list 'nl-BE' in the attribute");
         diagnostic.GetMessage().ShouldContain("implement 'string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";'");
@@ -2294,7 +2294,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnlistedLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldBe($"'{name}' is a set for 'nl', which [assembly: SupportedLanguages] doesn't list. Add the language to the attribute, or remove the set.");
     }
 
@@ -2513,7 +2513,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: only the contract without a British set is reported, with the set that derives from its English one.
-        var message = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("'GridLocalization' has no set for 'en-GB'");
         message.ShouldEndWith("Add 'class GridLocalizationEnGb : GridLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
     }
@@ -2575,7 +2575,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        SingleDiagnostic(result, LocalizationSetsGenerator.DerivedFromOtherLanguageDiagnosticId);
+        SingleDiagnostic(result, LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId);
     }
 
     [Test]
@@ -2593,7 +2593,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.DerivedFromOtherLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldContain("'MyGridTextsNl' is a set for 'nl' but derives from 'GridLocalizationEn'");
         diagnostic.GetMessage().ShouldContain("To reword 'GridLocalizationEn', give 'MyGridTextsNl' the language");
     }
@@ -2664,7 +2664,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: this already says what to do about Dutch, so no LOC201 on top.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.DerivedFromOtherLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId);
         diagnostic.Id.ShouldBe("LOC203");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationNl' is a set for 'nl' but derives from 'ShopLocalizationEn'");
@@ -2686,7 +2686,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary);
 
         // Assert
-        SingleDiagnostic(result, LocalizationSetsGenerator.DerivedFromOtherLanguageDiagnosticId);
+        SingleDiagnostic(result, LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId);
     }
 
     [Test]
@@ -2733,9 +2733,9 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: the other languages keep compiling against the contract meanwhile.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingContractDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingContractDiagnosticId);
         diagnostic.GetMessage().ShouldBe("'ShopLocalizationEn' is a set for 'en' but doesn't implement 'IShopLocalization', so no text reads it. Add 'IShopLocalization', the contract generated from 'ShopLocalizationEn', next to ILocalizationSet.");
-        diagnostic.Properties[LocalizationSetsGenerator.SuggestedNameProperty].ShouldBe("IShopLocalization");
+        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe("IShopLocalization");
         ContractText(result).ShouldContain("public interface IShopLocalization");
         ContractText(result).ShouldNotContain("partial class ShopLocalizationEn");
     }
@@ -2759,7 +2759,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: it isn't the Dutch set, so Dutch is missing, and the message says why the class doesn't count.
-        var message = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId).GetMessage();
+        var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("Add 'class ShopLocalizationNl : ILocalizationSet, IShopLocalization'.");
         message.ShouldEndWith("A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
     }
@@ -2813,7 +2813,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary);
 
         // Assert: it isn't the German set, so the library lacks German.
-        SingleDiagnostic(result, LocalizationSetsGenerator.LibraryMissingLanguageDiagnosticId).GetMessage().ShouldContain("Add 'class GridLocalizationDe : ILocalizationSet, GridLibrary.IGridLocalization'.");
+        SingleDiagnostic(result, LocalizationSetsPart.LibraryMissingLanguageDiagnosticId).GetMessage().ShouldContain("Add 'class GridLocalizationDe : ILocalizationSet, GridLibrary.IGridLocalization'.");
     }
 
     [Test]
@@ -2982,7 +2982,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary);
 
         // Assert: it says why IAppLocalization isn't there, where the compiler only says it isn't found (CS0246).
-        var message = SingleDiagnostic(result, LocalizationSetsGenerator.CannotExtendDiagnosticId).GetMessage();
+        var message = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId).GetMessage();
         message.ShouldStartWith("'AppLocalizationEn' is the default-language set of a contract, but it implements 'GridLibrary.IGridLocalization' too, and a set starts a contract only when it implements no other.");
         message.ShouldEndWith("Write the texts of 'IAppLocalization' in a set of their own, and implement 'GridLibrary.IGridLocalization' in another class.");
     }
@@ -3005,7 +3005,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary);
 
         // Assert
-        DiagnosticIds(result).Contains(LocalizationSetsGenerator.CannotExtendDiagnosticId, StringComparer.Ordinal).ShouldBeFalse();
+        DiagnosticIds(result).Contains(LocalizationSetsPart.CannotExtendDiagnosticId, StringComparer.Ordinal).ShouldBeFalse();
     }
 
     [Test]
@@ -3027,7 +3027,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingContractDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingContractDiagnosticId);
         diagnostic.Id.ShouldBe("LOC204");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("Add 'IShopLocalization', the contract generated from 'ShopLocalizationEn', next to ILocalizationSet.");
@@ -3046,12 +3046,51 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.LibraryMissingLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryMissingLanguageDiagnosticId);
         diagnostic.Id.ShouldBe("LOC600");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("No set serves 'GridLibrary.IGridLocalization' in 'de'");
         diagnostic.GetMessage().ShouldContain("'class GridLocalizationDe : ILocalizationSet, GridLibrary.IGridLocalization'");
         diagnostic.Location.GetLineSpan().StartLinePosition.Line.ShouldBe(2);
+    }
+
+    [Test]
+    [Arguments("public", "'class OrderStatusLocalizationDe : ILocalizationSet<StatusLibrary.OrderStatus>, StatusLibrary.IOrderStatusLocalization'")]
+    [Arguments("internal", "'class OrderStatusLocalizationDe : ILocalizationSet, StatusLibrary.IOrderStatusLocalization'")] // The app can't name the enum
+    public void LibraryEnumMissingLanguage_ShouldSuggestSetOfEnum(string accessibility, string suggestion)
+    {
+        // Arrange
+        var library = GeneratorTestHelper.CompileLibraryWithGenerators($"StatusLibrary{accessibility}", $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace StatusLibrary;
+
+            {{accessibility}} enum OrderStatus { Pending }
+
+            public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+            }
+
+            public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+            }
+            """);
+
+        // Act: every set of the contract of an enum lists ILocalizationSet<TEnum> (LOC211).
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace TestApp;
+            """, library);
+
+        // Assert
+        SingleDiagnostic(result, LocalizationSetsPart.LibraryMissingLanguageDiagnosticId).GetMessage().ShouldContain(suggestion);
     }
 
     [Test]
@@ -3189,7 +3228,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, InlineLibrary);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.LibraryCannotBeTranslatedDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId);
         diagnostic.Id.ShouldBe("LOC601");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe("'InlineLibrary' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.");
@@ -3212,7 +3251,7 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         result.Results.ShouldHaveSingleItem().Diagnostics
-            .Where(static diagnostic => diagnostic.Id is LocalizationSetsGenerator.LibraryCannotBeTranslatedDiagnosticId)
+            .Where(static diagnostic => diagnostic.Id is LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId)
             .ShouldAllBe(diagnostic => diagnostic.GetMessage().EndsWith($"will see them in '{shown}'.", StringComparison.Ordinal));
     }
 
@@ -3245,7 +3284,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, library);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.LibraryCannotBeTranslatedDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId);
         diagnostic.Id.ShouldBe("LOC601");
         diagnostic.GetMessage().ShouldContain("'MemberLibrary' has inline texts without 'de'");
     }
@@ -3740,10 +3779,10 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert: the contract comes from the first of them by name, and the other is reported where it is declared.
         // The generator neither stops at two files of one name nor writes the contract twice.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.CannotExtendDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
         diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationEn' is the default-language set of a contract, but 'ShopLocalizationEN' is the default-language set of 'IShopLocalization' already, and a contract has only one. The generator can't use it, so it writes no texts for it.");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopLocalizationEn");
-        diagnostic.Properties.ShouldNotContainKey(LocalizationSetsGenerator.SuggestedNameProperty);
+        diagnostic.Properties.ShouldNotContainKey(LocalizationSetsPart.SuggestedNameProperty);
         DiagnosticIds(result).ShouldBe(["LOC200"]);
         ContractText(result).ShouldContain("GetDefaultSet<ShopLocalizationEN>)");
         errors.Select(static error => error.Id).ShouldBe(["LOC200"]);
@@ -3814,8 +3853,8 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.CannotExtendDiagnosticId);
-        diagnostic.Properties[LocalizationSetsGenerator.SuggestedNameProperty].ShouldBe(expectedName);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
+        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe(expectedName);
     }
 
     [Test]
@@ -3840,9 +3879,9 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: the error names the suffix, and carries the name for the fix.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.CannotExtendDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
         diagnostic.GetMessage().ShouldContain("its name doesn't end in En, the suffix of the default language");
-        diagnostic.Properties[LocalizationSetsGenerator.SuggestedNameProperty].ShouldBe(expectedName);
+        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe(expectedName);
     }
 
     [Test]
@@ -3865,7 +3904,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        DiagnosticIds(result).Contains(LocalizationSetsGenerator.CannotExtendDiagnosticId, StringComparer.Ordinal).ShouldBeFalse();
+        DiagnosticIds(result).Contains(LocalizationSetsPart.CannotExtendDiagnosticId, StringComparer.Ordinal).ShouldBeFalse();
     }
 
     [Test]
@@ -4064,7 +4103,7 @@ public sealed class LocalizationSetsGeneratorTests
             """, GridLibrary, rewording);
 
         // Assert: German is still missing, as it is without the rewording library.
-        SingleDiagnostic(result, LocalizationSetsGenerator.LibraryMissingLanguageDiagnosticId).GetMessage().ShouldContain("No set serves 'GridLibrary.IGridLocalization' in 'de'");
+        SingleDiagnostic(result, LocalizationSetsPart.LibraryMissingLanguageDiagnosticId).GetMessage().ShouldContain("No set serves 'GridLibrary.IGridLocalization' in 'de'");
     }
 
     [Test]
@@ -4187,7 +4226,7 @@ public sealed class LocalizationSetsGeneratorTests
     public void ReparsedSet_ShouldStillEmitAcrossEditWithoutThrowing()
     {
         // Arrange & Act: the same driver runs over a re-parsed copy of the set (the IDE edit scenario).
-        var result = GeneratorTestHelper.RunAcrossEdit(new LocalizationSetsGenerator(), ShopSets);
+        var result = GeneratorTestHelper.RunAcrossEdit(LocalizationParts.Sets(), ShopSets);
 
         // Assert
         ContractText(result).ShouldContain("public static partial class ShopLocalization");
@@ -4197,7 +4236,7 @@ public sealed class LocalizationSetsGeneratorTests
     public void UnrelatedEdit_ShouldLeaveGeneratorFullyCached()
     {
         // Arrange & Act: editing a file that declares no set must not re-run the output steps.
-        var reasons = GeneratorTestHelper.GetOutputReasonsAfterUnrelatedEdit(new LocalizationSetsGenerator(), ShopSets);
+        var reasons = GeneratorTestHelper.GetOutputReasonsAfterUnrelatedEdit(LocalizationParts.Sets(), ShopSets);
 
         // Assert
         reasons.ShouldNotBeEmpty();
@@ -4209,7 +4248,7 @@ public sealed class LocalizationSetsGeneratorTests
     {
         // Arrange & Act: discovery reads every set again on every edit, in any file, so it reads what this generator
         // writes from and leaves the rest to the generator that uses it.
-        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(new LocalizationSetsGenerator(), LocalizationDiscovery.TrackingName, """
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Sets(), LocalizationDiscovery.ContractTrackingName, """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en", "en-GB")]
@@ -4244,7 +4283,7 @@ public sealed class LocalizationSetsGeneratorTests
     {
         // Arrange & Act: a contract without its Dutch set, reported at the default-language set, and an edit in that
         // file which moves nothing.
-        var (run, edited) = GeneratorTestHelper.RunAcrossEditInSameFile(new LocalizationSetsGenerator(), $$"""
+        var (run, edited) = GeneratorTestHelper.RunAcrossEditInSameFile(LocalizationParts.Sets(), $$"""
             {{Header}}
 
             public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
@@ -4561,7 +4600,7 @@ public sealed class LocalizationSetsGeneratorTests
         var result = Run(source);
 
         // Assert: at the method, which is what to change. The other texts are generated all the same.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnsupportedTextDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnsupportedTextDiagnosticId);
         diagnostic.Id.ShouldBe("LOC300");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationEn.Greeting' is a public method that returns a string");
@@ -4600,7 +4639,7 @@ public sealed class LocalizationSetsGeneratorTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
 
         // Assert: at the method, and the other texts are generated all the same.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnsupportedTextDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnsupportedTextDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("'ShopLocalizationEn.Greeting' is a public method that returns a string, which makes it a text with parameters, but it takes no parameters, so write it as a property. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Greeting");
@@ -5570,7 +5609,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: at the method. The contract still asks for the member's text as a property.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.UnsupportedTextDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnsupportedTextDiagnosticId);
         diagnostic.GetMessage().ShouldContain("'OrderStatusLocalizationEn.Shipped' is a public method that returns a string");
         diagnostic.GetMessage().ShouldContain("it has the name of 'OrderStatus.Shipped', and the text of an enum member is a property, because it takes no values");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Shipped");
@@ -5713,9 +5752,9 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: the set to add lists what the default-language set lists, in the message and in what the IDE writes.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingLanguageDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         diagnostic.GetMessage().ShouldContain($"Add 'class OrderStatusLocalizationNl : {expectedInterface}, IOrderStatusLocalization'.");
-        diagnostic.Properties[LocalizationSetsGenerator.SuggestedDeclarationProperty].ShouldBe($"public class OrderStatusLocalizationNl : {expectedInterface}, IOrderStatusLocalization");
+        diagnostic.Properties[LocalizationSetsPart.SuggestedDeclarationProperty].ShouldBe($"public class OrderStatusLocalizationNl : {expectedInterface}, IOrderStatusLocalization");
     }
 
     [Test]
@@ -5739,9 +5778,9 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert: a set like any other, which the generic interface is no contract of.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsGenerator.MissingContractDiagnosticId);
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingContractDiagnosticId);
         diagnostic.GetMessage().ShouldContain("'OrderStatusLocalizationNl' is a set for 'nl' but doesn't implement 'IOrderStatusLocalization'");
-        diagnostic.Properties[LocalizationSetsGenerator.SuggestedNameProperty].ShouldBe("IOrderStatusLocalization");
+        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe("IOrderStatusLocalization");
     }
 
     [Test]
@@ -5985,7 +6024,7 @@ public sealed class LocalizationSetsGeneratorTests
             """);
 
         // Assert
-        DiagnosticIds(result).ShouldBe([LocalizationSetsGenerator.CannotExtendDiagnosticId]);
+        DiagnosticIds(result).ShouldBe([LocalizationSetsPart.CannotExtendDiagnosticId]);
         ContractText(result).ShouldNotContain(" GetTextByKey(string key");
     }
     #endregion

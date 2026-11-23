@@ -2,7 +2,7 @@
 
 A language code, such as `en` or `en-GB`, is written in three ways: as a culture name in `[assembly: SupportedLanguages]`, in PascalCase at the end of a set's name, and in camelCase as a parameter name of an inline text or an attribute. This page covers the names, and the two ways to add a regional variant.
 
-Other subjects have a page of their own: [libraries that use Idioma](libraries-and-apps.md), [Blazor](blazor.md), [what the build rejects](build-errors.md), [coming from resx](coming-from-resx.md), [performance](performance.md), and [advanced topics](advanced-topics.md).
+Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
 ## Codes in names
 
@@ -18,9 +18,9 @@ When a longer code isn't listed, only the last two letters count. A name alone c
 
 ## Regional variants
 
-You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. There are two ways to add one:
+You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. It derives from the English set and overrides those texts. So make them `virtual` in the English set, as in `public virtual string Cart => "Cart";`. There are two ways to add a British set:
 
-- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`, and the name is enough. The build then treats British English as a language of its own. Every contract needs a British set (`LOC201`), which can derive from the English one and add nothing, and every inline text and attribute takes a British wording (`enGb:`).
+- List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`, and the name is enough:
 
   ```csharp
   public class ShopLocalizationEnGb : ShopLocalizationEn
@@ -28,6 +28,11 @@ You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and
       public override string Cart => "Basket";
   }
   ```
+
+  British users then see "Basket" and the rest of your English. The build treats British English as a language of its own, so no British wording is forgotten:
+
+  - Every contract needs a British set (`LOC201`). One with nothing British about it is a single line: `public class GridLocalizationEnGb : GridLocalizationEn;`.
+  - Every inline text and every attribute takes a British wording, as in `LocalizableText.Inline(en: "Color", nl: "Kleur", enGb: "Colour")`.
 
 - Leave it out, `("en", "nl")`, and implement `LocalizationLanguageCode` in the set. Your other sets, your inline texts and your attributes then show their English in Britain.
 

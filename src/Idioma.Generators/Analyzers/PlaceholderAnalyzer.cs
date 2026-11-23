@@ -167,7 +167,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
             || declaration is MethodDeclarationSyntax { ExpressionBody: null, Body: null }
             || context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not { IsStatic: false, ContainingType: { TypeKind: TypeKind.Class } set } member
             || !set.AllInterfaces.Contains(localizationSet, SymbolEqualityComparer.Default)
-            || !ContractTexts.ImplementsText(member, set, localizationSet))
+            || !ContractTexts.ImplementsText(member, set))
         {
             return;
         }

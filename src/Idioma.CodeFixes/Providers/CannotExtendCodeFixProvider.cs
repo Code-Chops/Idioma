@@ -20,7 +20,7 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class CannotExtendCodeFixProvider : CodeFixProvider
 {
-    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsGenerator.CannotExtendDiagnosticId];
+    public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.CannotExtendDiagnosticId];
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -42,7 +42,7 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
     /// </summary>
     private static CodeAction? CreateFix(Document document, TypeDeclarationSyntax declaration, Diagnostic diagnostic)
     {
-        if (diagnostic.Properties.TryGetValue(LocalizationSetsGenerator.SuggestedNameProperty, out var suggestedName) && suggestedName is not null)
+        if (diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var suggestedName) && suggestedName is not null)
         {
             return CodeAction.Create(
                 title: $"Rename to '{suggestedName}'",

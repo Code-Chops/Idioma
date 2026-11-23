@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
 namespace CodeChops.Idioma.Generators;
@@ -16,19 +15,26 @@ namespace CodeChops.Idioma.Generators;
 /// does, and so gets no contract.
 /// </summary>
 /// <remarks>
-/// A contract written by <see cref="LocalizationSetsGenerator"/> does not exist yet when the generators run (they all see
-/// the same input compilation), so a same-assembly set implementing it (<c>ShopLocalizationNl : ILocalizationSet,
-/// IShopLocalization</c>) binds that base type to an error type. Such a set is kept with its unresolved base types, and
-/// the generators tie it to a contract the same compilation generates when one of them names it
+/// A contract written by <see cref="LocalizationSetsPart"/> does not exist yet when the generator runs (it sees the
+/// compilation before its own output is added), so a same-assembly set implementing it (<c>ShopLocalizationNl :
+/// ILocalizationSet, IShopLocalization</c>) binds that base type to an error type. Such a set is kept with its unresolved
+/// base types, and the generator ties it to a contract the same compilation generates when one of them names it
 /// (<see cref="FindGeneratedContract"/>). Where two generated contracts share a name, the compiler binds it
 /// (<see cref="BindContracts"/>).
 /// </remarks>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
-    /// The name of the pipeline step that holds what discovery found (<see cref="Discovery"/>), for a test to read it.
+    /// The name of the pipeline step that holds what discovery found for the contracts (<see cref="Discovery"/>,
+    /// <see cref="DiscoveredTexts.OfContract"/>), for a test to read it.
     /// </summary>
-    internal const string TrackingName = "Discovery";
+    internal const string ContractTrackingName = "Discovery.OfContract";
+
+    /// <summary>
+    /// The name of the pipeline step that holds what discovery found for the registrar (<see cref="Discovery"/>,
+    /// <see cref="DiscoveredTexts.OfRecord"/>), for a test to read it.
+    /// </summary>
+    internal const string RecordTrackingName = "Discovery.OfRecord";
 
     /// <summary>
     /// The member of <c>ILocalizationSet</c> that gives a set its language, which is no text.
@@ -45,15 +51,6 @@ internal static partial class LocalizationDiscovery
     // Held by the semantic model, which is made anew for every file of every compilation: nothing outlives the
     // compilation it was read from, and nothing is shared between two of them.
     private static readonly ConditionalWeakTable<SemanticModel, Dictionary<(SyntaxNode Scope, string Name), bool>> BaseTypesLeadingToSet = new();
-
-    /// <summary>
-    /// Per file of a compilation, what discovery found in each class, for both generators.
-    /// </summary>
-    // Both generators read every class with a base list on every edit, and the driver gives them the same semantic model
-    // of each file. So the first to come to a class reads what both use, and the second finds it here. Without this,
-    // every set was read twice on every edit, which cost a project with hundreds of sets more than all else discovery
-    // does. Held by the semantic model, as the base types above are: nothing outlives the compilation it was read from.
-    private static readonly ConditionalWeakTable<SemanticModel, ConcurrentDictionary<SyntaxNode, DiscoveryResult?>> ReadOnce = new();
 
     private static SymbolDisplayFormat FullyQualifiedFormat { get; } = new(
         globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
@@ -72,24 +69,35 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// What one pass over the classes of the current compilation finds: the candidate sets, the nested or file-local
     /// sets that reword another assembly's texts, and the partial classes listing <c>ILocalizationSet</c> that no
-    /// contract can come from because of their shape.
+    /// contract can come from because of their shape. Once as the part of the generator that writes the contracts reads
+    /// it (<see cref="DiscoveredTexts.OfContract"/>), and once as the part that writes the registrar reads it
+    /// (<see cref="DiscoveredTexts.OfRecord"/>).
     /// </summary>
-    // One syntax provider for all three: a provider re-runs its transform for every class with a base list on every
-    // edit, and each pass costs its own walk over them. The two generators calling this each build one; the binding the
-    // first does is reused by the second. Nearly every such class is no set, so the transform first asks what its base
-    // list names (MayBeSet), which costs one binding per name and file, and resolves the class only when that leads on.
-    // A set is then read with every text it has, on every edit, so each generator reads only the texts it uses
-    // (DiscoveredTexts).
-    public static IncrementalValueProvider<Discovery> Read(IncrementalGeneratorInitializationContext context, DiscoveredTexts texts)
+    // One syntax provider for all of it: a provider re-runs its transform for every class with a base list on every
+    // edit, and each pass costs its own walk over them. Nearly every such class is no set, so the transform first asks
+    // what its base list names (MayBeSet), which costs one binding per name and file, and resolves the class only when
+    // that leads on. A set is then read once with every text either part uses, and each part takes its own share of it,
+    // class by class (ForPart). So an edit that changes only what one part uses leaves the other's pipeline as it was.
+    public static (IncrementalValueProvider<Discovery> OfContract, IncrementalValueProvider<Discovery> OfRecord) Read(
+        IncrementalGeneratorInitializationContext context)
     {
-        var valueProvider = context.SyntaxProvider
-            .CreateSyntaxProvider<DiscoveryResult?>(
-                predicate: IsCandidate,
-                transform: texts is DiscoveredTexts.OfContract
-                    ? static (context, cancellationToken) => Discover(context, DiscoveredTexts.OfContract, cancellationToken)
-                    : static (context, cancellationToken) => Discover(context, DiscoveredTexts.OfRecord, cancellationToken))
+        var results = context.SyntaxProvider
+            .CreateSyntaxProvider(predicate: IsCandidate, transform: ReadClass)
             .Where(static result => result is not null)
-            .Select(static (result, _) => result!)
+            .Select(static (result, _) => result!);
+
+        var ofContract = Collect(results.Select(static (result, _) => ForPart(result, DiscoveredTexts.OfContract)), ContractTrackingName);
+        var ofRecord = Collect(results.Select(static (result, _) => ForPart(result, DiscoveredTexts.OfRecord)), RecordTrackingName);
+
+        return (ofContract, ofRecord);
+    }
+
+    /// <summary>
+    /// What discovery found in every class, as one part of the generator reads it.
+    /// </summary>
+    private static IncrementalValueProvider<Discovery> Collect(IncrementalValuesProvider<DiscoveryResult> results, string trackingName)
+    {
+        var valueProvider = results
             .Collect()
             .Select(static (results, _) => new Discovery(
                 new EquatableArray<DiscoveredLocalization>([.. results.Where(static result => result.Set is not null).Select(static result => result.Set!.Value)]),
@@ -107,7 +115,7 @@ internal static partial class LocalizationDiscovery
                         .Distinct()
                         .OrderBy(static set => set.MetadataName, StringComparer.Ordinal),
                 ])))
-            .WithTrackingName(TrackingName);
+            .WithTrackingName(trackingName);
 
         return valueProvider;
     }
@@ -375,31 +383,23 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Resolves a candidate to what discovery finds in it for one generator, or <see langword="null"/> when it holds
-    /// nothing of interest. The class is read once for both generators (<see cref="ReadClass"/>).
+    /// What one part of the generator reads of what discovery found in a class
+    /// (<see cref="ForPart(DiscoveredLocalization, DiscoveredTexts)"/>).
     /// </summary>
-    private static DiscoveryResult? Discover(GeneratorSyntaxContext context, DiscoveredTexts texts, CancellationToken cancellationToken)
+    private static DiscoveryResult ForPart(DiscoveryResult result, DiscoveredTexts texts)
     {
-        var read = ReadOnce.GetOrCreateValue(context.SemanticModel);
-
-        if (!read.TryGetValue(context.Node, out var result))
-        {
-            result = ReadClass(context, cancellationToken);
-            read.TryAdd(context.Node, result);
-        }
-
-        var forGenerator = result?.Set is { } set ? result with { Set = ForGenerator(set, texts) } : result;
-        return forGenerator;
+        var forPart = result.Set is { } set ? result with { Set = ForPart(set, texts) } : result;
+        return forPart;
     }
 
     /// <summary>
-    /// The part of a set that one generator reads, as <see cref="DiscoverSet"/> gives it for <paramref name="texts"/>
-    /// alone: the texts a contract is written from, or the names the registrar records. So an edit that changes only
-    /// the other part leaves the generator's pipeline as it was.
+    /// The share of a set that one part of the generator reads, as <see cref="DiscoverSet"/> gives it for
+    /// <paramref name="texts"/> alone: the texts a contract is written from, or the names the registrar records. So an
+    /// edit that changes only the other share leaves that part's pipeline as it was.
     /// </summary>
-    internal static DiscoveredLocalization ForGenerator(DiscoveredLocalization set, DiscoveredTexts texts)
+    internal static DiscoveredLocalization ForPart(DiscoveredLocalization set, DiscoveredTexts texts)
     {
-        var forGenerator = texts switch
+        var forPart = texts switch
         {
             DiscoveredTexts.OfContract => set with { OwnTexts = new EquatableArray<string>(ImmutableArray<string>.Empty) },
             DiscoveredTexts.OfRecord => set with
@@ -410,8 +410,8 @@ internal static partial class LocalizationDiscovery
                 Texts = new EquatableArray<LocalizationMember>(ImmutableArray<LocalizationMember>.Empty),
                 UnsupportedTexts = new EquatableArray<UnsupportedText>(ImmutableArray<UnsupportedText>.Empty),
                 Usings = default,
-                // Only which enums it holds the texts of, which the registrar's generator asks so that an enum doesn't
-                // get a second GetText from its [Localized] members. Not their members, which change with every edit.
+                // Only which enums it holds the texts of, which the registrar's part asks so that an enum doesn't get
+                // a second GetText from its [Localized] members. Not their members, which change with every edit.
                 Enums = new EquatableArray<LocalizedEnum>([.. set.Enums.Select(static @enum => @enum with { Members = new EquatableArray<LocalizedEnumMember>(ImmutableArray<LocalizedEnumMember>.Empty) })]),
                 TypeNamedLikeTexts = null,
                 TypeNamedLikeContract = null,
@@ -421,12 +421,12 @@ internal static partial class LocalizationDiscovery
             _ => set,
         };
 
-        return forGenerator;
+        return forPart;
     }
 
     /// <summary>
-    /// Resolves a candidate to what discovery finds in it for both generators, or <see langword="null"/> when it holds
-    /// nothing of interest.
+    /// Resolves a candidate to what discovery finds in it for both parts of the generator, or <see langword="null"/>
+    /// when it holds nothing of interest.
     /// </summary>
     private static DiscoveryResult? ReadClass(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
