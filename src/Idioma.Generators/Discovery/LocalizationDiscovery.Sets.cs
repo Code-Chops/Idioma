@@ -135,12 +135,7 @@ internal static partial class LocalizationDiscovery
         var depth = GetDepth(type, ancestors);
         var readsContract = discoveredTexts is DiscoveredTexts.OfContract or DiscoveredTexts.OfBoth;
         var readsRecord = discoveredTexts is DiscoveredTexts.OfRecord or DiscoveredTexts.OfBoth;
-        var unsupportedTexts = ImmutableArray<UnsupportedText>.Empty;
-        var usings = default(RepeatedUsings);
         var enums = listsLocalizationSet && readsContract ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
-        var texts = listsLocalizationSet && readsContract
-            ? GetTextMembers(type, enums, reader, cancellationToken, out unsupportedTexts, out usings)
-            : ImmutableArray<LocalizationMember>.Empty;
 
         var set = new DiscoveredLocalization(
             MetadataName: type.ToDisplayString(),
@@ -187,16 +182,35 @@ internal static partial class LocalizationDiscovery
             DeclaredTexts: new EquatableArray<string>(readsContract ? GetDeclaredTexts(type) : ImmutableArray<string>.Empty),
             InheritedTexts: new EquatableArray<InheritedText>(readsContract ? GetInheritedTexts(type) : ImmutableArray<InheritedText>.Empty),
             Wordings: new EquatableArray<TextWording>(readsContract ? GetWordings(type, reader, cancellationToken) : ImmutableArray<TextWording>.Empty),
-            Texts: new EquatableArray<LocalizationMember>(texts),
-            UnsupportedTexts: new EquatableArray<UnsupportedText>(unsupportedTexts),
-            Usings: usings,
+            Texts: new EquatableArray<LocalizationMember>(ImmutableArray<LocalizationMember>.Empty),
+            UnsupportedTexts: new EquatableArray<UnsupportedText>(ImmutableArray<UnsupportedText>.Empty),
+            Usings: default,
             Enums: new EquatableArray<LocalizedEnum>(enums),
-            TypeNamedLikeTexts: readsContract && language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
+            TypeNamedLikeTexts: null,
             TypeNamedLikeContract: readsContract && language is not null ? FindTypeNamedLikeContract(type, language) : null,
-            ReservedTexts: new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
-            UndeclaredTexts: new EquatableArray<UndeclaredText>(listsLocalizationSet && readsContract ? GetUndeclaredTexts(type) : ImmutableArray<UndeclaredText>.Empty));
+            ReservedTexts: new EquatableArray<ReservedText>(ImmutableArray<ReservedText>.Empty),
+            UndeclaredTexts: new EquatableArray<UndeclaredText>(ImmutableArray<UndeclaredText>.Empty));
 
-        return set;
+        // The texts a contract is written from, which only a set a contract may come from has: one in the default
+        // language, or in any language while the build can't read the default one, as the analysis takes them
+        // (ReadsAsDefaultSet). Discovery reads every set again on every edit, and the texts are what it reads longest,
+        // so a set of another language is left without them.
+        if (!readsContract || !listsLocalizationSet || !ReadsAsDefaultSet(set, SupportedLanguages.ReadDefaultLanguage(type.ContainingAssembly)))
+            return set;
+
+        var texts = GetTextMembers(type, enums, reader, cancellationToken, out var unsupportedTexts, out var usings);
+
+        var withTexts = set with
+        {
+            Texts = new EquatableArray<LocalizationMember>(texts),
+            UnsupportedTexts = new EquatableArray<UnsupportedText>(unsupportedTexts),
+            Usings = usings,
+            TypeNamedLikeTexts = language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
+            ReservedTexts = new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
+            UndeclaredTexts = new EquatableArray<UndeclaredText>(GetUndeclaredTexts(type)),
+        };
+
+        return withTexts;
     }
 
     /// <summary>

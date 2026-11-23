@@ -33,6 +33,37 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
+    /// The default language an assembly declares, as <see cref="DeclaredLanguages.DefaultLanguage"/> reads it: the first
+    /// language of its attribute, or <see langword="null"/> when that is no culture name, or when the assembly declares
+    /// none.
+    /// </summary>
+    // Asked by discovery of every set on every edit, so it builds no string to tell the attribute by. Two attributes,
+    // which don't compile, give none, as the generators may read either.
+    public static string? ReadDefaultLanguage(IAssemblySymbol assembly)
+    {
+        AttributeData? declared = null;
+
+        foreach (var attribute in assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass is not { Name: "SupportedLanguagesAttribute", ContainingType: null, ContainingNamespace: { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } } })
+                continue;
+
+            if (declared is not null)
+                return null;
+
+            declared = attribute;
+        }
+
+        if (declared is null)
+            return null;
+
+        foreach (var (code, isDefault) in ReadArguments(declared))
+            return isDefault && code is not null && IsCultureName(code) ? code : null;
+
+        return null;
+    }
+
+    /// <summary>
     /// Whether a set for <paramref name="provided"/> serves <paramref name="requested"/>: the same language, or a culture
     /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>, <c>zh-Hant</c> serves <c>zh-TW</c>, and
     /// <c>zh-TW</c> serves <c>zh-Hant-TW</c>).

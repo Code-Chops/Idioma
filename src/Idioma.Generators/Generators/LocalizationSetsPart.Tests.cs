@@ -4246,8 +4246,8 @@ public sealed class LocalizationSetsPartTests
     [Test]
     public void Discovery_ShouldReadTheTextsOfAContractAndNotWhatTheRegistrarRecords()
     {
-        // Arrange & Act: discovery reads every set again on every edit, in any file, so it reads what this generator
-        // writes from and leaves the rest to the generator that uses it.
+        // Arrange & Act: discovery reads every set again on every edit, in any file, so it reads what this part writes
+        // from and leaves the rest to the part that uses it.
         var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Sets(), LocalizationDiscovery.ContractTrackingName, """
             using CodeChops.Idioma;
 
@@ -4276,6 +4276,64 @@ public sealed class LocalizationSetsPartTests
         british.DeclaredTexts.ShouldBe(["Cart"]);
         british.InheritedTexts.Select(static text => text.Name).ShouldBe(["Greeting"]);
         british.OwnTexts.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void Discovery_ShouldReadTheTextsOfTheDefaultLanguageSetAlone()
+    {
+        // Arrange & Act: the contract is written from the default-language set, and discovery reads every set again on
+        // every edit. A set of another language is read for the wording the links of the contract show.
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Sets(), LocalizationDiscovery.ContractTrackingName, """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Cart => "Cart";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Cart => "Winkelwagen";
+            }
+            """);
+
+        // Assert
+        var english = discovery.Sets.Single(static set => set.Name is "ShopLocalizationEn");
+        var dutch = discovery.Sets.Single(static set => set.Name is "ShopLocalizationNl");
+        english.Texts.Select(static text => text.Name).ShouldBe(["Cart"]);
+        dutch.Texts.ShouldBeEmpty();
+        dutch.Wordings.Select(static wording => wording.Wording).ShouldBe(["Winkelwagen"]);
+    }
+
+    [Test]
+    public void Discovery_WithoutDefaultLanguage_ShouldReadTheTextsOfEverySet()
+    {
+        // Arrange & Act: a first language that isn't a culture name (LOC101) leaves the default language unknown, and
+        // the build takes a set of any language for the default-language set, so that its contract is still written.
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Sets(), LocalizationDiscovery.ContractTrackingName, """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en_US", "en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Cart => "Cart";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Cart => "Winkelwagen";
+            }
+            """);
+
+        // Assert
+        discovery.Sets.ShouldAllBe(static set => set.Texts.Length == 1);
     }
 
     [Test]
