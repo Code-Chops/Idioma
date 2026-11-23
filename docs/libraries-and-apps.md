@@ -28,7 +28,7 @@ So an app that keeps its texts in a library declares its languages in both proje
 
 ```csharp
 // In the app's own project, in Program.cs for example
-[assembly: SupportedLanguages("en", "nl")]
+[assembly: SupportedLanguages(defaultLanguage: "en", "en-GB", "nl")]
 ```
 
 The app's build then also checks that every library it uses has those languages (`LOC600`, below). Without the attribute, the app has no languages of its own:

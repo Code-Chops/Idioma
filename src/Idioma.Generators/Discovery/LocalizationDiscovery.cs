@@ -30,7 +30,10 @@ internal static partial class LocalizationDiscovery
     /// </summary>
     internal const string TrackingName = "Discovery";
 
-    private const string LanguageCodeMemberName = "LocalizationLanguageCode";
+    /// <summary>
+    /// The member of <c>ILocalizationSet</c> that gives a set its language, which is no text.
+    /// </summary>
+    public const string LanguageCodeMemberName = "LocalizationLanguageCode";
 
     /// <summary>
     /// Per file of a compilation, whether a base type written in a scope of that file leads to a set

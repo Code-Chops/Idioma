@@ -766,16 +766,23 @@ internal sealed record LocalizationSetsAnalysis(
         return isDerived;
     }
 
+    /// <summary>
+    /// A set of a language the attribute doesn't list. It carries the language its code fix lists: the longer code its
+    /// name was likely meant for, such as <c>en-GB</c> for <c>ShopLocalizationEnGb</c>, and else its own.
+    /// </summary>
     private static LocalizationSetsFinding UnlistedLanguage(DiscoveredLocalization set, string language, EquatableArray<string> codes)
     {
-        var advice = GuessLongCode(set.Name, codes) is { } meant
+        var meant = GuessLongCode(set.Name, codes);
+
+        var advice = meant is not null
             ? $"If it's meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ILocalizationSet.LocalizationLanguageCode => \"{meant}\";'. Otherwise add '{language}' to the attribute, or remove the set."
             : "Add the language to the attribute, or remove the set.";
 
         var unlistedLanguageFinding = new LocalizationSetsFinding(
             LocalizationSetsRule.UnlistedLanguage,
             set.Location,
-            new EquatableArray<string>([set.Name, language, advice]));
+            new EquatableArray<string>([set.Name, language, advice]),
+            SuggestedName: meant ?? language);
 
         return unlistedLanguageFinding;
     }
@@ -1007,8 +1014,9 @@ internal readonly record struct ReferencedLocalization(
 
 /// <summary>
 /// A diagnostic to report: which rule, where, and the arguments of its message. A finding a name resolves carries it,
-/// for the code fix to apply: the name the class should carry (<c>LOC200</c>), the contract it should implement
-/// (<c>LOC204</c>), or the set to add (<c>LOC201</c> and <c>LOC600</c>), which also carries how to write that set.
+/// for the code fix to apply: the name the class should carry (<c>LOC200</c>), the language to list
+/// (<c>LOC202</c>), the contract it should implement (<c>LOC204</c>), or the set to add (<c>LOC201</c> and
+/// <c>LOC600</c>), which also carries how to write that set.
 /// </summary>
 internal readonly record struct LocalizationSetsFinding(
     LocalizationSetsRule Rule,

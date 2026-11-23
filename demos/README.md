@@ -3,9 +3,9 @@
 This folder has four demos of [Idioma](../README.md). Each is a complete app in one file, which `dotnet run` runs without a project:
 
 - [`SetDemo.cs`](SetDemo.cs) writes its texts in a set per language, including a plural.
-- [`EnumSetDemo.cs`](EnumSetDemo.cs) writes the texts of an enum in a set of the enum.
 - [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline.
-- [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class, its properties and the members of an enum.
+- [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class and its properties.
+- [`EnumDemo.cs`](EnumDemo.cs) gives two enums their texts, one in each [way](../README.md#enums): a set of the enum, and an attribute on each member.
 
 All four support English and Dutch. `SetDemo.cs`, `InlineTextDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../README.md#regional-variants-such-as-british-english) of English. Each prints its texts in each of its languages, and for a German user. German isn't one of their languages, so that user gets English, the default, as a [fallback](../docs/advanced-topics.md#fallback-order).
 

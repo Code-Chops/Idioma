@@ -3,7 +3,7 @@
 using System.Globalization;
 using CodeChops.Idioma;
 
-[assembly: SupportedLanguages("en", "en-GB", "nl")] // The first is the default
+[assembly: SupportedLanguages(defaultLanguage: "en", "en-GB", "nl")]
 
 var name = args.FirstOrDefault() ?? "Max";
 

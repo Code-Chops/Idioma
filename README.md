@@ -3,12 +3,12 @@
 Translations for any .NET app, written in C# and checked at compile time:
 
 - The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation that never uses a value the original shows.
-- There are no resource files, so you get full IDE support: autocomplete, go to definition, and find all references.
+- There are no resource files, so you get full IDE support: autocomplete, go to definition, every language's wording on hover, and find all references.
 - The package has no dependencies, and is safe to trim and to publish with Native AOT.
-- Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing. Only a text with parameters takes longer, in Blazor WebAssembly compiled ahead of time ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
+- Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
 - An AI coding assistant can translate your texts, and the build tells it which are missing ([details](#translating-your-texts)).
 
-Declare your languages once, `[assembly: SupportedLanguages("en", "nl")]`, and write each text in one of three ways:
+Declare your languages once, `[assembly: SupportedLanguages(defaultLanguage: "en", "nl")]`, and write each text in one of three ways:
 
 - **In a set** per language, for texts you reuse.
 - **Inline**, where you use a text once.
@@ -28,7 +28,8 @@ public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
     public string Checkout => "Afrekenen";
 }
 
-// An attribute on the member it names
+// An attribute on a type and on each of its members
+[Localized(en: "Address", nl: "Adres")]
 public class Address
 {
     [Localized(en: "City", nl: "Plaats")]
@@ -44,22 +45,22 @@ From the English set, the source generator writes the contract `IShopLocalizatio
   @ShopLocalization.Checkout
 </button>
 
-@* An inline text *@
-<button>
-  @LocalizableText.Inline(en: "Cancel", nl: "Annuleren")
-</button>
-
 @* A text written as an attribute *@
 <label>
   @(LocalizableText.GetTextByMember<Address>(nameof(Address.City)))
 </label>
+
+@* An inline text, written where it shows *@
+<button>
+  @LocalizableText.Inline(en: "Cancel", nl: "Annuleren")
+</button>
 ```
 
-[Formosa](https://github.com/Code-Chops/Formosa), which generates Blazor forms from your C# models, writes its texts with Idioma too.
+> Also see [Formosa](https://github.com/Code-Chops/Formosa). It generates Blazor forms from your C# models, and writes its texts with Idioma too.
 
 ## Getting started
 
-> For complete apps to run, see the [demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md), or run them in your browser:
+> Each [demo app](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md) is one file that `dotnet run` runs without a project. You can also run them in your browser:
 >
 > [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Code-Chops/Idioma?quickstart=1)
 
@@ -69,7 +70,7 @@ From the English set, the source generator writes the contract `IShopLocalizatio
 dotnet add package CodeChops.Idioma
 ```
 
-The package needs .NET 10 or later and C# 14. C# 14 is the default on .NET 10, unless your project sets an older `LangVersion`, which is build error `LOC102`.
+The package needs .NET 10 or later and C# 14. "C# 14 is the default on .NET 10. An older `LangVersion` in your project is build error `LOC102`."
 
 ### Declare your languages
 
@@ -78,7 +79,7 @@ Add this to any C# file of your project, after its `using` lines:
 ```csharp
 using CodeChops.Idioma;
 
-[assembly: SupportedLanguages("en", "nl")] // The first is the default
+[assembly: SupportedLanguages(defaultLanguage: "en", "nl")]
 ```
 
 From then on, the build checks that every text in the project has all of these languages.
@@ -200,21 +201,14 @@ All three show the wording for the user's language in markup, in string interpol
 
 Every text is a `LocalizableText`. Use that type when your own code stores or accepts a text, as `Title` above does.
 
-### Keep a text as a text
-
-A `string` made from a text holds the wording of that moment. It doesn't change when the user's language does, and on a server every user gets the language of the first one. So keep the `LocalizableText` in anything that outlives one request, such as a static field, a cache or a view model, and convert it where you show it:
-
-```csharp
-static readonly string Frozen = ShopLocalization.Checkout;         // The first user's language, for every user
-static readonly LocalizableText Label = ShopLocalization.Checkout; // Each user's own language
-```
+A `string` made from a text keeps the wording of that moment. So keep the `LocalizableText` in a static field, a cache or a view model, and convert it where you show it. On a server, a `string` in a static field shows every user the language of the first one.
 
 ### The user's language
 
 The user's language is `CultureInfo.CurrentUICulture`.
 A desktop or console app starts with the language of the user's system, and a Blazor WebAssembly app with that of the browser.
 
-> An ASP.NET Core app needs request localization, as in `app.UseRequestLocalization("en", "nl")`,
+> An ASP.NET Core app needs request localization, as in `app.UseRequestLocalization([.. LocalizationRegistry.SupportedLanguages])`,
 > which sets the language for each request. Without it, every user gets the language of the server.
 
 Users whose language you don't support see your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order)).
@@ -429,7 +423,7 @@ Two texts are equal when they show the same wording in the user's language, and 
 3. Write a set with only those texts, named after the code in PascalCase (`EnGb`) and deriving from the English set:
 
 ```csharp
-[assembly: SupportedLanguages("en", "nl", "en-GB")]
+[assembly: SupportedLanguages(defaultLanguage: "en", "nl", "en-GB")]
 
 public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
 {

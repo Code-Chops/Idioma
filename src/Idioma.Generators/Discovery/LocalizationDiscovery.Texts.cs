@@ -513,7 +513,11 @@ internal static partial class LocalizationDiscovery
         return location;
     }
 
-    private static bool IsPublicStringProperty(ISymbol member, out IPropertySymbol property)
+    /// <summary>
+    /// Whether a member has the shape of a text without values: a public instance property of type
+    /// <see cref="string"/>, with a public getter, that isn't an indexer or an explicit interface implementation.
+    /// </summary>
+    public static bool IsPublicStringProperty(ISymbol member, out IPropertySymbol property)
     {
         property = (member as IPropertySymbol)!;
 

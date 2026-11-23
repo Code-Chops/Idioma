@@ -222,9 +222,9 @@ What else to know:
 - **A value of an enum.** `status.GetText()` gives the text of its member. Of two members with the same value, the first gives the text. An enum inside a type with type parameters gets no `GetText()`, and `GetTextByMember` still finds its texts.
 - **A member of an enum without `[Localized]`.** It shows its name, in every language. The build warns about it when other members of the enum are marked (`LOC503`), because that's usually a member added later. An enum with a text of its own and no marked member gets no warning, because its values may never be shown.
 - **No values.** An attribute takes constants, so the wording can't show a value. Write a text with a value as a method of a set. A placeholder such as `{0}` gets warning `LOC502`.
-- **A type the generated code can't name.** A member of a private or protected nested type, or of a file-local type, gets no text (`LOC400`). Make the type internal or public.
-- **Markup.** A member marked `[Localized]` in the `@code` of a `.razor` file gets no text either (`LOC400`), because the source generator can't read what Razor generates. Write the type in a C# file.
-- **An indexer, and the field behind a property.** Neither has a text to find, so `[Localized]` on an indexer, or written as `[field: Localized]` on a property, gets `LOC400` too.
+- **A type the generated code can't name.** A member of a private or protected nested type, or of a file-local type, gets no text (`LOC505`). Make the type internal or public.
+- **Markup.** A member marked `[Localized]` in the `@code` of a `.razor` file gets no text either (`LOC505`), because the source generator can't read what Razor generates. Write the type in a C# file.
+- **An indexer, and the field behind a property.** Neither has a text to find, so `[Localized]` on an indexer, or written as `[field: Localized]` on a property, gets `LOC505` too.
 - **Registration.** A text is found once its assembly's registrar ran ([Registration](#registration)). An app that declares its languages calls the registrar of every assembly it references when it starts. So the label of a library's property is there before any code of the library ran.
 - **Libraries.** No app can add a language to a text a library writes as an attribute, because it carries its wording itself, as an inline text does. An app with a language the library lacks gets warning `LOC601`, which counts such texts among the library's inline texts.
 - **An attribute of your own named `Localized`.** The generated attribute lies in the global namespace, and C# decides which of the two a member gets:
@@ -294,7 +294,7 @@ Every set lists `ILocalizationSet` and the contract, the default-language set to
 
 A text always has wording, so the contract declares it as `string`. A set that returns `string?` for a text gets compiler warning `CS8766`, because it doesn't match the contract. Return a `string`.
 
-The contract takes the texts the default-language set declares itself, overrides included. A text it only inherits from a class of its assembly would be left out, so that's build error `LOC208`.
+The contract takes the texts the default-language set declares itself, overrides included. A text it only inherits from a class of its assembly would be left out, so that's build error `LOC208`. A text that only another language declares isn't in the contract either, so no user sees it. The build warns about it (`LOC209`).
 
 Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
 
@@ -329,7 +329,7 @@ The texts of members marked `[Localized]` are recorded the same way, by the same
 
 A set is registered by its type, and created when the first text is shown. So a set whose constructor throws doesn't stop your app from starting. The first text shown throws an `InvalidOperationException` that names the set, with the set's own exception inside, and so does every text after it.
 
-A set that can't be registered automatically gets build warning `LOC400`, such as a set without a parameterless constructor. So does a member marked `[Localized]` whose text can't be registered, such as a member of a private nested type. [LOC400](build-errors.md#loc400) lists every case and its fix.
+A set that can't be registered automatically gets build warning `LOC400`, such as a set without a parameterless constructor. [LOC400](build-errors.md#loc400) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC505](build-errors.md#loc505).
 
 A nested, generic, or file-local class with your own texts isn't recognized, so its language is reported as missing (`LOC201`). Make it a top-level class that isn't generic.
 

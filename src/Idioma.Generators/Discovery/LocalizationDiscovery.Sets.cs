@@ -391,7 +391,7 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// Whether a set, or a member of one, is marked <c>[ExcludeFromLocalizationDiscovery]</c>.
     /// </summary>
-    private static bool IsExcluded(ISymbol symbol)
+    public static bool IsExcluded(ISymbol symbol)
     {
         var isExcluded = Enumerable.Any(symbol.GetAttributes(), attribute
             => String.Equals(attribute.AttributeClass?.ToDisplayString(), PackageNames.ExcludeFromLocalizationDiscoveryAttribute, StringComparison.Ordinal));

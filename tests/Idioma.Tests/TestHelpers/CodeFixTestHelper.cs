@@ -57,6 +57,18 @@ internal static class CodeFixTestHelper
         return FixAllAsync(provider, Generate(generator), references, sources);
     }
 
+    /// <summary>
+    /// Runs <paramref name="generator"/> as <see cref="FixAsync(CodeFixProvider, IIncrementalGenerator, string[])"/>
+    /// does, but the workspace the fix sees holds the generated code too, as an IDE's does. For a fix that reads the
+    /// generated contract of a set.
+    /// </summary>
+    internal static async Task<ImmutableArray<(string Title, ImmutableArray<string> Sources)>> FixWithGeneratedCodeAsync(CodeFixProvider provider,
+        IIncrementalGenerator generator, params string[] sources)
+    {
+        var fixes = await FixAsync(provider, Generate(generator), sources, withGeneratedCode: true);
+        return [.. fixes.Select(static fix => (fix.Title, fix.Sources))];
+    }
+
     private static Func<Compilation, Task<ImmutableArray<Diagnostic>>> Generate(IIncrementalGenerator generator)
     {
         return compilation => Task.FromResult(CSharpGeneratorDriver

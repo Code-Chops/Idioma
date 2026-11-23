@@ -218,25 +218,77 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
+    public void GeneratedClass_ShouldComeBeforeTheContract()
+    {
+        // Arrange & Act
+        var text = ContractText(Run(ShopSets));
+
+        // Assert: the texts are what a reader of the file looks for.
+        text.IndexOf("public static partial class ShopLocalization", StringComparison.Ordinal).ShouldBeInRange(0, text.IndexOf("public interface IShopLocalization", StringComparison.Ordinal));
+    }
+
+    [Test]
     public void GeneratedMembers_ShouldInheritDocCommentOfProperty()
     {
         // Arrange & Act
         var text = ContractText(Run(ShopSets));
 
-        // Assert: both the contract member and the text point at the property, whose doc comment is the single source.
-        text.Split('\n').Count(line => line.Contains("/// <inheritdoc cref=\"ShopLocalizationEn.Checkout\"/>", StringComparison.Ordinal)).ShouldBe(2);
+        // Assert: the text points at the property, whose doc comment is the single source, and the contract member at
+        // the text.
+        text.Split('\n').Count(line => line.Contains("/// <inheritdoc cref=\"ShopLocalizationEn.Checkout\"/>", StringComparison.Ordinal)).ShouldBe(1);
+        text.ShouldContain("/// <inheritdoc cref=\"ShopLocalization.Checkout\"/>");
         text.ShouldNotContain("/// Checkout");
     }
 
     [Test]
     public void GeneratedMembers_WithoutDocComment_ShouldBeDocumentedWithDefaultWording()
     {
-        // Arrange & Act: Total has no doc comment, so its English wording documents both generated members.
+        // Arrange & Act: Total has no doc comment, so its English wording documents the text, which the contract member
+        // inherits.
         var text = ContractText(Run(ShopSets));
 
         // Assert
-        text.Split('\n').Count(line => String.Equals(line.Trim(), "/// Total", StringComparison.Ordinal)).ShouldBe(2);
+        text.Split('\n').Count(line => String.Equals(line.Trim(), "/// Total", StringComparison.Ordinal)).ShouldBe(1);
+        text.ShouldContain("/// <inheritdoc cref=\"ShopLocalization.Total\"/>");
         text.ShouldNotContain("inheritdoc cref=\"ShopLocalizationEn.Total\"");
+    }
+
+    [Test]
+    [Arguments("OptionLocalization")]
+    [Arguments("GetTextByKey")]
+    public void TextTheClassDoesntHold_ShouldBeDocumentedInTheContract(string name)
+    {
+        // Arrange: a text the generated class can't hold for its name (LOC205), next to one it holds. Inside the
+        // contract, a text named like the class doesn't hide the class from the cref of the other member.
+        var source = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class OptionLocalizationEn : ILocalizationSet, IOptionLocalization
+            {
+                public string {{name}} => "Text";
+                public string Other => "Other";
+            }
+
+            public sealed class OptionLocalizationNl : ILocalizationSet, IOptionLocalization
+            {
+                public string {{name}} => "Tekst";
+                public string Other => "Ander";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
+
+        // Assert
+        text.ShouldContain($"/// <item><description><see cref=\"OptionLocalizationNl.{name}\">nl</see>: Tekst</description></item>");
+        text.ShouldNotContain($"<inheritdoc cref=\"OptionLocalization.{name}\"/>");
+        text.ShouldContain("/// <inheritdoc cref=\"OptionLocalization.Other\"/>");
+        unresolved.ShouldBeEmpty();
     }
 
     [Test]
@@ -245,8 +297,7 @@ public sealed class LocalizationSetsGeneratorTests
         // Arrange & Act
         var text = ContractText(Run(ShopSets));
 
-        // Assert: on both the contract member and the text, for each language in the order of the attribute, with its
-        // wording next to the link.
+        // Assert: on the text, for each language in the order of the attribute, with its wording next to the link.
         foreach (var (language, set, member, wording) in new[]
                  {
                      ("en", "ShopLocalizationEn", "Checkout", "Checkout"), ("en", "ShopLocalizationEn", "Total", "Total"),
@@ -254,7 +305,7 @@ public sealed class LocalizationSetsGeneratorTests
                  })
         {
             var line = $"/// <item><description><see cref=\"{set}.{member}\">{language}</see>: {wording}</description></item>";
-            text.Split('\n').Count(candidate => candidate.Contains(line, StringComparison.Ordinal)).ShouldBe(2);
+            text.Split('\n').Count(candidate => candidate.Contains(line, StringComparison.Ordinal)).ShouldBe(1);
         }
     }
 
@@ -453,12 +504,12 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     [Arguments("namespace TestApp { public abstract class WordingBase<TMarker> { public string Checkout => \"Afrekenen\"; } }", "WordingBase<int>", "WordingBase{TMarker}.Checkout")]
     [Arguments("namespace TestApp { public static class Wordings { public abstract class Dutch { public string Checkout => \"Afrekenen\"; } } }", "Wordings.Dutch", "Wordings.Dutch.Checkout")]
-    [Arguments("namespace Shared.Wording { public abstract class DutchBase { public string Checkout => \"Afrekenen\"; } }", "Shared.Wording.DutchBase", "Namespace_Shared_Wording.DutchBase.Checkout")]
-    [Arguments("namespace Shared { public abstract class Pair<TFirst, TSecond> { public string Checkout => \"Afrekenen\"; } }", "Shared.Pair<int, string>", "Namespace_Shared.Pair{TFirst, TSecond}.Checkout")]
+    [Arguments("namespace Shared.Wording { public abstract class DutchBase { public string Checkout => \"Afrekenen\"; } }", "Shared.Wording.DutchBase", "Shared.Wording.DutchBase.Checkout")]
+    [Arguments("namespace Shared { public abstract class Pair<TFirst, TSecond> { public string Checkout => \"Afrekenen\"; } }", "Shared.Pair<int, string>", "Shared.Pair{TFirst, TSecond}.Checkout")]
     public void SetInheritingTextFromGenericOrNestedClassOrOtherNamespace_ShouldBeLinkedWithResolvedCref(string declaration, string baseType, string expectedCref)
     {
         // Arrange: a cref names a generic class with its type parameters in braces, a nested one through its container,
-        // and a class of another namespace through the alias the file gives that namespace.
+        // and a class of another namespace by its full name.
         var source = $$"""
             using CodeChops.Idioma;
 
@@ -603,8 +654,8 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         text.ShouldContain("<see cref=\"ShopLocalizationEn.Checkout\">en</see>: Checkout (<see cref=\"ShopLocalizationEn\"/>)</description>");
-        text.ShouldContain("<see cref=\"Namespace_Shared_Wording.RewordedShopLocalizationEn.Checkout\">en</see>: Pay (<see cref=\"Namespace_Shared_Wording.RewordedShopLocalizationEn\"/>)</description>");
-        text.ShouldContain("<see cref=\"ShopLocalizationEn.Total\">en</see>: Total (<see cref=\"Namespace_Shared_Wording.RewordedShopLocalizationEn\"/>, inherited from <see cref=\"ShopLocalizationEn\"/>)</description>");
+        text.ShouldContain("<see cref=\"Shared.Wording.RewordedShopLocalizationEn.Checkout\">en</see>: Pay (<see cref=\"Shared.Wording.RewordedShopLocalizationEn\"/>)</description>");
+        text.ShouldContain("<see cref=\"ShopLocalizationEn.Total\">en</see>: Total (<see cref=\"Shared.Wording.RewordedShopLocalizationEn\"/>, inherited from <see cref=\"ShopLocalizationEn\"/>)</description>");
         text.ShouldContain("<see cref=\"ShopLocalizationNl.Checkout\">nl</see>: Afrekenen (<see cref=\"ShopLocalizationNl\"/>)</description>");
         text.ShouldContain("<see cref=\"UnregisteredShopLocalizationNl.Checkout\">nl</see>: Betalen (<see cref=\"UnregisteredShopLocalizationNl\"/>, excluded from discovery)</description>");
         errors.ShouldBeEmpty();
@@ -673,7 +724,7 @@ public sealed class LocalizationSetsGeneratorTests
         text.ShouldContain("/// Total due");
         text.ShouldContain("/// Cancel");
         text.ShouldContain("/// The <c>Dynamic</c> text of <see cref=\"ShopLocalizationEn\"/>.");
-        text.ShouldNotContain("inheritdoc");
+        text.ShouldNotContain("<inheritdoc cref=\"ShopLocalizationEn.");
     }
 
     [Test]
@@ -3267,10 +3318,9 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
-    public void SetInOtherNamespaceBehindClassNamedLikeThatNamespace_ShouldBeLinkedWithResolvedCref()
+    public void SetInOtherNamespace_ShouldBeLinkedByItsFullName()
     {
-        // Arrange: inside namespace Shop the name Shop is the class, so Shop.Dutch.ShopLocalizationNl names nothing
-        // there (CS1574), which stops a build that writes a documentation file and treats warnings as errors.
+        // Arrange
         const string source = """
             using CodeChops.Idioma;
 
@@ -3278,8 +3328,6 @@ public sealed class LocalizationSetsGeneratorTests
 
             namespace Shop
             {
-                public sealed class Shop;
-
                 public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
                 {
                     public virtual string Checkout => "Checkout";
@@ -3300,24 +3348,22 @@ public sealed class LocalizationSetsGeneratorTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
         var unresolved = GeneratorTestHelper.GetUnresolvedDocReferences(source);
 
-        // Assert: the namespace is named once, at the top of the file, where nothing of the contract's namespace hides
-        // it, and the set is reached through that alias.
-        text.ShouldContain("using Namespace_Shop_Dutch = Shop.Dutch;");
-        text.ShouldContain("<see cref=\"Namespace_Shop_Dutch.ShopLocalizationNl.Checkout\">nl</see>");
+        // Assert
+        text.ShouldContain("<see cref=\"Shop.Dutch.ShopLocalizationNl.Checkout\">nl</see>");
         text.ShouldContain("<see cref=\"ShopLocalizationEn.Checkout\">en</see>");
         errors.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
     }
 
     [Test]
-    public void SetsInOneNamespace_ShouldGetNoAliasButThoseOfTheFramework()
+    public void File_ShouldImportTheFrameworkAndNoAlias()
     {
         // Arrange & Act
         var text = ContractText(Run(ShopSets));
-        var aliases = text.Split('\n').Where(static line => line.StartsWith("using Namespace_", StringComparison.Ordinal)).Select(static line => line.TrimEnd()).ToArray();
+        var usings = text.Split('\n').Where(static line => line.StartsWith("using ", StringComparison.Ordinal)).Select(static line => line.TrimEnd()).ToArray();
 
-        // Assert: the namespaces of what the method that gives a text by its key names, and none for the sets.
-        aliases.ShouldBe(["using Namespace_System = System;", "using Namespace_System_Collections_Generic = System.Collections.Generic;"]);
+        // Assert: the namespaces of what the method that gives a text by its key names, and what creates a text.
+        usings.ShouldBe(["using System;", "using System.Collections.Generic;", "using static CodeChops.Idioma.Internals.GeneratedCode;"]);
     }
 
     [Test]
@@ -4357,13 +4403,16 @@ public sealed class LocalizationSetsGeneratorTests
         // Arrange & Act
         var text = ContractText(Run(GreetingSets));
 
-        // Assert: the doc comment of the method is inherited, parameters included, and the wording of each language
-        // stands next to its link with each value in braces. A method that chooses between wordings shows none.
-        text.Split('\n').Count(line => line.Contains("/// <inheritdoc cref=\"ShopLocalizationEn.Greeting\"/>", StringComparison.Ordinal)).ShouldBe(2);
-        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationEn.Greeting\">en</see>: Hello, {name}!</description>", StringComparison.Ordinal)).ShouldBe(2);
-        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.Greeting\">nl</see>: Hallo, {name}!</description>", StringComparison.Ordinal)).ShouldBe(2);
-        text.Split('\n').Count(line => line.Contains("/// The <c>ItemsInCart</c> text of <see cref=\"ShopLocalizationEn\"/>.", StringComparison.Ordinal)).ShouldBe(2);
-        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.ItemsInCart\">nl</see></description>", StringComparison.Ordinal)).ShouldBe(2);
+        // Assert: the text inherits the doc comment of the method, parameters included, and the wording of each language
+        // stands next to its link with each value in braces. A method that chooses between wordings shows none. The
+        // contract member inherits the text's.
+        text.Split('\n').Count(line => line.Contains("/// <inheritdoc cref=\"ShopLocalizationEn.Greeting\"/>", StringComparison.Ordinal)).ShouldBe(1);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationEn.Greeting\">en</see>: Hello, {name}!</description>", StringComparison.Ordinal)).ShouldBe(1);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.Greeting\">nl</see>: Hallo, {name}!</description>", StringComparison.Ordinal)).ShouldBe(1);
+        text.Split('\n').Count(line => line.Contains("/// The <c>ItemsInCart</c> text of <see cref=\"ShopLocalizationEn\"/>.", StringComparison.Ordinal)).ShouldBe(1);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.ItemsInCart\">nl</see></description>", StringComparison.Ordinal)).ShouldBe(1);
+        text.ShouldContain("/// <inheritdoc cref=\"ShopLocalization.Greeting\"/>");
+        text.ShouldContain("/// <inheritdoc cref=\"ShopLocalization.ItemsInCart\"/>");
     }
 
     [Test]
@@ -4731,21 +4780,18 @@ public sealed class LocalizationSetsGeneratorTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
         var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
 
-        // Assert: a type of another namespace is reached through the alias of that namespace, as a set of another
-        // namespace is.
+        // Assert: a type of another namespace stands by its full name, as a set of another namespace does.
         errors.ShouldBeEmpty();
         warnings.ShouldBeEmpty();
-        text.ShouldContain("using Namespace_System = System;");
-        text.ShouldContain("using Namespace_System_Collections_Generic = System.Collections.Generic;");
-        text.ShouldContain("using Namespace_TestApp_Models = TestApp.Models;");
+        text.ShouldNotContain("using TestApp.Models;");
         text.ShouldContain("    string Keywords(string? name, int count, decimal price, object? value, nint handle);");
         text.ShouldContain("    string OwnNamespace(Size size, Size? optional);");
-        text.ShouldContain("    string OtherNamespace(Namespace_TestApp_Models.Salutation salutation, Namespace_TestApp_Models.Order.Line line, Namespace_TestApp_Models.Box<Namespace_TestApp_Models.Order?>.Lid? lid);");
+        text.ShouldContain("    string OtherNamespace(TestApp.Models.Salutation salutation, TestApp.Models.Order.Line line, TestApp.Models.Box<TestApp.Models.Order?>.Lid? lid);");
         text.ShouldContain("    string GlobalNamespace(GlobalKind kind);");
-        text.ShouldContain("    string Framework(Namespace_System.DateOnly date, Namespace_System.DateTime? time, Namespace_System_Collections_Generic.IReadOnlyList<string?> names, Namespace_System_Collections_Generic.Dictionary<string, Namespace_System_Collections_Generic.List<int>>? counts);");
+        text.ShouldContain("    string Framework(System.DateOnly date, System.DateTime? time, System.Collections.Generic.IReadOnlyList<string?> names, System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<int>>? counts);");
         text.ShouldContain("    string Arrays(string[] names, int[,] grid, string?[]? optional, int[][] jagged, int[]?[] rows);");
         text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
-        text.ShouldContain("    string Delegates(Namespace_System.Func<int, string> format);");
+        text.ShouldContain("    string Delegates(System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
         text.ShouldContain("LocalizableText @event(string @class, int @int) => CreateSetText<IShopLocalization, string, int>(\"TestApp.ShopLocalization.event\", static (set, @class, @int) => set.@event(@class, @int), GetDefaultSet<ShopLocalizationEn>(), @class, @int);");
     }
@@ -4831,47 +4877,6 @@ public sealed class LocalizationSetsGeneratorTests
     }
 
     [Test]
-    [Arguments("public static class System;", "DateOnly", "using System;")]
-    [Arguments("public static class TestApp;", "Salutation", "using TestApp.Models;")]
-    public void ClassStandingBeforeNamespaceOfParameterType_ShouldCompile(string other, string parameterType, string import)
-    {
-        // Arrange: inside the set's namespace a class carries the name the namespace of the parameter's type starts
-        // with, so that the type's full name would name nothing there.
-        var source = $$"""
-            {{import}}
-            using CodeChops.Idioma;
-
-            [assembly: SupportedLanguages("en", "nl")]
-
-            namespace TestApp.Models
-            {
-                public enum Salutation { Unknown, Madam, Sir }
-            }
-
-            namespace TestApp
-            {
-                {{other}}
-
-                public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
-                {
-                    public string Dear({{parameterType}} value) => $"Dear {value}";
-                }
-
-                public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
-                {
-                    public string Dear({{parameterType}} value) => $"Beste {value}";
-                }
-            }
-            """;
-
-        // Act
-        var errors = GeneratorTestHelper.CompileWithGenerators(source);
-
-        // Assert
-        errors.ShouldBeEmpty();
-    }
-
-    [Test]
     [Arguments("using MyApp.Domain;", "", "OrderId")]
     [Arguments("using MyApp.Domain;", "", "OrderId?")]
     [Arguments("using System.Collections.Generic;\nusing MyApp.Domain;", "", "IReadOnlyList<OrderId>")]
@@ -4933,9 +4938,10 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void UsingDirectivesOfSet_ShouldBeRepeatedOnlyForTypeThatBindsToNothing()
     {
-        // Arrange: Money binds, so the contract names it by its own name and needs no directive of the set. OrderId is
-        // written by another generator.
+        // Arrange: Money binds, so the contract names it by its full name and needs no directive of the set. OrderId is
+        // written by another generator. The set imports System as the contract's file does.
         const string source = """
+            using System;
             using System.Text;
             using MyApp.Domain;
             using CodeChops.Idioma;
@@ -4963,11 +4969,12 @@ public sealed class LocalizationSetsGeneratorTests
         // Assert
         bound.ShouldNotContain("using MyApp.Domain;");
         bound.ShouldNotContain("using System.Text;");
-        bound.ShouldContain("string Total(Namespace_MyApp_Domain.Money value);");
+        bound.ShouldContain("string Total(MyApp.Domain.Money value);");
         unbound.ShouldContain("using System.Text;");
         unbound.ShouldContain("using CodeChops.Idioma;");
         unbound.IndexOf("using MyApp.Domain;", StringComparison.Ordinal).ShouldBeInRange(0, unbound.IndexOf("namespace MyApp.Localization;", StringComparison.Ordinal));
         unbound.ShouldContain("string Total(OrderId value);");
+        unbound.Split('\n').Count(static line => String.Equals(line.TrimEnd(), "using System;", StringComparison.Ordinal)).ShouldBe(1);
     }
 
     [Test]
@@ -5478,10 +5485,9 @@ public sealed class LocalizationSetsGeneratorTests
     [Test]
     public void SetOfEnumOfAnotherNamespaceOrInsideAClass_ShouldCompileWithoutWarningsAndWithResolvedCrefs()
     {
-        // Arrange: an enum of another namespace, behind a class of the set's namespace named like the start of that
-        // namespace, and an internal enum inside a class, with a member named like a keyword. Texts named like the
-        // enum, like the parameter of the generated method, and like what that method calls stand before those
-        // names inside the generated class.
+        // Arrange: an enum of another namespace, and an internal enum inside a class, with a member named like a
+        // keyword. Texts named like the enum, like the parameter of the generated method, and like what that method
+        // calls stand before those names inside the generated class.
         const string source = """
             using CodeChops.Idioma;
             using Domain.Orders;
@@ -5495,8 +5501,6 @@ public sealed class LocalizationSetsGeneratorTests
 
             namespace TestApp
             {
-                public static class Domain;
-
                 public static class Shipping
                 {
                     internal enum Speed { @default, Express }
@@ -5539,9 +5543,9 @@ public sealed class LocalizationSetsGeneratorTests
         errors.ShouldBeEmpty();
         warnings.ShouldBeEmpty();
         unresolved.ShouldBeEmpty();
-        contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_Domain_Orders.OrderStatus value)"));
+        contracts.ShouldContain(static contract => contract.Contains("public static CodeChops.Idioma.LocalizableText GetTextByValue(Domain.Orders.OrderStatus value)"));
         contracts.ShouldContain(static contract => contract.Contains("internal static CodeChops.Idioma.LocalizableText GetTextByValue(Shipping.Speed value)"));
-        contracts.ShouldContain(static contract => contract.Contains("extension(Namespace_Domain_Orders.OrderStatus value)") && contract.Contains("        public CodeChops.Idioma.LocalizableText GetText() =>"));
+        contracts.ShouldContain(static contract => contract.Contains("extension(Domain.Orders.OrderStatus value)") && contract.Contains("        public CodeChops.Idioma.LocalizableText GetText() =>"));
         contracts.ShouldContain(static contract => contract.Contains("extension(Shipping.Speed value)") && contract.Contains("        internal CodeChops.Idioma.LocalizableText GetText() =>"));
     }
 
@@ -5842,10 +5846,10 @@ public sealed class LocalizationSetsGeneratorTests
 
         // Assert
         errors.ShouldBeEmpty();
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(Namespace_System.MidpointRounding value) => TextsByValue<IMidpointRoundingLocalization>.Get(value);");
-        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(Namespace_System.MidpointRounding value) => value switch");
-        text.ShouldContain("        Namespace_System.MidpointRounding.ToEven => MidpointRoundingLocalization.ToEven,");
-        text.ShouldContain("        _ => CreateUndefinedEnumText<Namespace_System.MidpointRounding>(value),");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByValue(System.MidpointRounding value) => TextsByValue<IMidpointRoundingLocalization>.Get(value);");
+        text.ShouldContain("    internal static CodeChops.Idioma.LocalizableText Get(System.MidpointRounding value) => value switch");
+        text.ShouldContain("        System.MidpointRounding.ToEven => MidpointRoundingLocalization.ToEven,");
+        text.ShouldContain("        _ => CreateUndefinedEnumText<System.MidpointRounding>(value),");
     }
     #endregion
 
@@ -5857,7 +5861,7 @@ public sealed class LocalizationSetsGeneratorTests
         var text = ContractText(Run(GreetingSets));
 
         // Assert: an arm per text, by its name. A text that takes values takes each from the values passed.
-        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params Namespace_System.ReadOnlySpan<object?> values) => key switch");
+        text.ShouldContain("public static CodeChops.Idioma.LocalizableText GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch");
         text.ShouldContain("        \"Checkout\" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),");
         text.ShouldContain("        \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\"), GetKeyedValue<string>(key, values, 1, 2, \"shop\")),");
         text.ShouldContain("        _ => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");
@@ -5867,8 +5871,8 @@ public sealed class LocalizationSetsGeneratorTests
     public void MethodThatGivesTextByKey_ShouldCompileWhateverTheTextsAreNamedOrTake()
     {
         // Arrange: texts named like the parameters of the method, like what it declares and calls, and like a
-        // keyword, in a namespace with a part named System. One takes a value of a type of another namespace, behind
-        // a class named like the start of that namespace, and one a value that may be null.
+        // keyword, in a namespace with a part named System. One takes a value of a type of another namespace, and one
+        // a value that may be null.
         const string source = """
             #nullable enable
             using CodeChops.Idioma;
@@ -5883,8 +5887,6 @@ public sealed class LocalizationSetsGeneratorTests
 
             namespace TestApp.System
             {
-                public static class Domain;
-
                 public sealed class OptionLocalizationEn : ILocalizationSet, IOptionLocalization
                 {
                     public string key => "Key";

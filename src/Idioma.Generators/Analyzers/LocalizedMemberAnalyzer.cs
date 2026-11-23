@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC400</c>), a member of an enum without
+/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC505</c>), a member of an enum without
 /// <c>[Localized]</c> next to members that have it (<c>LOC503</c>), and a call of <c>GetTextByMember</c> or
 /// <c>GetTextOfType</c> that names a member or a type without a text (<c>LOC504</c>). Without these,
 /// <c>GetTextByMember</c> would silently give nothing, and <c>GetText()</c> would silently show the member's name.
@@ -31,16 +31,13 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 {
-    public const string CannotRegisterDiagnosticId = LocalizationRegistrationGenerator.CannotRegisterDiagnosticId;
     public const string UnmarkedEnumMemberDiagnosticId = "LOC503";
     public const string NoTextToFindDiagnosticId = "LOC504";
+    public const string CannotRegisterDiagnosticId = "LOC505";
 
     private const string GetTextByMemberName = "GetTextByMember";
     private const string GetTextOfTypeName = "GetTextOfType";
 
-    // The code of a set that can't be registered, which the generator reports. Both say that texts won't be found.
-    // So the code is shared on purpose.
-#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
     private static readonly DiagnosticDescriptor CannotRegisterRule = new(
         id: CannotRegisterDiagnosticId,
         title: "Text of a member can't be registered",
@@ -50,7 +47,6 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, or a file-local one. The generator can't read what Razor generates from a .razor or .cshtml file either. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizableText.GetTextByMember would silently give nothing for the member.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
-#pragma warning restore RS1019
 
     private static readonly DiagnosticDescriptor UnmarkedEnumMemberRule = new(
         id: UnmarkedEnumMemberDiagnosticId,
@@ -242,7 +238,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports a <c>[Localized]</c> that gives its member no text (<c>LOC400</c>).
+    /// Reports a <c>[Localized]</c> that gives its member no text (<c>LOC505</c>).
     /// </summary>
     private static void AnalyzeLocalized(SyntaxNodeAnalysisContext context, ImmutableArray<string> codes)
     {

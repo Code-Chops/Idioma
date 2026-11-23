@@ -23,6 +23,12 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
 {
     public const string HiddenTextDiagnosticId = "LOC207";
 
+    /// <summary>
+    /// The property of a diagnostic that holds the full name of the contract whose text is hidden, such as
+    /// <c>TestApp.IShopLocalization</c>, for the code fix that lists the contract again.
+    /// </summary>
+    public const string ContractProperty = "Contract";
+
     private static readonly DiagnosticDescriptor HiddenTextRule = new(
         id: HiddenTextDiagnosticId,
         title: "Text hidden instead of overridden",
@@ -69,6 +75,8 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
             if (!IsContract(contract, localizationSet))
                 continue;
 
+            ImmutableDictionary<string, string?>? properties = null;
+
             foreach (var text in contract.GetMembers())
             {
                 // A text the set implements itself, as it does after listing the contract again, isn't hidden.
@@ -88,9 +96,12 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
                         ? $"'{code}'"
                         : "that language";
 
+                    properties ??= ImmutableDictionary<string, string?>.Empty.Add(ContractProperty, contract.ToDisplayString());
+
                     context.ReportDiagnostic(Diagnostic.Create(
                         HiddenTextRule,
                         member.Locations[0],
+                        properties,
                         set.Name,
                         text.Name,
                         implementation.ContainingType.Name,
@@ -103,9 +114,10 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Whether a member of a set hides the member that implements a text: a public property of its name, or a public
-    /// method of its name with the same parameters, that doesn't override it.
+    /// method of its name with the same parameters, that doesn't override it. The code fix asks the same of each class
+    /// the set derives from, to find the member an override would override.
     /// </summary>
-    private static bool Hides(ISymbol member, ISymbol implementation)
+    internal static bool Hides(ISymbol member, ISymbol implementation)
     {
         var hides = (member, implementation) switch
         {

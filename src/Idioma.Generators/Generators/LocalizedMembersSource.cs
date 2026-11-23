@@ -18,7 +18,7 @@ namespace CodeChops.Idioma.Generators;
 /// <para>
 /// The code lies in one file, at the top level of the assembly. A type it can't name from there, which is a private
 /// or protected nested type or a file-local one, gets no text, and <c>LocalizedMemberAnalyzer</c> says so
-/// (<c>LOC400</c>).
+/// (<c>LOC505</c>).
 /// </para>
 /// <para>
 /// The file marks its assembly <c>[assembly: InlineTexts]</c>, because a text on a member carries its wording itself,

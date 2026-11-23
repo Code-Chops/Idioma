@@ -30,6 +30,13 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     public const string ParameterNamesDifferDiagnosticId = "LOC301";
     public const string ValueLeftOutDiagnosticId = "LOC302";
 
+    /// <summary>
+    /// The property of <c>LOC301</c> that holds the names the contract gives the text's parameters, in their order,
+    /// separated by commas: <c>host,guest</c>. Its code fix names the parameters from it, also in a workspace that
+    /// hasn't run the generator that writes the contract.
+    /// </summary>
+    public const string ContractParameterNamesProperty = "ContractParameterNames";
+
     private static readonly DiagnosticDescriptor ParameterNamesDifferRule = new(
         id: ParameterNamesDifferDiagnosticId,
         title: "Parameter of a text named differently than in its contract",
@@ -114,6 +121,9 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         {
             var reported = false;
 
+            // The names of the contract for the code fix of LOC301, made once per text that a name differs from.
+            ImmutableDictionary<string, string?>? properties = null;
+
             for (var i = 0; i < method.Parameters.Length && i < text.Parameters.Length; i++)
             {
                 var parameter = method.Parameters[i];
@@ -123,7 +133,9 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
                 if (declaringPart is null && !String.Equals(parameter.Name, expected.Name, StringComparison.Ordinal))
                 {
                     reported = true;
-                    context.ReportDiagnostic(Diagnostic.Create(ParameterNamesDifferRule, location, set.Name, text.Name, parameter.Name, text.ContainingType.Name, expected.Name));
+                    properties ??= ImmutableDictionary<string, string?>.Empty.Add(ContractParameterNamesProperty, String.Join(",", text.Parameters.Select(static parameter => parameter.Name)));
+
+                    context.ReportDiagnostic(Diagnostic.Create(ParameterNamesDifferRule, location, properties, set.Name, text.Name, parameter.Name, text.ContainingType.Name, expected.Name));
                 }
 
                 if (!IsShown(text, expected, shownValue, shownByHand, context.Compilation, context.CancellationToken))

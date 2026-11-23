@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/Demos/">
     <File Path="demos/AttributeDemo.cs" />
-    <File Path="demos/EnumSetDemo.cs" />
+    <File Path="demos/EnumDemo.cs" />
     <File Path="demos/InlineTextDemo.cs" />
     <File Path="demos/README.md" />
     <File Path="demos/SetDemo.cs" />

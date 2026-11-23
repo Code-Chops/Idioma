@@ -111,4 +111,16 @@ internal static class CodeFixSupport
 
         return solution;
     }
+
+    /// <summary>
+    /// The line break a file uses, for a line a fix adds to it: its first one, and else the one of this machine.
+    /// </summary>
+    public static SyntaxTrivia FindEndOfLine(SyntaxNode root)
+    {
+        foreach (var trivia in root.DescendantTrivia())
+            if (trivia.IsKind(SyntaxKind.EndOfLineTrivia))
+                return trivia;
+
+        return SyntaxFactory.EndOfLine(Environment.NewLine);
+    }
 }

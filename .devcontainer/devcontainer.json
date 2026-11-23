@@ -8,9 +8,9 @@
       "extensions": ["ms-dotnettools.csharp"]
     },
     "codespaces": {
-      "openFiles": ["demos/README.md", "demos/SetDemo.cs", "demos/EnumSetDemo.cs", "demos/InlineTextDemo.cs", "demos/AttributeDemo.cs"]
+      "openFiles": ["demos/README.md", "demos/SetDemo.cs", "demos/InlineTextDemo.cs", "demos/AttributeDemo.cs", "demos/EnumDemo.cs"]
     }
   },
   // Each demo runs once the codespace opens, so its output is the first thing a visitor sees.
-  "postAttachCommand": "cd demos && dotnet run SetDemo.cs && dotnet run EnumSetDemo.cs && dotnet run InlineTextDemo.cs && dotnet run AttributeDemo.cs"
+  "postAttachCommand": "cd demos && dotnet run SetDemo.cs && dotnet run InlineTextDemo.cs && dotnet run AttributeDemo.cs && dotnet run EnumDemo.cs"
 }

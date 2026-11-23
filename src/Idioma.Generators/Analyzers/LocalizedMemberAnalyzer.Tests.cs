@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="LocalizedMemberAnalyzer"/>: a member marked <c>[Localized]</c> that gets no text is reported
-/// (<c>LOC400</c>), and so is a member of an enum without <c>[Localized]</c> next to members that have it
+/// (<c>LOC505</c>), and so is a member of an enum without <c>[Localized]</c> next to members that have it
 /// (<c>LOC503</c>), and a call that asks for the text of a member or a type without one (<c>LOC504</c>).
 /// </summary>
 public sealed class LocalizedMemberAnalyzerTests
@@ -32,13 +32,13 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     /// <summary>
-    /// The one <c>LOC400</c> for a source, which is a warning.
+    /// The one <c>LOC505</c> for a source, which is a warning.
     /// </summary>
     private static async Task<Diagnostic> SingleCannotRegisterAsync(string source, params (string Path, string Text)[] files)
     {
         var diagnostic = (await AnalyzeAsync(source, files)).ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizedMemberAnalyzer.CannotRegisterDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC400");
+        diagnostic.Id.ShouldBe("LOC505");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
 
         return diagnostic;
@@ -125,7 +125,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Arguments("private", "private")]
     [Arguments("protected", "protected")]
     [Arguments("private protected", "private protected")]
-    public async Task MemberOfTypeGeneratedCodeCannotName_ShouldReportLOC400(string accessibility, string kind)
+    public async Task MemberOfTypeGeneratedCodeCannotName_ShouldReportLOC505(string accessibility, string kind)
     {
         // Arrange & Act
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -168,7 +168,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task MemberOfFileLocalType_ShouldReportLOC400()
+    public async Task MemberOfFileLocalType_ShouldReportLOC505()
     {
         // Arrange & Act
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -189,7 +189,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Arguments("""en: "City", nl: null!""", "nl")]
     [Arguments("""en: null!, nl: "Plaats" """, "en")]
     [Arguments(""" "City", null!""", "nl")]
-    public async Task WordingThatIsNull_ShouldReportLOC400WithItsLanguage(string arguments, string language)
+    public async Task WordingThatIsNull_ShouldReportLOC505WithItsLanguage(string arguments, string language)
     {
         // Arrange & Act
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -209,7 +209,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Test]
     [Arguments("Page_razor.g.cs")]
     [Arguments("Pages/Index_cshtml.g.cs")]
-    public async Task MemberMarkedInRazorOutput_ShouldReportLOC400(string outputPath)
+    public async Task MemberMarkedInRazorOutput_ShouldReportLOC505(string outputPath)
     {
         // Arrange: what Razor writes for a class in the @code of a component. The attribute compiles there, and the
         // source generator that writes the texts never saw it, because no generator sees what another writes.
@@ -258,7 +258,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task MarkedIndexer_ShouldReportLOC400()
+    public async Task MarkedIndexer_ShouldReportLOC505()
     {
         // Arrange & Act: the compiler takes the attribute on an indexer, which is a property to it.
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -277,7 +277,7 @@ public sealed class LocalizedMemberAnalyzerTests
 
     [Test]
     [Arguments("""[field: Localized(en: "City", nl: "Plaats")] public string City { get; } = "";""", "Write the attribute without 'field:'")]
-    public async Task AttributeOnTheFieldBehindAProperty_ShouldReportLOC400(string member, string advice)
+    public async Task AttributeOnTheFieldBehindAProperty_ShouldReportLOC505(string member, string advice)
     {
         // Arrange & Act: 'field:' puts the attribute on the field the compiler keeps the property's value in.
         var diagnostic = await SingleCannotRegisterAsync($$"""

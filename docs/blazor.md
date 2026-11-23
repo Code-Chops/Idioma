@@ -72,10 +72,7 @@ The rest of this page sets up the parts the picker needs. A standalone Blazor We
 Every app with a server needs request localization, which gives each request the culture of its cookie, and the endpoint the picker calls. Add both to the server's `Program.cs`, before `app.MapRazorComponents`, with usings for `CodeChops.Idioma`, `Microsoft.AspNetCore.Http.HttpResults` and `Microsoft.AspNetCore.Localization`:
 
 ```csharp
-app.UseRequestLocalization(options => options
-    .AddSupportedCultures([.. LocalizationRegistry.SupportedLanguages])
-    .AddSupportedUICultures([.. LocalizationRegistry.SupportedLanguages])
-    .SetDefaultCulture(LocalizationRegistry.DefaultLanguage!));
+app.UseRequestLocalization([.. LocalizationRegistry.SupportedLanguages]);
 
 app.MapGet("/culture/set", (string culture, string? returnUrl, HttpContext http) =>
 {
