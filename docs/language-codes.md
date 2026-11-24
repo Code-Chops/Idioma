@@ -16,7 +16,7 @@ An inline text and an attribute take the same codes as parameter names, in camel
 
 When a longer code isn't listed, only the last two letters count. A name alone can't tell `ShopLocalizationEnGb` (British English) from `AdminUiNl` (Dutch). So an unlisted `ShopLocalizationEnGb` serves `gb`, which isn't a language (build error `LOC202`).
 
-Write each code as .NET names the culture. Danish is `da` and British English is `en-GB`, so `dk` and `en-UK` match no user's culture. The build warns about a language or a region that no culture has (`LOC104`).
+Write each code as .NET names the culture. Danish is `da` and British English is `en-GB`, so `dk` and `en-UK` match no user's culture. The build warns about a language or a region that doesn't exist (`LOC104`).
 
 ## Regional variants
 
@@ -47,7 +47,7 @@ You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and
   }
   ```
 
-A set that derives from another set lists `ILocalizationSet` again to implement `LocalizationLanguageCode`, as in the second example. Without it, its `LocalizationLanguageCode` implements nothing (`LOC206`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC207`. A culture name with a region that no culture has, such as `"en-UK"`, is build warning `LOC104`.
+A set that derives from another set lists `ILocalizationSet` again to implement `LocalizationLanguageCode`, as in the second example. Without it, its `LocalizationLanguageCode` implements nothing (`LOC206`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC207`. A culture name with a region that doesn't exist, such as `"en-UK"`, is build warning `LOC104`.
 
 Separate `en-US` and `en-GB` sets without an `en` set work too, with two drawbacks:
 

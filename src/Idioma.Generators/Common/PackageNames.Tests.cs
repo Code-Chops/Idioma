@@ -17,7 +17,7 @@ public sealed class PackageNamesTests
         var helpLink = PackageNames.HelpLink("LOC201");
 
         // Assert
-        helpLink.ShouldBe("https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md#loc201");
+        helpLink.ShouldBe("https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors/LOC2XX-sets.md#loc201");
     }
 
     [Test]

@@ -14,7 +14,7 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 `LocalizableText.GetTextOfType` gives the text of a type itself, the same way: `GetTextOfType<Address>()`, or `GetTextOfType(type)` for a type your code only has at run time.
 
-Each gives `null` where there's no text. The `string` is the wording for the user's language at the call, so read it where you show it. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC601` when the member has no text ([details](build-errors.md#loc601)).
+Each gives `null` where there's no text. The `string` is the wording for the user's language at the call, so read it where you show it. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC601` when the member has no text ([details](build-errors/LOC6XX-reading-a-text.md#loc601)).
 
 A member of an enum has a text the same way, and a value of the enum gives it with `GetText()` ([Enums](enums.md#an-attribute-on-each-member)).
 

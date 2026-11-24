@@ -16,6 +16,7 @@ Lightweight and fast translations for any .NET app, written in C# and checked at
   - Go to definition;
   - Every language's wording on hover;
   - Find all references.
+- A wording can use your app's services, where a resx entry is a fixed string. A set is a class, so its constructor can take services from dependency injection ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#dependency-injection)).
 - Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
 - An AI coding assistant translates your texts well:
   - It sees the code that uses them so it knows the context.
@@ -219,17 +220,6 @@ To show a text written as an attribute, ask for it by its type and the name of i
 
 All three give a `string`: the wording for the user's language at the moment you read the text. So they work in markup, in string interpolation, and wherever a `string` is expected, as in `string label = ShopLocalization.Checkout;`.
 
-#### Read a text where you show it
-
-A text doesn't follow a later change of language, because it's a `string`. Don't keep it in a static field, a cache or a view model that outlives one request. On a server, a `string` in a static field shows every user the language of the first one:
-
-```csharp
-static readonly string Frozen = ShopLocalization.Checkout; // The first user's language, for every user
-static string Label => ShopLocalization.Checkout;          // Each user's own language
-```
-
-The build warns about a text in the initializer of a static field or property (`LOC602`).
-
 ### The user's language
 
 The user's language is `CultureInfo.CurrentUICulture`.
@@ -324,7 +314,6 @@ A member you add to the enum later is a build error in every language until it h
 
 - When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can ask an `IStringLocalizer` first, such as one that reads a database ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
 - When your translators work in a translation tool, which reads files such as XLIFF.
-- When an attribute of .NET such as `[Required]` or `[Display]` has to read a label you write with `[Localized]`. Those attributes read only a text of a set, by its name ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)).
 - When your app targets .NET 9 or earlier, or can't move to C# 14.
 
 ## Documentation
@@ -338,7 +327,7 @@ The docs cover the rest, a page per subject:
 - [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): writing a library, and [changing a text of a library](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#changing-a-text-of-a-library) in your app.
 - [Translating your texts](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md): with an AI coding assistant, and reviewing each language in a pull request.
 - [ASP.NET Core](https://github.com/Code-Chops/Idioma/blob/main/docs/aspnet-core.md): the language of a request, labels and validation messages, and what to watch on a server.
-- [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): a language picker for every render mode, dates and numbers, and a text as a component parameter.
+- [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): a language picker for every render mode, a browser language the app doesn't have, and dates and numbers.
 - [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning, by its code.
 - [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, and keeping a resource file as an override.
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes next to `IStringLocalizer`, and what Idioma adds to a download.

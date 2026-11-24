@@ -29,15 +29,9 @@ public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderSt
 }
 ```
 
-The generator adds every member of the enum to the contract, as a property named after the member. The generated class gets a text per member, a method `GetTextByValue` that gives the text of a value, and an extension method `GetText` that you call on the value:
+The generated class gets a text per member of the enum, a method `GetTextByValue` that gives the text of a value, and an extension method `GetText` that you call on the value. The generator also adds every member to the contract, as a property named after the member:
 
 ```csharp
-public interface IOrderStatusLocalization
-{
-    string Pending { get; }
-    string Shipped { get; }
-}
-
 public static partial class OrderStatusLocalization
 {
     public static string Pending => ...; // The wording of the set for the user's language
@@ -55,6 +49,12 @@ public static partial class OrderStatusLocalization
         public string GetText() => GetTextByValue(value); // order.Status.GetText()
     }
 }
+
+public interface IOrderStatusLocalization
+{
+    string Pending { get; }
+    string Shipped { get; }
+}
 ```
 
 The contract takes its members from the enum, and not only from the default-language set. So a member without a text is build error `CS0535` in every language, the default language too. Your IDE's "Implement interface" writes the missing properties.
@@ -66,9 +66,8 @@ What else to know:
 - **Every language.** Each set of the enum lists `ILocalizationSet<TEnum>`, in every language, so each set shows which enum it words. A set that lists `ILocalizationSet` in its place is build warning `LOC205`, and so is one that lists an enum the contract has no texts of. The fix for a missing language (`LOC201`) writes the generic one.
 - **Only texts of members.** A text that isn't a member of the enum is build warning `LOC305`, because `GetText()` never gives it. It's usually left over from a member that was removed. Write a caption for the enum, or a text that takes values, in a set of its own.
 - **A member's text is a property.** It takes no values, because `GetTextByValue` has none to give it. A method with the name of a member is build error `LOC400`.
-- **The names `GetTextByValue` and `GetText`.** No text of such a set can have either name, because the generated methods have them (`LOC300`).
 - **By name.** `GetTextByKey` takes the name of a member as its key: `OrderStatusLocalization.GetTextByKey("Shipped")`.
-- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart. So `OrderStatus.None.GetText()` shows the text of `Default`. The build warns about such a call ([LOC600](build-errors.md#loc600)), and the IDE fix writes `OrderStatusLocalization.None`.
+- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart. So `OrderStatus.None.GetText()` shows the text of `Default`. The build warns about such a call ([LOC600](build-errors/LOC6XX-reading-a-text.md#loc600)), and the IDE fix writes `OrderStatusLocalization.None`.
 - **A value that isn't a member.** `GetTextByValue` shows it as `ToString()` writes it, in every language. For a combination of flags, that's the names of the flags, as in `Read, Write`. For any other value, it's the number.
 - **A member marked `[Obsolete]` as an error.** It still needs a text, because stored data may still hold its value. `GetTextByValue` gives that value the text.
 - **Accessibility.** `GetTextByValue` and `GetText` are public for a public enum, and internal for an internal one.
@@ -115,6 +114,6 @@ public static class ParcelStatusLocalizedExtensions
 
 What else to know:
 
-- **Members with the same value.** Of two members with the same value, the first gives the text. A member with the value of a marked member, such as `Default = Active`, shows that member's text. The build warns about a call that names the later of two marked members ([LOC600](build-errors.md#loc600)), because it shows the other's text. `GetTextByMember` gives the text of each.
+- **Members with the same value.** Of two members with the same value, the first gives the text. A member with the value of a marked member, such as `Default = Active`, shows that member's text. The build warns about a call that names the later of two marked members ([LOC600](build-errors/LOC6XX-reading-a-text.md#loc600)), because it shows the other's text. `GetTextByMember` gives the text of each.
 - **A member without `[Localized]`.** It shows its name, in every language. The build warns about it when other members of the enum are marked (`LOC501`), because that's usually a member added later. An enum with a text of its own and no marked member gets no warning, because its values may never be shown.
 - **An enum inside a generic type.** An enum inside a type with type parameters gets no `GetText()`, and `GetTextByMember` still finds its texts.

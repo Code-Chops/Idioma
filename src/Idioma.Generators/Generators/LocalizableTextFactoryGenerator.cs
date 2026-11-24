@@ -76,7 +76,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
     // A warning, because the tables the build carries can lag behind the standards, and a warning can be turned off.
     internal static readonly DiagnosticDescriptor UnknownLanguageCodeRule = new(
         id: UnknownLanguageCodeDiagnosticId,
-        title: "Language code that no culture has",
+        title: "Language code that doesn't exist",
         messageFormat: "'{0}' won't match any user's culture, because '{1}' isn't an {2} code. {3}.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,

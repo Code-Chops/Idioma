@@ -31,21 +31,30 @@ This picker works in Blazor WebAssembly, Blazor Server, and a Blazor Web App in 
 
     private async Task SelectLanguage(string name)
     {
-        // For the WebAssembly runtime to start in this language, also after a reload on the server.
+        // For the WebAssembly runtime to start in this language, also after a reload.
         await JS.InvokeVoidAsync("localStorage.setItem", "language", name);
 
         if (OperatingSystem.IsBrowser())
         {
-            // In WebAssembly the app runs for one user, so switch in place. Set the DefaultThread cultures too,
-            // because a culture set only on CurrentCulture and CurrentUICulture doesn't last beyond this event.
-            var culture = CultureInfo.GetCultureInfo(name);
-            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = culture;
-            CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.CurrentUICulture = culture;
-
             // For the pages a server renders. Leave this out in standalone Blazor WebAssembly, which has no server.
             await JS.InvokeVoidAsync("fetch", $"culture/set?culture={Uri.EscapeDataString(name)}");
 
-            await LanguageChanged.InvokeAsync();
+            if (LanguageChanged.HasDelegate)
+            {
+                // In WebAssembly the app runs for one user, so switch in place. Set the DefaultThread cultures too,
+                // because a culture set only on CurrentCulture and CurrentUICulture doesn't last beyond this event.
+                var culture = CultureInfo.GetCultureInfo(name);
+                CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = culture;
+                CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.CurrentUICulture = culture;
+
+                await LanguageChanged.InvokeAsync();
+            }
+            else
+            {
+                // Without a layout that re-renders the page, switching in place would change only this picker.
+                // So reload the page.
+                Navigation.Refresh(forceReload: true);
+            }
         }
         else
         {
@@ -60,7 +69,7 @@ This picker works in Blazor WebAssembly, Blazor Server, and a Blazor Web App in 
 
 The picker does one of two things:
 
-- **In WebAssembly**, it switches in place. Every language is compiled into your assemblies, so this needs no download and no reload.
+- **In WebAssembly**, it switches in place. Every language is compiled into your assemblies, so this needs no download and no reload. It needs a layout that handles `LanguageChanged`, because that re-renders the rest of the page ([details](#showing-the-new-language-everywhere)). Without one, the picker reloads the page.
 - **On a server**, it stores the choice in the culture cookie and reloads the page. The same happens with `InteractiveAuto` until the WebAssembly runtime has downloaded.
 
 Either way, it stores the choice in the browser's local storage as well, for the WebAssembly runtime to start in (see [Remembering the choice](#remembering-the-choice)).
@@ -114,7 +123,9 @@ An `EventCallback` re-renders the component that receives it, so any handler wou
 
 When the key changes, Blazor rebuilds everything inside it, so every text reads the new culture. Whatever is rebuilt loses its state, such as what a user typed in a form.
 
-The layout handles the event, so it must be interactive. In standalone Blazor WebAssembly, it always is. In a Blazor Web App, it is only when the whole app is interactive, as in `<Routes @rendermode="InteractiveAuto" />`.
+Read a text where you show it. A text kept outside the keyed content, such as in a scoped service, isn't rebuilt, so it stays in the old language.
+
+The layout handles the event, so it must be interactive. In standalone Blazor WebAssembly, it always is. In a Blazor Web App, it is only when the whole app is interactive, as in `<Routes @rendermode="InteractiveAuto" />`. In any other app, leave `LanguageChanged` out, so the picker reloads the page. Switching in place would leave the static parts of the page in the old language until the next navigation.
 
 ### Remembering the choice
 
@@ -166,27 +177,3 @@ This also needs all globalization data, because the app can start in a culture o
 To show dates and numbers correctly in every culture, set `<BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>` in the project file of the WebAssembly app. In a Blazor Web App, that's the client project.
 
 Dates and numbers follow the culture too, but they need its globalization data. Blazor loads only the part for the culture the app starts with, so an app starting in English shows Dutch dates in English.
-
-## A text as a component parameter
-
-A text is a `string`, so a component parameter that takes a text is a `string` too. It holds the wording of the moment its parent rendered. After a language switch, the parent renders again and passes the new wording.
-
-In an app that is interactive as a whole, [keying the layout on the culture](#showing-the-new-language-everywhere) covers parameters too. Blazor rebuilds every component inside the key, so each parent reads its texts again and passes the new wording on.
-
-A component with another render mode is different, such as an `InteractiveWebAssembly` component on a static page. It gets the wording the server made, and the server isn't asked again when the language switches in the browser. So the text stays in the old language until the next navigation. Read the text inside that component instead. Where the parent decides which text it is, pass what names the text and read it there:
-
-```razor
-@* The static page passes the key, not the wording *@
-<CartButton LabelKey="@nameof(ShopLocalization.Checkout)" />
-
-@* CartButton.razor, interactive *@
-<button>
-    @ShopLocalization.GetTextByKey(LabelKey)
-</button>
-
-@code {
-    [Parameter, EditorRequired] public string LabelKey { get; set; } = "";
-}
-```
-
-A value of an enum works the same way, with `GetText()` in the component. A text kept outside the keyed content, such as in a scoped service, isn't rebuilt with the layout, so read it where you show it too.

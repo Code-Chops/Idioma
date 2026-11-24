@@ -19,6 +19,15 @@
     <File Path="docs/translating.md" />
     <File Path="README.md" />
   </Folder>
+  <Folder Name="/Docs/BuildErrors/">
+    <File Path="docs/build-errors/LOC1XX-languages.md" />
+    <File Path="docs/build-errors/LOC2XX-sets.md" />
+    <File Path="docs/build-errors/LOC3XX-texts-of-a-set.md" />
+    <File Path="docs/build-errors/LOC4XX-texts-with-parameters.md" />
+    <File Path="docs/build-errors/LOC5XX-inline-texts-and-attributes.md" />
+    <File Path="docs/build-errors/LOC6XX-reading-a-text.md" />
+    <File Path="docs/build-errors/LOC7XX-libraries.md" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />

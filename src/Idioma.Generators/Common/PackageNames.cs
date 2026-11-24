@@ -26,19 +26,34 @@ internal static class PackageNames
     public const string ShownValueAttribute = InternalsNamespace + ".ShownValueAttribute";
 
     /// <summary>
-    /// The page that lists every build error and warning by its code, with an example and the fix.
+    /// The folder of the pages of build errors and warnings. Each page holds the codes of one subject, with an example
+    /// and the fix of each.
     /// </summary>
-    private const string BuildErrorsPage = "https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md";
+    private const string BuildErrorsFolder = "https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors/";
 
     /// <summary>
-    /// The help link of a diagnostic: the section of its code on the page of build errors, such as <c>#loc201</c> for
-    /// <c>LOC201</c>. An IDE opens it from the code in its error list.
+    /// The help link of a diagnostic: the section of its code on the page of its subject, such as
+    /// <c>LOC2XX-sets.md#loc201</c> for <c>LOC201</c>. The first digit of a code names its subject. An IDE opens the
+    /// link from the code in its error list.
     /// </summary>
     // On main, and not at the tag of a version as the README of the package links: this assembly doesn't know the
-    // version of the package it ships in.
+    // version of the package it ships in. So a page or a section that a released version links to stays where it is.
+    // GitHub tells the case of a path apart, so each page is named here as its file is.
     public static string HelpLink(string diagnosticId)
     {
-        var helpLink = $"{BuildErrorsPage}#{diagnosticId.ToLowerInvariant()}";
+        var page = diagnosticId[3] switch
+        {
+            '1' => "LOC1XX-languages",
+            '2' => "LOC2XX-sets",
+            '3' => "LOC3XX-texts-of-a-set",
+            '4' => "LOC4XX-texts-with-parameters",
+            '5' => "LOC5XX-inline-texts-and-attributes",
+            '6' => "LOC6XX-reading-a-text",
+            '7' => "LOC7XX-libraries",
+            _ => throw new ArgumentOutOfRangeException(nameof(diagnosticId), diagnosticId, "The code has no page of build errors. Add its subject to HelpLink, and its page to docs/build-errors/."),
+        };
+
+        var helpLink = $"{BuildErrorsFolder}{page}.md#{diagnosticId.ToLowerInvariant()}";
         return helpLink;
     }
 

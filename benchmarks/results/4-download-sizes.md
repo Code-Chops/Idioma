@@ -2,30 +2,30 @@ Download sizes, with the interpreter, compressed with Brotli as a server sends t
 
 | What's downloaded | resx and IStringLocalizer | Idioma |
 |---|---:|---:|
-| The approach, with 100 texts in the default language | 19.3 KB | 30.1 KB |
-| Of that, its own assemblies | 11.3 KB | 16.4 KB |
-| Of that, the app's assembly | 4.0 KB | 8.5 KB |
-| Of that, .NET's own assemblies | 3.9 KB | 5.0 KB |
+| The approach, with 100 texts in the default language | 19.3 KB | 31.4 KB |
+| Of that, its own assemblies | 11.3 KB | 17.4 KB |
+| Of that, the app's assembly | 4.1 KB | 8.6 KB |
+| Of that, .NET's own assemblies | 3.9 KB | 5.4 KB |
 | Of that, the rest, such as dotnet.js | 0.1 KB | 0.1 KB |
-| Each extra language of 100 texts | 3.9 KB | 1.8 KB |
+| Each extra language of 100 texts | 3.7 KB | 2.0 KB |
 
 The files that grow by 0.5 KB or more, with 100 texts in the default language:
 
 | File | resx and IStringLocalizer | Idioma |
 |---|---:|---:|
-| CodeChops.Idioma.wasm | 0.0 KB | 16.4 KB |
-| Idioma.Benchmarks.Size.wasm | 4.0 KB | 8.5 KB |
+| CodeChops.Idioma.wasm | 0.0 KB | 17.4 KB |
+| Idioma.Benchmarks.Size.wasm | 4.1 KB | 8.6 KB |
 | Microsoft.Extensions.Localization.Abstractions.wasm | 2.5 KB | 0.0 KB |
 | Microsoft.Extensions.Localization.wasm | 8.8 KB | 0.0 KB |
-| System.Collections.Immutable.wasm | 0.1 KB | 1.9 KB |
+| System.Collections.Immutable.wasm | 0.1 KB | 2.5 KB |
 | System.Linq.wasm | 0.1 KB | 0.8 KB |
-| System.Private.CoreLib.wasm | 2.4 KB | 0.4 KB |
+| System.Private.CoreLib.wasm | 2.4 KB | 0.2 KB |
 | System.Threading.wasm | 0.0 KB | 1.7 KB |
 
 Idioma in two languages, with the Dutch set in an assembly of its own that the app loads lazily, so only a Dutch user downloads it. Measured against the same app without localization:
 
 | What's downloaded | Both sets in the app's assembly | The Dutch set loaded lazily |
 |---|---:|---:|
-| By a user of the default language | 31.9 KB | 47.4 KB |
-| By a Dutch user | 31.9 KB | 52.4 KB |
-| Of that, the Dutch set | 1.8 KB | 5.1 KB |
+| By a user of the default language | 33.4 KB | 48.6 KB |
+| By a Dutch user | 33.4 KB | 53.6 KB |
+| Of that, the Dutch set | 2.0 KB | 5.0 KB |

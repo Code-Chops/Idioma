@@ -16,7 +16,7 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 Three choices decide what an app that uses your library can change:
 
-- **Write texts in sets.** An app can add a language to a set, but not to an inline text or a text written as an attribute ([LOC701](build-errors.md#loc701)).
+- **Write texts in sets.** An app can add a language to a set, but not to an inline text or a text written as an attribute ([LOC701](build-errors/LOC7XX-libraries.md#loc701)).
 - **Make the sets public.** A contract takes the accessibility of its set, and an app needs a public contract to add a language.
 - **Leave the sets unsealed and the texts `virtual`.** An app can then reword one text and keep the rest ([Changing a text of a library](#changing-a-text-of-a-library)).
 
@@ -24,7 +24,7 @@ Three choices decide what an app that uses your library can change:
 
 Your users get the languages of the app itself, the project that starts, such as the one that holds `Program.cs`. Its `[assembly: SupportedLanguages]` is what `LocalizationRegistry.SupportedLanguages` returns. Its first language is the fallback for every text, library texts included. What a library declares matters only to the library's own build, which checks its own texts against it.
 
-So every app declares its languages, even when its own project has no texts. An app without the attribute doesn't build ([LOC103](build-errors.md#loc103)):
+So every app declares its languages, even when its own project has no texts. An app without the attribute doesn't build ([LOC103](build-errors/LOC1XX-languages.md#loc103)):
 
 ```csharp
 // In the app's own project, in Program.cs for example
