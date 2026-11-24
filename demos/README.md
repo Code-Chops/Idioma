@@ -7,7 +7,7 @@ This folder has four demos of [Idioma](../README.md). Each is a complete app in 
 - [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class and its properties.
 - [`EnumDemo.cs`](EnumDemo.cs) gives two enums their texts, one in each [way](../docs/enums.md): a set of the enum, and an attribute on each member.
 
-All four support English and Dutch. `SetDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../docs/language-codes.md#regional-variants) of English. Each prints its texts in each of its languages. A user of non-supported language, such as German, gets English, the default, as a [fallback](../docs/advanced-topics.md#fallback-order).
+All four support English and Dutch. `SetDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../docs/language-codes.md#regional-variants) of English. Each prints its texts in each of its languages. A user of a language the demos don't support, such as German, gets English, the default, as a [fallback](../docs/advanced-topics.md#fallback-order).
 
 ## In your browser
 
