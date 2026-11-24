@@ -1,8 +1,8 @@
 name: Publish
 
-# Publishes CodeChops.Idioma to nuget.org: push a tag named after the version (v0.1.0), or run it by hand on such a
-# tag. It signs in through trusted publishing, so the repository holds no API key: nuget.org needs a trusted publishing
-# policy for this repository and this workflow file (publish.yml).
+# Publishes CodeChops.Idioma to nuget.org and to GitHub Packages: push a tag named after the version (v0.1.0), or run
+# it by hand on such a tag. It signs in to nuget.org through trusted publishing, so the repository holds no API key:
+# nuget.org needs a trusted publishing policy for this repository and this workflow file (publish.yml).
 #
 # The publish job can get an API key for nuget.org, so each action this workflow uses is pinned to a commit, with its
 # version in the comment behind it: a tag such as v4 is one its owner can move to other code.
@@ -124,3 +124,27 @@ jobs:
       # The symbols package (.snupkg) next to the package is pushed along.
       - name: Push
         run: dotnet nuget push artifacts/*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+
+  # Pushes the same package to GitHub Packages, so the repository's page lists it. nuget.org stays the feed to install
+  # from, because GitHub's feed needs a sign-in even for a public package. It runs after the push to nuget.org, so
+  # GitHub never lists a version that nuget.org doesn't have.
+  publish-github:
+    name: Publish to GitHub Packages
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write # lets GITHUB_TOKEN push to GitHub Packages
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: artifacts
+
+      # For `dotnet nuget push` alone.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      # GitHub Packages takes no symbols package, so the .snupkg stays behind.
+      - name: Push
+        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --no-symbols
