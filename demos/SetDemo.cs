@@ -5,7 +5,6 @@ using CodeChops.Idioma;
 
 [assembly: SupportedLanguages(defaultLanguage: "en", "en-GB", "nl")]
 
-// The supported languages, and German, which isn't one of them.
 foreach (var culture in LocalizationRegistry.SupportedLanguages)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);

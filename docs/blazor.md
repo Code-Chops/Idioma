@@ -182,7 +182,7 @@ A component with another render mode is different, such as an `InteractiveWebAss
 @* CartButton.razor, interactive *@
 <button>
     @ShopLocalization.GetTextByKey(LabelKey)
-  </button>
+</button>
 
 @code {
     [Parameter, EditorRequired] public string LabelKey { get; set; } = "";

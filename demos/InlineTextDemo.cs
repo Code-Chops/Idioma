@@ -11,6 +11,6 @@ foreach (var culture in LocalizationRegistry.SupportedLanguages)
     var day = DateTime.Now.ToString("dddd", CultureInfo.CurrentUICulture);
 
     // The text gives the wording for the language of the moment it's read, so it's read where it's shown.
-    // Leave out nl:, or the {name} in it, and it doesn't build.
+    // Leave out nl:, or the {day} in it, and it doesn't build.
     Console.WriteLine($"{culture}: {LocalizableText.Inline(en: $"Today is {day}.", nl: $"Vandaag is het {day}.")}");
 }
