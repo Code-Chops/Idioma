@@ -60,6 +60,27 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
+    public void ResolveLanguage_OfCodeThatIsACultureName_ShouldKeepItsLookupApartFromTheReaders()
+    {
+        // Arrange: a reader's culture object of its own, as the options of ASP.NET Core hold one.
+        var registry = LocalizationRegistry.Create([new RegistryLocalizationEn(), new RegistryLocalizationNl()], "en", "nl");
+        var reader = new CultureInfo("en");
+
+        // Act: the code first, as a text falling back to the default language resolves it.
+        var language = registry.ResolveLanguage("en");
+        var culture = registry.Resolve(reader);
+
+        // Assert: the reader's lookup holds the reader's culture, which a thread compares by reference, and the code's
+        // lookup holds the culture of its language. Both walk the same names.
+        culture.ShouldNotBeSameAs(language);
+        culture.Culture.ShouldBeSameAs(reader);
+        culture.Language.ShouldBeNull();
+        language.Culture.ShouldBe(CultureInfo.GetCultureInfo("en"));
+        language.Language.ShouldBe("en");
+        language.Names.ShouldBe(culture.Names);
+    }
+
+    [Test]
     public void Resolve_OnThreadsOfDifferentCultures_ShouldGiveEachItsOwnCulture()
     {
         // Arrange: one registry, and threads that each render for a user of another language, as a server's do.
@@ -76,7 +97,7 @@ public sealed partial class LocalizationRegistryTests
                 var lookup = registry.Resolve(culture);
 
                 if (!ReferenceEquals(lookup.Culture, culture) || !String.Equals(lookup.Names[0], culture.Name, StringComparison.Ordinal))
-                    throw new InvalidOperationException($"Asked for {culture.Name}, and got the lookup of {lookup.Culture.Name}.");
+                    throw new InvalidOperationException($"Asked for {culture.Name}, and got the lookup of {lookup.Culture?.Name}.");
             }
         });
     }

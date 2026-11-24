@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace CodeChops.Idioma.Generators;
 
 // The part of LocalizationDiscovery that reads the texts of a set: which members are texts, which it declares or
@@ -476,10 +478,20 @@ internal static partial class LocalizationDiscovery
 
             var members = ImmutableArray.CreateBuilder<LocalizedEnumMember>();
             var values = new HashSet<object>();
+            var suppressed = new List<string>(GetSuppressedDiagnosticsOfType(@enum));
 
             foreach (var member in @enum.GetMembers())
-                if (member is IFieldSymbol { HasConstantValue: true, ConstantValue: { } value })
-                    members.Add(new LocalizedEnumMember(member.Name, IsFirstOfItsValue: values.Add(value)));
+            {
+                if (member is not IFieldSymbol { HasConstantValue: true, ConstantValue: { } value })
+                    continue;
+
+                members.Add(new LocalizedEnumMember(
+                    member.Name,
+                    IsFirstOfItsValue: values.Add(value),
+                    ObsoleteAsErrorValue: IsObsoleteAsError(member) ? Convert.ToString(value, CultureInfo.InvariantCulture) : null));
+
+                suppressed.AddRange(GetSuppressedDiagnostics(member));
+            }
 
             enums.Add(new LocalizedEnum(
                 Type: TextParameters.ReadType(@enum),
@@ -487,7 +499,8 @@ internal static partial class LocalizationDiscovery
                 Name: @enum.ToDisplayString(CrefNameFormat),
                 Namespace: GetNamespaceName(@enum.ContainingNamespace),
                 IsPublic: IsPublic(@enum),
-                Members: new EquatableArray<LocalizedEnumMember>(members.ToImmutable())));
+                Members: new EquatableArray<LocalizedEnumMember>(members.ToImmutable()),
+                SuppressedDiagnostics: new EquatableArray<string>([.. suppressed.Distinct(StringComparer.Ordinal)])));
         }
 
         var ordered = enums.OrderBy(static @enum => @enum.FullyQualifiedName, StringComparer.Ordinal).ToImmutableArray();

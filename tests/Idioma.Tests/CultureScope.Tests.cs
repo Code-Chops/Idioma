@@ -155,6 +155,47 @@ public sealed class CultureScopeTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public async Task UseCulture_DisposedWhileATaskStartedInsideItRuns_ShouldStillHoldInThatTask()
+    {
+        // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread. An email is
+        // started inside the scope, and the code that started it ends the scope before the email reads its texts.
+        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
+        using var provider = new ProvidedCultureScope("en-US");
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<(string Checkout, string Total, string AfterScopeOfItsOwn)> email;
+
+        using (LocalizationRegistry.UseCulture(Dutch))
+        {
+            email = Task.Run(async () =>
+            {
+                await ended.Task;
+
+                var checkout = GeneratedLocalization.Checkout;
+                var total = GeneratedLocalization.Total(1234.5m);
+
+                // A scope of its own ends back in the scope the task was started in.
+                using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB")))
+                {
+                }
+
+                return (checkout, total, GeneratedLocalization.Checkout);
+            });
+        }
+
+        // Act
+        ended.SetResult();
+        var (checkout, total, afterScopeOfItsOwn) = await email;
+
+        // Assert: the email is Dutch throughout, as the cultures of its thread are, and the code that ended the scope
+        // follows the provider again.
+        checkout.ShouldBe("Afrekenen");
+        total.ShouldBe("Totaal: 1.234,50");
+        afterScopeOfItsOwn.ShouldBe("Afrekenen");
+        GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
+    }
+
+    [Test]
     public void UseCulture_WithNull_ShouldThrowArgumentNullException()
     {
         // Act & Assert

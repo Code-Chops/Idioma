@@ -160,7 +160,11 @@ internal static class TextParameters
         var parameters = ImmutableArray.CreateBuilder<TextParameter>(method.Parameters.Length);
 
         foreach (var parameter in method.Parameters)
-            parameters.Add(new TextParameter(parameter.Name, ReadType(parameter.Type), shown[parameter.Ordinal]));
+            parameters.Add(new TextParameter(
+                parameter.Name,
+                ReadType(parameter.Type),
+                shown[parameter.Ordinal],
+                new EquatableArray<string>(LocalizationDiscovery.GetSuppressedDiagnosticsOfType(parameter.Type))));
 
         return new EquatableArray<TextParameter>(parameters.MoveToImmutable());
     }
@@ -694,13 +698,16 @@ internal static class TextParameters
 }
 
 /// <summary>
-/// A parameter of a text that takes values: its name, its type as generated code can write it, and whether the
-/// default-language wording shows the value, which every other language is then held to (<c>LOC302</c>).
+/// A parameter of a text that takes values: its name, its type as generated code can write it, whether the
+/// default-language wording shows the value, which every other language is then held to (<c>LOC302</c>), and what
+/// writing its type in generated code reports besides <c>CS0612</c> and <c>CS0618</c>, such as the id of a type marked
+/// <c>[Experimental]</c> (<see cref="LocalizationDiscovery.GetSuppressedDiagnosticsOfType"/>).
 /// </summary>
 internal readonly record struct TextParameter(
     string Name,
     EquatableArray<TypeNamePart> Type,
-    bool IsShown);
+    bool IsShown,
+    EquatableArray<string> SuppressedDiagnostics);
 
 /// <summary>
 /// The using directives the file of a contract repeats, each as it is written (<c>using MyApp.Domain;</c>): those of

@@ -45,7 +45,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, or a file-local one. The generator can't read what Razor generates from a .razor or .cshtml file either. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizableText.GetTextByMember would silently give nothing for the member.",
+        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizableText.GetTextByMember would silently give nothing for the member.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmarkedEnumMemberRule = new(

@@ -22,7 +22,7 @@ This picker works in Blazor WebAssembly, Blazor Server, and a Blazor Web App in 
 @foreach (var language in LocalizationRegistry.SupportedLanguages)
 {
     <button @onclick="() => SelectLanguage(language)">
-      @language.ToUpperInvariant()
+        @language.ToUpperInvariant()
     </button>
 }
 
@@ -80,10 +80,12 @@ app.MapGet("/culture/set", (string culture, string? returnUrl, HttpContext http)
         http.Response.Cookies.Append(
             CookieRequestCultureProvider.DefaultCookieName,
             CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture)),
-            new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // Without an expiry, the cookie ends with the browser session
+            new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) });
 
     // Only back to a page of this site, so the endpoint can't send a visitor elsewhere.
-    return returnUrl is not null && RedirectHttpResult.IsLocalUrl(returnUrl) ? Results.LocalRedirect(returnUrl) : Results.NoContent();
+    return returnUrl is not null && RedirectHttpResult.IsLocalUrl(returnUrl)
+        ? Results.LocalRedirect(returnUrl)
+        : Results.NoContent();
 });
 ```
 
@@ -178,7 +180,9 @@ A component with another render mode is different, such as an `InteractiveWebAss
 <CartButton LabelKey="@nameof(ShopLocalization.Checkout)" />
 
 @* CartButton.razor, interactive *@
-<button>@ShopLocalization.GetTextByKey(LabelKey)</button>
+<button>
+    @ShopLocalization.GetTextByKey(LabelKey)
+  </button>
 
 @code {
     [Parameter, EditorRequired] public string LabelKey { get; set; } = "";

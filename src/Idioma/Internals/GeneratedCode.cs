@@ -620,7 +620,7 @@ public static class GeneratedCode
     /// </summary>
     /// <param name="languageCode">
     /// The language: a culture name such as <c>en-GB</c>. <see langword="null"/> for a set that implements
-    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/>.
+    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/> with something other than a constant the build can read.
     /// </param>
     /// <param name="ownTexts">
     /// The names of the texts the set's own class words, such as <c>Checkout</c>, for a set that derives from another.

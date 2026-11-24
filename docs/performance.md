@@ -10,6 +10,7 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 - In Blazor WebAssembly with Mono's interpreter, the same takes a set about 60 ns, where `IStringLocalizer` takes about 680 ns.
 - A British user's text costs a set the same as any other. `IStringLocalizer` takes three times as long for a text that comes from English, because it looks for British wording first.
 - A text with a parameter takes a set about 6 ns on .NET, a tenth of what `IStringLocalizer` takes. It allocates only the string it returns.
+- For a user whose language falls back, such as a German user of an app in English and Dutch, a text with a parameter takes more than ten times as long, and allocates about 90 bytes more. Its method runs in the culture of the language it falls back to, so the culture is switched for the call.
 - An inline text takes about 3.9 ns, and a text written as an attribute about 5.7 ns. Both allocate nothing.
 - An inline text with a parameter builds its wording in every language on each call. It takes about 16 ns with three languages, a quarter of what `IStringLocalizer` takes.
 - Idioma adds more to a Blazor WebAssembly download than resx and `IStringLocalizer` do. With 100 texts and the interpreter, Idioma adds 30.1 KB, compressed, plus 1.8 KB for each extra language. resx and `IStringLocalizer` add 19.3 KB, plus 3.9 KB for a user whose language isn't the default.
@@ -29,11 +30,11 @@ Four approaches show them:
 
 The app declares `("en", "nl", "en-GB")`. "Region" is a British user.
 
-A user whose language the app doesn't have, such as a German user, has no row. The app makes its default language their UI culture, as [Blazor](blazor.md#a-browser-language-the-app-doesnt-have) shows, so their texts take as long as for a user of the default language.
+A user whose language the app doesn't have, such as a German user, sees English. Their texts were measured on another machine, so they have [a table of their own](#a-language-that-falls-back). A Blazor app can make its default language their UI culture, as [Blazor](blazor.md#a-browser-language-the-app-doesnt-have) shows. Their texts then take as long as for a user of the default language.
 
 Each benchmark first checks that every approach shows the expected wording, so no approach is timed doing less work.
 
-The numbers come from one machine, an AMD Ryzen AI 9 HX PRO 370 on Windows 11. They ran on .NET 11.0.0 with BenchmarkDotNet 0.16.0-preview.2, and in Blazor WebAssembly on .NET 11.0.0 in a headless Chrome 157. [Its tables](../benchmarks/results/second-machine) are kept. Compare the approaches with each other rather than with your own numbers, because those depend on the machine.
+Apart from that table, the numbers come from one machine, an AMD Ryzen AI 9 HX PRO 370 on Windows 11. They ran on .NET 11.0.0 with BenchmarkDotNet 0.16.0-preview.2, and in Blazor WebAssembly on .NET 11.0.0 in a headless Chrome 157. [Its tables](../benchmarks/results/second-machine) are kept. Compare the approaches with each other rather than with your own numbers, because those depend on the machine.
 
 What wasn't measured again since a text became a `string`:
 
@@ -76,6 +77,30 @@ With Mono's interpreter:
 | Text with parameter, second language  | 1,125 ns         | 0.13×      | 0.30×  | –         |
 | Text with parameter, region           | 2,490 ns         | 0.06×      | 0.14×  | –         |
 
+### A language that falls back
+
+A German user of an app in English and Dutch sees English. These rows come from another machine, an Apple M2 Max on macOS. They ran on the same .NET and BenchmarkDotNet, and with Mono's interpreter in a headless Chrome 158. So compare them with the default language of the same run, shown next to them, rather than with the tables above.
+
+On .NET:
+
+| Text, user's culture                  | IStringLocalizer | Idioma set   | Inline       | Attribute  |
+|---------------------------------------|------------------|--------------|--------------|------------|
+| Plain text, default language          | 43 ns, 72 B      | 0.11×, 0 B   | 0.18×, 0 B   | 0.18×, 0 B |
+| Plain text, German                    | 45 ns, 72 B      | 0.13×, 0 B   | 0.18×, 0 B   | 0.17×, 0 B |
+| Text with parameter, default language | 77 ns, 152 B     | 0.12×, 48 B  | 0.32×, 144 B | –          |
+| Text with parameter, German           | 80 ns, 152 B     | 1.47×, 136 B | 0.33×, 144 B | –          |
+
+With Mono's interpreter:
+
+| Text, user's culture                  | IStringLocalizer | Idioma set | Inline | Attribute |
+|---------------------------------------|------------------|------------|--------|-----------|
+| Plain text, default language          | 960 ns           | 0.07×      | 0.10×  | 0.16×     |
+| Plain text, German                    | 986 ns           | 0.07×      | 0.10×  | 0.16×     |
+| Text with parameter, default language | 1,551 ns         | 0.14×      | 0.28×  | –         |
+| Text with parameter, German           | 1,470 ns         | 1.29×      | 0.29×  | –         |
+
+A plain text costs a German user about the same as an English one. A text with a parameter takes a set about 12 times as long on .NET, and 9 times as long with the interpreter. It's the one row where a set takes longer than `IStringLocalizer`. It takes 1.5 times as long on .NET, and 1.3 times as long with the interpreter. [What the numbers mean](#what-the-numbers-mean) explains why.
+
 ### What the numbers mean
 
 - **Plain text.** A set takes under a tenth of the time `IStringLocalizer` takes, and allocates nothing. Idioma keeps, per culture, the set that words each text. So showing a text is a read of that table and a call of the set's own property.
@@ -84,7 +109,11 @@ With Mono's interpreter:
 - **Inline.** A plain inline text picks one of the wordings it's called with. It takes about 3.9 ns on .NET and 75 ns with the interpreter, and allocates nothing.
 - **Inline text with parameter.** C# builds the wording of every language before `Inline` picks one. With three languages, it takes about 16 ns and allocates 144 bytes, three strings of 48. Its cost grows with the number of languages. For a text you show often, or one with a costly value, write a method of a set, which builds one wording.
 - **Attribute.** Idioma finds a text written as an attribute by its type and the name of its member each time it's asked for. It compares the name as an object first, and `nameof(Address.City)` is the same string on every call. It takes about 5.7 ns on .NET and 110 ns with the interpreter, and allocates nothing.
-- **A culture provider.** These numbers are for an app that follows `CultureInfo.CurrentUICulture`. With `CurrentUICultureProvider` set to a culture the thread doesn't have, a text with a parameter runs its set's method in that culture. That switches the thread's cultures for the call, which wasn't measured and costs more than the rows above.
+- **A language that falls back, and a culture provider.** A text with a parameter runs its set's method in the culture of the language it words. That switches the thread's culture for the call where it isn't that culture already:
+  - for a user whose language falls back to another, such as a German user of an app in English and Dutch
+  - with `CurrentUICultureProvider` set to a culture the thread doesn't have
+
+  The first switch in an execution context, such as the first of a request, copies the context. The next ones reuse that copy. For a German user, such a call takes about 12 times as long as for an English one ([above](#a-language-that-falls-back)). It allocates 88 bytes more than its wording, for the function that hands the set its values. A text without parameters switches nothing, so it costs the same for every user.
 
 ## Labels and enum values
 

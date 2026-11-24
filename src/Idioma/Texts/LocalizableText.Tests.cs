@@ -379,8 +379,10 @@ namespace CodeChops.Idioma.Tests
             // Arrange
             using var _ = new CulturesScope("nl-NL");
 
-            // Act & Assert: a value can't tell the two apart.
+            // Act & Assert: a value can't tell the two apart. The build warns about naming the second (LOC500).
+#pragma warning disable LOC500
             ParcelStatus.Collected.GetText().ShouldBe("Gepickt");
+#pragma warning restore LOC500
         }
 
         [Test]

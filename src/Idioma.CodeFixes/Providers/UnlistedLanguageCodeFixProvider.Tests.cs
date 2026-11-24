@@ -59,6 +59,22 @@ public sealed class UnlistedLanguageCodeFixProviderTests
     }
 
     [Test]
+    public async Task AttributeThatNamesTheDefaultLanguage_ShouldListTheLanguageLast()
+    {
+        // Arrange: the README writes the attribute this way.
+        var set = "public class ShopLocalizationDe : ILocalizationSet, IShopLocalization { public string Color => \"Farbe\"; }";
+
+        // Act
+        var fixes = await FixAsync(Source("defaultLanguage: \"en\", \"nl\"", set));
+
+        // Assert
+        var source = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        source.ShouldBe(Source("defaultLanguage: \"en\", \"nl\", \"de\"", set));
+        GeneratorTestHelper.GetGeneratorDiagnostics(source).ShouldBeEmpty();
+        GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task AttributeInAnotherFile_ShouldBeChangedThere()
     {
         // Arrange

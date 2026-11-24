@@ -28,43 +28,27 @@ namespace CodeChops.Idioma;
 /// </example>
 public sealed class CultureScope : IDisposable
 {
-    // The scope the code that runs now is in. It flows with the code, as the cultures of the thread do, so the scope
-    // still holds after an await. Read only where a provider is set: without one, the thread's UI culture is the
-    // scope's already.
-    private static AsyncLocal<CultureScope?> Entered { get; } = new();
+    // The scopes the code that runs now is in, the innermost first. They flow with the code, as the cultures of the
+    // thread do, so a scope still holds after an await. Each flow keeps its own: a scope disposed in one, such as the
+    // code that started a task, still holds in a task started inside it, whose thread cultures are still the scope's.
+    // Read only where a provider is set: without one, the thread's UI culture is the scope's already.
+    private static AsyncLocal<OpenScope?> Entered { get; } = new();
 
     /// <summary>
     /// The culture of the scope the code that runs now is in, or <see langword="null"/> outside one. A text follows
     /// it rather than <see cref="LocalizationRegistry.CurrentUICultureProvider"/>.
     /// </summary>
-    internal static CultureInfo? Current => FindOpen(Entered.Value)?.Culture;
-
-    /// <summary>
-    /// A scope, or else the nearest scope around it that isn't disposed yet. So a scope disposed before one inside it
-    /// doesn't come back when the inner one ends.
-    /// </summary>
-    private static CultureScope? FindOpen(CultureScope? scope)
-    {
-        while (scope is { _isDisposed: true })
-            scope = scope.PreviousScope;
-
-        return scope;
-    }
+    internal static CultureInfo? Current => Entered.Value?.Scope.Culture;
 
     private CultureInfo Culture { get; }
-
-    private CultureScope? PreviousScope { get; }
 
     // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
     private CultureInfo PreviousUICulture { get; }
     private CultureInfo PreviousCulture { get; }
 
-    private bool _isDisposed;
-
     internal CultureScope(CultureInfo culture)
     {
         this.Culture = culture;
-        this.PreviousScope = Entered.Value;
         this.PreviousUICulture = CultureInfo.CurrentUICulture;
         this.PreviousCulture = CultureInfo.CurrentCulture;
 
@@ -72,27 +56,46 @@ public sealed class CultureScope : IDisposable
         // Nothing has changed yet then.
         CultureInfo.CurrentUICulture = culture;
         CultureInfo.CurrentCulture = culture;
-        Entered.Value = this;
+
+        var around = Entered.Value;
+
+        Entered.Value = new OpenScope(
+            this,
+            around,
+            uiCultureBefore: around?.UICultureBefore ?? this.PreviousUICulture,
+            cultureBefore: around?.CultureBefore ?? this.PreviousCulture,
+            isOnWhatItFound: true);
     }
 
     /// <summary>
     /// Ends the scope. Texts follow the culture from before it again. Disposing a scope twice does nothing.
     /// </summary>
+    /// <remarks>
+    /// Dispose a scope in the code that created it, as <see langword="using"/> does. The scope ends there, and in the
+    /// code that runs from there on. Code that was started inside it and still runs, such as a task, stays in it until
+    /// it ends itself.
+    /// </remarks>
     public void Dispose()
     {
-        if (this._isDisposed)
-            return;
+        var innermost = Entered.Value;
 
-        this._isDisposed = true;
+        // Disposed already in this flow, or never entered in it.
+        if (innermost is null || !innermost.Holds(this))
+            return;
 
         // Disposed before a scope inside it: that scope still holds, and puts back what it found when it ends.
-        if (!ReferenceEquals(Entered.Value, this))
+        if (!ReferenceEquals(innermost.Scope, this))
+        {
+            Entered.Value = innermost.Without(this);
             return;
+        }
+
+        var around = innermost.Around;
+        Entered.Value = around;
 
         // The usual order: back to what this scope found.
-        if (this.PreviousScope is not { _isDisposed: true })
+        if (innermost.IsOnWhatItFound)
         {
-            Entered.Value = this.PreviousScope;
             CultureInfo.CurrentUICulture = this.PreviousUICulture;
             CultureInfo.CurrentCulture = this.PreviousCulture;
 
@@ -101,14 +104,70 @@ public sealed class CultureScope : IDisposable
 
         // The scope around this one ended first. Back to the nearest scope that still holds, and its culture. Outside
         // every scope, back to the cultures from before the outermost one.
-        var outer = FindOpen(this.PreviousScope);
-        var outermost = this;
+        CultureInfo.CurrentUICulture = around?.Scope.Culture ?? innermost.UICultureBefore;
+        CultureInfo.CurrentCulture = around?.Scope.Culture ?? innermost.CultureBefore;
+    }
 
-        while (outer is null && outermost.PreviousScope is { } previous)
-            outermost = previous;
+    /// <summary>
+    /// A scope that holds in a flow, with the scopes around it that hold there too.
+    /// </summary>
+    // Never changed, because a flow started inside a scope shares what it found. A scope disposed out of order gives
+    // the scopes inside it a new list without it. A class rather than a record, so that the package carries no
+    // equality and printing it never uses.
+    private sealed class OpenScope(CultureScope scope, OpenScope? around, CultureInfo uiCultureBefore, CultureInfo cultureBefore, bool isOnWhatItFound)
+    {
+        /// <summary>
+        /// The scope.
+        /// </summary>
+        public CultureScope Scope { get; } = scope;
 
-        Entered.Value = outer;
-        CultureInfo.CurrentUICulture = outer?.Culture ?? outermost.PreviousUICulture;
-        CultureInfo.CurrentCulture = outer?.Culture ?? outermost.PreviousCulture;
+        /// <summary>
+        /// The scope around it that holds, or <see langword="null"/> for the outermost.
+        /// </summary>
+        public OpenScope? Around { get; } = around;
+
+        /// <summary>
+        /// The UI culture from before the outermost scope.
+        /// </summary>
+        // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
+        public CultureInfo UICultureBefore { get; } = uiCultureBefore;
+
+        /// <summary>
+        /// The culture from before the outermost scope.
+        /// </summary>
+        public CultureInfo CultureBefore { get; } = cultureBefore;
+
+        /// <summary>
+        /// Whether the scope around it is still the one it was entered in, so that the cultures it found are those to
+        /// put back.
+        /// </summary>
+        public bool IsOnWhatItFound { get; } = isOnWhatItFound;
+
+        /// <summary>
+        /// Whether a scope holds here: it's this one, or one around it.
+        /// </summary>
+        public bool Holds(CultureScope scope)
+        {
+            for (var current = this; current is not null; current = current.Around)
+                if (ReferenceEquals(current.Scope, scope))
+                    return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// The scopes that hold here without one around this one. The scope that stood directly on it then no longer
+        /// stands on what it found.
+        /// </summary>
+        public OpenScope? Without(CultureScope scope)
+        {
+            if (ReferenceEquals(this.Scope, scope))
+                return this.Around;
+
+            var around = this.Around!.Without(scope);
+            var stoodOnIt = ReferenceEquals(this.Around.Scope, scope);
+
+            return new OpenScope(this.Scope, around, this.UICultureBefore, this.CultureBefore, this.IsOnWhatItFound && !stoodOnIt);
+        }
     }
 }

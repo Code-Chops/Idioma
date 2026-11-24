@@ -133,8 +133,8 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// Records what the build read about a set, for <see cref="Internals.GeneratedCode.RecordSet"/>: its language, or
-    /// <see langword="null"/> for a set that implements <see cref="ILocalizationSet.LocalizationLanguageCode"/>, and the texts its
-    /// own class words. A set has one code. Recording the same code again changes nothing, and another code is refused.
+    /// <see langword="null"/> for a set whose <see cref="ILocalizationSet.LocalizationLanguageCode"/> the build couldn't read,
+    /// and the texts its own class words. A set has one code. Recording the same code again changes nothing, and another code is refused.
     /// </summary>
     internal static void RecordSet<TSet>(string? languageCode, string[] ownTexts)
         where TSet : class, ILocalizationSet
@@ -269,14 +269,15 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// Adds sets that the registry creates when it's first read, for
+    /// Adds sets that the registry creates when a text of their contract is first shown, for
     /// <see cref="Internals.GeneratedCode.RegisterSets"/>. Each is filed under the language the build recorded for its
     /// type, or under the one it gives once it's created, for a set that implements
     /// <see cref="ILocalizationSet.LocalizationLanguageCode"/>.
     /// </summary>
     // Not created here, because this runs in a module initializer, before Main. A set whose constructor throws there
     // takes the app down where nothing can catch it, also an app that never shows the set's texts. Created when the
-    // first text is shown, it throws from there, where the app can log it.
+    // first text of its contract is shown, it throws from there, where the app can log it, and only for the texts of
+    // its contract.
     internal static void RegisterSets(ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets, bool asDefaults)
     {
         var entries = new Registration[sets.Length];
@@ -286,8 +287,8 @@ public sealed partial class LocalizationRegistry
             ArgumentNullException.ThrowIfNull(type, nameof(sets));
             ArgumentNullException.ThrowIfNull(create, nameof(sets));
 
-            // The type's own record alone. A set that implements LocalizationLanguageCode itself is recorded without a
-            // code, and the code of a set it derives from isn't its own.
+            // The type's own record alone. A set whose LocalizationLanguageCode the build couldn't read is recorded
+            // without a code, and the code of a set it derives from isn't its own.
             var language = RecordedSets.TryGetValue(type, out var recorded) ? recorded.LanguageCode : null;
             entries[i] = Registration.ToCreate(type, create, language);
         }
@@ -298,11 +299,12 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// A registered set, with the language it had when it registered. A set the registry creates itself is created
-    /// once, when the registry is first read, and its language is read from it then if the build recorded none.
+    /// when a text of its contract is first shown. Where the build recorded no language for it, it's created when the
+    /// registry is built, to read its language.
     /// </summary>
     // A class, for the reason ContractSet is one. As a tuple, it left nine methods of ImmutableArray to the JIT at the
     // start of every app.
-    private sealed class Registration
+    internal sealed class Registration
     {
         private readonly Lazy<ILocalizationSet> _set;
 
@@ -322,10 +324,16 @@ public sealed partial class LocalizationRegistry
         public string? Language { get; }
 
         /// <summary>
-        /// The set, which is created at the first read. A set whose constructor threw throws the same exception on every
-        /// read, so every text says what went wrong, and not only the first.
+        /// The set, which is created at the first read. A set whose constructor threw is created again at the next read,
+        /// so a constructor that failed once, such as on a setting that wasn't loaded yet, doesn't fail its texts for
+        /// good.
         /// </summary>
         public ILocalizationSet Set => this._set.Value;
+
+        /// <summary>
+        /// Whether the set exists: one registered as an instance, or one the registry created already.
+        /// </summary>
+        public bool IsCreated => this._set.IsValueCreated;
 
         public static Registration Of(ILocalizationSet set)
         {
@@ -333,9 +341,12 @@ public sealed partial class LocalizationRegistry
             return registration;
         }
 
+        // PublicationOnly keeps no exception, so a failed constructor runs again at the next read. Two threads may each
+        // create the set, and the first one to finish gives every text its instance, as for the set of a default
+        // language (GeneratedCode.DefaultSet).
         public static Registration ToCreate(Type type, Func<ILocalizationSet> create, string? language)
         {
-            var registration = new Registration(type, new Lazy<ILocalizationSet>(() => CreateSet(type, create), LazyThreadSafetyMode.ExecutionAndPublication), language);
+            var registration = new Registration(type, new Lazy<ILocalizationSet>(() => CreateSet(type, create), LazyThreadSafetyMode.PublicationOnly), language);
             return registration;
         }
     }
@@ -355,7 +366,7 @@ public sealed partial class LocalizationRegistry
         catch (Exception exception)
         {
             throw new InvalidOperationException(
-                $"'{type}' threw when it was created, so no text can be shown. The registry creates every set when the first text is shown. See the inner exception for why it threw, and make its constructor succeed.",
+                $"'{type}' threw when it was created, so the texts of its contract can't be shown. The registry creates a set when a text of its contract is first shown, and tries again at the next one. See the inner exception for why it threw, and make its constructor succeed.",
                 exception);
         }
 
@@ -390,27 +401,12 @@ public sealed partial class LocalizationRegistry
 
         private LocalizationRegistry CreateRegistry()
         {
-            var sets = ImmutableArray.CreateBuilder<ILocalizationSet>(this.Defaults.Length + this.Overrides.Length);
-            var registeredLanguages = new List<string>(this.Defaults.Length + this.Overrides.Length);
+            var registrations = this.Defaults.AddRange(this.Overrides);
 
-            // A set the registry creates is created here, at the first read, and throws from here if its constructor
-            // does. So does one without a recorded language whose code is no culture name.
-            foreach (var registration in this.Defaults)
-            {
-                sets.Add(registration.Set);
-                registeredLanguages.Add(registration.Language ?? ReadLanguageCode(registration.Set));
-            }
-
-            foreach (var registration in this.Overrides)
-            {
-                sets.Add(registration.Set);
-                registeredLanguages.Add(registration.Language ?? ReadLanguageCode(registration.Set));
-            }
-
-            // Building reads the language code of every set, which is consumer code, so nothing is held meanwhile and
+            // Building may create a set to read its language, which is consumer code, so nothing is held meanwhile and
             // two threads may build at once. The first one done gives the registry every reader gets, so that a cache
             // a consumer keys on the instance sees one.
-            var created = Create(sets.MoveToImmutable(), this.Languages, registeredLanguages);
+            var created = CreateOfRegistrations(registrations, this.Languages);
 
             return Interlocked.CompareExchange(ref this._registry, created, comparand: null) ?? created;
         }

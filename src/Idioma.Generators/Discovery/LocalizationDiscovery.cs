@@ -136,6 +136,49 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
+    /// A partial set is discovered once per declaration that has a base list: one set, with the unresolved base types of
+    /// all of them.
+    /// </summary>
+    public static ImmutableArray<DiscoveredLocalization> Merge(EquatableArray<DiscoveredLocalization> discovered)
+    {
+        var merged = discovered
+            .GroupBy(static set => set.MetadataName, StringComparer.Ordinal)
+            .OrderBy(static group => group.Key, StringComparer.Ordinal)
+            .Select(static group => group.First() with
+            {
+                UnresolvedBaseTypes = new EquatableArray<UnresolvedBaseType>(group.SelectMany(static set => set.UnresolvedBaseTypes).Distinct().ToImmutableArray()),
+                ListsLocalizationSet = group.Any(static set => set.ListsLocalizationSet),
+            })
+            .ToImmutableArray();
+
+        return merged;
+    }
+
+    /// <summary>
+    /// The contracts the current compilation generates, worked out once for both parts of the generator, from what the
+    /// registrar's part reads of the sets (<see cref="DiscoveredTexts.OfRecord"/>). That holds everything that decides
+    /// where a contract comes from, and stays as it was when a wording changes. A partial set counts with the base types
+    /// of all its declarations (<see cref="Merge"/>).
+    /// </summary>
+    public static IncrementalValueProvider<GeneratedContracts> ReadGeneratedContracts(IncrementalValueProvider<Discovery> recordDiscovery,
+        IncrementalValueProvider<DeclaredLanguages?> languages, IncrementalValueProvider<EquatableArray<ContractBinding>> bindings)
+    {
+        var contracts = recordDiscovery
+            .Combine(languages)
+            .Combine(bindings)
+            .Select(static (data, _) => GetGeneratedContracts(Merge(data.Left.Left.Sets), data.Left.Right, data.Right))
+            .WithTrackingName(GeneratedContractsTrackingName);
+
+        return contracts;
+    }
+
+    /// <summary>
+    /// The name of the pipeline step that holds the contracts the compilation generates
+    /// (<see cref="ReadGeneratedContracts"/>), for a test to read it.
+    /// </summary>
+    internal const string GeneratedContractsTrackingName = "GeneratedContracts";
+
+    /// <summary>
     /// The contracts the current compilation generates, from its sets and languages. A same-assembly set can implement
     /// such a contract while it doesn't exist yet. The bindings say which of two contracts of one name a base type
     /// names (<see cref="BindContracts"/>).
@@ -351,7 +394,7 @@ internal static partial class LocalizationDiscovery
     /// </summary>
     public static bool RewordsSet(DiscoveredLocalization set)
     {
-        var rewordsSet = set is { BaseSetName: not null, BaseSetContracts.Length: 0 };
+        var rewordsSet = set.BaseSet is { Contracts.Length: 0 };
         return rewordsSet;
     }
 
@@ -401,23 +444,10 @@ internal static partial class LocalizationDiscovery
     {
         var forPart = texts switch
         {
-            DiscoveredTexts.OfContract => set with { OwnTexts = new EquatableArray<string>(ImmutableArray<string>.Empty) },
-            DiscoveredTexts.OfRecord => set with
-            {
-                DeclaredTexts = new EquatableArray<string>(ImmutableArray<string>.Empty),
-                InheritedTexts = new EquatableArray<InheritedText>(ImmutableArray<InheritedText>.Empty),
-                Wordings = new EquatableArray<TextWording>(ImmutableArray<TextWording>.Empty),
-                Texts = new EquatableArray<LocalizationMember>(ImmutableArray<LocalizationMember>.Empty),
-                UnsupportedTexts = new EquatableArray<UnsupportedText>(ImmutableArray<UnsupportedText>.Empty),
-                Usings = default,
-                // Only which enums it holds the texts of, which the registrar's part asks so that an enum doesn't get
-                // a second GetText from its [Localized] members. Not their members, which change with every edit.
-                Enums = new EquatableArray<LocalizedEnum>([.. set.Enums.Select(static @enum => @enum with { Members = new EquatableArray<LocalizedEnumMember>(ImmutableArray<LocalizedEnumMember>.Empty) })]),
-                TypeNamedLikeTexts = null,
-                TypeNamedLikeContract = null,
-                ReservedTexts = new EquatableArray<ReservedText>(ImmutableArray<ReservedText>.Empty),
-                UndeclaredTexts = new EquatableArray<UndeclaredText>(ImmutableArray<UndeclaredText>.Empty),
-            },
+            DiscoveredTexts.OfContract => set with { OwnTexts = default },
+            // The registrar's part asks which enums a set holds the texts of (EnumNames), so that an enum doesn't get a
+            // second GetText from its [Localized] members, and reads nothing else of its texts.
+            DiscoveredTexts.OfRecord => set with { OfContract = default },
             _ => set,
         };
 

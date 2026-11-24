@@ -67,6 +67,20 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
+    /// The constant that the <c>LocalizationLanguageCode</c> a set implements returns, when the build can read it and it's a
+    /// culture name, or else <see langword="null"/>. The generated registrar records it, so that the registry files the set
+    /// under its language without creating it.
+    /// </summary>
+    // The implementation alone, which is what runs, and not a LocalizationLanguageCode that implements nothing (LOC401).
+    private static string? ReadImplementedLanguageCode(INamedTypeSymbol type, WordingReader reader, CancellationToken cancellationToken)
+    {
+        var property = MapLanguageCode(type).Implementation ?? FindInterfaceLanguageCode(type);
+        var code = property is null ? null : reader.Read(property, cancellationToken);
+
+        return code is not null && SupportedLanguages.IsCultureName(code) ? code : null;
+    }
+
+    /// <summary>
     /// The language the last two letters of a name give, in lower case, or <see langword="null"/> when the name doesn't
     /// end in two ASCII letters that start with a capital. <c>ShopLocalizationNl</c> and <c>ShopLocalizationNL</c> give
     /// <c>nl</c>, and <c>LocalizationSet</c> gives none.

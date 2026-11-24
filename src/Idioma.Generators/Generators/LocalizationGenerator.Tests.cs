@@ -85,6 +85,23 @@ public sealed class LocalizationGeneratorTests
     }
 
     [Test]
+    public void EditOfWording_ShouldLeaveTheGeneratedContractsAsTheyWere()
+    {
+        // Arrange
+        var compilation = Compile(Sets);
+        var driver = CreateTrackingDriver().RunGenerators(compilation);
+        var edited = CSharpSyntaxTree.ParseText(Sets.Replace("=> \"Checkout\"", "=> \"Pay\"", StringComparison.Ordinal), GeneratorTestHelper.ParseOptions);
+
+        // Act: which contracts the compilation generates is worked out once for both parts, from what the registrar's
+        // share of discovery holds, which has no wording.
+        var run = driver.RunGenerators(compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), edited)).GetRunResult().Results.ShouldHaveSingleItem();
+
+        // Assert
+        var step = run.TrackedSteps[LocalizationDiscovery.GeneratedContractsTrackingName].ShouldHaveSingleItem();
+        step.Outputs.ShouldAllBe(static output => output.Reason == IncrementalStepRunReason.Cached || output.Reason == IncrementalStepRunReason.Unchanged);
+    }
+
+    [Test]
     public void UnrelatedEdit_ShouldLeaveGeneratorFullyCached()
     {
         // Arrange & Act: editing a file that declares no sets must not re-run an output step of either part.

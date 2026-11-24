@@ -45,6 +45,45 @@ public sealed partial class LocalizationRegistryTests
         public RegistryLazyLocalizationNl() => Interlocked.Increment(ref Created);
     }
 
+    private interface IRegistrySteadyLocalization : ILocalizationSet;
+
+    private sealed class RegistrySteadyLocalizationNl : IRegistrySteadyLocalization;
+
+    private interface IRegistryFlakyLocalization : ILocalizationSet;
+
+    /// <summary>
+    /// A set whose constructor throws as often as <see cref="FailuresLeft"/> says, as one that reads a setting that isn't
+    /// loaded yet at the start of an app.
+    /// </summary>
+    private sealed class RegistryFlakyLocalizationNl : IRegistryFlakyLocalization
+    {
+        public static int FailuresLeft;
+
+        public RegistryFlakyLocalizationNl()
+        {
+            if (Interlocked.Decrement(ref FailuresLeft) >= 0)
+                throw new TimeoutException("The settings aren't loaded yet.");
+        }
+    }
+
+    private interface IRegistryFlakyCodedLocalization : ILocalizationSet;
+
+    /// <summary>
+    /// The same, for a set that gives its language itself, which the registry creates to file it under its language.
+    /// </summary>
+    private sealed class RegistryFlakyCodedLocalization : IRegistryFlakyCodedLocalization
+    {
+        public static int FailuresLeft;
+
+        public RegistryFlakyCodedLocalization()
+        {
+            if (Interlocked.Decrement(ref FailuresLeft) >= 0)
+                throw new TimeoutException("The settings aren't loaded yet.");
+        }
+
+        string ILocalizationSet.LocalizationLanguageCode => "nl";
+    }
+
     private interface IRegistryConcurrentLocalization : ILocalizationSet
     {
         string Name { get; }

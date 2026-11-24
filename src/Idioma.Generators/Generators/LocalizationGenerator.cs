@@ -4,8 +4,8 @@ namespace CodeChops.Idioma.Generators;
 /// Writes what the localization sets of an assembly and its members marked <c>[Localized]</c> need, in two parts: the
 /// contract and the generated class of each default-language set (<see cref="LocalizationSetsPart"/>), and the
 /// registrar that adds the sets to <c>LocalizationRegistry</c> (<see cref="LocalizationRegistrationPart"/>). One
-/// generator for both, so that the classes of the compilation are read once per edit, and the languages and the
-/// contracts the sets list are found once.
+/// generator for both, so that the classes of the compilation are read once per edit, and the languages, the contracts
+/// the sets list, and the contracts the compilation generates are found once.
 /// </summary>
 /// <remarks>
 /// Each part reads only what it uses of a set (<see cref="DiscoveredTexts"/>), so an edit that changes only what one
@@ -35,24 +35,26 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
 /// (<see cref="DiscoveredTexts.OfContract"/>).</param>
 /// <param name="RecordDiscovery">What discovery found, as the part that writes the registrar reads it
 /// (<see cref="DiscoveredTexts.OfRecord"/>).</param>
-/// <param name="Bindings">Which generated contract a base type names where two share its name
-/// (<see cref="LocalizationDiscovery.BindContracts"/>).</param>
+/// <param name="Contracts">The contracts the compilation generates, worked out once for both parts
+/// (<see cref="LocalizationDiscovery.ReadGeneratedContracts"/>).</param>
 internal sealed record LocalizationInputs(
     IncrementalValueProvider<DeclaredLanguages?> Languages,
     IncrementalValueProvider<bool> Compiles,
     IncrementalValueProvider<Discovery> ContractDiscovery,
     IncrementalValueProvider<Discovery> RecordDiscovery,
-    IncrementalValueProvider<EquatableArray<ContractBinding>> Bindings)
+    IncrementalValueProvider<GeneratedContracts> Contracts)
 {
     public static LocalizationInputs Read(IncrementalGeneratorInitializationContext context)
     {
         var languages = SupportedLanguages.Read(context);
         var (contractDiscovery, recordDiscovery) = LocalizationDiscovery.Read(context);
 
-        // From what the registrar reads, which a wording leaves as it was. What binds a contract is in both.
+        // From what the registrar reads, which a wording leaves as it was. What binds a contract, and where one comes
+        // from, is in both.
         var bindings = LocalizationDiscovery.BindContracts(context, recordDiscovery, languages);
+        var contracts = LocalizationDiscovery.ReadGeneratedContracts(recordDiscovery, languages, bindings);
 
-        var inputs = new LocalizationInputs(languages, LanguageVersionCheck.Read(context, languages), contractDiscovery, recordDiscovery, bindings);
+        var inputs = new LocalizationInputs(languages, LanguageVersionCheck.Read(context, languages), contractDiscovery, recordDiscovery, contracts);
         return inputs;
     }
 }

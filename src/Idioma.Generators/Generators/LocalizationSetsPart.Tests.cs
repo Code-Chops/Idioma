@@ -4274,11 +4274,11 @@ public sealed class LocalizationSetsPartTests
         // Assert
         var english = discovery.Sets.Single(static set => set.Name is "ShopLocalizationEn");
         var british = discovery.Sets.Single(static set => set.Name is "ShopLocalizationEnGb");
-        english.Texts.Select(static text => (text.Name, text.DefaultText)).ShouldBe([("Cart", "Cart"), ("Greeting", "Hello, {name}!")]);
-        english.Wordings.Select(static wording => wording.Wording).ShouldBe(["Cart", "Hello, {name}!"]);
-        british.Wordings.Select(static wording => wording.Wording).ShouldBe(["Basket", "Hello, {name}!"]);
-        british.DeclaredTexts.ShouldBe(["Cart"]);
-        british.InheritedTexts.Select(static text => text.Name).ShouldBe(["Greeting"]);
+        english.OfContract.Texts.Select(static text => (text.Name, text.DefaultText)).ShouldBe([("Cart", "Cart"), ("Greeting", "Hello, {name}!")]);
+        english.OfContract.Wordings.Select(static wording => wording.Wording).ShouldBe(["Cart", "Hello, {name}!"]);
+        british.OfContract.Wordings.Select(static wording => wording.Wording).ShouldBe(["Basket", "Hello, {name}!"]);
+        british.OfContract.DeclaredTexts.ShouldBe(["Cart"]);
+        british.OfContract.InheritedTexts.Select(static text => text.Name).ShouldBe(["Greeting"]);
         british.OwnTexts.ShouldBeEmpty();
     }
 
@@ -4308,9 +4308,9 @@ public sealed class LocalizationSetsPartTests
         // Assert
         var english = discovery.Sets.Single(static set => set.Name is "ShopLocalizationEn");
         var dutch = discovery.Sets.Single(static set => set.Name is "ShopLocalizationNl");
-        english.Texts.Select(static text => text.Name).ShouldBe(["Cart"]);
-        dutch.Texts.ShouldBeEmpty();
-        dutch.Wordings.Select(static wording => wording.Wording).ShouldBe(["Winkelwagen"]);
+        english.OfContract.Texts.Select(static text => text.Name).ShouldBe(["Cart"]);
+        dutch.OfContract.Texts.ShouldBeEmpty();
+        dutch.OfContract.Wordings.Select(static wording => wording.Wording).ShouldBe(["Winkelwagen"]);
     }
 
     [Test]
@@ -4337,7 +4337,7 @@ public sealed class LocalizationSetsPartTests
             """);
 
         // Assert
-        discovery.Sets.ShouldAllBe(static set => set.Texts.Length == 1);
+        discovery.Sets.ShouldAllBe(static set => set.OfContract.Texts.Length == 1);
     }
 
     [Test]
@@ -5584,6 +5584,108 @@ public sealed class LocalizationSetsPartTests
         text.ShouldContain("    string Waiting { get; }");
         text.ShouldContain("        OrderStatus.Pending => OrderStatusLocalization.Pending,");
         text.ShouldNotContain("OrderStatus.Waiting =>");
+    }
+
+    [Test]
+    [Arguments("[System.Obsolete(\"Use Shipped.\", error: true)]", "", "")]
+    [Arguments("[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]", "", "")]
+    [Arguments("[System.Obsolete(\"Use Shipped.\", DiagnosticId = \"SHOP002\")]", "", "")]
+    [Arguments("", "[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]", "")]
+    [Arguments("", "[System.Obsolete(\"Use the new status.\", DiagnosticId = \"SHOP002\")]", "")]
+    [Arguments("", "", "[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]")]
+    [Arguments("", "", "[System.Obsolete(\"Use an amount.\", DiagnosticId = \"SHOP002\")]")]
+    public void EnumMemberEnumOrParameterTypeWithDiagnosticOfItsOwn_LeavesNothingInGeneratedCode(string onMember, string onEnum, string onParameterType)
+    {
+        // Arrange: the generated code names the enum, each of its members, and the type of each parameter. Naming them
+        // reports a diagnostic of its author's choosing, which a build treats as an error (Experimental, and Obsolete
+        // as an error) or stops at when it treats warnings as errors (Obsolete). The pragma of the sets' file doesn't
+        // reach a generated file.
+        var source = $$"""
+            #pragma warning disable SHOP001, SHOP002
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            {{onEnum}}
+            public enum OrderStatus { Pending, {{onMember}} Sent, Shipped }
+
+            {{onParameterType}}
+            public sealed record Money(decimal Amount);
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Sent => "Sent";
+                public string Shipped => "Shipped";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+                public string Sent => "Verstuurd";
+                public string Shipped => "Verzonden";
+            }
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Total(Money money, System.Collections.Generic.List<Money>[] earlier) => $"Total: {money.Amount}, after {earlier.Length}";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Total(Money money, System.Collections.Generic.List<Money>[] earlier) => $"Totaal: {money.Amount}, na {earlier.Length}";
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        warnings.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void EnumMemberMarkedObsoleteAsError_ShouldGiveItsTextByItsValue()
+    {
+        // Arrange: generated code can't name the member, whose value stored data may still hold.
+        var source = $$"""
+            {{Header}}
+
+            public enum OrderStatus
+            {
+                Pending,
+                Shipped,
+                [System.Obsolete("Use Shipped.", error: true)]
+                Sent = -1,
+            }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Sent => "Sent";
+                public string Shipped => "Shipped";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+                public string Sent => "Verstuurd";
+                public string Shipped => "Verzonden";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert: the parentheses keep the negative value whole.
+        errors.ShouldBeEmpty();
+        text.ShouldContain("        (OrderStatus)(-1) => OrderStatusLocalization.Sent,");
+        text.ShouldContain("        OrderStatus.Shipped => OrderStatusLocalization.Shipped,");
     }
 
     [Test]

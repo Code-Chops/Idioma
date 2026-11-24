@@ -1,6 +1,6 @@
 ﻿# Translating your texts
 
-Your texts are C# in your repository. So an AI coding assistant can translate them, and a person can review each language in a pull request. This page covers both.
+Your texts are C# in your repository. So an AI coding assistant can easily translate them as it knows the context, and a person can review each language in a pull request. This page covers both.
 
 Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 

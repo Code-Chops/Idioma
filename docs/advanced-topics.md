@@ -60,7 +60,7 @@ What to know:
 
 - The culture chooses the wording and formats dates and numbers, so the line is Dutch throughout.
 - It wins over `CurrentUICultureProvider`, which isn't asked inside the scope.
-- The scope follows your code across an `await`.
+- The scope follows your code across an `await`. A task started inside it stays in it until the task ends, also when the scope ends first.
 - A scope inside another wins until it's disposed.
 - Entering a scope copies the execution context. So wrap a block of texts, not each text.
 
@@ -210,7 +210,12 @@ The source generator writes the code that does this. It's a class named after yo
 
 The texts of members marked `[Localized]` are recorded the same way, by the same generated code ([Attributes](attributes.md#what-the-source-generator-writes)).
 
-A set is registered by its type, and created when the first text is shown. So a set whose constructor throws doesn't stop your app from starting. The first text shown throws an `InvalidOperationException` that names the set, with the set's own exception inside, and so does every text after it.
+A set is registered by its type, and created when a text of its contract is first shown. So a set whose constructor throws doesn't stop your app from starting, and doesn't stop the texts of other contracts, or inline texts and attributes:
+
+- A text that needs the set throws an `InvalidOperationException` that names the set, with the set's own exception inside.
+- The next text of that contract creates the set again. So a constructor that failed once, such as on a setting that wasn't loaded yet, doesn't fail its texts for good.
+
+A set whose `LocalizationLanguageCode` the build can't read is created earlier, at the first text of your app, because only the set itself can tell its language. That's a code that isn't a constant, or one the set inherits from a set of another assembly.
 
 A set that can't be registered automatically gets build warning `LOC400`, such as a set without a parameterless constructor. [LOC400](build-errors.md#loc400) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC505](build-errors.md#loc505).
 
@@ -233,20 +238,13 @@ The build still counts it as a set of its language, and still requires that lang
 
 ## Reading sets yourself
 
-Besides registering, `LocalizationRegistry` does two things:
-
-- It reads a set directly: `LocalizationRegistry.Current.Find<IShopLocalization>(culture)`.
-- It keeps sets apart from those of your app: `LocalizationRegistry.Create(sets)`.
+Besides registering, `LocalizationRegistry` reads a set directly: `LocalizationRegistry.Current.Find<IShopLocalization>(culture)`.
 
 ```csharp
 var dutch = CultureInfo.GetCultureInfo("nl");
 
 // The Dutch set itself, whatever the current UI culture
 string? checkout = LocalizationRegistry.Current.Find<IShopLocalization>(dutch)?.Checkout;
-
-// A registry with sets of its own
-var registry = LocalizationRegistry.Create([new ShopLocalizationNl()]);
-string? wording = registry.Find<IShopLocalization>(dutch)?.Checkout;
 ```
 
 `Find` gives one set, without the [fallback order](#fallback-order). A culture without a set gives `null`. The texts of a generated class, such as `ShopLocalization.Checkout`, always read `LocalizationRegistry.Current`.

@@ -68,8 +68,9 @@ What else to know:
 - **A member's text is a property.** It takes no values, because `GetTextByValue` has none to give it. A method with the name of a member is build error `LOC300`.
 - **The names `GetTextByValue` and `GetText`.** No text of such a set can have either name, because the generated methods have them (`LOC205`).
 - **By name.** `GetTextByKey` takes the name of a member as its key: `OrderStatusLocalization.GetTextByKey("Shipped")`.
-- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart.
+- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart. So `OrderStatus.None.GetText()` shows the text of `Default`. The build warns about such a call ([LOC500](build-errors.md#loc500)), and the IDE fix writes `OrderStatusLocalization.None`.
 - **A value that isn't a member.** `GetTextByValue` shows it as `ToString()` writes it, in every language. For a combination of flags, that's the names of the flags, as in `Read, Write`. For any other value, it's the number.
+- **A member marked `[Obsolete]` as an error.** It still needs a text, because stored data may still hold its value. `GetTextByValue` gives that value the text.
 - **Accessibility.** `GetTextByValue` and `GetText` are public for a public enum, and internal for an internal one.
 - **More than one enum.** A set that lists `ILocalizationSet<TEnum>` for two enums holds the texts of both, and gets a `GetTextByValue` and a `GetText` for each. Two members with the same name share a text.
 - **Two sets of one enum.** Each set gives the enum a `GetText`. Where the namespaces of both are in reach, the call is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
@@ -114,6 +115,6 @@ public static class ParcelStatusLocalizedExtensions
 
 What else to know:
 
-- **Members with the same value.** Of two members with the same value, the first gives the text. A member with the value of a marked member, such as `Default = Active`, shows that member's text.
+- **Members with the same value.** Of two members with the same value, the first gives the text. A member with the value of a marked member, such as `Default = Active`, shows that member's text. The build warns about a call that names the later of two marked members ([LOC500](build-errors.md#loc500)), because it shows the other's text. `GetTextByMember` gives the text of each.
 - **A member without `[Localized]`.** It shows its name, in every language. The build warns about it when other members of the enum are marked (`LOC503`), because that's usually a member added later. An enum with a text of its own and no marked member gets no warning, because its values may never be shown.
 - **An enum inside a generic type.** An enum inside a type with type parameters gets no `GetText()`, and `GetTextByMember` still finds its texts.

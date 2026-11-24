@@ -2,13 +2,27 @@
 
 [![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)
 
-Translations for any .NET app, written in C# and checked at compile time:
+## Why use Idioma?
 
-- The build catches the mistakes that resx files hide until a user sees them: a mistyped key, a text missing from a language, or a translation that never uses a value the original shows.
-- There are no resource files, so you get full IDE support: autocomplete, go to definition, every language's wording on hover, and find all references.
-- The package has no dependencies, and is safe to trim and to publish with Native AOT.
+Lightweight and fast translations for any .NET app, written in C# and checked at compile time:
+
+- The build catches the mistakes that resx files hide until a user sees them:
+  - A mistyped key;
+  - A text missing from a language;
+  - A translation that never uses a value the original shows;
+  - An enum member that has no translation.
+- There are no resource files, so you get full IDE support:
+  - Autocomplete;
+  - Go to definition;
+  - Every language's wording on hover;
+  - Find all references.
 - Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
-- An AI coding assistant knows the context of your code and can translate your texts, and the build tells it which are missing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md)).
+- An AI coding assistant translates your texts well:
+  - It sees the code that uses them so it knows the context.
+  - The build names each missing translation, so the assistant knows when it's done ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md)).
+- The package has no dependencies, and is safe to trim and to publish with Native AOT.
+
+### At a glance
 
 Declare your languages once, `[assembly: SupportedLanguages(defaultLanguage: "en", "nl")]`, and write each text in one of three ways:
 
@@ -28,7 +42,8 @@ public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
     public string Checkout => "Afrekenen";
 }
 
-// An attribute on a member
+// An attribute on a type or its member
+[Localized(en: "Address", nl: "Adres")]
 public class Address
 {
     [Localized(en: "City", nl: "Plaats")]
@@ -44,7 +59,11 @@ From the English set, the source generator writes the contract `IShopLocalizatio
   @ShopLocalization.Checkout
 </button>
 
-@* A text written as an attribute *@
+@* A text of a type, written as an attribute *@
+<label>
+  @LocalizableText.GetTextOfType<Address>()
+</label>
+@* A text of its member, written as an attribute *@
 <label>
   @(LocalizableText.GetTextByMember<Address>(nameof(Address.City)))
 </label>
@@ -138,6 +157,8 @@ error LOC201: 'ShopLocalization' has no set for 'de', which [assembly: Supported
 Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.
 ```
 
+An enum gets a set of its own, which lists `ILocalizationSet<TEnum>` ([Enums](#enums)).
+
 #### Write an inline text
 
 An inline text is written where you use it, in markup or in C#. It suits a text you use once:
@@ -219,20 +240,25 @@ A desktop or console app starts with the language of the user's system, and a Bl
 
 Users whose language you don't support see your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order)).
 
-To get the wording in another language, such as that of an email's recipient, wrap the block that reads the texts in `LocalizationRegistry.UseCulture` ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#another-language)):
-
-```csharp
-using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl")))
-{
-    string dutch = ShopLocalization.Checkout;
-}
-```
-
 An app that keeps the user's language somewhere else, such as in a user profile, sets `LocalizationRegistry.CurrentUICultureProvider` once at startup. Every text then follows the culture it returns ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#the-current-culture)):
 
 ```csharp
 LocalizationRegistry.CurrentUICultureProvider = () => UserProfile.Current?.Culture;
 ```
+
+#### Another language
+
+To get the wording in another language, such as that of an email's recipient, wrap the block that reads the texts in `LocalizationRegistry.UseCulture`:
+
+```csharp
+using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl")))
+{
+    // "Hallo, Anna!", whatever the user's language
+    string greeting = ShopLocalization.Greeting("Anna");
+}
+```
+
+The culture formats dates and numbers too, so the whole block is Dutch. The scope follows your code across an `await` ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#another-language)).
 
 ### Texts with parameters
 
@@ -296,7 +322,7 @@ A member you add to the enum later is a build error in every language until it h
 
 ## Where Idioma doesn't fit
 
-- When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can let a resource file override it ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
+- When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can ask an `IStringLocalizer` first, such as one that reads a database ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
 - When your translators work in a translation tool, which reads files such as XLIFF.
 - When an attribute of .NET such as `[Required]` or `[Display]` has to read a label you write with `[Localized]`. Those attributes read only a text of a set, by its name ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes)).
 - When your app targets .NET 9 or earlier, or can't move to C# 14.

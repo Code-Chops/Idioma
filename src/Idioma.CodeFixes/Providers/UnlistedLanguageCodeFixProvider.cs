@@ -18,7 +18,8 @@ namespace CodeChops.Idioma.CodeFixes;
 /// </para>
 /// <para>
 /// Every other contract then lacks a set of that language, which <c>LOC201</c> reports, and which its fix adds. The
-/// attribute changes only where each of its arguments is a string written in it, in whichever file it is.
+/// attribute changes only where each of its arguments is a string written in it, in whichever file it is. The first
+/// may carry the name of its parameter, as in <c>SupportedLanguages(defaultLanguage: "en", "nl")</c>.
 /// </para>
 /// <para>
 /// There's no "Fix all", because one fix serves every set of the language.
@@ -37,12 +38,26 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
         var document = context.Document;
         var semanticModel = await document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
 
-        if (semanticModel is null || await FindAttributeAsync(semanticModel.Compilation, context.CancellationToken).ConfigureAwait(false) is not { ArgumentList: { } arguments } attribute)
+        if (semanticModel is null
+            || await FindAttributeAsync(semanticModel.Compilation, context.CancellationToken).ConfigureAwait(false) is not ({ ArgumentList: { } arguments }, var constructor))
+        {
             return;
+        }
 
-        // Each argument a string written in the attribute, so that one more fits after them.
-        if (!arguments.Arguments.All(static argument => argument is { NameColon: null, NameEquals: null, Expression: LiteralExpressionSyntax literal } && literal.IsKind(SyntaxKind.StringLiteralExpression)))
-            return;
+        // Each argument a string written in the attribute, so that one more fits after them. The first may carry the
+        // name of its parameter, as in SupportedLanguages(defaultLanguage: "en", "nl"): a string after it still takes
+        // the next place.
+        for (var i = 0; i < arguments.Arguments.Count; i++)
+        {
+            var argument = arguments.Arguments[i];
+
+            if (argument is not { NameEquals: null, Expression: LiteralExpressionSyntax literal }
+                || !literal.IsKind(SyntaxKind.StringLiteralExpression)
+                || (argument.NameColon is { } nameColon && !NamesParameterOfItsPlace(nameColon, i, constructor)))
+            {
+                return;
+            }
+        }
 
         var listed = arguments.Arguments.Select(static argument => ((LiteralExpressionSyntax)argument.Expression).Token.ValueText).ToArray();
 
@@ -66,18 +81,35 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// <c>[assembly: SupportedLanguages(...)]</c> as written in a file of the project, or <see langword="null"/> when
-    /// no file holds it.
+    /// <c>[assembly: SupportedLanguages(...)]</c> as written in a file of the project, with the constructor it calls,
+    /// or <see langword="null"/> when no file holds it.
     /// </summary>
-    private static async Task<AttributeSyntax?> FindAttributeAsync(Compilation compilation, CancellationToken cancellationToken)
+    private static async Task<(AttributeSyntax Syntax, IMethodSymbol? Constructor)?> FindAttributeAsync(Compilation compilation, CancellationToken cancellationToken)
     {
         var attribute = compilation.Assembly.GetAttributes().FirstOrDefault(static attribute
             => String.Equals(attribute.AttributeClass?.ToDisplayString(), PackageNames.SupportedLanguagesAttribute, StringComparison.Ordinal));
 
-        if (attribute?.ApplicationSyntaxReference is not { } reference)
+        if (attribute?.ApplicationSyntaxReference is not { } reference
+            || await reference.GetSyntaxAsync(cancellationToken).ConfigureAwait(false) is not AttributeSyntax syntax)
+        {
             return null;
+        }
 
-        return await reference.GetSyntaxAsync(cancellationToken).ConfigureAwait(false) as AttributeSyntax;
+        return (syntax, attribute.AttributeConstructor);
+    }
+
+    /// <summary>
+    /// Whether the name of an argument is that of the parameter of its place, which isn't <c>params</c>: then the
+    /// argument takes that place as it would without its name.
+    /// </summary>
+    private static bool NamesParameterOfItsPlace(NameColonSyntax nameColon, int index, IMethodSymbol? constructor)
+    {
+        var namesIt = constructor is not null
+            && index < constructor.Parameters.Length
+            && constructor.Parameters[index] is { IsParams: false } parameter
+            && String.Equals(parameter.Name, nameColon.Name.Identifier.ValueText, StringComparison.Ordinal);
+
+        return namesIt;
     }
 
     /// <summary>

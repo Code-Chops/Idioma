@@ -184,8 +184,16 @@ internal static class LocalizedMembersSource
             {
                 var field = GetFieldName(text, ref number);
 
-                if (text.MemberName is not null && (text.EnumValue is null || values.Add(text.EnumValue)))
-                    sb.AppendLine($"        {type.Reference}.{LocalizationSetsPart.EscapeIdentifier(text.MemberName)} => {OwnMembersName}.Word({field}),");
+                if (text.MemberName is null || (text.EnumValue is not null && !values.Add(text.EnumValue)))
+                    continue;
+
+                // A member marked [Obsolete] as an error can't be named (CS0619), so its arm names its value, which a
+                // parenthesis keeps whole when it's negative.
+                var pattern = text is { IsObsoleteAsError: true, EnumValue: { } value }
+                    ? $"({type.Reference})({value})"
+                    : $"{type.Reference}.{LocalizationSetsPart.EscapeIdentifier(text.MemberName)}";
+
+                sb.AppendLine($"        {pattern} => {OwnMembersName}.Word({field}),");
             }
 
             sb.AppendLine($$"""

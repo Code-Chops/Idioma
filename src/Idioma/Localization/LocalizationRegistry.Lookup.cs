@@ -22,7 +22,12 @@ public sealed partial class LocalizationRegistry
     /// Per language code, how the language resolves here (see <see cref="ResolveLanguage"/>). Up to
     /// <see cref="MaxLookupsKept"/> codes are kept.
     /// </summary>
-    private ConcurrentDictionary<string, LanguageLookup> ByLanguageCode { get; } = new(StringComparer.Ordinal);
+    // Apart from ByCulture, though a code is usually a culture name. A lookup there holds the culture object of the
+    // reader who asked first, which a thread compares by reference. A code's lookup holds the culture of its language
+    // instead, while an app's readers bring culture objects of their own, such as those of ASP.NET Core's options. So
+    // in one dictionary, the lookup of en that a fallback made first would make every text of an English reader miss
+    // that comparison.
+    private ConcurrentDictionary<string, CultureLookup> ByLanguageCode { get; } = new(StringComparer.Ordinal);
 
     // Far more than the cultures of an app's users. A culture name can come from outside, such as a request header that
     // CurrentUICultureProvider passes on, so the lookups can't grow without end.
@@ -37,7 +42,7 @@ public sealed partial class LocalizationRegistry
     private static CultureLookup? LastCulture;
 
     [ThreadStatic]
-    private static LanguageLookup? LastLanguage;
+    private static CultureLookup? LastLanguage;
 
     // Set once a dictionary above holds MaxLookupsKept entries, which is for good, as entries are never removed. A lookup
     // past the limit then skips Count, which takes every lock of the dictionary.
@@ -54,7 +59,7 @@ public sealed partial class LocalizationRegistry
             return last;
 
         if (!this.ByCulture.TryGetValue(culture.Name, out var lookup))
-            lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, culture), ref this._hasKeptMaxCultures);
+            lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, new CultureFallback(culture), culture, language: null), ref this._hasKeptMaxCultures);
 
         LastCulture = lookup;
         return lookup;
@@ -64,13 +69,13 @@ public sealed partial class LocalizationRegistry
     /// How a language code resolves here: the names it falls back through, as a user of that language gets them (see
     /// <see cref="CultureFallback.OfLanguage"/>), and the sets of each. Worked out once per code.
     /// </summary>
-    internal LanguageLookup ResolveLanguage(string language)
+    internal CultureLookup ResolveLanguage(string language)
     {
         if (LastLanguage is { } last && ReferenceEquals(last.Language, language) && ReferenceEquals(last.Registry, this))
             return last;
 
         if (!this.ByLanguageCode.TryGetValue(language, out var lookup))
-            lookup = Keep(this.ByLanguageCode, language, new LanguageLookup(this, language), ref this._hasKeptMaxLanguages);
+            lookup = Keep(this.ByLanguageCode, language, new CultureLookup(this, CultureFallback.OfLanguage(language), CultureName.FindCulture(language), language), ref this._hasKeptMaxLanguages);
 
         LastLanguage = lookup;
         return lookup;
@@ -80,8 +85,7 @@ public sealed partial class LocalizationRegistry
     /// Keeps a lookup under its name, unless <see cref="MaxLookupsKept"/> are kept already. Gives the lookup that is
     /// kept for the name, also when another thread kept one in the meantime, or else the given one.
     /// </summary>
-    private static TLookup Keep<TLookup>(ConcurrentDictionary<string, TLookup> kept, string name, TLookup lookup, ref bool hasKeptMax)
-        where TLookup : FallbackLookup
+    private static CultureLookup Keep(ConcurrentDictionary<string, CultureLookup> kept, string name, CultureLookup lookup, ref bool hasKeptMax)
     {
         if (hasKeptMax)
             return lookup;
@@ -94,11 +98,12 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// The names a culture or a language code falls back through, most specific first, and the sets of this registry for
-    /// each name that has any.
+    /// How a culture or a language code resolves in a registry: the names it falls back through, most specific first,
+    /// and the sets of the registry for each name that has any. See <see cref="Resolve"/> and
+    /// <see cref="ResolveLanguage"/>.
     /// </summary>
-    // Classes, for the same reason as ContractSet: ReadyToRun compiles the framework's generic types for them.
-    internal abstract class FallbackLookup
+    // A class, for the same reason as ContractSet: ReadyToRun compiles the framework's generic types for it.
+    internal sealed class CultureLookup
     {
         /// <summary>
         /// The names to try, most specific first, as <see cref="CultureFallback"/> walks them.
@@ -115,7 +120,25 @@ public sealed partial class LocalizationRegistry
         /// </summary>
         public LocalizationRegistry Registry { get; }
 
-        private protected FallbackLookup(LocalizationRegistry registry, CultureFallback fallback)
+        /// <summary>
+        /// The culture this was worked out for, which another culture of the same name gets too. For a language code,
+        /// the culture of the language, or <see langword="null"/> where this machine has none, as under invariant
+        /// globalization (see <see cref="CultureName.FindCulture"/>).
+        /// </summary>
+        public CultureInfo? Culture { get; }
+
+        /// <summary>
+        /// The language code this was worked out for, or <see langword="null"/> for a culture.
+        /// </summary>
+        public string? Language { get; }
+
+        /// <summary>
+        /// Whether a text shows the culture's own wording: the registry has no app languages, or one of them serves the
+        /// culture. Else the culture gets the default app language.
+        /// </summary>
+        public bool ShowsCulture { get; }
+
+        public CultureLookup(LocalizationRegistry registry, CultureFallback fallback, CultureInfo? culture, string? language)
         {
             var byLanguage = registry.ByLanguage;
             var names = new List<string>(capacity: 4);
@@ -132,32 +155,14 @@ public sealed partial class LocalizationRegistry
             this.Registry = registry;
             this.Names = [.. names];
             this.Levels = [.. levels];
-        }
-    }
-
-    /// <summary>
-    /// How a culture resolves in a registry. See <see cref="Resolve"/>.
-    /// </summary>
-    internal sealed class CultureLookup : FallbackLookup
-    {
-        /// <summary>
-        /// The culture this was worked out for. Another culture of the same name gets this lookup too.
-        /// </summary>
-        public CultureInfo Culture { get; }
-
-        /// <summary>
-        /// Whether a text shows the culture's own wording: the registry has no app languages, or one of them serves the
-        /// culture. Else the culture gets the default app language.
-        /// </summary>
-        public bool ShowsCulture { get; }
-
-        public CultureLookup(LocalizationRegistry registry, CultureInfo culture)
-            : base(registry, new CultureFallback(culture))
-        {
-            var appLanguages = registry.AppLanguages;
-
             this.Culture = culture;
-            this.ShowsCulture = appLanguages.IsDefaultOrEmpty || IsServed(culture, appLanguages);
+            this.Language = language;
+
+            // By the names the lookup walks, so that this gate and the lookup agree on which language serves the culture,
+            // also under invariant globalization, where en-GB (if it can be created: PredefinedCulturesOnly off) has no
+            // parent culture and en still serves it.
+            var appLanguages = registry.AppLanguages;
+            this.ShowsCulture = appLanguages.IsDefaultOrEmpty || appLanguages.Any(this.IsServedBy);
         }
 
         /// <summary>
@@ -203,47 +208,6 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// Whether one of the app's languages serves a culture. It does when the culture, or one it falls back to, is that
-    /// language or a region of it.
-    /// </summary>
-    internal static bool IsServed(CultureInfo culture, ImmutableArray<string> appLanguages)
-    {
-        // The names the lookups walk, so that this gate and the lookups agree on which language serves a culture, also
-        // under invariant globalization, where en-GB (if it can be created: PredefinedCulturesOnly off) has no parent
-        // culture and en still serves it.
-        foreach (var name in new CultureFallback(culture))
-            foreach (var language in appLanguages)
-                if (IsLanguageOrRegion(name, language))
-                    return true;
-
-        return false;
-    }
-
-    /// <summary>
-    /// How a language code resolves in a registry. See <see cref="ResolveLanguage"/>.
-    /// </summary>
-    internal sealed class LanguageLookup : FallbackLookup
-    {
-        /// <summary>
-        /// The language code this was worked out for.
-        /// </summary>
-        public string Language { get; }
-
-        /// <summary>
-        /// The culture of the language, or <see langword="null"/> where this machine has none, as under invariant
-        /// globalization. See <see cref="CultureName.FindCulture"/>.
-        /// </summary>
-        public CultureInfo? Culture { get; }
-
-        public LanguageLookup(LocalizationRegistry registry, string language)
-            : base(registry, CultureFallback.OfLanguage(language))
-        {
-            this.Language = language;
-            this.Culture = CultureName.FindCulture(language);
-        }
-    }
-
-    /// <summary>
     /// The wording the sets of a contract give a text for the first of the names that has a set, or
     /// <see langword="null"/> when none has. Within a name, it's the wording of the set registered last that words the
     /// text itself, rather than leaving it to the set it derives from (<see cref="FindLevelSet"/>). So rewordings of
@@ -270,7 +234,7 @@ public sealed partial class LocalizationRegistry
     // A set is asked for its wording only once it's known to give it, or where only its wording can tell. A British set
     // that leaves a text to the English one isn't called for that text at all. Called anyway, a text that a wording
     // shows was worded twice per level for a British user.
-    internal string? FindWording<TContract>(FallbackLookup lookup, string name, Func<TContract, string?> select,
+    internal string? FindWording<TContract>(CultureLookup lookup, string name, Func<TContract, string?> select,
         out TContract? set, out bool isToldByRecord)
         where TContract : class
     {
@@ -450,7 +414,7 @@ public sealed partial class LocalizationRegistry
             for (var current = set.GetType(); current is not null && current != typeof(object); current = current.BaseType)
             {
                 classes.Add(current);
-                records.Add(RecordedSets.TryGetValue(current, out var recorded) ? recorded : null);
+                records.Add(RecordedSets.GetValueOrDefault(current));
             }
 
             this.Classes = [.. classes];
@@ -509,9 +473,13 @@ public sealed partial class LocalizationRegistry
     // A language holds the sets of every contract of the app, and a text needs only those of its own: found once per
     // contract and kept, so that a lookup does not test every set of the language against the contract, on every text
     // of every render. Never dropped, as a registry never changes: a registration builds a new one.
-    internal sealed class LanguageSets(ImmutableArray<ILocalizationSet> sets)
+    internal sealed class LanguageSets(ImmutableArray<Registration> registrations, ImmutableArray<Registration> unfiled)
     {
-        private ImmutableArray<ILocalizationSet> Sets { get; } = sets;
+        private ImmutableArray<Registration> Registrations { get; } = registrations;
+
+        // The sets of the registry that couldn't be filed under a language, because creating one, or reading its code,
+        // threw. Every language holds them, so that every text of their contracts tries them again.
+        private ImmutableArray<Registration> Unfiled { get; } = unfiled;
 
         // Never written to once added, so an array is as safe here as an immutable one.
         private ConcurrentDictionary<Type, ContractSet[]> ByContract { get; } = new();
@@ -520,26 +488,51 @@ public sealed partial class LocalizationRegistry
         /// The sets of this language that implement a contract, in the order they apply, each with the set it derives
         /// from. Empty when none implements it.
         /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// When the constructor of such a set throws, with that exception inside. Nothing is kept then, so the next text
+        /// of the contract tries again.
+        /// </exception>
         public ContractSet[] Of(Type contract)
         {
-            return this.ByContract.TryGetValue(contract, out var known)
+            var contractSets = this.ByContract.TryGetValue(contract, out var known)
                 ? known
-                : this.ByContract.GetOrAdd(contract, static (contract, languageSets) => Find(languageSets.Sets, contract), this);
+                : this.ByContract.GetOrAdd(contract, static (contract, languageSets) => languageSets.Find(contract), this);
+
+            return contractSets;
         }
 
-        private static ContractSet[] Find(ImmutableArray<ILocalizationSet> sets, Type contract)
+        // Each set is created here, at the first text of its contract in this language, so a set whose constructor
+        // throws fails the texts of its own contract alone.
+        private ContractSet[] Find(Type contract)
         {
-            var implementing = sets.Where(contract.IsInstanceOfType).ToImmutableArray();
+            foreach (var registration in this.Unfiled)
+                if (contract.IsAssignableFrom(registration.Type))
+                    Refile(registration);
+
+            var implementing = this.Registrations.Where(registration => contract.IsAssignableFrom(registration.Type)).ToImmutableArray();
             var found = new ContractSet[implementing.Length];
 
             for (var i = 0; i < implementing.Length; i++)
             {
-                var type = implementing[i].GetType();
+                var type = implementing[i].Type;
+                var basis = implementing.LastOrDefault(other => type.IsSubclassOf(other.Type));
 
-                found[i] = new ContractSet(implementing[i], implementing.LastOrDefault(other => type.IsSubclassOf(other.GetType())));
+                found[i] = new ContractSet(implementing[i].Set, basis?.Set);
             }
 
             return found;
         }
+    }
+
+    /// <summary>
+    /// Tries again to file a set the registry couldn't file under a language when it was built: creates it, and reads
+    /// its code. Throws while either does. Otherwise the registry is built again at the next read, with the set filed
+    /// under its language.
+    /// </summary>
+    private static void Refile(Registration registration)
+    {
+        _ = ReadLanguageCode(registration.Set);
+
+        ImmutableInterlocked.Update(ref Registered, static registered => registered.Copy());
     }
 }

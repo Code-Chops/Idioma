@@ -56,7 +56,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
             {{set}}
             """);
 
-        // Assert: the texts implement the contract, and ToString() still overrides.
+        // Assert: the texts implement the contract, an override stays virtual, and ToString() still overrides.
         var fix = fixes.ShouldHaveSingleItem();
         fix.Title.ShouldBe("Implement 'IShopLocalization' instead");
 
@@ -66,7 +66,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
 
             public class ShopLocalizationNl : ILocalizationSet, IShopLocalization // Dutch
             {
-                public string Checkout => "Afrekenen";
+                public virtual string Checkout => "Afrekenen";
 
                 public string Cart => "Winkelwagen";
 
@@ -110,7 +110,112 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
         var fix = fixes.ShouldHaveSingleItem();
         fix.Sources[0].ShouldBe(Header);
         fix.Sources[1].ShouldBe("namespace TestApp;\n\npublic partial class ShopLocalizationNl : CodeChops.Idioma.ILocalizationSet, IShopLocalization;\n");
-        fix.Sources[2].ShouldBe(second.Replace("public override", "public", StringComparison.Ordinal));
+        fix.Sources[2].ShouldBe(second.Replace("public override", "public virtual", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SetThatAnotherSetDerivesFrom_ShouldKeepItsTextsVirtual()
+    {
+        // Arrange: a kiosk rewords the Dutch set, which derives from English.
+        var source = $$"""
+            {{Header}}
+
+            public class ShopLocalizationNl : ShopLocalizationEn
+            {
+                public override string Checkout => "Afrekenen";
+
+                public override string Cart => "Winkelwagen";
+            }
+
+            public sealed class KioskShopLocalizationNl : ShopLocalizationNl
+            {
+                public override string Checkout => "Betalen";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: the kiosk's override still compiles.
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldContain("public class ShopLocalizationNl : ILocalizationSet, IShopLocalization");
+        fixedSource.ShouldContain("public virtual string Checkout => \"Afrekenen\";");
+        GeneratorTestHelper.GetGeneratorDiagnostics(fixedSource).ShouldBeEmpty();
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task OverrideOfObjectMemberThatTheSetOverrodeToo_ShouldStayAnOverride()
+    {
+        // Arrange: English overrides ToString() of object, and Dutch overrides English's.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Checkout";
+
+                public override string ToString() => "English";
+            }
+
+            public class ShopLocalizationNl : ShopLocalizationEn
+            {
+                public override string Checkout => "Afrekenen";
+
+                public override string ToString() => "Nederlands";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldContain("public override string ToString() => \"Nederlands\";");
+        GeneratorTestHelper.GetGeneratorDiagnostics(fixedSource).ShouldBeEmpty();
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task SetOfEnum_ShouldListTheEnumOfTheSetItDerivedFrom()
+    {
+        // Arrange
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending, Shipped }
+
+            public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public virtual string Pending => "Pending";
+
+                public virtual string Shipped => "Shipped";
+            }
+
+            public sealed class OrderStatusLocalizationNl : OrderStatusLocalizationEn
+            {
+                public override string Pending => "In behandeling";
+
+                public override string Shipped => "Verzonden";
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: no LOC211 follows.
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldContain("public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization");
+        GeneratorTestHelper.GetGeneratorDiagnostics(fixedSource).ShouldBeEmpty();
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
     }
 
     [Test]

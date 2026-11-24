@@ -135,6 +135,35 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
+    /// How an order is delivered: an enum with a member marked [Obsolete] as an error, which generated code can't name,
+    /// and one marked [Experimental], whose id generated code turns off.
+    /// </summary>
+    public enum Delivery
+    {
+        Standard,
+
+        [Obsolete("Use Express.", error: true)]
+        Rush,
+
+        [System.Diagnostics.CodeAnalysis.Experimental("IDIOMA_TEST")]
+        Express,
+    }
+
+    public sealed class DeliveryLocalizationEn : ILocalizationSet<Delivery>, IDeliveryLocalization
+    {
+        public string Standard => "Standard";
+        public string Rush => "Rush";
+        public string Express => "Express";
+    }
+
+    public sealed class DeliveryLocalizationNl : ILocalizationSet<Delivery>, IDeliveryLocalization
+    {
+        public string Standard => "Standaard";
+        public string Rush => "Spoed";
+        public string Express => "Snel";
+    }
+
+    /// <summary>
     /// A helper next to the generated texts: the generated class is partial.
     /// </summary>
     public static partial class GeneratedLocalization
@@ -554,6 +583,34 @@ namespace CodeChops.Idioma.Tests
             counted.ShouldBe(countedWorded, "text that takes a number and a string");
         }
 
+        [Test]
+        [NotInParallel(nameof(LocalizationRegistry))]
+        [Arguments("fr-FR", null)]
+        [Arguments("en-US", "nl-NL")]
+        public void ShowingATextThatTakesValues_InACultureTheThreadDoesNotHave_ShouldNotCopyTheContextEachTime(string culture, string? provided)
+        {
+            // Arrange: a French reader of an app in English and Dutch gets English, and a provider's Dutch reader on an
+            // American thread gets Dutch. Either way the set's method runs in a culture the thread doesn't have, which
+            // takes switching the culture. The first switch in a context copies it, and the next ones restore that copy.
+            using var _ = new CulturesScope(culture);
+            using var provider = provided is null ? null : new ProvidedCultureScope(provided);
+            const string name = "Max";
+            var wording = GeneratedLocalization.Welcome(name);
+
+            // Act: per call, the least of a few rounds of ten thousand.
+            var shown = Allocated(() => GeneratedLocalization.Welcome(name)) / 10_000;
+            var ofWording = Allocated(() => new string(wording.AsSpan())) / 10_000;
+            var ofValue = Allocated(() => HoldValue(static (set, value) => set + value, name)) / 10_000;
+
+            // Assert: the string, and the function that hands the lookup the value. No copy of the context.
+            shown.ShouldBe(ofWording + ofValue);
+        }
+
+        /// <summary>
+        /// A function that holds a value, as the generated class hands the lookup one for a text that takes values.
+        /// </summary>
+        private static Func<string, string> HoldValue(Func<string, string, string> selector, string value) => set => selector(set, value);
+
         /// <summary>
         /// The bytes this thread allocates in an action, the least of a few rounds after a warm-up: a round that meets the
         /// JIT or a lazily built table is not what a page that shows texts pays for each time.
@@ -691,9 +748,12 @@ namespace CodeChops.Idioma.Tests
             // Arrange
             using var _ = new UICultureScope("en-US");
 
-            // Act & Assert: both members have a text, and the value gives the first one.
+            // Act & Assert: both members have a text, and the value gives the first one. The build warns about naming
+            // the second (LOC500).
             OrderStatusLocalization.Arrived.ShouldBe("Arrived");
+#pragma warning disable LOC500
             OrderStatusLocalization.GetTextByValue(OrderStatus.Arrived).ShouldBe("Delivered");
+#pragma warning restore LOC500
         }
 
         [Test]
@@ -733,6 +793,16 @@ namespace CodeChops.Idioma.Tests
 
             using (new UICultureScope("en-GB"))
                 OrderStatus.Shipped.GetText().ShouldBe("Shipped");
+        }
+
+        [Test]
+        public void GeneratedExtensionOfEnumValue_OfMemberMarkedObsoleteAsError_ShouldGiveTheTextOfTheValue()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: code can't name the member, but stored data may hold its value.
+            ((Delivery)1).GetText().ShouldBe("Spoed");
         }
 
         [Test]

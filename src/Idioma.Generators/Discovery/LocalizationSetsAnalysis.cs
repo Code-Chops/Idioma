@@ -59,11 +59,10 @@ internal sealed record LocalizationSetsAnalysis(
         EquatableArray<DiscoveredLocalization> discovered,
         EquatableArray<UnextendableSet> unextendable,
         DeclaredLanguages? languages,
-        EquatableArray<ContractBinding> bindings,
+        GeneratedContracts generatedContracts,
         CancellationToken cancellationToken = default)
     {
-        var candidates = Merge(discovered);
-        var generatedContracts = LocalizationDiscovery.GetGeneratedContracts(candidates, languages, bindings);
+        var candidates = LocalizationDiscovery.Merge(discovered);
         var sets = candidates.Where(static candidate => !candidate.IsExcluded).ToImmutableArray();
 
         // A set marked [ExcludeFromLocalizationDiscovery] is registered by hand, so nothing is reported about it, but it
@@ -289,25 +288,6 @@ internal sealed record LocalizationSetsAnalysis(
     }
 
     /// <summary>
-    /// A partial set is discovered once per declaration that has a base list: one set, with the unresolved base types of
-    /// all of them.
-    /// </summary>
-    private static ImmutableArray<DiscoveredLocalization> Merge(EquatableArray<DiscoveredLocalization> discovered)
-    {
-        var merged = discovered
-            .GroupBy(static set => set.MetadataName, StringComparer.Ordinal)
-            .OrderBy(static group => group.Key, StringComparer.Ordinal)
-            .Select(static group => group.First() with
-            {
-                UnresolvedBaseTypes = new EquatableArray<UnresolvedBaseType>(group.SelectMany(static set => set.UnresolvedBaseTypes).Distinct().ToImmutableArray()),
-                ListsLocalizationSet = group.Any(static set => set.ListsLocalizationSet),
-            })
-            .ToImmutableArray();
-
-        return merged;
-    }
-
-    /// <summary>
     /// Builds the contract of every default-language set, and holds it to the languages: each must have a set of its
     /// own. Without <paramref name="findings"/> nothing is reported, and the contracts are written all the same.
     /// </summary>
@@ -387,7 +367,7 @@ internal sealed record LocalizationSetsAnalysis(
             // A type of the contract's name, such as an interface written by hand that doesn't derive from
             // ILocalizationSet, would meet the generated contract (CS0101). So neither the contract nor its texts are
             // written, and the sets that list that type aren't told to add it (LOC204).
-            if (set.TypeNamedLikeContract is { } typeOfContractName)
+            if (set.OfContract.TypeNamedLikeContract is { } typeOfContractName)
             {
                 findings?.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.CannotExtend,
@@ -415,7 +395,7 @@ internal sealed record LocalizationSetsAnalysis(
 
             // The generated class would be a second type of its name (CS0101), so it isn't written. The contract is, as
             // for a set that can't be created: the sets list it.
-            if (set.TypeNamedLikeTexts is { } typeOfName)
+            if (set.OfContract.TypeNamedLikeTexts is { } typeOfName)
             {
                 var that = typeOfName.StartsWith("the namespace ", StringComparison.Ordinal) ? "that namespace" : "that type";
 
@@ -438,9 +418,9 @@ internal sealed record LocalizationSetsAnalysis(
                     SuggestedName: contractName));
             }
 
-            foreach (var member in set.Texts)
+            foreach (var member in set.OfContract.Texts)
             {
-                if (!IsReservedTextName(member.Name, baseName, hasLookup: set.Enums.Length > 0))
+                if (!IsReservedTextName(member.Name, baseName, hasLookup: set.OfContract.Enums.Length > 0))
                     continue;
 
                 var taken = member.Name switch
@@ -453,19 +433,19 @@ internal sealed record LocalizationSetsAnalysis(
                 };
 
                 // At the text, which is what to rename, and not at the set.
-                var reserved = set.ReservedTexts.FirstOrDefault(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal));
+                var reserved = set.OfContract.ReservedTexts.FirstOrDefault(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal));
                 var location = reserved.Name is null ? set.Location : reserved.Location;
 
                 findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.ReservedTextName, location, new EquatableArray<string>([set.Name, member.Name, taken])));
             }
 
             // At the method, which is what to change, and not at the set.
-            foreach (var method in set.UnsupportedTexts)
+            foreach (var method in set.OfContract.UnsupportedTexts)
                 findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UnsupportedText, method.Location, new EquatableArray<string>([set.Name, method.Name, method.Problem])));
 
             // At the text that's left out, which says where it's written. Its contract would lack it, and so every other
             // language would too, without a word.
-            foreach (var text in set.UndeclaredTexts)
+            foreach (var text in set.OfContract.UndeclaredTexts)
                 findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UndeclaredText, text.Location, new EquatableArray<string>([set.Name, text.Name, text.DeclaringType])));
 
             var implementers = setImplementers.Of(set, contractFullName).Where(static other => other.Language is not null).ToArray();
@@ -525,7 +505,7 @@ internal sealed record LocalizationSetsAnalysis(
 
             var links = otherSets
                 .Prepend(set)
-                .Select(static other => new SetLink(other.Language!, other.Namespace, other.Name, other.DeclaredTexts, other.InheritedTexts, other.Wordings, other.IsExcluded))
+                .Select(static other => new SetLink(other.Language!, other.Namespace, other.Name, other.OfContract.DeclaredTexts, other.OfContract.InheritedTexts, other.OfContract.Wordings, other.IsExcluded))
                 .ToImmutableArray();
 
             contracts.Add(new LocalizationContract(
@@ -535,13 +515,27 @@ internal sealed record LocalizationSetsAnalysis(
                 IsPublic: set.IsPublic,
                 ContractName: contractName,
                 TextsName: baseName,
-                Members: set.Texts,
+                Members: set.OfContract.Texts,
                 Sets: new EquatableArray<SetLink>(links),
                 HasTexts: hasTexts,
-                Usings: set.Usings,
-                Enums: set.Enums,
-                SuppressedDiagnostics: set.SuppressedDiagnostics));
+                Usings: set.OfContract.Usings,
+                Enums: set.OfContract.Enums,
+                SuppressedDiagnostics: GetContractSuppressedDiagnostics(set)));
         }
+    }
+
+    /// <summary>
+    /// What the file of a contract turns off besides <c>CS0612</c> and <c>CS0618</c>: what naming the default-language
+    /// set reports, then what naming its enums and their members reports, and what writing the types of its texts'
+    /// parameters reports. Each id once, in that order.
+    /// </summary>
+    private static EquatableArray<string> GetContractSuppressedDiagnostics(DiscoveredLocalization set)
+    {
+        var ofEnums = set.OfContract.Enums.SelectMany(static @enum => @enum.SuppressedDiagnostics);
+        var ofParameters = set.OfContract.Texts.SelectMany(static text => text.Parameters).SelectMany(static parameter => parameter.SuppressedDiagnostics);
+
+        var suppressed = set.SuppressedDiagnostics.Concat(ofEnums).Concat(ofParameters).Distinct(StringComparer.Ordinal).ToImmutableArray();
+        return new EquatableArray<string>(suppressed);
     }
 
     /// <summary>
@@ -732,7 +726,7 @@ internal sealed record LocalizationSetsAnalysis(
                 findings.Add(DerivedFromOtherLanguage(set, language));
             }
             // A type of the contract's name, which the default-language set's LOC200 reports, is what it lists.
-            else if (IsMissingContract(set, defaultLanguage) && set.TypeNamedLikeContract is null)
+            else if (IsMissingContract(set, defaultLanguage) && set.OfContract.TypeNamedLikeContract is null)
             {
                 var baseName = LocalizationDiscovery.DeriveBaseName(set.Name, language) ?? set.Name;
                 var defaultSet = $"{baseName}{SupportedLanguages.ToTypeSuffix(defaultLanguage)}";
@@ -754,8 +748,8 @@ internal sealed record LocalizationSetsAnalysis(
     /// </summary>
     private static bool IsDerivedFromOtherLanguage(DiscoveredLocalization set, GeneratedContracts generatedContracts)
     {
-        var isDerived = set.BaseSetLanguage is { } baseLanguage
-               && (set.BaseSetContracts.Length is 0 || set.BaseSetContracts.Any(baseType => LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is not null))
+        var isDerived = set.BaseSet is { Language: { } baseLanguage } baseSet
+               && (baseSet.Contracts.Length is 0 || baseSet.Contracts.Any(baseType => LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is not null))
                && !SupportedLanguages.Serves(baseLanguage, set.Language!);
 
         return isDerived;
@@ -766,7 +760,7 @@ internal sealed record LocalizationSetsAnalysis(
         var isDerived = new LocalizationSetsFinding(
             LocalizationSetsRule.DerivedFromOtherLanguage,
             set.Location,
-            new EquatableArray<string>([set.Name, language, set.BaseSetName!, set.BaseSetLanguage!]));
+            new EquatableArray<string>([set.Name, language, set.BaseSet!.Value.Name, set.BaseSet.Value.Language!]));
 
         return isDerived;
     }
@@ -799,7 +793,7 @@ internal sealed record LocalizationSetsAnalysis(
     private static bool IsMissingContract(DiscoveredLocalization set, string? defaultLanguage)
     {
         var isMissingContract = defaultLanguage is not null
-               && set is { ListsLocalizationSet: true, BaseSetName: null, UnresolvedBaseTypes.Length: 0 }
+               && set is { ListsLocalizationSet: true, BaseSet: null, UnresolvedBaseTypes.Length: 0 }
                && !LocalizationDiscovery.ImplementsContract(set)
                && !String.Equals(set.Language, defaultLanguage, StringComparison.OrdinalIgnoreCase);
 
@@ -900,10 +894,10 @@ internal sealed record LocalizationSetsAnalysis(
     /// </summary>
     private static string GetSetInterface(DiscoveredLocalization defaultSet)
     {
-        if (defaultSet.Enums.Length is 0)
+        if (defaultSet.OfContract.Enums.Length is 0)
             return SupportedLanguages.SetInterface;
 
-        var setInterface = String.Join(", ", defaultSet.Enums.Select(@enum =>
+        var setInterface = String.Join(", ", defaultSet.OfContract.Enums.Select(@enum =>
         {
             var name = String.Equals(@enum.Namespace, defaultSet.Namespace, StringComparison.Ordinal)
                 ? @enum.Name
@@ -943,8 +937,8 @@ internal sealed record LocalizationSetsAnalysis(
 /// them, whether the generated class holds the texts, the using directives its file repeats
 /// (<see cref="RepeatedUsings"/>), and the enums whose members it has a text for, each of which the generated class
 /// gets a method for that gives the text of a value. The class doesn't hold the texts when the generated code can't
-/// create the set for their default wording (<c>LOC200</c>). The file turns off what naming the default-language set
-/// reports (<see cref="DiscoveredLocalization.SuppressedDiagnostics"/>).
+/// create the set for their default wording (<c>LOC200</c>). The file turns off what naming the default-language set,
+/// its enums and the types of its parameters reports (<see cref="LocalizationSetsAnalysis.GetContractSuppressedDiagnostics"/>).
 /// </summary>
 internal sealed record LocalizationContract(
     string HintName,

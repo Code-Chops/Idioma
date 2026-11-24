@@ -42,6 +42,7 @@ The first digit of a code names its subject. The subjects follow the order of th
 | [`LOC401`](#loc401) (code fix)                      | A `LocalizationLanguageCode` that implements nothing    |
 | [`LOC402`](#loc402)                                 | A `LocalizationLanguageCode` that isn't a culture name  |
 | **[Wording](#wording)**                             |                                                         |
+| [`LOC500`](#loc500) (warning, code fix)             | An enum member that gives another member's text         |
 | [`LOC501`](#loc501) (code fix)                      | A language argument without its name                    |
 | [`LOC502`](#loc502) (warning, code fix)             | A placeholder such as `{0}` in a wording                |
 | [`LOC503`](#loc503) (warning, code fix)             | An enum member without a label next to members with one |
@@ -167,7 +168,7 @@ public class ShopLocalizationEnGb : ShopLocalizationEn // Texts it doesn't overr
 
 One region can't derive from another, because a region doesn't fall back to another region. `ShopLocalizationEnUs : ShopLocalizationEnGb` is LOC203.
 
-The IDE fix lists `ILocalizationSet` and the contract in place of the set it derives from. Its texts lose `override`, and the compiler then names each text the set lacks (`CS0535`). A region that derives from another region also gets a fix that derives from the set of its language instead, as in `ShopLocalizationEnUs : ShopLocalizationEn`.
+The IDE fix lists `ILocalizationSet` and the contract in place of the set it derives from. A set of an enum gets `ILocalizationSet<TEnum>` instead. Its texts become `virtual` in place of `override`, so a set that derives from it still compiles. The compiler then names each text the set lacks (`CS0535`). A region that derives from another region also gets a fix that derives from the set of its language instead, as in `ShopLocalizationEnUs : ShopLocalizationEn`.
 
 ### LOC204
 
@@ -419,6 +420,30 @@ This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which wo
 
 ## Wording
 
+### LOC500
+
+A call names an enum member whose value an earlier member has. This is a warning. A value can't tell the two members apart, so the call gets the text of the earlier member:
+
+```csharp
+public enum OrderStatus { Default, None = Default }
+
+OrderStatus.None.GetText()                               // LOC500: shows the text of Default
+OrderStatusLocalization.GetTextByValue(OrderStatus.None) // LOC500
+```
+
+```text
+warning LOC500: GetText() gives the text of 'OrderStatus.Default' for 'OrderStatus.None', because the two have the same value. Use 'OrderStatusLocalization.None' for the text of 'None'.
+```
+
+Use the member's own text:
+
+- In a [set of the enum](enums.md#a-set-of-the-enum), that's `OrderStatusLocalization.None`. The IDE fix writes it.
+- For a member marked `[Localized]`, that's `LocalizableText.GetTextByMember<OrderStatus>(nameof(OrderStatus.None))`. It gives a `string?`, so it gets no fix.
+
+The build checks a call that names the member in the code. A value your code only has at run time, as in `order.Status.GetText()`, gets no warning, because no member is named there. Such a value gives the text of the first member.
+
+A member without `[Localized]` next to marked members, such as `Default = Active`, gets no warning either, because it has no text of its own.
+
 ### LOC501
 
 An argument of `LocalizableText.Inline` or of `[Localized]` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or `[Localized(en: "City", nl: "Plaats")]`.
@@ -509,6 +534,7 @@ To ask for a text that isn't there yet on purpose, turn the error off around the
 A member marked `[Localized]` has a text that can't be registered, so `LocalizableText.GetTextByMember` won't find it. This is a warning, with these causes:
 
 - Its type is private or protected inside another type, or file-local. The generated code that holds the text can't name such a type. Make the type internal or public.
+- Its type, or a type around it, is marked `[Obsolete]` as an error. Naming such a type is an error that no pragma turns off. Make the `[Obsolete]` a warning, or remove `[Localized]`.
 - A wording is `null`. Write a wording for that language.
 - It's written in the `@code` of a `.razor` file. The source generator can't read what Razor generates, so write the type in a C# file.
 - The attribute is on an indexer, which has no name to find a text by. Remove it.

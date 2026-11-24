@@ -8,7 +8,8 @@ namespace CodeChops.Idioma.Generators;
 /// app's override must win over the library it rewords even when the library loads later. Within a tier a set comes
 /// after the sets it derives from, so it wins over them. Before that it records what the build read about each set
 /// (<c>GeneratedCode.RecordSet</c>). That's the language of each set that doesn't implement <c>LocalizationLanguageCode</c>, so that
-/// the run time never reads a set's name. A renamed type, as an obfuscator leaves it, keeps its language. So does a set
+/// the run time never reads a set's name, and the constant of each set that implements it, so that the registry needn't
+/// create the set to file it. A renamed type, as an obfuscator leaves it, keeps its language. So does a set
 /// named after a longer code, such as <c>ShopLocalizationEnGb</c>, whose last two letters alone would give <c>gb</c>.
 /// For a set deriving from another, it's also the texts its own class words, so that the registry knows which texts
 /// the set rewords without calling it. It also writes the texts of the assembly's members marked <c>[Localized]</c>
@@ -112,7 +113,6 @@ public static class LocalizationRegistrationPart
     {
         var languages = inputs.Languages;
         var discovery = inputs.RecordDiscovery;
-        var bindings = inputs.Bindings;
 
         // Every set, an excluded one included. Discovery finds only classes that implement ILocalizationSet.
         var allSets = discovery.Select(static (discovery, _) => discovery.Sets);
@@ -146,11 +146,10 @@ public static class LocalizationRegistrationPart
         // LOC200 reports, and the advice of LOC400, to exclude the set and register it by hand, is no way out for it.
         var unregistrable = sets
             .Combine(languages)
-            .Combine(bindings)
+            .Combine(inputs.Contracts)
             .Select(static (data, _) =>
             {
-                var ((sets, languages), bindings) = data;
-                var contracts = LocalizationDiscovery.GetGeneratedContracts(sets, languages, bindings);
+                var ((sets, languages), contracts) = data;
 
                 // Nor a default-language set whose name gives it no language, which LOC200 reports with the name to
                 // give it.
@@ -184,8 +183,7 @@ public static class LocalizationRegistrationPart
         // because every attribute of that name is bound again on each edit.
         // An enum that a set holds the texts of gets its GetText from that set's generated class alone.
         var enumsWithSets = allSets.Select(static (sets, _) => new EquatableArray<string>(sets
-            .SelectMany(static set => set.Enums)
-            .Select(static @enum => @enum.FullyQualifiedName)
+            .SelectMany(static set => set.EnumNames)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static name => name, StringComparer.Ordinal)
             .ToImmutableArray()));
@@ -230,8 +228,8 @@ public static class LocalizationRegistrationPart
 
         // Once per class that declares the property, where the fix is, however many sets derive from it.
         var unmapped = sets.Select(static (sets, _) => new EquatableArray<UnmappedLanguageCode>(sets
-            .Where(set => set.UnmappedLanguageCodeType is not null)
-            .Select(set => new UnmappedLanguageCode(set.UnmappedLanguageCodeType!, set.UnmappedLanguageCodeBaseType ?? "object", set.UnmappedLanguageCodeLocation))
+            .Where(set => set.UnmappedLanguageCode is not null)
+            .Select(set => set.UnmappedLanguageCode!.Value)
             .Distinct()
             .OrderBy(set => set.DeclaringType, StringComparer.Ordinal)
             .ToImmutableArray()));

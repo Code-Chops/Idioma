@@ -186,6 +186,47 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
+    public async Task MemberOfTypeMarkedObsoleteAsError_ShouldReportLOC505()
+    {
+        // Arrange & Act: naming the type is an error (CS0619), which no pragma turns off.
+        var diagnostic = await SingleCannotRegisterAsync($$"""
+            {{Header}}
+
+            [System.Obsolete("Use the new address.", error: true)]
+            public class OldAddress
+            {
+                [Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+            }
+            """);
+
+        // Assert
+        diagnostic.GetMessage().ShouldBe("The text of 'OldAddress.City' can't be registered because generated code can't name 'OldAddress', which is marked [Obsolete] as an error, so it won't be found. Make the [Obsolete] of 'OldAddress' a warning, or remove [Localized].");
+    }
+
+    [Test]
+    public async Task EnumMemberMarkedObsoleteAsError_ShouldReportNothing()
+    {
+        // Arrange & Act: GetText() finds it by its value.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Picked", nl: "Gepickt")]
+                Picked,
+
+                [System.Obsolete("Use Picked.", error: true)]
+                [Localized(en: "Dropped", nl: "Afgeleverd")]
+                Dropped,
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
     [Arguments("""en: "City", nl: null!""", "nl")]
     [Arguments("""en: null!, nl: "Plaats" """, "en")]
     [Arguments(""" "City", null!""", "nl")]

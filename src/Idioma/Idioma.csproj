@@ -21,13 +21,13 @@
     <IsPackable>true</IsPackable>
     <!-- The version is in Directory.Build.props, for the generator and the code fixes too. -->
     <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
-    <PackageReleaseNotes>Every text is a string. ShopLocalization.Checkout, ShopLocalization.Greeting(customer.Name), LocalizableText.Inline(...), LocalizableText.GetTextByMember and GetText() each give the wording for the user's language at the moment you read them. Read a text where you show it, because a string kept in a static field stays in the language of the first user. The build warns about a text in the initializer of a static field or property (LOC506). LocalizableText is no longer a type you hold. It only has Inline, GetTextByMember and GetTextOfType. Its conversions, its equality, ToString(culture), Key, FullKey, Contract, Arguments, Keyed, GetWording and its JSON converter are gone, and so are LOC303 and LOC500. A parameter that took a LocalizableText takes a string. Rebuild every library built with an earlier version, because the generated code calls other methods.
+    <PackageReleaseNotes>Every text is a string. ShopLocalization.Checkout, ShopLocalization.Greeting(customer.Name), LocalizableText.Inline(...), LocalizableText.GetTextByMember and GetText() each give the wording for the user's language at the moment you read them. Read a text where you show it, because a string kept in a static field stays in the language of the first user. The build warns about a text in the initializer of a static field or property (LOC506). LocalizableText is no longer a type you hold. It only has Inline, GetTextByMember and GetTextOfType. Its conversions, its equality, ToString(culture), Key, FullKey, Contract, Arguments, Keyed, GetWording and its JSON converter are gone, and so is LOC303. LOC500 now reports another mistake, which the texts of an enum below describe. A parameter that took a LocalizableText takes a string. Rebuild every library built with an earlier version, because the generated code calls other methods.
 
 A text takes a value as a method of its set. Write Greeting(string name) in each language and call ShopLocalization.Greeting(customer.Name). LocalizableText.Format is gone, and nothing fills in a placeholder such as {0} any more, so a wording that holds one shows its braces (LOC502, with an IDE fix that writes the method). Each language writes its own plurals in C#, because a wording can depend on its values.
 
-A set can hold the texts of an enum. List ILocalizationSet&lt;OrderStatus&gt; in place of ILocalizationSet, and every member of the enum needs a text in every language (CS0535). order.Status.GetText() gives a value its text, and so does OrderStatusLocalization.GetTextByValue(order.Status).
+A set can hold the texts of an enum. List ILocalizationSet&lt;OrderStatus&gt; in place of ILocalizationSet, and every member of the enum needs a text in every language (CS0535). order.Status.GetText() gives a value its text, and so does OrderStatusLocalization.GetTextByValue(order.Status). A value that two members have gives the text of the first, so OrderStatus.None.GetText() next to Default = 0 is a build warning (LOC500).
 
-A label can sit on the member it names. Mark a property, a field, an enum member or a type [Localized(en: "City", nl: "Plaats")], with a wording per language. LocalizableText.GetTextByMember&lt;Address&gt;(nameof(Address.City)) gives the text, also by a Type or a PropertyInfo your code holds. LocalizableText.GetTextOfType&lt;Address&gt;() gives the text of a type itself, and a value of an enum gives the text of its member with GetText(). The source generator writes each text as code, so nothing reads the attribute at run time. A member of an enum without [Localized] next to members that have it is a build warning (LOC503).
+A label can sit on the member it names. Mark a property, a field, an enum member or a type [Localized(en: "City", nl: "Plaats")], with a wording per language. LocalizableText.GetTextByMember&lt;Address&gt;(nameof(Address.City)) gives the text, also by a Type or a PropertyInfo your code holds. LocalizableText.GetTextOfType&lt;Address&gt;() gives the text of a type itself, and a value of an enum gives the text of its member with GetText(). The source generator writes each text as code, so nothing reads the attribute at run time. A member of an enum without [Localized] next to members that have it is a build warning (LOC503), and so is GetText() on the later of two marked members with one value (LOC500).
 
 The build holds every language to the values. A language whose method never uses a value the default wording shows doesn't build (LOC302), and neither does a language of LocalizableText.Inline that leaves out a value the default language shows.
 
@@ -35,7 +35,7 @@ The names say localization. A set implements ILocalizationSet and its contract: 
 
 ResourceText is gone. The key of a text of a set is its name, such as Checkout. Every generated class has a method GetTextByKey, for a key your code only has at run time. ShopLocalization.GetTextByKey("Checkout") gives the wording, and GetTextByKey("Greeting", customer.Name) that of a text with parameters. A key no text has throws. No text can be named GetTextByKey any more (LOC205).
 
-LocalizationRegistry.Create(sets, defaultLanguage, ...) is gone, because nothing public read a text from such a registry. [Localized] written through an alias is a build warning (LOC505), and the fix for parameter names (LOC301) no longer moves names over parameters of different types.
+LocalizationRegistry.Create is gone, because nothing public read a text from a registry of your own. Read a set of your app with LocalizationRegistry.Current.Find. [Localized] written through an alias is a build warning (LOC505), and the fix for parameter names (LOC301) no longer moves names over parameters of different types.
 
 LocalizationRegistry.CurrentUICultureProvider gives the user's culture in an app that keeps it somewhere other than CultureInfo.CurrentUICulture. LocalizationRegistry.UseCulture(culture) makes every text in a using block follow another culture, such as that of an email's recipient, also across an await.
 
@@ -97,8 +97,6 @@ The details have a page per subject under docs/, which the README links to. New 
   -->
   <ItemGroup Label="PublicApi">
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
-    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
-    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
 
   <ItemGroup>

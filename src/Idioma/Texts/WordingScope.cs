@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace CodeChops.Idioma;
 
 /// <summary>
@@ -53,6 +55,16 @@ internal readonly ref struct WordingScope
     // because Capture gives none then, so the cultures are set back one by one.
     private ExecutionContext? PreviousContext { get; }
 
+    /// <summary>
+    /// Per execution context, that context with the cultures a scope switched to, so that the next scope of those
+    /// cultures switches to it by restoring it. Kept as long as the context it was switched from lives.
+    /// </summary>
+    // Setting a culture copies the context, which cost every text that falls back, or runs in a provider's culture, a
+    // few hundred bytes and most of its time. The texts of one render or request run in one context, and fall back to
+    // one language, so all but the first restore the context the first one made, which copies nothing. A context dies
+    // with its flow, and its switched context with it, so nothing here keeps the values of a request alive.
+    private static ConditionalWeakTable<ExecutionContext, SwitchedContext> SwitchedContexts { get; } = new();
+
     // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
     private CultureInfo? PreviousUICulture { get; }
     private CultureInfo? PreviousCulture { get; }
@@ -72,18 +84,30 @@ internal readonly ref struct WordingScope
         var changesCulture = valuesCulture is not null && !ReferenceEquals(valuesCulture, currentCulture);
 
         if (changesUiCulture || changesCulture)
-            this.PreviousContext = ExecutionContext.Capture();
-
-        if (changesUiCulture)
         {
-            CultureInfo.CurrentUICulture = culture;
-            this.PreviousUICulture = uiCulture;
-        }
+            var previous = ExecutionContext.Capture();
+            var switchedUiCulture = changesUiCulture ? culture : uiCulture;
+            var switchedCulture = changesCulture ? valuesCulture! : currentCulture;
 
-        if (changesCulture)
-        {
-            CultureInfo.CurrentCulture = valuesCulture!;
-            this.PreviousCulture = currentCulture;
+            this.PreviousContext = previous;
+            this.PreviousUICulture = changesUiCulture ? uiCulture : null;
+            this.PreviousCulture = changesCulture ? currentCulture : null;
+
+            if (previous is not null && SwitchedContexts.TryGetValue(previous, out var switched) && switched.Holds(switchedUiCulture, switchedCulture))
+            {
+                ExecutionContext.Restore(switched.Context);
+            }
+            else
+            {
+                if (changesUiCulture)
+                    CultureInfo.CurrentUICulture = culture;
+
+                if (changesCulture)
+                    CultureInfo.CurrentCulture = valuesCulture!;
+
+                if (previous is not null && ExecutionContext.Capture() is { } context)
+                    SwitchedContexts.AddOrUpdate(previous, new SwitchedContext(switchedUiCulture, switchedCulture, context));
+            }
         }
 
         this.PreviousEntered = Entered;
@@ -172,5 +196,27 @@ internal readonly ref struct WordingScope
 
         if (this.PreviousCulture is not null)
             CultureInfo.CurrentCulture = this.PreviousCulture;
+    }
+
+    /// <summary>
+    /// An execution context with the cultures a scope switched to: the UI culture, and the culture that formats values.
+    /// </summary>
+    private sealed class SwitchedContext(CultureInfo uiCulture, CultureInfo culture, ExecutionContext context)
+    {
+        // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
+        private CultureInfo UICulture { get; } = uiCulture;
+        private CultureInfo Culture { get; } = culture;
+
+        public ExecutionContext Context { get; } = context;
+
+        /// <summary>
+        /// Whether the context holds these cultures. They're compared as objects, because a scope switches to the
+        /// culture object its language or its provider gives, which is the same one text after text.
+        /// </summary>
+        public bool Holds(CultureInfo uiCulture, CultureInfo culture)
+        {
+            var holds = ReferenceEquals(this.UICulture, uiCulture) && ReferenceEquals(this.Culture, culture);
+            return holds;
+        }
     }
 }

@@ -34,7 +34,6 @@ static CodeChops.Idioma.Internals.GeneratedCode.GetKeyedValue<TValue>(string! ke
 static CodeChops.Idioma.Internals.GeneratedCode.RecordSet<TSet>(string? languageCode, params string![]! ownTexts) -> void
 static CodeChops.Idioma.Internals.GeneratedCode.RegisterLanguages(string! defaultLanguage, params System.ReadOnlySpan<string!> otherLanguages) -> void
 static CodeChops.Idioma.Internals.GeneratedCode.RegisterSets(bool asDefaults, params System.ReadOnlySpan<(System.Type! Type, System.Func<CodeChops.Idioma.ILocalizationSet!>! Create)> sets) -> void
-static CodeChops.Idioma.LocalizationRegistry.Create(System.Collections.Generic.IEnumerable<CodeChops.Idioma.ILocalizationSet!>! sets) -> CodeChops.Idioma.LocalizationRegistry!
 static CodeChops.Idioma.LocalizationRegistry.Current.get -> CodeChops.Idioma.LocalizationRegistry!
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.get -> System.Func<System.Globalization.CultureInfo?>?
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.set -> void

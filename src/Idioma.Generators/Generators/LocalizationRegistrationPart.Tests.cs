@@ -854,7 +854,7 @@ public sealed class LocalizationRegistrationPartTests
         // Assert: by name and in order, and nothing of the texts for a set deriving from none.
         text.ShouldContain("RecordSet<TestApp.ShopLocalizationEnGb>(\"en-GB\", \"Cart\", \"Greeting\");");
         text.ShouldContain("RecordSet<TestApp.MyShopLocalizationEn>(\"en\", \"Checkout\");");
-        text.ShouldContain("RecordSet<TestApp.ShopLocalizationBritish>(null, \"Cart\");");
+        text.ShouldContain("RecordSet<TestApp.ShopLocalizationBritish>(\"en-GB\", \"Cart\");");
         text.ShouldContain("RecordSet<TestApp.ShopLocalizationEn>(\"en\");");
     }
 
@@ -888,11 +888,13 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";", null)]
+    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";", "ShopLocalizationNlBe>(\"nl-BE\");")]
+    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"SHOP_LANGUAGE\") ?? \"nl-BE\";", null)]
     [Arguments("[assembly: SupportedLanguages(\"en\", \"nl\")]", "", "ShopLocalizationNlBe>(\"be\");")]
     public void SetWhoseNameGivesNoDeclaredLongCode_RecordsWhatTheBuildReads(string attribute, string languageCode, string? recorded)
     {
-        // Arrange & Act: a set implementing its code needs no record; and without nl-BE declared, the name gives 'be'.
+        // Arrange & Act: a set implementing its code records it where it's a constant, so that the registry needn't
+        // create the set to file it. One the build can't read gets no record. Without nl-BE declared, the name gives 'be'.
         var text = GeneratedText(Run($$"""
             using CodeChops.Idioma;
 
@@ -2438,14 +2440,9 @@ public sealed class LocalizationRegistrationPartTests
         discovery.Sets.Single(static set => set.Name is "ShopLocalizationEn").OwnTexts.ShouldBeEmpty();
         discovery.Sets.Single(static set => set.Name is "ShopLocalizationEnGb").OwnTexts.ShouldBe(["Cart"]);
 
-        foreach (var set in discovery.Sets)
-        {
-            set.Texts.ShouldBeEmpty();
-            set.UnsupportedTexts.ShouldBeEmpty();
-            set.Wordings.ShouldBeEmpty();
-            set.DeclaredTexts.ShouldBeEmpty();
-            set.InheritedTexts.ShouldBeEmpty();
-        }
+        // Nothing of what the contracts are written from, so that a change of it leaves the registrar as it was. The
+        // names of the enums whose texts a set holds are the registrar's.
+        discovery.Sets.ShouldAllBe(static set => set.OfContract == default);
     }
 
     [Test]

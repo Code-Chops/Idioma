@@ -159,14 +159,13 @@ public static class LocalizationSetsPart
     internal static void Initialize(IncrementalGeneratorInitializationContext context, LocalizationInputs inputs)
     {
         var languages = inputs.Languages;
-        var bindings = inputs.Bindings;
 
         // No code below C# 14, which LOC102 reports. What is found about the sets is reported all the same.
         var compiles = inputs.Compiles;
 
         var analysis = inputs.ContractDiscovery
             .Combine(languages)
-            .Combine(bindings)
+            .Combine(inputs.Contracts)
             .Select(static (data, cancellationToken) => LocalizationSetsAnalysis.Analyze(
                 data.Left.Left.Sets,
                 data.Left.Left.UnextendableSets,
@@ -363,7 +362,7 @@ public static class LocalizationSetsPart
         // words a text, which is called by its name alone. Inside the generated class a text stands before every
         // namespace of its name, so behind a text named CodeChops the package's namespace could not be reached to call
         // it. The pragma also covers a set marked [Obsolete] or [Experimental], whose texts read it for as long as it
-        // exists.
+        // exists, and an enum, a member of it or a parameter type marked so, which the file names too.
         var warnings = LocalizationRegistrationPart.WithSuppressed(LocalizationRegistrationPart.ObsoleteWarnings, contract.SuppressedDiagnostics);
         var sb = new StringBuilder();
         sb.AppendLine($"""
@@ -639,9 +638,13 @@ public static class LocalizationSetsPart
                 {
             """);
 
-        // Each text by the name of its class in front, as it stands outside that class.
+        // Each text by the name of its class in front, as it stands outside that class. A member marked [Obsolete] as an
+        // error can't be named (CS0619), so its arm names its value, which a parenthesis keeps whole when it's negative.
         foreach (var member in members)
-            lookups.AppendLine($"        {type}.{EscapeIdentifier(member.Name)} => {textsName}.{EscapeIdentifier(member.Name)},");
+        {
+            var pattern = member.ObsoleteAsErrorValue is { } value ? $"({type})({value})" : $"{type}.{EscapeIdentifier(member.Name)}";
+            lookups.AppendLine($"        {pattern} => {textsName}.{EscapeIdentifier(member.Name)},");
+        }
 
         lookups.AppendLine($$"""
                     _ => value.ToString(),

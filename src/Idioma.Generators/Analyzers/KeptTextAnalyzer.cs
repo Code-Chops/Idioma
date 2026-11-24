@@ -152,7 +152,7 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     /// Whether a class is one the source generator writes for a set, such as <c>ShopLocalization</c>: a static class
     /// whose namespace holds its contract, <c>IShopLocalization</c>, which the generator marks.
     /// </summary>
-    private static bool IsGeneratedClass(INamedTypeSymbol? type)
+    internal static bool IsGeneratedClass(INamedTypeSymbol? type)
     {
         if (type is not { IsStatic: true, ContainingType: null, Arity: 0 })
             return false;

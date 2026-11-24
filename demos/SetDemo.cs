@@ -5,16 +5,14 @@ using CodeChops.Idioma;
 
 [assembly: SupportedLanguages(defaultLanguage: "en", "en-GB", "nl")]
 
-// The supported languages, and German, which isn't one of them. A German user sees English, the default.
-foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
+// The supported languages, and German, which isn't one of them.
+foreach (var culture in LocalizationRegistry.SupportedLanguages)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
     Console.WriteLine($"{culture}: {ShopLocalization.Greeting("Max")} {ShopLocalization.ItemsInCart(2)}. {ShopLocalization.GoToCheckout}");
 }
 
-// English: the default. The source generator writes two types from this set:
-// - the contract IShopLocalization, which every set implements.
-// - the class ShopLocalization, which shows the texts.
+// English: the default.
 public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
 {
     public string GoToCheckout => "Go to checkout";

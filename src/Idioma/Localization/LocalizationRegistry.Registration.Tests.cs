@@ -155,8 +155,62 @@ public sealed partial class LocalizationRegistryTests
         var exception = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.CreateSet(typeof(RegistryLazyLocalizationNl), () => throw thrown));
 
         // Assert
-        exception.Message.ShouldStartWith($"'{typeof(RegistryLazyLocalizationNl)}' threw when it was created, so no text can be shown.");
+        exception.Message.ShouldStartWith($"'{typeof(RegistryLazyLocalizationNl)}' threw when it was created, so the texts of its contract can't be shown.");
         exception.InnerException.ShouldBeSameAs(thrown);
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void RegisterSets_WhoseConstructorThrowsOnce_ShouldFailOnlyTheTextsOfItsContractAndOnlyOnce()
+    {
+        // Arrange: recorded as the build records a set, so the registry files it under its language without creating it.
+        RegistryFlakyLocalizationNl.FailuresLeft = 1;
+        GeneratedCode.RecordSet<RegistryFlakyLocalizationNl>("nl");
+        GeneratedCode.RegisterSets(
+            asDefaults: true,
+            (typeof(RegistryFlakyLocalizationNl), static () => new RegistryFlakyLocalizationNl()),
+            (typeof(RegistrySteadyLocalizationNl), static () => new RegistrySteadyLocalizationNl()));
+
+        var dutch = Culture("nl");
+
+        // Act: the language an inline text shows, a set of another contract, and the set itself, twice.
+        var inlineLanguage = InlineLanguage.Find(["en", "nl"], LocalizationRegistry.Current.Resolve(dutch));
+        var other = LocalizationRegistry.Current.Find<IRegistrySteadyLocalization>(dutch);
+        var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Current.Find<IRegistryFlakyLocalization>(dutch));
+        var retried = LocalizationRegistry.Current.Find<IRegistryFlakyLocalization>(dutch);
+
+        // Assert: only the texts of its contract fail, and the next one creates the set again.
+        inlineLanguage.ShouldBe(1);
+        other.ShouldBeOfType<RegistrySteadyLocalizationNl>();
+        failure.Message.ShouldStartWith($"'{typeof(RegistryFlakyLocalizationNl)}' threw when it was created");
+        failure.InnerException.ShouldBeOfType<TimeoutException>();
+        retried.ShouldBeOfType<RegistryFlakyLocalizationNl>();
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void RegisterSets_WhoseConstructorThrowsBeforeItGivesItsLanguage_ShouldFailOnlyTheTextsOfItsContract()
+    {
+        // Arrange: a set that gives its language itself, which the registry creates when it's built, to file it. That
+        // fails, and so does the first text of its contract.
+        RegistryFlakyCodedLocalization.FailuresLeft = 2;
+        GeneratedCode.RegisterSets(
+            asDefaults: true,
+            (typeof(RegistryFlakyCodedLocalization), static () => new RegistryFlakyCodedLocalization()),
+            (typeof(RegistrySteadyLocalizationNl), static () => new RegistrySteadyLocalizationNl()));
+
+        var dutch = Culture("nl");
+
+        // Act: the second text of its contract creates it, and the registry files it for the texts after that.
+        var other = LocalizationRegistry.Current.Find<IRegistrySteadyLocalization>(dutch);
+        var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Current.Find<IRegistryFlakyCodedLocalization>(dutch));
+        _ = LocalizationRegistry.Current.Find<IRegistryFlakyCodedLocalization>(dutch);
+        var filed = LocalizationRegistry.Current.Find<IRegistryFlakyCodedLocalization>(dutch);
+
+        // Assert
+        other.ShouldBeOfType<RegistrySteadyLocalizationNl>();
+        failure.InnerException.ShouldBeOfType<TimeoutException>();
+        filed.ShouldBeOfType<RegistryFlakyCodedLocalization>();
     }
 
     [Test]

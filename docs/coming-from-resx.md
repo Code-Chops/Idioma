@@ -51,7 +51,7 @@ Code of your own that shows a property's label can keep the label on the propert
 
 ## Keeping a resource file as an override
 
-An app can let a resource file or a database override a wording through `IStringLocalizer`. Use this when a wording has to change without a rebuild, such as when translators edit a resource file. The key of a text is its name. An extension method on the localizer asks it for that key first, and gives the text where there's no entry:
+An app can let a resource file or a database override a wording through `IStringLocalizer`. Use a resource file when translators edit one. A resource file is compiled into an assembly as well, so a changed entry still takes a build. To change a wording without a build, use a localizer that reads a database or a JSON file at run time. The key of a text is its name. An extension method on the localizer asks it for that key first, and gives the text where there's no entry:
 
 ```csharp
 public static class LocalizerExtensions

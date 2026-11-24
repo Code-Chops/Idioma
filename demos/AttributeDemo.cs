@@ -7,8 +7,8 @@ using CodeChops.Idioma;
 
 var parcel = new Parcel() { Recipient = "Max", PostalCode = "1012 AB" };
 
-// The supported languages, and German, which isn't one of them. A German user sees English, the default.
-foreach (var culture in LocalizationRegistry.SupportedLanguages.Append("de-DE"))
+// The supported languages, and German, which isn't one of them.
+foreach (var culture in LocalizationRegistry.SupportedLanguages)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 

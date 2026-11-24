@@ -155,7 +155,7 @@ internal static partial class LocalizationDiscovery
             // Not for a LocalizationLanguageCode the build can't read: such a set has a language, which only the run time knows.
             NameGivesNoLanguage: language is null && invalidLanguageCode is null && !DeclaresLanguageCode(type) && MapLanguageCode(type).Unmapped is null,
             InvalidLanguageCode: invalidLanguageCode,
-            RecordedLanguageCode: DeclaresLanguageCode(type) ? null : FindRecordedLanguageCode(type, ancestors) ?? GetNameLanguage(type.Name),
+            RecordedLanguageCode: DeclaresLanguageCode(type) ? ReadImplementedLanguageCode(type, reader, cancellationToken) : FindRecordedLanguageCode(type, ancestors) ?? GetNameLanguage(type.Name),
             // Only for a set deriving from another: the registry asks it of such a set alone, and a set deriving from
             // none would list every text, in every language, in the generated code.
             OwnTexts: new EquatableArray<string>(depth > 0 && readsRecord ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
@@ -164,32 +164,38 @@ internal static partial class LocalizationDiscovery
             OwnContractNames: new EquatableArray<string>(GetOwnContractNames(type)),
             ImplementsInternalContract: ImplementsInternalContract(type),
             AncestorNames: new EquatableArray<string>([.. ancestors.Select(static ancestor => ancestor.Type.ToDisplayString())]),
-            BaseSetName: baseSet?.Name,
-            BaseSetLanguage: baseSet is null ? null : GetLanguage(baseSet, [.. ancestors.Skip(1)], reader, cancellationToken),
-            BaseSetContracts: baseSet is null || ImplementsLocalizationSet(baseSet)
-                ? default
-                : new EquatableArray<UnresolvedBaseType>(inheritedBaseTypes),
-            UnmappedLanguageCodeType: unmappedLanguageCode?.ContainingType.Name,
-            UnmappedLanguageCodeBaseType: unmappedLanguageCode?.ContainingType.BaseType?.Name,
-            // At the class that declares it, so that the sets deriving from that class report one error, where the fix
-            // is. A class of another assembly has no place in this one, and is reported at the set.
-            UnmappedLanguageCodeLocation: unmappedLanguageCode is { ContainingType: { } declaring } && IsDeclaredIn(declaring, type.ContainingAssembly)
-                ? DiagnosticLocation.From(declaring.Locations[0])
-                : location,
+            BaseSet: baseSet is null
+                ? null
+                : new BaseSet(
+                    Name: baseSet.Name,
+                    Language: GetLanguage(baseSet, [.. ancestors.Skip(1)], reader, cancellationToken),
+                    Contracts: ImplementsLocalizationSet(baseSet) ? default : new EquatableArray<UnresolvedBaseType>(inheritedBaseTypes)),
+            UnmappedLanguageCode: unmappedLanguageCode is { ContainingType: { } declaring }
+                ? new UnmappedLanguageCode(
+                    DeclaringType: declaring.Name,
+                    DeclaringTypeBase: declaring.BaseType?.Name ?? "object",
+                    // At the class that declares it, so that the sets deriving from that class report one error, where
+                    // the fix is. A class of another assembly has no place in this one, and is reported at the set.
+                    Location: IsDeclaredIn(declaring, type.ContainingAssembly) ? DiagnosticLocation.From(declaring.Locations[0]) : location)
+                : null,
             IsRecord: type.IsRecord,
             IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
-            DeclaredTexts: new EquatableArray<string>(readsContract ? GetDeclaredTexts(type) : ImmutableArray<string>.Empty),
-            InheritedTexts: new EquatableArray<InheritedText>(readsContract ? GetInheritedTexts(type) : ImmutableArray<InheritedText>.Empty),
-            Wordings: new EquatableArray<TextWording>(readsContract ? GetWordings(type, reader, cancellationToken) : ImmutableArray<TextWording>.Empty),
-            Texts: new EquatableArray<LocalizationMember>(ImmutableArray<LocalizationMember>.Empty),
-            UnsupportedTexts: new EquatableArray<UnsupportedText>(ImmutableArray<UnsupportedText>.Empty),
-            Usings: default,
-            Enums: new EquatableArray<LocalizedEnum>(enums),
-            TypeNamedLikeTexts: null,
-            TypeNamedLikeContract: readsContract && language is not null ? FindTypeNamedLikeContract(type, language) : null,
-            ReservedTexts: new EquatableArray<ReservedText>(ImmutableArray<ReservedText>.Empty),
-            UndeclaredTexts: new EquatableArray<UndeclaredText>(ImmutableArray<UndeclaredText>.Empty));
+            EnumNames: new EquatableArray<string>([.. enums.Select(static @enum => @enum.FullyQualifiedName)]),
+            OfContract: !readsContract
+                ? default
+                : new SetTextsOfContract(
+                    DeclaredTexts: new EquatableArray<string>(GetDeclaredTexts(type)),
+                    InheritedTexts: new EquatableArray<InheritedText>(GetInheritedTexts(type)),
+                    Wordings: new EquatableArray<TextWording>(GetWordings(type, reader, cancellationToken)),
+                    Texts: default,
+                    UnsupportedTexts: default,
+                    Usings: default,
+                    Enums: new EquatableArray<LocalizedEnum>(enums),
+                    TypeNamedLikeTexts: null,
+                    TypeNamedLikeContract: language is not null ? FindTypeNamedLikeContract(type, language) : null,
+                    ReservedTexts: default,
+                    UndeclaredTexts: default));
 
         // The texts a contract is written from, which only a set a contract may come from has: one in the default
         // language, or in any language while the build can't read the default one, as the analysis takes them
@@ -202,12 +208,15 @@ internal static partial class LocalizationDiscovery
 
         var withTexts = set with
         {
-            Texts = new EquatableArray<LocalizationMember>(texts),
-            UnsupportedTexts = new EquatableArray<UnsupportedText>(unsupportedTexts),
-            Usings = usings,
-            TypeNamedLikeTexts = language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
-            ReservedTexts = new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
-            UndeclaredTexts = new EquatableArray<UndeclaredText>(GetUndeclaredTexts(type)),
+            OfContract = set.OfContract with
+            {
+                Texts = new EquatableArray<LocalizationMember>(texts),
+                UnsupportedTexts = new EquatableArray<UnsupportedText>(unsupportedTexts),
+                Usings = usings,
+                TypeNamedLikeTexts = language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
+                ReservedTexts = new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
+                UndeclaredTexts = new EquatableArray<UndeclaredText>(GetUndeclaredTexts(type)),
+            },
         };
 
         return withTexts;
@@ -577,15 +586,49 @@ internal static partial class LocalizationDiscovery
     internal const string ObsoleteAsErrorProblem = "it's marked [Obsolete] as an error, and generated code can't name such a class";
 
     /// <summary>
-    /// Whether the type is marked <c>[Obsolete]</c> as an error, as in <c>[Obsolete("Use another set", error: true)]</c>.
+    /// Whether a type or a member is marked <c>[Obsolete]</c> as an error, as in
+    /// <c>[Obsolete("Use another set", error: true)]</c>. Naming it is an error (<c>CS0619</c>), which no pragma turns off.
     /// </summary>
-    private static bool IsObsoleteAsError(INamedTypeSymbol type)
+    internal static bool IsObsoleteAsError(ISymbol symbol)
     {
-        var isObsoleteAsError = type.GetAttributes().Any(static attribute =>
+        var isObsoleteAsError = symbol.GetAttributes().Any(static attribute =>
             attribute.AttributeClass is { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } }
             && attribute.ConstructorArguments is [_, { Value: true }]);
 
         return isObsoleteAsError;
+    }
+
+    /// <summary>
+    /// What writing a type in generated code reports besides <c>CS0612</c> and <c>CS0618</c>
+    /// (<see cref="GetSuppressedDiagnostics(ISymbol)"/>), for the type, the types around it, and the types it's made of,
+    /// such as the element of an array or a type argument. <c>Payment&lt;Money&gt;[]</c> reports what <c>Payment</c> and
+    /// <c>Money</c> are marked with.
+    /// </summary>
+    internal static ImmutableArray<string> GetSuppressedDiagnosticsOfType(ITypeSymbol type)
+    {
+        var suppressed = new List<string>();
+        Add(type, suppressed);
+
+        return [.. suppressed.Distinct(StringComparer.Ordinal)];
+
+        static void Add(ITypeSymbol type, List<string> suppressed)
+        {
+            switch (type)
+            {
+                case IArrayTypeSymbol array:
+                    Add(array.ElementType, suppressed);
+                    break;
+
+                case INamedTypeSymbol named:
+                    for (var current = named; current is not null; current = current.ContainingType)
+                        suppressed.AddRange(GetSuppressedDiagnostics(current.OriginalDefinition));
+
+                    foreach (var argument in named.TypeArguments)
+                        Add(argument, suppressed);
+
+                    break;
+            }
+        }
     }
 
     /// <summary>

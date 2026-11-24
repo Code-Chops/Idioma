@@ -457,6 +457,72 @@ public sealed class LocalizedMembersSourceTests
     }
 
     [Test]
+    public void EnumMemberMarkedObsoleteAsError_ShouldGiveItsTextByItsValue()
+    {
+        // Arrange: generated code can't name the member, whose value stored data may still hold.
+        var source = $$"""
+            {{Header}}
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Picked", nl: "Gepickt")]
+                Picked,
+
+                [System.Obsolete("Use Delivered.", error: true)]
+                [Localized(en: "Dropped", nl: "Afgeleverd")]
+                Dropped = -1,
+            }
+            """;
+
+        // Act
+        var text = Texts(Run(source))!;
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert: the parentheses keep the negative value whole, and the member is still found by its name.
+        errors.ShouldBeEmpty();
+        text.ShouldContain("(Shop.Domain.ParcelStatus)(-1) => ");
+        text.ShouldContain("\"Dropped\" => ");
+    }
+
+    [Test]
+    [Arguments("[System.Obsolete(\"Use the new address.\", error: true)]", "")]
+    [Arguments("", "[System.Obsolete(\"Use the new address.\", error: true)]")]
+    public void MemberOfTypeMarkedObsoleteAsError_ShouldGetNoText(string onType, string onOuterType)
+    {
+        // Arrange: generated code can't name the type, so the member gets no text, and LocalizedMemberAnalyzer reports
+        // it (LOC505). The rest of the assembly keeps its texts.
+        var source = $$"""
+            {{Header}}
+
+            {{onOuterType}}
+            public class Customer
+            {
+                {{onType}}
+                public class Address
+                {
+                    [Localized(en: "City", nl: "Plaats")]
+                    public string City { get; } = "";
+                }
+            }
+
+            public class Order
+            {
+                [Localized(en: "Number", nl: "Nummer")]
+                public int Number { get; }
+            }
+            """;
+
+        // Act
+        var text = Texts(Run(source))!;
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+
+        // Assert
+        errors.ShouldBeEmpty();
+        text.ShouldContain("\"Number\" =>");
+        text.ShouldNotContain("City");
+    }
+
+    [Test]
     public void WordingThatIsNull_ShouldGetNoText()
     {
         // Arrange & Act: LocalizedMemberAnalyzer reports it.

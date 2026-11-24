@@ -13,9 +13,7 @@ namespace CodeChops.Idioma.Generators;
 /// <item>The base types that bind to nothing, which it or a class it derives from lists
 /// (<see cref="UnresolvedBaseTypes"/>). A contract generated in the same build is one.</item>
 /// <item>The classes of its assembly it derives from (<see cref="AncestorNames"/>), and the set it derives from
-/// directly (<see cref="BaseSetName"/>). <see cref="BaseSetContracts"/> holds the unresolved base types through which
-/// that set would implement a contract generated here. It's empty when that set implements <c>ILocalizationSet</c>
-/// already.</item>
+/// directly (<see cref="BaseSet"/>), if any.</item>
 /// <item>The public contracts it implements (<see cref="ContractNames"/>), those written by hand in its assembly
 /// (<see cref="OwnContractNames"/>), and whether it implements an internal contract of another assembly, which it
 /// sees through <c>InternalsVisibleTo</c> (<see cref="ImplementsInternalContract"/>).</item>
@@ -44,9 +42,11 @@ namespace CodeChops.Idioma.Generators;
 /// can't read.</item>
 /// <item><see cref="InvalidLanguageCode"/> is the constant its <c>LocalizationLanguageCode</c> holds when that's no culture
 /// name.</item>
-/// <item><see cref="RecordedLanguageCode"/> is the code the generated registrar records for it. It's read from its
-/// name, or from that of a set it derives from, when the set doesn't implement <c>LocalizationLanguageCode</c>.</item>
-/// <item>The class whose <c>LocalizationLanguageCode</c> implements nothing, if any, with where to report it.</item>
+/// <item><see cref="RecordedLanguageCode"/> is the code the generated registrar records for it. It's the constant its
+/// <c>LocalizationLanguageCode</c> returns, where the build can read one. For a set that doesn't implement
+/// <c>LocalizationLanguageCode</c>, it's read from its name, or from that of a set it derives from.</item>
+/// <item>The class whose <c>LocalizationLanguageCode</c> implements nothing, if any, with where to report it
+/// (<see cref="UnmappedLanguageCode"/>).</item>
 /// </list>
 /// <para>
 /// Its texts:
@@ -54,25 +54,12 @@ namespace CodeChops.Idioma.Generators;
 /// <list type="bullet">
 /// <item><see cref="OwnTexts"/> are the texts its own class words, for a set deriving from another. The registrar
 /// records them, and only its part of the generator reads them (<see cref="DiscoveredTexts.OfRecord"/>).</item>
-/// <item><see cref="Texts"/> are the texts of a set listing <c>ILocalizationSet</c>, and
-/// <see cref="UnsupportedTexts"/> its methods that have the shape of a text but can't be one. <see cref="Usings"/>
-/// are the using directives its contract repeats, for a text that takes a value of a type another generator
-/// writes.</item>
-/// <item><see cref="Enums"/> are the enums whose members it has a text for, which it lists as
-/// <c>ILocalizationSet&lt;TEnum&gt;</c>. <see cref="Texts"/> holds a text for each of their members, also for one the
-/// set doesn't declare.</item>
-/// <item><see cref="DeclaredTexts"/>, <see cref="InheritedTexts"/>, and <see cref="Wordings"/> are what the doc
-/// comments of the generated contract link to and show.</item>
-/// <item><see cref="TypeNamedLikeTexts"/> is the type or namespace in its namespace that has the name its generated
-/// class would get, as a message names it (<c>the enum 'OrderStatus'</c>), if any. <see cref="TypeNamedLikeContract"/>
-/// is the same for the name of its contract, such as an interface <c>IShopLocalization</c> written by hand that isn't a
-/// contract.</item>
-/// <item><see cref="ReservedTexts"/> are its texts with a name its generated class can't give them, with where each is
-/// written. Most sets have none.</item>
-/// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
-/// which its contract leaves out (<c>LOC208</c>). Most sets have none.</item>
-/// <item>These are read only for the part of the generator that writes the contracts
-/// (<see cref="DiscoveredTexts.OfContract"/>).</item>
+/// <item><see cref="EnumNames"/> are the full names of the enums whose members it has a text for, which it lists as
+/// <c>ILocalizationSet&lt;TEnum&gt;</c>.</item>
+/// <item><see cref="OfContract"/> holds what the part of the generator that writes the contracts reads of its texts
+/// (<see cref="DiscoveredTexts.OfContract"/>), and nothing for the registrar's part. Each part takes its own share
+/// with one field (<see cref="LocalizationDiscovery.ForPart"/>), so that an edit of a wording leaves the registrar's
+/// pipeline as it was.</item>
 /// </list>
 /// </remarks>
 internal readonly record struct DiscoveredLocalization(
@@ -99,15 +86,49 @@ internal readonly record struct DiscoveredLocalization(
     EquatableArray<string> OwnContractNames,
     bool ImplementsInternalContract,
     EquatableArray<string> AncestorNames,
-    string? BaseSetName,
-    string? BaseSetLanguage,
-    EquatableArray<UnresolvedBaseType> BaseSetContracts,
-    string? UnmappedLanguageCodeType,
-    string? UnmappedLanguageCodeBaseType,
-    DiagnosticLocation UnmappedLanguageCodeLocation,
+    BaseSet? BaseSet,
+    UnmappedLanguageCode? UnmappedLanguageCode,
     bool IsRecord,
     bool IsSealed,
     bool IsPublic,
+    EquatableArray<string> EnumNames,
+    SetTextsOfContract OfContract);
+
+/// <summary>
+/// The set a set derives from directly: its name, and its language, or <see langword="null"/> when the build can't read
+/// one. <see cref="Contracts"/> holds the unresolved base types through which that set would implement a contract
+/// generated here. It's empty when that set implements <c>ILocalizationSet</c> already.
+/// </summary>
+internal readonly record struct BaseSet(
+    string Name,
+    string? Language,
+    EquatableArray<UnresolvedBaseType> Contracts);
+
+/// <summary>
+/// What the part of the generator that writes the contracts reads of a set's texts (<see cref="DiscoveredTexts.OfContract"/>).
+/// The registrar's part reads none of it, so its view of a set holds this empty.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item><see cref="DeclaredTexts"/>, <see cref="InheritedTexts"/>, and <see cref="Wordings"/> are what the doc comments
+/// of the generated contract link to and show. Every set has them.</item>
+/// <item><see cref="Enums"/> are the enums whose members it has a text for, with those members.</item>
+/// <item>The rest only a set a contract may come from has (<see cref="LocalizationDiscovery.ReadsAsDefaultSet"/>).
+/// <see cref="Texts"/> are the texts of a set listing <c>ILocalizationSet</c>, and <see cref="UnsupportedTexts"/> its
+/// methods that have the shape of a text but can't be one. <see cref="Usings"/> are the using directives its contract
+/// repeats, for a text that takes a value of a type another generator writes. <see cref="Texts"/> holds a text for each
+/// member of its enums, also for one the set doesn't declare.</item>
+/// <item><see cref="TypeNamedLikeTexts"/> is the type or namespace in its namespace that has the name its generated class
+/// would get, as a message names it (<c>the enum 'OrderStatus'</c>), if any. <see cref="TypeNamedLikeContract"/> is the
+/// same for the name of its contract, such as an interface <c>IShopLocalization</c> written by hand that isn't a
+/// contract.</item>
+/// <item><see cref="ReservedTexts"/> are its texts with a name its generated class can't give them, with where each is
+/// written. Most sets have none.</item>
+/// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
+/// which its contract leaves out (<c>LOC208</c>). Most sets have none.</item>
+/// </list>
+/// </remarks>
+internal readonly record struct SetTextsOfContract(
     EquatableArray<string> DeclaredTexts,
     EquatableArray<InheritedText> InheritedTexts,
     EquatableArray<TextWording> Wordings,
@@ -133,7 +154,9 @@ internal readonly record struct UndeclaredText(
 /// An enum whose members a set has a text for, because the set lists <c>ILocalizationSet&lt;TEnum&gt;</c>: its type as
 /// generated code can write it, its full name, its name as a message writes it, with the types
 /// that hold it (<c>Order.Status</c>), its namespace (<c>""</c> for the global namespace), whether code outside its
-/// assembly can name it, and its members in the order they're written.
+/// assembly can name it, and its members in the order they're written. Generated code names the enum and its members,
+/// so it turns off what that reports besides <c>CS0612</c> and <c>CS0618</c> (<see cref="SuppressedDiagnostics"/>),
+/// such as the id of a member marked <c>[Experimental]</c>.
 /// </summary>
 internal readonly record struct LocalizedEnum(
     EquatableArray<TypeNamePart> Type,
@@ -141,15 +164,24 @@ internal readonly record struct LocalizedEnum(
     string Name,
     string Namespace,
     bool IsPublic,
-    EquatableArray<LocalizedEnumMember> Members);
+    EquatableArray<LocalizedEnumMember> Members,
+    EquatableArray<string> SuppressedDiagnostics);
 
 /// <summary>
 /// A member of an enum a set has a text for: its name, which is the name of its text, and whether it's the first
 /// member of its value. Of <c>Default = 0</c> and <c>None = 0</c>, only <c>Default</c> is.
 /// </summary>
+/// <param name="Name">The name of the member, which is the name of its text.</param>
+/// <param name="IsFirstOfItsValue">Whether it's the first member of its value.</param>
+/// <param name="ObsoleteAsErrorValue">
+/// The member's value as a literal, such as <c>2</c> or <c>-1</c>, when it's marked <c>[Obsolete]</c> as an error.
+/// Generated code can't name such a member, so it writes the value: <c>(OrderStatus)(2)</c>. Otherwise
+/// <see langword="null"/>.
+/// </param>
 internal readonly record struct LocalizedEnumMember(
     string Name,
-    bool IsFirstOfItsValue);
+    bool IsFirstOfItsValue,
+    string? ObsoleteAsErrorValue);
 
 /// <summary>
 /// The wording a set gives one of its texts, when that is a constant, or what the method of a text that takes values
@@ -209,11 +241,17 @@ internal readonly record struct ContractBindingQuestion(
 /// The full names of the contracts the current compilation generates, and which of them a base type binds to where
 /// two share its name (<see cref="LocalizationDiscovery.BindContracts"/>).
 /// </summary>
-internal sealed class GeneratedContracts
+// Equal by its names and bindings, because a step of the pipeline gives it to both parts of the generator: an edit
+// that changes neither leaves what comes after that step as it was.
+internal sealed class GeneratedContracts : IEquatable<GeneratedContracts>
 {
     // Looked up for every base type of every set, so by hash: a scan of the names made the analysis of a project with
     // hundreds of contracts take seconds on each edit.
     private HashSet<string> Names { get; }
+
+    // What it's made of, in the order given, for equality.
+    private EquatableArray<string> GivenNames { get; }
+    private EquatableArray<ContractBinding> GivenBindings { get; }
 
     /// <summary>
     /// The contract of each simple name, or <see langword="null"/> for a name two contracts share.
@@ -224,6 +262,8 @@ internal sealed class GeneratedContracts
 
     public GeneratedContracts(ImmutableArray<string> names, EquatableArray<ContractBinding> bindings)
     {
+        this.GivenNames = new EquatableArray<string>(names);
+        this.GivenBindings = bindings;
         this.Names = new HashSet<string>(names, StringComparer.Ordinal);
         this.BySimpleName = new Dictionary<string, string?>(StringComparer.Ordinal);
 
@@ -264,6 +304,16 @@ internal sealed class GeneratedContracts
         var binding = this.Bindings.TryGetValue(location, out var contract) ? contract : null;
         return binding;
     }
+
+    public bool Equals(GeneratedContracts? other)
+    {
+        var equals = other is not null && this.GivenNames.Equals(other.GivenNames) && this.GivenBindings.Equals(other.GivenBindings);
+        return equals;
+    }
+
+    public override bool Equals(object? obj) => this.Equals(obj as GeneratedContracts);
+
+    public override int GetHashCode() => (this.GivenNames.GetHashCode() * 397) ^ this.GivenBindings.GetHashCode();
 }
 
 /// <summary>

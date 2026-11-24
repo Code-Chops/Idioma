@@ -264,7 +264,8 @@ public interface ILocalizationSet
 /// error <c>LOC300</c>.</item>
 /// <item>No text can be named <c>GetTextByValue</c>, because the generated method has that name (<c>LOC205</c>).</item>
 /// <item>Two members with the same value, such as <c>Default = 0</c> next to <c>None = 0</c>, each need a text.
-/// <c>GetTextByValue</c> gives the text of the first one.</item>
+/// <c>GetTextByValue</c> gives the text of the first one. A call that names the other, as in
+/// <c>OrderStatus.None.GetText()</c>, is build warning <c>LOC500</c>.</item>
 /// <item><c>GetTextByValue</c> shows a value that isn't a member, such as a combination of flags, as
 /// <see cref="Enum.ToString()"/> writes it.</item>
 /// <item>A text that isn't a member is build warning <c>LOC210</c>, because <c>GetTextByValue</c> never gives it. Write a

@@ -370,7 +370,8 @@ internal static class LocalizedMembers
                 IsPublic: chain.All(static part => part.DeclaredAccessibility is Accessibility.Public),
                 CanExtend: !isInGenericType,
                 Ordinal: field is null ? -1 : type.GetMembers().OfType<IFieldSymbol>().ToImmutableArray().IndexOf(field, SymbolEqualityComparer.Default),
-                Value: field is { HasConstantValue: true } ? Convert.ToString(field.ConstantValue, CultureInfo.InvariantCulture) : null);
+                Value: field is { HasConstantValue: true } ? Convert.ToString(field.ConstantValue, CultureInfo.InvariantCulture) : null,
+                IsObsoleteAsError: field is not null && LocalizationDiscovery.IsObsoleteAsError(field));
         }
 
         var member = new LocalizedMember(
@@ -418,6 +419,10 @@ internal static class LocalizedMembers
 
             if (kind is not null)
                 return new UnnameableType(part.Name, kind, $"Make '{part.Name}' internal or public");
+
+            // Naming it is an error (CS0619), which no pragma turns off.
+            if (LocalizationDiscovery.IsObsoleteAsError(part))
+                return new UnnameableType(part.Name, "marked [Obsolete] as an error", $"Make the [Obsolete] of '{part.Name}' a warning, or remove [Localized]");
         }
 
         return null;
@@ -459,7 +464,7 @@ internal static class LocalizedMembers
                 .OrderBy(static text => text.Member.MemberName is null ? 0 : 1)
                 .ThenBy(static text => text.Member.Enum?.Ordinal ?? 0)
                 .ThenBy(static text => text.Member.MemberName, StringComparer.Ordinal)
-                .Select(static text => new LocalizedText(text.Member.MemberName, text.Wordings, text.Member.Enum?.Value))
+                .Select(static text => new LocalizedText(text.Member.MemberName, text.Wordings, text.Member.Enum?.Value, text.Member.Enum?.IsObsoleteAsError ?? false))
                 .ToImmutableArray();
 
             var extension = first.Enum is { CanExtend: true } @enum && texts.Any(static text => text.MemberName is not null)
@@ -562,6 +567,10 @@ internal readonly record struct UnnameableType(string Name, string Kind, string 
 /// <param name="CanExtend">Whether an extension method can take the enum: not one inside a type with type parameters.</param>
 /// <param name="Ordinal">The place of the member among the members of its enum, or -1 for the enum's own text.</param>
 /// <param name="Value">The number of the member, or <see langword="null"/> where it has none to read.</param>
+/// <param name="IsObsoleteAsError">
+/// Whether the member is marked <c>[Obsolete]</c> as an error. Generated code can't name such a member, so
+/// <c>GetText()</c> finds it by its <paramref name="Value"/>.
+/// </param>
 internal readonly record struct LocalizedMemberEnum(
     string Namespace,
     string Name,
@@ -569,7 +578,8 @@ internal readonly record struct LocalizedMemberEnum(
     bool IsPublic,
     bool CanExtend,
     int Ordinal,
-    string? Value);
+    string? Value,
+    bool IsObsoleteAsError);
 
 /// <summary>
 /// The texts to generate for the members of an assembly: the name of the class that records them, the languages, the
@@ -601,9 +611,10 @@ internal readonly record struct LocalizedType(
 
 /// <summary>
 /// A text of a member: the member's name, or <see langword="null"/> for the type's own text, its wording per language
-/// in the order of the assembly's languages, and the number of a member of an enum.
+/// in the order of the assembly's languages, the number of a member of an enum, and whether that member is marked
+/// <c>[Obsolete]</c> as an error, so that generated code names its number instead of the member.
 /// </summary>
-internal readonly record struct LocalizedText(string? MemberName, EquatableArray<string> Wordings, string? EnumValue);
+internal readonly record struct LocalizedText(string? MemberName, EquatableArray<string> Wordings, string? EnumValue, bool IsObsoleteAsError);
 
 /// <summary>
 /// The extension method that gives a value of an enum its text: where to write it, how to name the enum there, the

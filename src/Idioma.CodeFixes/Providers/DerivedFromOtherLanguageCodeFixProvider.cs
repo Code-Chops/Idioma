@@ -13,9 +13,15 @@ namespace CodeChops.Idioma.CodeFixes;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The texts of the set no longer override anything, so they lose <c>override</c>, and a member that hid one loses
-/// <c>new</c>. An override of a member of <see cref="object"/>, such as <c>ToString()</c>, stays. What still reads the
-/// class it derived from, such as <c>base.Color</c>, stops compiling, which shows what to change.
+/// The texts of the set no longer override anything, so <c>override</c> becomes <c>virtual</c>, and a member that hid
+/// one loses <c>new</c>. A class that derives from the set can then still override its texts. A sealed text, or a text
+/// of a sealed set, loses <c>override</c> without becoming virtual. An override of a member of <see cref="object"/>,
+/// such as <c>ToString()</c>, stays, also where a set overrode it before. What still reads the class it derived from,
+/// such as <c>base.Color</c>, stops compiling, which shows what to change.
+/// </para>
+/// <para>
+/// A set of an enum lists <c>ILocalizationSet&lt;TEnum&gt;</c> in place of <c>ILocalizationSet</c>, for each enum the
+/// set it derived from lists.
 /// </para>
 /// <para>
 /// A region that derives from another region of its language also gets a fix that derives from the set of its language,
@@ -59,10 +65,15 @@ public sealed class DerivedFromOtherLanguageCodeFixProvider : CodeFixProvider
         if (contracts.IsEmpty || compilation.GetTypeByMetadataName(PackageNames.LocalizationSet) is not { } localizationSet)
             return;
 
+        // A set of an enum lists ILocalizationSet<TEnum> for each enum the set it derived from lists, as every set of
+        // its contract does (LOC211).
+        var setsOfEnums = baseSet.AllInterfaces.Where(PackageNames.IsLocalizationSetOfEnum).ToImmutableArray();
+        ImmutableArray<INamedTypeSymbol> setInterfaces = setsOfEnums.IsEmpty ? [localizationSet] : setsOfEnums;
+
         context.RegisterCodeFix(
             CodeAction.Create(
                 title: $"Implement '{String.Join("' and '", contracts.Select(static contract => contract.Name))}' instead",
-                createChangedSolution: cancellationToken => ImplementAsync(document.Project.Solution, type, baseSet, [localizationSet, .. contracts], compilation, cancellationToken),
+                createChangedSolution: cancellationToken => ImplementAsync(document.Project.Solution, type, baseSet, [.. setInterfaces, .. contracts], compilation, cancellationToken),
                 equivalenceKey: "ImplementContractInstead"),
             context.Diagnostics);
     }
@@ -193,29 +204,67 @@ public sealed class DerivedFromOtherLanguageCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A member without <c>override</c> and <c>sealed</c> where it overrode a member of the set the class derived from,
-    /// or of a class further up than <see cref="object"/>, and without <c>new</c> where it hid one.
+    /// A member without <c>override</c> where it overrode a member that the set the class derived from, or a class
+    /// further up than <see cref="object"/>, declared first, and without <c>new</c> where it hid one. Such a member
+    /// stays <c>virtual</c>, so that a class deriving from this one can still override it, unless it was sealed, or
+    /// the class is.
     /// </summary>
     private static MemberDeclarationSyntax Detach(MemberDeclarationSyntax original, MemberDeclarationSyntax rewritten, INamedTypeSymbol baseSet,
         SemanticModel partModel, CancellationToken cancellationToken)
     {
         var symbol = partModel.GetDeclaredSymbol(original, cancellationToken);
 
-        ISymbol? overridden = symbol switch
+        // The member that started the chain of overrides: ToString() of an override of an override is object's.
+        if (symbol is not null && FindFirstDeclaration(symbol) is { ContainingType.SpecialType: not SpecialType.System_Object })
+        {
+            var staysVirtual = symbol is { IsSealed: false, IsAbstract: false, ContainingType.IsSealed: false };
+
+            return staysVirtual
+                ? ReplaceModifier(rewritten, SyntaxKind.OverrideKeyword, SyntaxKind.VirtualKeyword)
+                : RemoveModifiers(rewritten, static modifier => modifier.Kind() is SyntaxKind.OverrideKeyword or SyntaxKind.SealedKeyword);
+        }
+
+        if (symbol is not null && rewritten.Modifiers.Any(SyntaxKind.NewKeyword) && IsDeclaredAbove(symbol.Name, baseSet))
+            return RemoveModifiers(rewritten, static modifier => modifier.IsKind(SyntaxKind.NewKeyword));
+
+        return rewritten;
+    }
+
+    /// <summary>
+    /// The member an override overrides at the start of its chain, or <see langword="null"/> for a member that
+    /// overrides nothing.
+    /// </summary>
+    private static ISymbol? FindFirstDeclaration(ISymbol member)
+    {
+        ISymbol? first = null;
+
+        for (var current = Overridden(member); current is not null; current = Overridden(current))
+            first = current;
+
+        return first;
+
+        static ISymbol? Overridden(ISymbol member) => member switch
         {
             IPropertySymbol property => property.OverriddenProperty,
             IMethodSymbol method => method.OverriddenMethod,
             IEventSymbol @event => @event.OverriddenEvent,
             _ => null,
         };
+    }
 
-        if (overridden is { ContainingType.SpecialType: not SpecialType.System_Object })
-            return RemoveModifiers(rewritten, static modifier => modifier.Kind() is SyntaxKind.OverrideKeyword or SyntaxKind.SealedKeyword);
+    /// <summary>
+    /// A member with one modifier in place of another, which keeps what stood around it.
+    /// </summary>
+    private static MemberDeclarationSyntax ReplaceModifier(MemberDeclarationSyntax member, SyntaxKind replaced, SyntaxKind replacement)
+    {
+        var index = member.Modifiers.IndexOf(replaced);
+        if (index < 0)
+            return member;
 
-        if (symbol is not null && rewritten.Modifiers.Any(SyntaxKind.NewKeyword) && IsDeclaredAbove(symbol.Name, baseSet))
-            return RemoveModifiers(rewritten, static modifier => modifier.IsKind(SyntaxKind.NewKeyword));
+        var old = member.Modifiers[index];
+        var result = member.WithModifiers(member.Modifiers.Replace(old, SyntaxFactory.Token(old.LeadingTrivia, replacement, old.TrailingTrivia)));
 
-        return rewritten;
+        return result;
     }
 
     /// <summary>

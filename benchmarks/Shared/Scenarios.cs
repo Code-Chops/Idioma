@@ -13,12 +13,13 @@ internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
     private readonly string name = "Ada";
 
     /// <summary>
-    /// The cultures the benchmarks run for: the default language, the second one, and a region whose sets and resx file
-    /// reword one text.
+    /// The cultures the benchmarks run for: the default language, the second one, a region whose sets and resx file
+    /// reword one text, and German, which the app doesn't have.
     /// </summary>
-    // No culture the app doesn't have, such as German. An app makes its default language the UI culture of such a user
-    // (docs/blazor.md), so their texts are shown as for a user of the default language.
-    public static IReadOnlyList<string> Cultures { get; } = ["en", "nl", "en-GB"];
+    // German is the UI culture as a desktop app on a German system has it, or a Blazor app that doesn't make its default
+    // language the UI culture of such a user (docs/blazor.md). Every approach shows a German user English. A set's
+    // method then runs in English, which switches the culture for the call.
+    public static IReadOnlyList<string> Cultures { get; } = ["en", "nl", "en-GB", "de"];
 
     // IStringLocalizer comes first, because Microsoft recommends it, so every other approach is compared with it. An
     // inline text is written in the call, as markup writes it on every render. A text written as an attribute is found
