@@ -8,26 +8,61 @@ internal static partial class LocalizationDiscovery
 {
     /// <summary>
     /// The base-list entries of this declaration that bind to no type, each with the namespace its qualifier names and
-    /// where it is written. This is what a base list looks like when it names a contract another generator writes.
+    /// which entry it is (<see cref="BaseTypeSite"/>). This is what a base list looks like when it names a contract
+    /// another generator writes. Where each is written is added to <paramref name="locations"/>.
     /// </summary>
-    private static ImmutableArray<UnresolvedBaseType> GetUnresolvedBaseTypes(TypeDeclarationSyntax declaration,
-        SemanticModel semanticModel, CancellationToken cancellationToken)
+    /// <param name="type">The class the declaration declares.</param>
+    /// <param name="typeName">The name of that class, as a site names it.</param>
+    /// <param name="declaration">The declaration whose base list is read.</param>
+    /// <param name="semanticModel">The model of the declaration's file.</param>
+    /// <param name="locations">Gets where each entry is written.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    private static ImmutableArray<UnresolvedBaseType> GetUnresolvedBaseTypes(INamedTypeSymbol type, string typeName,
+        TypeDeclarationSyntax declaration, SemanticModel semanticModel, ImmutableArray<BaseTypeLocation>.Builder locations,
+        CancellationToken cancellationToken)
     {
         if (declaration.BaseList is null)
             return ImmutableArray<UnresolvedBaseType>.Empty;
 
         var types = ImmutableArray.CreateBuilder<UnresolvedBaseType>();
+        var declarationIndex = -1;
+        var baseTypes = declaration.BaseList.Types;
 
-        foreach (var baseType in declaration.BaseList.Types)
+        for (var index = 0; index < baseTypes.Count; index++)
         {
-            if (semanticModel.GetTypeInfo(baseType.Type, cancellationToken).Type is not { TypeKind: TypeKind.Error, Name.Length: > 0 } unresolved)
+            var baseType = baseTypes[index].Type;
+
+            if (semanticModel.GetTypeInfo(baseType, cancellationToken).Type is not { TypeKind: TypeKind.Error, Name.Length: > 0 } unresolved)
                 continue;
 
-            var (isQualified, @namespace) = ReadQualifier(baseType.Type, semanticModel, cancellationToken);
-            types.Add(new UnresolvedBaseType(unresolved.Name, isQualified, @namespace, DiagnosticLocation.From(baseType.Type.GetLocation())));
+            if (declarationIndex < 0)
+                declarationIndex = GetDeclarationIndex(type, declaration);
+
+            var (isQualified, @namespace) = ReadQualifier(baseType, semanticModel, cancellationToken);
+            var site = new BaseTypeSite(declaration.SyntaxTree.FilePath, typeName, declarationIndex, index);
+
+            types.Add(new UnresolvedBaseType(unresolved.Name, isQualified, @namespace, site));
+            locations.Add(new BaseTypeLocation(site, DiagnosticLocation.From(baseType.GetLocation())));
         }
 
         return types.ToImmutable();
+    }
+
+    /// <summary>
+    /// Which declaration of a class in its file a declaration is, counted from 0 in the order they're written. Only a
+    /// partial class has more than one.
+    /// </summary>
+    // Counted within the file. The number then stays the same across an edit in any other file, and across an edit in
+    // this one that adds or removes no declaration of the class before it.
+    private static int GetDeclarationIndex(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
+    {
+        var index = 0;
+
+        foreach (var reference in type.DeclaringSyntaxReferences)
+            if (reference.SyntaxTree == declaration.SyntaxTree && reference.Span.Start < declaration.SpanStart)
+                index++;
+
+        return index;
     }
 
     /// <summary>
@@ -65,19 +100,30 @@ internal static partial class LocalizationDiscovery
     /// </remarks>
     // The compilation changes on every edit, so the step that binds runs on every edit. It returns at once where no two
     // contracts share a name, which is nearly always, and only then makes a compilation of its own.
+    // The question comes from the share of discovery without locations (DiscoveredTexts.OfRecord), so it stays as it was
+    // when a wording changes. The share with locations (DiscoveredTexts.OfContract) says where each base type of the
+    // question is written, and is read only where there is something to bind.
     public static IncrementalValueProvider<EquatableArray<ContractBinding>> BindContracts(IncrementalGeneratorInitializationContext context,
-        IncrementalValueProvider<Discovery> discovery, IncrementalValueProvider<DeclaredLanguages?> languages)
+        IncrementalValueProvider<Discovery> discovery, IncrementalValueProvider<Discovery> locations, IncrementalValueProvider<DeclaredLanguages?> languages)
     {
         var question = discovery
             .Combine(languages)
-            .Select(static (data, _) => AskForBindings(data.Left, data.Right));
+            .Select(static (data, _) => AskForBindings(data.Left, data.Right))
+            .WithTrackingName(BindingQuestionTrackingName);
 
         var bindings = question
             .Combine(context.CompilationProvider)
-            .Select(static (data, cancellationToken) => Bind(data.Left, data.Right, cancellationToken));
+            .Combine(locations)
+            .Select(static (data, cancellationToken) => Bind(data.Left.Left, data.Left.Right, data.Right, cancellationToken));
 
         return bindings;
     }
+
+    /// <summary>
+    /// The name of the pipeline step that holds what the compiler is asked to bind (<see cref="AskForBindings"/>), for
+    /// a test to read it.
+    /// </summary>
+    internal const string BindingQuestionTrackingName = "BindingQuestion";
 
     /// <summary>
     /// The generated contracts that share a simple name with another, and the base types written with that name alone.
@@ -112,23 +158,33 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// Binds each base type of the question in the compilation with a stand-in for each of its contracts.
+    /// <paramref name="locations"/> says where each base type is written.
     /// </summary>
     private static EquatableArray<ContractBinding> Bind(ContractBindingQuestion question, Compilation compilation,
-        CancellationToken cancellationToken)
+        Discovery locations, CancellationToken cancellationToken)
     {
         if (question.BaseTypes.Length is 0)
             return default;
+
+        var written = new Dictionary<BaseTypeSite, DiagnosticLocation>();
+
+        foreach (var location in locations.Sets.SelectMany(static set => set.Locations.BaseTypes)
+                     .Concat(locations.UnextendableSets.SelectMany(static set => set.BaseTypeLocations)))
+        {
+            if (!written.ContainsKey(location.Site))
+                written.Add(location.Site, location.Location);
+        }
 
         var standIns = new StringBuilder();
 
         foreach (var contract in question.Contracts)
         {
             var separator = contract.LastIndexOf('.');
-            var name = LocalizationSetsPart.EscapeIdentifier(contract.Substring(separator + 1));
+            var name = CodeEscaping.EscapeIdentifier(contract.Substring(separator + 1));
 
             standIns.AppendLine(separator < 0
                 ? $"interface {name} {{ }}"
-                : $"namespace {String.Join(".", contract.Substring(0, separator).Split('.').Select(LocalizationSetsPart.EscapeIdentifier))} {{ interface {name} {{ }} }}");
+                : $"namespace {String.Join(".", contract.Substring(0, separator).Split('.').Select(CodeEscaping.EscapeIdentifier))} {{ interface {name} {{ }} }}");
         }
 
         var options = compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions;
@@ -141,19 +197,19 @@ internal static partial class LocalizationDiscovery
         foreach (var baseType in question.BaseTypes)
         {
             // A tree of an earlier compilation, as an edit in the IDE can leave behind, has nothing to bind in this one.
-            if (baseType.Location.Tree is not { } tree || !withStandIns.ContainsSyntaxTree(tree))
+            if (!written.TryGetValue(baseType.Site, out var location) || location.Tree is not { } tree || !withStandIns.ContainsSyntaxTree(tree))
                 continue;
 
             if (!models.TryGetValue(tree, out var model))
                 models[tree] = model = withStandIns.GetSemanticModel(tree);
 
-            var node = tree.GetRoot(cancellationToken).FindNode(baseType.Location.Span, getInnermostNodeForTie: true);
+            var node = tree.GetRoot(cancellationToken).FindNode(location.Span, getInnermostNodeForTie: true);
 
             if (model.GetTypeInfo(node, cancellationToken).Type is INamedTypeSymbol { TypeKind: TypeKind.Interface } bound
                 && bound.DeclaringSyntaxReferences.Any(reference => reference.SyntaxTree == standInTree))
             {
                 var @namespace = GetNamespaceName(bound.ContainingNamespace);
-                bindings.Add(new ContractBinding(baseType.Location, @namespace.Length > 0 ? $"{@namespace}.{bound.Name}" : bound.Name));
+                bindings.Add(new ContractBinding(baseType.Site, @namespace.Length > 0 ? $"{@namespace}.{bound.Name}" : bound.Name));
             }
         }
 

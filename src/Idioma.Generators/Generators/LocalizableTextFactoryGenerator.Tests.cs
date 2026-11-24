@@ -559,6 +559,71 @@ public sealed class LocalizableTextFactoryGeneratorTests
     }
 
     [Test]
+    [Arguments("dk", "'dk' won't match any user's culture, because 'dk' isn't an ISO 639-1 language code. Danish is 'da', so write 'da'.")]
+    [Arguments("jp", "'jp' won't match any user's culture, because 'jp' isn't an ISO 639-1 language code. Japanese is 'ja', so write 'ja'.")]
+    [Arguments("cz", "'cz' won't match any user's culture, because 'cz' isn't an ISO 639-1 language code. Czech is 'cs', so write 'cs'.")]
+    [Arguments("gr", "'gr' won't match any user's culture, because 'gr' isn't an ISO 639-1 language code. Greek is 'el', so write 'el'.")]
+    [Arguments("ua", "'ua' won't match any user's culture, because 'ua' isn't an ISO 639-1 language code. Ukrainian is 'uk', so write 'uk'.")]
+    [Arguments("DK-dk", "'DK-dk' won't match any user's culture, because 'DK' isn't an ISO 639-1 language code. Danish is 'da', so write 'da-dk'.")]
+    [Arguments("en-UK", "'en-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. The United Kingdom is 'GB', so write 'en-GB'.")]
+    [Arguments("uk-UK", "'uk-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. Ukraine is 'UA', so write 'uk-UA'.")]
+    [Arguments("sr-Latn-YU", "'sr-Latn-YU' won't match any user's culture, because 'YU' isn't an ISO 3166-1 region code. Check the code. If it's right, turn LOC104 off where it's reported.")]
+    [Arguments("xx", "'xx' won't match any user's culture, because 'xx' isn't an ISO 639-1 language code. Check the code. If it's right, turn LOC104 off where it's reported.")]
+    public void LanguageNoCultureHas_ShouldReportLOC104AndKeepTheLanguage(string language, string expected)
+    {
+        // Arrange & Act: the code has the form of a culture name, so the build uses it as written.
+        var result = Run(Source($"\"en\", \"{language}\""));
+
+        // Assert: a warning at the attribute, which a pragma there turns off.
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(LocalizableTextFactoryGenerator.UnknownLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe("LOC104");
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
+        diagnostic.GetMessage().ShouldBe(expected);
+        diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldStartWith("SupportedLanguages(");
+        Factory(result).ShouldNotBeNull().ShouldContain($"string {SupportedLanguages.ToParameterName(language)}");
+    }
+
+    [Test]
+    [Arguments("en")]
+    [Arguments("nl")]
+    [Arguments("en-GB")]
+    [Arguments("zh-Hans")]
+    [Arguments("zh-Hant-TW")]
+    [Arguments("es-419")]
+    [Arguments("en-001")]
+    [Arguments("sr-Latn-RS")]
+    [Arguments("fil")]
+    [Arguments("sq-XK")]
+    [Arguments("uk")]
+    [Arguments("se")]
+    [Arguments("EN-gb")]
+    [Arguments("ca-ES-valencia")]
+    [Arguments("en-US-u-ca-gregory")]
+    public void LanguageACultureHas_ShouldReportNothing(string language)
+    {
+        // Arrange & Act: also a longer language, a script, and a region of three digits, which the build doesn't
+        // check. 'uk' is Ukrainian and 'se' is Northern Sami.
+        var result = Run(Source($"\"de\", \"{language}\""));
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public void LanguageNoCultureHasAsDefault_ShouldReportLOC104ForEachCode()
+    {
+        // Arrange & Act
+        var result = Run(Source("\"jp\", \"en-UK\""));
+
+        // Assert
+        var diagnostics = result.Results.ShouldHaveSingleItem().Diagnostics;
+        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC104", "LOC104"]);
+        diagnostics[0].GetMessage().ShouldStartWith("'jp' won't match");
+        diagnostics[1].GetMessage().ShouldStartWith("'en-UK' won't match");
+    }
+
+    [Test]
     public void NullListOfLanguages_ShouldReportLOC101WithoutStoppingAnyGenerator()
     {
         // Arrange: null for the other languages passes no array at all, which every generator reads.

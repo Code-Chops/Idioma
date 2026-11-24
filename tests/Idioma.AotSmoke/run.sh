@@ -23,3 +23,7 @@ rm -rf obj/publish obj/packages/codechops.idioma
 dotnet publish AotSmokeApp/AotSmokeApp.csproj -c Release -o obj/publish "-p:IdiomaVersion=$version"
 
 obj/publish/AotSmokeApp
+
+# An app that gets the package only through the library it references gets the source generator too, so its languages
+# register. The app checks that when it runs.
+dotnet run --project TransitiveApp/TransitiveApp.csproj -c Release "-p:IdiomaVersion=$version"

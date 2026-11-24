@@ -28,48 +28,46 @@ public sealed class UnmappedLanguageCodeCodeFixProvider : CodeFixProvider
     {
         var document = context.Document;
 
-        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration)
+        // The fix is decided here, so that none is offered that would change nothing: a class that lists the interface
+        // already, or has no base list, gets no fix.
+        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration
+            || await CodeFixSupport.FindTypeAsync(document, declaration, context.CancellationToken).ConfigureAwait(false) is not var (type, semanticModel)
+            || type.Interfaces.Any(PackageNames.IsLocalizationSet))
+        {
             return;
+        }
+
+        var parts = await CodeFixSupport.GetPartsAsync(type, context.CancellationToken).ConfigureAwait(false);
+        var part = declaration.BaseList is not null ? declaration : parts.FirstOrDefault(static part => part.BaseList is not null);
+
+        if (part?.BaseList is not { } baseList)
+            return;
+
+        var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
+        var added = SyntaxFactory.SimpleBaseType(GetSetInterface(partModel, baseList.SpanStart));
+        var solution = document.Project.Solution;
 
         foreach (var diagnostic in context.Diagnostics)
         {
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: $"List '{SupportedLanguages.SetInterface}' on '{declaration.Identifier.ValueText}'",
-                    createChangedSolution: cancellationToken => AddAsync(document, declaration, cancellationToken),
+                    createChangedSolution: cancellationToken => AddAsync(solution, part, added, cancellationToken),
                     equivalenceKey: "ListLocalizationSet"),
                 diagnostic);
         }
     }
 
     /// <summary>
-    /// Adds <c>ILocalizationSet</c> at the end of the base list of one part of the class. A class that lists it
-    /// already, or has no base list, stays as it is.
+    /// Adds <c>ILocalizationSet</c> at the end of the base list of one part of the class.
     /// </summary>
-    private static async Task<Solution> AddAsync(Document document, TypeDeclarationSyntax declaration, CancellationToken cancellationToken)
+    private static Task<Solution> AddAsync(Solution solution, TypeDeclarationSyntax part, BaseTypeSyntax added, CancellationToken cancellationToken)
     {
-        var solution = document.Project.Solution;
-
-        if (await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is not var (type, semanticModel)
-            || type.Interfaces.Any(PackageNames.IsLocalizationSet))
-        {
-            return solution;
-        }
-
-        var parts = await CodeFixSupport.GetPartsAsync(type, cancellationToken).ConfigureAwait(false);
-        var part = declaration.BaseList is not null ? declaration : parts.FirstOrDefault(static part => part.BaseList is not null);
-
-        if (part?.BaseList is not { } baseList)
-            return solution;
-
-        var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
-        var added = SyntaxFactory.SimpleBaseType(GetSetInterface(partModel, baseList.SpanStart));
-
-        return await CodeFixSupport.ReplaceNodesAsync(
+        return CodeFixSupport.ReplaceNodesAsync(
             solution,
             [part],
             original => CodeFixSupport.InsertBaseType(original, original.BaseList!.Types.Count, added),
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
     }
 
     /// <summary>

@@ -409,4 +409,47 @@ public sealed class HiddenTextCodeFixProviderTests
         source.ShouldBe(Source.Replace("ShopLocalizationEnGb : ShopLocalizationEn", "ShopLocalizationEnGb : ShopLocalizationEn, IShopLocalization", StringComparison.Ordinal));
         await ShouldReportNothingAsync(source);
     }
+
+    [Test]
+    public async Task FixAll_SetHidingTextsOfTwoContracts_ShouldListBothContracts()
+    {
+        // Arrange: two contracts written by hand, which the English set implements explicitly, so neither text can be
+        // overridden.
+        const string Source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "en-GB")]
+
+            namespace TestApp;
+
+            public interface IShopLocalization : ILocalizationSet
+            {
+                string Color { get; }
+            }
+
+            public interface ICartLocalization : ILocalizationSet
+            {
+                string Total { get; }
+            }
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization, ICartLocalization
+            {
+                string IShopLocalization.Color => "Color";
+                string ICartLocalization.Total => "Total";
+            }
+
+            public class ShopLocalizationEnGb : ShopLocalizationEn // British
+            {
+                public string Color => "Colour";
+                public string Total => "Sum";
+            }
+            """;
+
+        // Act
+        var source = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(Provider, Analyzer, Source)).ShouldHaveSingleItem();
+
+        // Assert: each diagnostic lists its contract, both on the one base list.
+        source.ShouldBe(Source.Replace("ShopLocalizationEnGb : ShopLocalizationEn //", "ShopLocalizationEnGb : ShopLocalizationEn, IShopLocalization, ICartLocalization //", StringComparison.Ordinal));
+        (await GeneratorTestHelper.AnalyzeAsync(Analyzer, source, [])).ShouldBeEmpty();
+    }
 }

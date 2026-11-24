@@ -1,4 +1,5 @@
 using System.Composition;
+using System.Runtime.CompilerServices;
 using System.Text;
 using CodeChops.Idioma.Generators;
 using Microsoft.CodeAnalysis.CodeActions;
@@ -64,12 +65,21 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// Changes each text once, however many of its wordings and languages hold a placeholder, because each such wording
-    /// has a diagnostic of its own.
+    /// has a diagnostic of its own. A diagnostic of a text that an earlier fix changed already is skipped, and the
+    /// project is read once for all of them (<see cref="ProjectTexts"/>). A migration from resx files has hundreds of
+    /// such texts.
     /// </summary>
     private static readonly FixAllProvider FixAll = new ReplaceNodesFixAllProvider<MemberDeclarationSyntax>(
         "Replace the placeholders with parameters",
         EquivalenceKey,
-        static (root, semanticModel, diagnostic, cancellationToken) => FindText(root, diagnostic) is { } text ? Fix(text, semanticModel, cancellationToken) : null);
+        static (root, semanticModel, diagnostic, cancellationToken) => FindText(root, diagnostic) is { } text ? Fix(text, semanticModel, cancellationToken) : null,
+        prepare: static (root, semanticModel, diagnostic) =>
+        {
+            // The name of each property that may become a method, so that one pass finds the code that uses any of them.
+            if (FindText(root, diagnostic) is PropertyDeclarationSyntax property)
+                ProjectTexts.Of(semanticModel.Compilation).ExpectUsesOf(property.Identifier.ValueText);
+        },
+        findStart: FindText);
 
     public override FixAllProvider GetFixAllProvider() => FixAll;
 
@@ -84,6 +94,8 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
+            // Whether a property gets the fix depends on the other languages and on the code that uses the text, so
+            // the fix is found here. It's found once per text and compilation (ProjectTexts), so asking again is cheap.
             if (FindText(root, diagnostic) is not { } text || Fix(text, semanticModel, context.CancellationToken) is not { } fixedTexts)
                 continue;
 
@@ -145,12 +157,23 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         }
 
         var property = (PropertyDeclarationSyntax)text;
+        var projectTexts = ProjectTexts.Of(semanticModel.Compilation);
+
+        return projectTexts.GetOrAddFix(property, () => ToMethods(property, semanticModel, projectTexts, cancellationToken));
+    }
+
+    /// <summary>
+    /// A property and the same text of every other set of this assembly, each as the method it becomes, or
+    /// <see langword="null"/> when there's no fix (see the remarks of this class).
+    /// </summary>
+    private static Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? ToMethods(PropertyDeclarationSyntax property, SemanticModel semanticModel,
+        ProjectTexts projectTexts, CancellationToken cancellationToken)
+    {
         var compilation = semanticModel.Compilation;
 
         if (semanticModel.GetDeclaredSymbol(property, cancellationToken) is not { } symbol
-            || FindLanguages(symbol, compilation, cancellationToken) is not var (languages, properties, implementsContractText)
-            || ReadParameters(symbol, implementsContractText, languages) is not { } writeParameters
-            || IsUsedAsProperty(properties, languages, compilation, semanticModel, cancellationToken))
+            || FindLanguages(symbol, projectTexts, cancellationToken) is not var (languages, properties, implementsContractText)
+            || ReadParameters(symbol, implementsContractText, languages) is not { } writeParameters)
         {
             return null;
         }
@@ -171,7 +194,8 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             fixedTexts.Add(language, fixedText);
         }
 
-        return fixedTexts;
+        // Last, because it reads every file of the project.
+        return IsUsedAsProperty(properties, languages, projectTexts, semanticModel, cancellationToken) ? null : fixedTexts;
     }
 
     /// <summary>
@@ -299,9 +323,9 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     /// </list>
     /// </returns>
     private static (ImmutableArray<PropertyDeclarationSyntax> Languages, ImmutableHashSet<IPropertySymbol> Properties, bool ImplementsContractText)? FindLanguages(
-        IPropertySymbol text, Compilation compilation, CancellationToken cancellationToken)
+        IPropertySymbol text, ProjectTexts projectTexts, CancellationToken cancellationToken)
     {
-        var classes = CodeFixSupport.GetClasses(compilation.Assembly.GlobalNamespace).ToImmutableArray();
+        var compilation = projectTexts.Compilation;
         var found = new HashSet<IPropertySymbol>(SymbolEqualityComparer.Default);
         var contractTexts = new HashSet<IPropertySymbol>(SymbolEqualityComparer.Default);
         var languages = ImmutableArray.CreateBuilder<PropertyDeclarationSyntax>();
@@ -330,7 +354,8 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             if (property.OverriddenProperty is { } overridden)
                 pending.Push(overridden);
 
-            foreach (var set in classes)
+            // An override is a member of a class that derives from the property's class, so only those are read.
+            foreach (var set in projectTexts.FindClassesDerivingFrom(property.ContainingType))
                 foreach (var member in set.GetMembers(property.Name))
                     if (member is IPropertySymbol overriding && SymbolEqualityComparer.Default.Equals(overriding.OverriddenProperty, property))
                         pending.Push(overriding);
@@ -347,14 +372,9 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
                 // A set that derives from another implements the text through the property of that set. Its own
                 // property is found as the override of that one.
-                foreach (var set in classes)
-                {
-                    if (set.AllInterfaces.Contains(contract, SymbolEqualityComparer.Default)
-                        && set.FindImplementationForInterfaceMember(contractText) is IPropertySymbol implementation)
-                    {
+                foreach (var set in projectTexts.FindClassesImplementing(contract))
+                    if (set.FindImplementationForInterfaceMember(contractText) is IPropertySymbol implementation)
                         pending.Push(implementation);
-                    }
-                }
             }
         }
 
@@ -374,20 +394,19 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     /// </remarks>
     // By name first, which binds nothing, and then by the compiler for a name that matches: one of a few in a project.
     private static bool IsUsedAsProperty(ImmutableHashSet<IPropertySymbol> properties, ImmutableArray<PropertyDeclarationSyntax> languages,
-        Compilation compilation, SemanticModel semanticModel, CancellationToken cancellationToken)
+        ProjectTexts projectTexts, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
-        var names = properties.Select(GetTextName).ToImmutableHashSet(StringComparer.Ordinal);
+        var models = new Dictionary<SyntaxTree, SemanticModel> { [semanticModel.SyntaxTree] = semanticModel };
 
-        foreach (var tree in compilation.SyntaxTrees)
+        foreach (var name in properties.Select(GetTextName).Distinct(StringComparer.Ordinal))
         {
-            SemanticModel? model = null;
-
-            foreach (var identifier in tree.GetRoot(cancellationToken).DescendantNodes().OfType<IdentifierNameSyntax>())
+            foreach (var identifier in projectTexts.FindUsesOf(name, cancellationToken))
             {
-                if (!names.Contains(identifier.Identifier.ValueText) || IsReadOfBaseInLanguage(identifier, languages))
+                if (IsReadOfBaseInLanguage(identifier, languages))
                     continue;
 
-                model ??= tree == semanticModel.SyntaxTree ? semanticModel : compilation.GetSemanticModel(tree);
+                if (!models.TryGetValue(identifier.SyntaxTree, out var model))
+                    models.Add(identifier.SyntaxTree, model = projectTexts.Compilation.GetSemanticModel(identifier.SyntaxTree));
 
                 if (model.GetSymbolInfo(identifier, cancellationToken).Symbol is IPropertySymbol used && properties.Contains(used.OriginalDefinition))
                     return true;
@@ -395,6 +414,146 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// What the fix reads of a whole project, read once per compilation: the classes that derive from a class or
+    /// implement a contract, the code that uses a name, and the fix of each text it was asked for. A compilation
+    /// doesn't change, so neither does what's read of it.
+    /// </summary>
+    /// <remarks>
+    /// The IDE asks for the fix of a text each time it shows the lightbulb, and "Fix all" asks for one per diagnostic.
+    /// Each of them would otherwise read every class and every file of the project again.
+    /// </remarks>
+    private sealed class ProjectTexts(Compilation compilation)
+    {
+        private static readonly ConditionalWeakTable<Compilation, ProjectTexts> PerCompilation = new();
+
+        private object Gate { get; } = new();
+        private Dictionary<PropertyDeclarationSyntax, Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>?> Fixes { get; } = [];
+        private HashSet<string> ExpectedNames { get; } = new(StringComparer.Ordinal);
+        private Dictionary<string, ImmutableArray<IdentifierNameSyntax>> UsesByName { get; } = new(StringComparer.Ordinal);
+        private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>? ClassesByBase { get; set; }
+        private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>? ClassesByInterface { get; set; }
+
+        public Compilation Compilation { get; } = compilation;
+
+        public static ProjectTexts Of(Compilation compilation) => PerCompilation.GetValue(compilation, static compilation => new ProjectTexts(compilation));
+
+        /// <summary>
+        /// The fix of a property, found with <paramref name="find"/> the first time it's asked for.
+        /// </summary>
+        public Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? GetOrAddFix(PropertyDeclarationSyntax property,
+            Func<Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>?> find)
+        {
+            lock (this.Gate)
+            {
+                if (this.Fixes.TryGetValue(property, out var known))
+                    return known;
+            }
+
+            var found = find();
+
+            lock (this.Gate)
+                this.Fixes[property] = found;
+
+            return found;
+        }
+
+        /// <summary>
+        /// The top-level classes of this assembly that derive from a class, directly or through another class.
+        /// </summary>
+        public IReadOnlyList<INamedTypeSymbol> FindClassesDerivingFrom(INamedTypeSymbol @base)
+        {
+            lock (this.Gate)
+            {
+                this.ReadClasses();
+                return this.ClassesByBase!.TryGetValue(@base, out var classes) ? classes : [];
+            }
+        }
+
+        /// <summary>
+        /// The top-level classes of this assembly that implement an interface, themselves or through a class they
+        /// derive from.
+        /// </summary>
+        public IReadOnlyList<INamedTypeSymbol> FindClassesImplementing(INamedTypeSymbol @interface)
+        {
+            lock (this.Gate)
+            {
+                this.ReadClasses();
+                return this.ClassesByInterface!.TryGetValue(@interface, out var classes) ? classes : [];
+            }
+        }
+
+        private void ReadClasses()
+        {
+            if (this.ClassesByBase is not null)
+                return;
+
+            var byBase = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
+            var byInterface = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
+
+            foreach (var type in CodeFixSupport.GetClasses(this.Compilation.Assembly.GlobalNamespace))
+            {
+                for (var @base = type.BaseType; @base is { SpecialType: not SpecialType.System_Object }; @base = @base.BaseType)
+                    Add(byBase, @base, type);
+
+                foreach (var @interface in type.AllInterfaces)
+                    Add(byInterface, @interface, type);
+            }
+
+            this.ClassesByInterface = byInterface;
+            this.ClassesByBase = byBase;
+
+            static void Add(Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> classes, INamedTypeSymbol key, INamedTypeSymbol type)
+            {
+                if (!classes.TryGetValue(key, out var found))
+                    classes.Add(key, found = []);
+
+                found.Add(type);
+            }
+        }
+
+        /// <summary>
+        /// Notes a name that <see cref="FindUsesOf"/> will be asked for, so that one pass over the project finds the
+        /// uses of every such name.
+        /// </summary>
+        public void ExpectUsesOf(string name)
+        {
+            lock (this.Gate)
+            {
+                if (!this.UsesByName.ContainsKey(name))
+                    this.ExpectedNames.Add(name);
+            }
+        }
+
+        /// <summary>
+        /// Each place in the code of the project, generated code included, where a name is used, outside comments.
+        /// </summary>
+        public ImmutableArray<IdentifierNameSyntax> FindUsesOf(string name, CancellationToken cancellationToken)
+        {
+            lock (this.Gate)
+            {
+                if (this.UsesByName.TryGetValue(name, out var known))
+                    return known;
+
+                this.ExpectedNames.Add(name);
+
+                var found = this.ExpectedNames.ToDictionary(static expected => expected, static _ => ImmutableArray.CreateBuilder<IdentifierNameSyntax>(), StringComparer.Ordinal);
+
+                foreach (var tree in this.Compilation.SyntaxTrees)
+                    foreach (var identifier in tree.GetRoot(cancellationToken).DescendantNodes().OfType<IdentifierNameSyntax>())
+                        if (found.TryGetValue(identifier.Identifier.ValueText, out var uses))
+                            uses.Add(identifier);
+
+                foreach (var uses in found)
+                    this.UsesByName[uses.Key] = uses.Value.ToImmutable();
+
+                this.ExpectedNames.Clear();
+
+                return this.UsesByName[name];
+            }
+        }
     }
 
     /// <summary>

@@ -4,7 +4,8 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="SupportedLanguages"/> against the cultures of the runtime the tests run on: the parents the
-/// build writes out must be the parents a text follows at run time (<see cref="CultureInfo.Parent"/>).
+/// build writes out must be the parents a text follows at run time (<see cref="CultureInfo.Parent"/>), and the
+/// languages and regions it knows must hold those of every culture (<c>LOC104</c>).
 /// </summary>
 public sealed class SupportedLanguagesTests
 {
@@ -105,6 +106,70 @@ public sealed class SupportedLanguagesTests
 
         // Assert
         serves.ShouldBe(expected);
+    }
+
+    [Test]
+    public void EveryCultureOfTheRuntime_ShouldHaveNoUnknownPart()
+    {
+        // Arrange: the tables of languages and regions the build carries, against the cultures a user can have. A
+        // culture the tables don't know would get LOC104 for a code that is right.
+        var unknown = new List<string>();
+
+        foreach (var culture in CulturesToCheck())
+        {
+            // Act
+            if (SupportedLanguages.IsCultureName(culture.Name) && SupportedLanguages.FindUnknownPart(culture.Name) is { } part)
+                unknown.Add($"{culture.Name} ({part.Part})");
+        }
+
+        // Assert
+        unknown.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("dk", "dk", "ISO 639-1 language")]
+    [Arguments("JP", "JP", "ISO 639-1 language")]
+    [Arguments("iw", "iw", "ISO 639-1 language")]
+    [Arguments("dk-UK", "dk", "ISO 639-1 language")]
+    [Arguments("en-UK", "UK", "ISO 3166-1 region")]
+    [Arguments("en-uk", "uk", "ISO 3166-1 region")]
+    [Arguments("zh-Hant-ZZ", "ZZ", "ISO 3166-1 region")]
+    [Arguments("fil-UK", "UK", "ISO 3166-1 region")]
+    public void CodeWithPartNoCultureHas_ShouldGiveThatPart(string code, string expectedPart, string expectedKind)
+    {
+        // Act: the language before the region, in any letter case.
+        var unknown = SupportedLanguages.FindUnknownPart(code);
+
+        // Assert
+        unknown.ShouldNotBeNull();
+        unknown.Value.Code.ShouldBe(code);
+        unknown.Value.Part.ShouldBe(expectedPart);
+        unknown.Value.Kind.ShouldBe(expectedKind);
+    }
+
+    [Test]
+    [Arguments("en")]
+    [Arguments("uk")]
+    [Arguments("se")]
+    [Arguments("en-GB")]
+    [Arguments("sq-XK")]
+    [Arguments("es-419")]
+    [Arguments("en-001")]
+    [Arguments("zh-Hans")]
+    [Arguments("zh-Hant-TW")]
+    [Arguments("sr-Latn-RS")]
+    [Arguments("fil")]
+    [Arguments("xyz-Abcd-123")]
+    [Arguments("en-US-u-ca-gregory")]
+    [Arguments("ca-ES-valencia")]
+    public void CodeOfKnownOrUncheckedParts_ShouldGiveNothing(string code)
+    {
+        // Act: a language of three letters, a script, a region of three digits, and what follows the region aren't
+        // checked.
+        var unknown = SupportedLanguages.FindUnknownPart(code);
+
+        // Assert
+        unknown.ShouldBeNull();
     }
 
     [Test]

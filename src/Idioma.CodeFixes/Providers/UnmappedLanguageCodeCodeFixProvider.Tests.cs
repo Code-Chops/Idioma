@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
-using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis.CodeFixes;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -101,5 +101,21 @@ public sealed class UnmappedLanguageCodeCodeFixProviderTests
         fix.Sources[0].ShouldBe(first);
         fix.Sources[1].ShouldBe(Second.Replace(": ShopLocalizationEn;", ": ShopLocalizationEn, ILocalizationSet;", StringComparison.Ordinal));
         ShouldReportNothing([.. fix.Sources]);
+    }
+
+    [Test]
+    public async Task FixAll_ShouldListTheInterfaceAgainOnEverySet()
+    {
+        // Arrange: a British and, in another file, an American set, each with a language code that implements nothing.
+        var first = $"{Header.Replace("\"en-GB\"", "\"en-GB\", \"en-US\"", StringComparison.Ordinal)}\n\n{DefaultSet}\n\npublic sealed class ShopLocalizationBritish : ShopLocalizationEn\n{Body}";
+        var second = $"using CodeChops.Idioma;\n\nnamespace TestApp;\n\npublic sealed class ShopLocalizationAmerican : ShopLocalizationEn\n{Body.Replace("en-GB", "en-US", StringComparison.Ordinal)}";
+
+        // Act
+        var sources = await CodeFixTestHelper.FixAllAsync(new UnmappedLanguageCodeCodeFixProvider(), LocalizationParts.Registration(), FixAllScope.Solution, fromFile: 1, first, second);
+
+        // Assert
+        sources[0].ShouldBe(first.Replace("British : ShopLocalizationEn", "British : ShopLocalizationEn, ILocalizationSet", StringComparison.Ordinal));
+        sources[1].ShouldBe(second.Replace("American : ShopLocalizationEn", "American : ShopLocalizationEn, ILocalizationSet", StringComparison.Ordinal));
+        ShouldReportNothing([.. sources]);
     }
 }

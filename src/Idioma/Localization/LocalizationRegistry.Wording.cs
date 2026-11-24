@@ -190,6 +190,12 @@ internal sealed class ResolvedSets<TContract>
     [ThreadStatic]
     private static ResolvedSets<TContract>? Last;
 
+    // The culture object this thread asked Last for. It may be another object of the same name as the one the lookup
+    // holds, which is the object of the reader who asked first. Read only where the lookup's own culture isn't the one
+    // asked for, so a reader with the lookup's culture pays nothing for it.
+    [ThreadStatic]
+    private static CultureInfo? LastAsked;
+
     /// <summary>
     /// How the registry resolves the culture these sets are for.
     /// </summary>
@@ -223,11 +229,15 @@ internal sealed class ResolvedSets<TContract>
         var registry = LocalizationRegistry.Current;
         var last = Last;
 
-        if (last is not null && ReferenceEquals(last.Lookup.Culture, culture) && ReferenceEquals(last.Lookup.Registry, registry))
+        // The registry is compared on every read, so a registration, which builds a new one, drops what a thread kept.
+        if (last is not null && (ReferenceEquals(last.Lookup.Culture, culture) || ReferenceEquals(LastAsked, culture)) && ReferenceEquals(last.Lookup.Registry, registry))
             return last;
 
+        // Both written on this thread, one after the other. So the culture asked always belongs to the sets next to it,
+        // also where code goes on on another thread after an await.
         last = registry.Resolve(culture).GetResolvedSets<TContract>(count);
         Last = last;
+        LastAsked = culture;
 
         return last;
     }

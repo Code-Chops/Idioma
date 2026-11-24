@@ -41,6 +41,13 @@ public sealed partial class LocalizationRegistry
     [ThreadStatic]
     private static CultureLookup? LastCulture;
 
+    // The culture object this thread asked LastCulture for. A lookup holds the object of the reader who asked first,
+    // and a later reader may bring another object of the same name, as ASP.NET Core's options do after a
+    // UseCulture(CultureInfo.GetCultureInfo("nl-NL")). Compared by reference too, so that reader pays the lookup by
+    // name once, and not for every text. Read only where the lookup's own culture isn't the one asked for.
+    [ThreadStatic]
+    private static CultureInfo? LastCultureAsked;
+
     [ThreadStatic]
     private static CultureLookup? LastLanguage;
 
@@ -55,13 +62,16 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     internal CultureLookup Resolve(CultureInfo culture)
     {
-        if (LastCulture is { } last && ReferenceEquals(last.Culture, culture) && ReferenceEquals(last.Registry, this))
+        if (LastCulture is { } last && (ReferenceEquals(last.Culture, culture) || ReferenceEquals(LastCultureAsked, culture)) && ReferenceEquals(last.Registry, this))
             return last;
 
         if (!this.ByCulture.TryGetValue(culture.Name, out var lookup))
             lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, new CultureFallback(culture), culture, language: null), ref this._hasKeptMaxCultures);
 
+        // Both written on this thread, one after the other, so the culture asked always belongs to the lookup next to it.
         LastCulture = lookup;
+        LastCultureAsked = culture;
+
         return lookup;
     }
 

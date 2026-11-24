@@ -15,7 +15,8 @@ namespace CodeChops.Idioma.Generators;
 // holding a location is reused across edits in other files. An edit in the file itself gives a new tree, and with it a
 // new location, also where nothing moved: the steps holding one then run again. So what a generator writes comes from
 // models without a location (the contracts, the recorded sets, the registrar, the languages of the factory), and only
-// reporting runs again.
+// reporting runs again. Discovery keeps every location of a set in one share (SetLocations), which the registrar's
+// share of that set leaves empty, so the steps that read the registrar's share don't run again either.
 internal readonly record struct DiagnosticLocation(SyntaxTree? Tree, TextSpan Span)
 {
     public static DiagnosticLocation From(Location location)

@@ -51,6 +51,10 @@ public sealed class UnnamedLanguageCodeFixProvider : CodeFixProvider
 
             var named = arguments is ArgumentListSyntax list ? (SyntaxNode)Name(list, names) : Name((AttributeArgumentListSyntax)arguments, names);
 
+            // Each argument got its name since the diagnostic was reported.
+            if (named.IsEquivalentTo(arguments))
+                continue;
+
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: "Name each language",

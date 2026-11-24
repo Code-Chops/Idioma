@@ -84,4 +84,19 @@ public sealed class SharedEnumValueCodeFixProviderTests
         // Assert: its text would be a string?, which doesn't fit where a string was.
         fixes.ShouldBeEmpty();
     }
+
+    [Test]
+    public async Task FixAll_ShouldGiveEveryCallTheOwnTextOfItsMember()
+    {
+        // Arrange: two calls in one expression, and one that has no fix.
+        var source = Source("OrderStatus.None.GetText() + OrderStatusLocalization.GetTextByValue(OrderStatus.None) + ParcelStatus.Collected.GetText()");
+
+        // Act
+        var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new SharedEnumValueCodeFixProvider(), new SharedEnumValueAnalyzer(), source)).ShouldHaveSingleItem();
+
+        // Assert: the marked member keeps its call, and its warning.
+        fixedSource.ShouldBe(Source("OrderStatusLocalization.None + OrderStatusLocalization.None + ParcelStatus.Collected.GetText()"));
+        (await GeneratorTestHelper.AnalyzeAsync(new SharedEnumValueAnalyzer(), fixedSource, [])).ShouldHaveSingleItem();
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
 }

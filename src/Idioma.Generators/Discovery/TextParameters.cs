@@ -617,7 +617,7 @@ internal static class TextParameters
             Write(elements[i].Type, parts);
 
             if (elements[i].IsExplicitlyNamedTupleElement)
-                Append(parts, $" {LocalizationSetsPart.EscapeIdentifier(elements[i].Name)}");
+                Append(parts, $" {CodeEscaping.EscapeIdentifier(elements[i].Name)}");
         }
 
         Append(parts, ")");
@@ -639,7 +639,7 @@ internal static class TextParameters
             parts.Add((LocalizationDiscovery.GetNamespaceName(type.ContainingNamespace), new StringBuilder()));
         }
 
-        Append(parts, LocalizationSetsPart.EscapeIdentifier(type.Name));
+        Append(parts, CodeEscaping.EscapeIdentifier(type.Name));
 
         if (type.TypeArguments.Length is 0)
             return;

@@ -1,22 +1,19 @@
-Blazor WebAssembly, Mono interpreter: .NET 11.0.0, in Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.0.0 Safari/537.36.
+Blazor WebAssembly, Mono interpreter: .NET 11.0.0, in Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36.
 
 Showing one text, in nanoseconds, after the cost of the loop and the call is taken off:
 
 | Text | Approach | en | nl | en-GB |
 |---|---|---:|---:|---:|
-| Checkout | IStringLocalizer | 979 | 995 | 2724 |
-| Checkout | Idioma set | 401 | 401 | 899 |
-| Checkout | Idioma inline, in a field | 193 | 225 | 204 |
-| Checkout | Idioma inline, in markup | 327 | 363 | 345 |
-| Checkout | Idioma attribute | 260 | 297 | 272 |
-| Cart | IStringLocalizer | 961 | 982 | 968 |
-| Cart | Idioma set | 401 | 406 | 870 |
-| Cart | Idioma inline, in a field | 193 | 227 | 208 |
-| Cart | Idioma inline, in markup | 326 | 365 | 346 |
-| Cart | Idioma attribute | 261 | 298 | 277 |
-| Greeting(name) | IStringLocalizer | 1546 | 1574 | 3319 |
-| Greeting(name) | Idioma set | 981 | 994 | 1552 |
-| Greeting(name) | Idioma inline, in a field | 194 | 228 | 209 |
-| Greeting(name) | Idioma inline, in markup | 844 | 881 | 850 |
+| Checkout | IStringLocalizer | 678 | 697 | 1970 |
+| Checkout | Idioma set | 61 | 61 | 59 |
+| Checkout | Idioma inline | 73 | 77 | 76 |
+| Checkout | Idioma attribute | 110 | 112 | 110 |
+| Cart | IStringLocalizer | 658 | 676 | 686 |
+| Cart | Idioma set | 61 | 61 | 58 |
+| Cart | Idioma inline | 73 | 77 | 76 |
+| Cart | Idioma attribute | 110 | 112 | 111 |
+| Greeting(name) | IStringLocalizer | 1112 | 1125 | 2490 |
+| Greeting(name) | Idioma set | 148 | 148 | 147 |
+| Greeting(name) | Idioma inline | 341 | 339 | 346 |
 
-The loop and the call cost: en 20.5 ns, nl 20.5 ns, en-GB 20.6 ns.
+The loop and the call cost: en 11.8 ns, nl 11.3 ns, en-GB 11.6 ns.

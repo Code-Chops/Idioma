@@ -25,6 +25,67 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
+    public void Resolve_ForTwoCulturesOfSameNameInTurn_ShouldLookUpEachByNameOnce()
+    {
+        // Arrange: the lookup holds the culture object that asked first. A second object of the same name asks next, as
+        // ASP.NET Core's options hold one of their own.
+        var registry = LocalizationRegistry.Create([new RegistryLocalizationEn(), new RegistryLocalizationNl()], "en", "nl");
+        var withoutDutch = LocalizationRegistry.Create([new RegistryLocalizationEn()]);
+        var first = new RegistryCountingCulture("nl-NL");
+        var other = new RegistryCountingCulture("nl-NL");
+
+        var lookup = registry.Resolve(first);
+        registry.Resolve(other).ShouldBeSameAs(lookup);
+        var (firstReads, otherReads) = (first.NameReads, other.NameReads);
+
+        // Act: both in turn, as a thread reads texts for either.
+        for (var i = 0; i < 10; i++)
+        {
+            registry.Resolve(first).ShouldBeSameAs(lookup);
+            registry.Resolve(other).ShouldBeSameAs(lookup);
+        }
+
+        // Assert: told by reference, so neither name was read again. Another registry still gives its own lookup.
+        first.NameReads.ShouldBe(firstReads);
+        other.NameReads.ShouldBe(otherReads);
+        withoutDutch.Resolve(other).Registry.ShouldBeSameAs(withoutDutch);
+        registry.Resolve(other).ShouldBeSameAs(lookup);
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void ResolvedSetsFind_ForTwoCulturesOfSameNameInTurn_ShouldLookUpByNameOnceUntilNextRegistration()
+    {
+        // Arrange: the sets a text of a generated class reads, in the registry of the whole app. Its lookup holds the
+        // culture object that asked first, which is neither of these once another test asked for Dutch.
+        var first = new RegistryCountingCulture("nl-NL");
+        var other = new RegistryCountingCulture("nl-NL");
+
+        var resolved = ResolvedSets<IRegistryLocalization>.Find(first, count: 1);
+        var kept = resolved.Lookup.Culture!;
+        ResolvedSets<IRegistryLocalization>.Find(other, count: 1).ShouldBeSameAs(resolved);
+        var otherReads = other.NameReads;
+
+        // Act: the lookup's own culture and the other object in turn.
+        for (var i = 0; i < 10; i++)
+        {
+            ResolvedSets<IRegistryLocalization>.Find(kept, count: 1).ShouldBeSameAs(resolved);
+            ResolvedSets<IRegistryLocalization>.Find(other, count: 1).ShouldBeSameAs(resolved);
+        }
+
+        var readsInTurn = other.NameReads - otherReads;
+
+        LocalizationRegistry.Register(new RegistryConfiguredLocalization("it"));
+        var afterRegistration = ResolvedSets<IRegistryLocalization>.Find(other, count: 1);
+
+        // Assert: told by reference, so the name wasn't read again. A registration drops what the thread kept.
+        readsInTurn.ShouldBe(0);
+        afterRegistration.ShouldNotBeSameAs(resolved);
+        afterRegistration.Lookup.Registry.ShouldBeSameAs(LocalizationRegistry.Current);
+        other.NameReads.ShouldBeGreaterThan(otherReads);
+    }
+
+    [Test]
     public void Resolve_ShouldTakeSetsOfItsOwnRegistry()
     {
         // Arrange: one registry with a Dutch set, and one without.

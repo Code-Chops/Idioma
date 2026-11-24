@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
-using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis.CodeFixes;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -133,7 +133,7 @@ public sealed class CannotExtendCodeFixProviderTests
     }
 
     [Test]
-    public async Task AbstractSetWithAbstractMember_ShouldStayAsItIs()
+    public async Task AbstractSetWithAbstractMember_ShouldGetNoFix()
     {
         // Arrange: without the modifier the class would no longer compile.
         var source = File("public abstract class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public abstract string Checkout { get; } }");
@@ -141,8 +141,36 @@ public sealed class CannotExtendCodeFixProviderTests
         // Act
         var fixes = await FixAsync(source);
 
-        // Assert
-        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(source);
+        // Assert: no fix that would change nothing.
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task FixAll_SetsNotNamedAfterTheirLanguage_ShouldAllBeRenamedInEveryFile()
+    {
+        // Arrange: two sets whose names give no language, and a file that names both.
+        var shop = File("public sealed class ShopLocalization : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }");
+        const string Cart = "using CodeChops.Idioma; namespace TestApp; public sealed class CartLocalization : ILocalizationSet, ICartLocalization { public string Total => \"Total\"; }";
+        const string User = """
+            namespace TestApp;
+
+            public static class Shop
+            {
+                public static string Checkout => new ShopLocalization().Checkout;
+                public static string Total => new CartLocalization().Total;
+            }
+            """;
+
+        // Act
+        var sources = await CodeFixTestHelper.FixAllAsync(new CannotExtendCodeFixProvider(), LocalizationParts.Sets(), FixAllScope.Solution, fromFile: 0, shop, Cart, User);
+
+        // Assert: the file that names both sets takes both renames.
+        sources[0].ShouldBe(shop.Replace("class ShopLocalization ", "class ShopLocalizationEn ", StringComparison.Ordinal));
+        sources[1].ShouldBe(Cart.Replace("class CartLocalization ", "class CartLocalizationEn ", StringComparison.Ordinal));
+        sources[2].ShouldBe(User
+            .Replace("new ShopLocalization()", "new ShopLocalizationEn()", StringComparison.Ordinal)
+            .Replace("new CartLocalization()", "new CartLocalizationEn()", StringComparison.Ordinal));
+        ShouldBeExtended([.. sources]);
     }
 
     [Test]

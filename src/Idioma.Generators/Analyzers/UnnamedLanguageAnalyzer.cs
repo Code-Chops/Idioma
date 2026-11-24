@@ -18,8 +18,8 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
 {
-    // LOC600 reported wording written in one language where a text was expected. A text is a string now, so the build
-    // can't tell such wording from any other string, and the code is no longer reported. It stays reserved.
+    // An earlier rule reported wording written in one language where a text was expected. A text is a string now, so
+    // the build can't tell such wording from any other string, and that rule is gone.
     public const string UnnamedLanguageDiagnosticId = "LOC500";
 
     /// <summary>

@@ -28,11 +28,15 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
     {
         var document = context.Document;
 
-        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration)
+        // The fix is decided here, so that none is offered that would change nothing.
+        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration
+            || await CodeFixSupport.FindTypeAsync(document, declaration, context.CancellationToken).ConfigureAwait(false) is not var (type, _))
+        {
             return;
+        }
 
         foreach (var diagnostic in context.Diagnostics)
-            if (CreateFix(document, declaration, diagnostic) is { } fix)
+            if (CreateFix(document.Project.Solution, declaration, type, diagnostic) is { } fix)
                 context.RegisterCodeFix(fix, diagnostic);
     }
 
@@ -40,13 +44,17 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
     /// The fix for what the generator reported, or <see langword="null"/> when no single edit resolves it. The shapes
     /// are told apart in the order the generator reports them, so the fix is for the problem the message names.
     /// </summary>
-    private static CodeAction? CreateFix(Document document, TypeDeclarationSyntax declaration, Diagnostic diagnostic)
+    private static CodeAction? CreateFix(Solution solution, TypeDeclarationSyntax declaration, INamedTypeSymbol type, Diagnostic diagnostic)
     {
         if (diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var suggestedName) && suggestedName is not null)
         {
+            // Renamed since the diagnostic was reported.
+            if (String.Equals(type.Name, suggestedName, StringComparison.Ordinal))
+                return null;
+
             return CodeAction.Create(
                 title: $"Rename to '{suggestedName}'",
-                createChangedSolution: cancellationToken => RenameAsync(document, declaration, suggestedName, cancellationToken),
+                createChangedSolution: cancellationToken => Renamer.RenameSymbolAsync(solution, type, new SymbolRenameOptions(), suggestedName, cancellationToken),
                 equivalenceKey: "Rename");
         }
 
@@ -54,50 +62,34 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
             return null;
 
         if (declaration.Modifiers.Any(SyntaxKind.FileKeyword))
-            return RemoveModifier(document, declaration, SyntaxKind.FileKeyword);
+            return RemoveModifier(solution, declaration, type, SyntaxKind.FileKeyword);
 
         if (declaration.TypeParameterList is not null)
             return null;
 
-        if (declaration.Modifiers.Any(SyntaxKind.AbstractKeyword))
-            return RemoveModifier(document, declaration, SyntaxKind.AbstractKeyword);
+        // A class that isn't abstract can't hold an abstract member, so such a set gets no fix.
+        if (declaration.Modifiers.Any(SyntaxKind.AbstractKeyword) && !type.GetMembers().Any(static member => member.IsAbstract))
+            return RemoveModifier(solution, declaration, type, SyntaxKind.AbstractKeyword);
 
         return null;
     }
 
-    private static CodeAction RemoveModifier(Document document, TypeDeclarationSyntax declaration, SyntaxKind modifier)
+    private static CodeAction RemoveModifier(Solution solution, TypeDeclarationSyntax declaration, INamedTypeSymbol type, SyntaxKind modifier)
     {
         var keyword = SyntaxFacts.GetText(modifier);
 
         return CodeAction.Create(
             title: $"Remove '{keyword}' from '{declaration.Identifier.ValueText}'",
-            createChangedSolution: cancellationToken => RemoveModifierAsync(document, declaration, modifier, cancellationToken),
+            createChangedSolution: cancellationToken => RemoveModifierAsync(solution, type, modifier, cancellationToken),
             equivalenceKey: $"Remove.{keyword}");
-    }
-
-    private static async Task<Solution> RenameAsync(Document document, TypeDeclarationSyntax declaration, string newName, CancellationToken cancellationToken)
-    {
-        var solution = document.Project.Solution;
-
-        return await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is var (type, _)
-            ? await Renamer.RenameSymbolAsync(solution, type, new SymbolRenameOptions(), newName, cancellationToken).ConfigureAwait(false)
-            : solution;
     }
 
     /// <summary>
     /// Removes a modifier from every part of the class that carries it, because each part of a partial class may repeat
-    /// it. An abstract class stays as it is when a member of it's abstract, which a concrete class can't hold.
+    /// it. The part the diagnostic is on carries it, so the fix always changes that part.
     /// </summary>
-    private static async Task<Solution> RemoveModifierAsync(Document document, TypeDeclarationSyntax declaration, SyntaxKind modifier, CancellationToken cancellationToken)
+    private static async Task<Solution> RemoveModifierAsync(Solution solution, INamedTypeSymbol type, SyntaxKind modifier, CancellationToken cancellationToken)
     {
-        var solution = document.Project.Solution;
-
-        if (await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is not var (type, _)
-            || modifier is SyntaxKind.AbstractKeyword && type.GetMembers().Any(static member => member.IsAbstract))
-        {
-            return solution;
-        }
-
         var parts = await CodeFixSupport.GetPartsAsync(type, cancellationToken).ConfigureAwait(false);
 
         return await CodeFixSupport.ReplaceNodesAsync(

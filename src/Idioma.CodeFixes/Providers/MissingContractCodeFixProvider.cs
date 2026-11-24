@@ -25,8 +25,15 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     {
         var document = context.Document;
 
-        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration)
+        // The place is found here, so that no fix is offered that would change nothing.
+        if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration
+            || await CodeFixSupport.FindTypeAsync(document, declaration, context.CancellationToken).ConfigureAwait(false) is not var (type, semanticModel)
+            || await FindPlaceAsync(declaration, type, semanticModel.Compilation, context.CancellationToken).ConfigureAwait(false) is not var (part, index))
+        {
             return;
+        }
+
+        var solution = document.Project.Solution;
 
         foreach (var diagnostic in context.Diagnostics)
         {
@@ -36,46 +43,46 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title: $"Implement '{name}'",
-                    createChangedSolution: cancellationToken => AddAsync(document, declaration, name, cancellationToken),
+                    createChangedSolution: cancellationToken => AddAsync(solution, part, index, name, cancellationToken),
                     equivalenceKey: "ImplementContract"),
                 diagnostic);
         }
     }
 
     /// <summary>
-    /// Adds the contract right after <c>ILocalizationSet</c>, in whichever part of the class lists it. The contract is one
-    /// that binds, or one generated here, which binds to nothing yet.
+    /// Where the contract goes: right after <c>ILocalizationSet</c>, in whichever part of the class lists it.
+    /// <see langword="null"/> when no part of the class has a base list.
     /// </summary>
-    private static async Task<Solution> AddAsync(Document document, TypeDeclarationSyntax declaration, string name, CancellationToken cancellationToken)
+    private static async Task<(TypeDeclarationSyntax Part, int Index)?> FindPlaceAsync(TypeDeclarationSyntax declaration, INamedTypeSymbol type, Compilation compilation,
+        CancellationToken cancellationToken)
     {
-        var solution = document.Project.Solution;
+        var parts = await CodeFixSupport.GetPartsAsync(type, cancellationToken).ConfigureAwait(false);
 
-        if (await CodeFixSupport.FindTypeAsync(document, declaration, cancellationToken).ConfigureAwait(false) is not var (type, semanticModel))
-            return solution;
-
-        foreach (var part in await CodeFixSupport.GetPartsAsync(type, cancellationToken).ConfigureAwait(false))
+        foreach (var part in parts)
         {
             if (part.BaseList is not { } baseList)
                 continue;
 
-            var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
+            var partModel = compilation.GetSemanticModel(part.SyntaxTree);
 
             for (var i = 0; i < baseList.Types.Count; i++)
             {
                 if (partModel.GetTypeInfo(baseList.Types[i].Type, cancellationToken).Type is INamedTypeSymbol listed
                     && (PackageNames.IsLocalizationSet(listed) || PackageNames.IsLocalizationSetOfEnum(listed)))
-                    return await AddAsync(solution, part, i + 1, name, cancellationToken).ConfigureAwait(false);
+                    return (part, i + 1);
             }
         }
 
-        // Nothing to go next to, as for a set that gets ILocalizationSet through a class it derives from: at the end.
-        return declaration.BaseList is { } own
-            ? await AddAsync(solution, declaration, own.Types.Count, name, cancellationToken).ConfigureAwait(false)
-            : solution;
+        // Nothing to go next to, as for a set that gets ILocalizationSet through a class it derives from: at the end,
+        // in the part the diagnostic is on when it has a base list, and else in the first part that has one.
+        var last = declaration.BaseList is not null ? declaration : parts.FirstOrDefault(static part => part.BaseList is not null);
+
+        return last?.BaseList is { } own ? (last, own.Types.Count) : null;
     }
 
     /// <summary>
-    /// Adds the contract to the base list of one part at an index.
+    /// Adds the contract to the base list of one part at an index. The contract is one that binds, or one generated
+    /// here, which binds to nothing yet.
     /// </summary>
     private static Task<Solution> AddAsync(Solution solution, TypeDeclarationSyntax part, int index, string name, CancellationToken cancellationToken)
     {

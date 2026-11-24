@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
-using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis.CodeFixes;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -166,5 +166,35 @@ public sealed class MissingContractCodeFixProviderTests
 
         // Assert
         fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments(FixAllScope.Document, false)]
+    [Arguments(FixAllScope.Project, true)]
+    [Arguments(FixAllScope.Solution, true)]
+    public async Task FixAll_ShouldGiveEverySetOfItsScopeItsContract(FixAllScope scope, bool otherFileChanges)
+    {
+        // Arrange: a Dutch set and, in another file, a German set, each without its contract.
+        var first = $$"""
+            {{Header.Replace("\"nl\"", "\"nl\", \"de\"", StringComparison.Ordinal)}}
+
+            {{DefaultSet}}
+
+            public sealed class ShopLocalizationNl : ILocalizationSet
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+        const string Second = "using CodeChops.Idioma; namespace TestApp; public sealed class ShopLocalizationDe : ILocalizationSet { public string Checkout => \"Zur Kasse\"; }";
+
+        // Act: "Fix all" is chosen in the file of the Dutch set.
+        var sources = await CodeFixTestHelper.FixAllAsync(new MissingContractCodeFixProvider(), LocalizationParts.Sets(), scope, fromFile: 0, first, Second);
+
+        // Assert: a fix of the document leaves the other file as it is.
+        sources[0].ShouldBe(first.Replace("ShopLocalizationNl : ILocalizationSet", "ShopLocalizationNl : ILocalizationSet, IShopLocalization", StringComparison.Ordinal));
+        sources[1].ShouldBe(otherFileChanges ? Second.Replace(": ILocalizationSet", ": ILocalizationSet, IShopLocalization", StringComparison.Ordinal) : Second);
+
+        if (otherFileChanges)
+            ShouldReportNothing([.. sources]);
     }
 }

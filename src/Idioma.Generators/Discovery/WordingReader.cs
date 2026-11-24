@@ -1,8 +1,12 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reads the wordings of the members of one class and the classes it derives from, each once, and with one semantic
-/// model per file. Lives within one transform only, so it may hold a semantic model.
+/// model per file. Lives within one transform only, so it may hold a semantic model. The model of another file than
+/// its own is shared by every reader of the compilation.
 /// </summary>
 // Discovery reads every text of every set again on every edit, in any file. A wording written as a string is read from
 // its syntax, which binds nothing. What needs binding is bound in one model per file, which keeps what it bound, where
@@ -10,7 +14,15 @@ namespace CodeChops.Idioma.Generators;
 // twice, as the default wording of its text and next to the link to it, and reads it once.
 internal sealed class WordingReader(Compilation compilation, SemanticModel? semanticModel = null)
 {
-    private Dictionary<SyntaxTree, SemanticModel?>? Models { get; set; }
+    /// <summary>
+    /// Per compilation, the semantic model of each file a reader asked for besides its own.
+    /// </summary>
+    // Every set that derives from another reads the file of that other set, and a model made for each of them would
+    // bind that file's usings and classes once per deriving set. A model answers from several threads at once, and
+    // gives the same answers as any other model of its file. Held by the compilation, so the models go when it does.
+    private static readonly ConditionalWeakTable<Compilation, ConcurrentDictionary<SyntaxTree, SemanticModel?>> SharedModels = new();
+
+    private ConcurrentDictionary<SyntaxTree, SemanticModel?>? Models { get; set; }
 
     private Dictionary<SyntaxNode, string?> Wordings { get; } = [];
 
@@ -26,10 +38,10 @@ internal sealed class WordingReader(Compilation compilation, SemanticModel? sema
         if (tree == semanticModel?.SyntaxTree)
             return semanticModel;
 
-        this.Models ??= [];
+        this.Models ??= SharedModels.GetOrCreateValue(compilation);
 
         if (!this.Models.TryGetValue(tree, out var model))
-            this.Models[tree] = model = compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null;
+            model = this.Models.GetOrAdd(tree, compilation.ContainsSyntaxTree(tree) ? compilation.GetSemanticModel(tree) : null);
 
         return model;
     }

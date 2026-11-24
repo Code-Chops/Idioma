@@ -182,7 +182,7 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// The languages a text read from this registry shows, the default language first. In <see cref="Current"/>, these
-    /// are your app's <see cref="SupportedLanguages"/>. In a registry of your own, they're the languages you passed to
+    /// are your app's <see cref="SupportedLanguages"/>. In a registry a test creates, they're the languages passed to
     /// <see cref="Create(IEnumerable{ILocalizationSet}, string, ReadOnlySpan{string})"/>. Empty when none were given.
     /// </summary>
     /// <remarks>
@@ -190,7 +190,7 @@ public sealed partial class LocalizationRegistry
     /// without languages shows every language it has a set for. There, a culture without wording gets each text's own
     /// default language.
     /// </remarks>
-    // Internal: for Current it repeats SupportedLanguages, and a registry of your own has the languages you passed.
+    // Internal: for Current it repeats SupportedLanguages, and only a test creates a registry with other languages.
     internal ImmutableArray<string> AppLanguages { get; }
 
     private FrozenDictionary<string, LanguageSets> ByLanguage { get; }
@@ -269,7 +269,8 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// The languages as one list, the default first, each written as culture names are.
     /// </summary>
-    // The parameter names are those of both public members that take languages.
+    // The parameter names are those of both members that take languages: the internal Create, which the tests call,
+    // and RegisterLanguages.
     private static ImmutableArray<string> ToCultureNames(string defaultLanguage, ReadOnlySpan<string> otherLanguages)
     {
         var languages = ImmutableArray.CreateBuilder<string>(otherLanguages.Length + 1);
@@ -304,8 +305,8 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// A registry of the given sets, filed by the language each set gives, with the given app languages. Both public
-    /// <c>Create</c> overloads end here.
+    /// A registry of the given sets, filed by the language each set gives, with the given app languages. Both internal
+    /// <c>Create</c> overloads end here, which the tests call.
     /// </summary>
     /// <param name="sets">
     /// The sets, in the order they apply. Within a language they keep that order, so a later set wins.

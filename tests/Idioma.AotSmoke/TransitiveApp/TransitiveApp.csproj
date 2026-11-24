@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    An app that references only a library with texts, and not the package. The .NET SDK gives it the analyzers of
+    every package it gets, also through another project, so the source generator runs here too. This app shows that it
+    does: its languages are registered, which only the generator's registrar does.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AotSmokeLibrary\AotSmokeLibrary.csproj" />
+  </ItemGroup>
+
+</Project>

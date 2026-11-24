@@ -210,16 +210,25 @@ public sealed class SetOfEnumCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// A part without the entry of its base list at an index, along with a comma. What stood before the first entry, or
-    /// after the last, such as a comment, goes to the entry that takes its place.
+    /// after the last, such as a comment, goes to the entry that takes its place. A part whose only entry goes loses
+    /// its base list, as a part of a partial class does that lists nothing but a wrong enum.
     /// </summary>
     private static TypeDeclarationSyntax Remove(TypeDeclarationSyntax part, int index)
     {
         var baseList = part.BaseList!;
         var types = baseList.Types;
 
-        // The plan removes no entry a set can't do without, so another one stays.
         if (types.Count is 1)
-            return part;
+        {
+            // What stood after the base list, such as the line break before the body, goes to the token before it,
+            // in place of the space that stood between the two.
+            var before = baseList.GetFirstToken().GetPreviousToken();
+            var kept = before.TrailingTrivia.Reverse().SkipWhile(static trivia => trivia.IsKind(SyntaxKind.WhitespaceTrivia)).Reverse();
+
+            return part
+                .ReplaceToken(before, before.WithTrailingTrivia(kept.Concat(baseList.GetTrailingTrivia())))
+                .WithBaseList(null);
+        }
 
         var removed = types[index];
         var remaining = types.RemoveAt(index);

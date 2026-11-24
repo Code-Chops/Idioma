@@ -19,6 +19,7 @@ internal static partial class LocalizationDiscovery
         SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var reader = new WordingReader(semanticModel.Compilation, semanticModel);
+        var typeName = type.ToDisplayString();
 
         // An override needs new T() to work. A class meant to start a contract lists one that binds to nothing yet, as
         // the default-language set lists the contract generated from it, or is partial, as such a set once was. The
@@ -37,13 +38,14 @@ internal static partial class LocalizationDiscovery
                 ? $"it's nested in '{container.Name}', where generated code can't reach it"
                 : "it's file-local, so generated code in another file can't name it";
 
-            unnameableOverride = new UnregistrableLocalization(type.ToDisplayString(), problem, DiagnosticLocation.From(type.Locations[0]));
+            unnameableOverride = new UnregistrableLocalization(typeName, problem, DiagnosticLocation.From(type.Locations[0]));
         }
 
         UnextendableSet? unextendableSet = null;
         if (mayStartContract && StartsContract(type))
         {
             var ancestors = GetSourceAncestors(type, reader, cancellationToken);
+            var baseTypeLocations = ImmutableArray.CreateBuilder<BaseTypeLocation>();
 
             // Of every part, so that each part of a partial class finds the same class. With those of the classes it
             // derives from, as for a set (DiscoverSet).
@@ -51,19 +53,22 @@ internal static partial class LocalizationDiscovery
                 .Select(reference => reference.GetSyntax(cancellationToken))
                 .OfType<TypeDeclarationSyntax>()
                 .SelectMany(part => reader.FindModel(part.SyntaxTree) is { } model
-                    ? GetUnresolvedBaseTypes(part, model, cancellationToken)
+                    ? GetUnresolvedBaseTypes(type, typeName, part, model, baseTypeLocations, cancellationToken)
                     : ImmutableArray<UnresolvedBaseType>.Empty)
                 .Concat(ancestors.SelectMany(static ancestor => ancestor.UnresolvedBaseTypes))
                 .Distinct()
                 .ToImmutableArray();
 
+            baseTypeLocations.AddRange(ancestors.SelectMany(static ancestor => ancestor.BaseTypeLocations));
+
             unextendableSet = new UnextendableSet(
-                MetadataName: type.ToDisplayString(),
+                MetadataName: typeName,
                 Name: type.Name,
                 Problem: DescribeShape(type),
                 Language: GetLanguage(type, ancestors, reader, cancellationToken),
                 UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
-                Location: DiagnosticLocation.From(type.Locations[0]));
+                Location: DiagnosticLocation.From(type.Locations[0]),
+                BaseTypeLocations: new EquatableArray<BaseTypeLocation>(baseTypeLocations.ToImmutable()));
         }
 
         var result = unnameableOverride is null && unextendableSet is null
@@ -89,6 +94,37 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
+    /// Whether a set lists <c>ILocalizationSet</c>: itself, or through an abstract class it derives from, as
+    /// <c>ShopLocalizationEn : ShopBase</c> does next to <c>abstract class ShopBase : ILocalizationSet,
+    /// IShopLocalization</c>. An abstract class is no set, so the first concrete class that derives from it lists what
+    /// it lists.
+    /// </summary>
+    /// <remarks>
+    /// Only abstract classes are passed through. A concrete class the set derives from is a set of its own, which the
+    /// set rewords (<see cref="RewordsSet"/>). An abstract class that derives from a concrete set rewords that set too,
+    /// so what it lists doesn't count.
+    /// </remarks>
+    private static bool ListsLocalizationSet(INamedTypeSymbol type)
+    {
+        if (Enumerable.Any(type.Interfaces, IsLocalizationSetInterface))
+            return true;
+
+        for (var current = type.BaseType; current is { IsAbstract: true, TypeKind: TypeKind.Class }; current = current.BaseType)
+        {
+            if (!Enumerable.Any(current.Interfaces, IsLocalizationSetInterface))
+                continue;
+
+            for (var above = current.BaseType; above is { TypeKind: TypeKind.Class }; above = above.BaseType)
+                if (!above.IsAbstract && ImplementsLocalizationSet(above))
+                    return false;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// What keeps the generator from extending a class, as the clause of the <c>LOC200</c> message.
     /// </summary>
     private static string DescribeShape(INamedTypeSymbol type)
@@ -106,102 +142,113 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// Resolves a concrete, closed, top-level class that implements <c>ILocalizationSet</c> to a discovered set. An
-    /// excluded set is resolved too, and flagged.
+    /// excluded set is resolved too, and flagged. It reads what both parts of the generator use, and each part takes
+    /// its own share of it (<see cref="ForPart"/>).
     /// </summary>
     private static DiscoveredLocalization DiscoverSet(INamedTypeSymbol type, TypeDeclarationSyntax declaration,
-        SemanticModel semanticModel, DiscoveredTexts discoveredTexts, CancellationToken cancellationToken)
+        SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         // One reader for the whole class: a model per file, and each wording read once.
         var reader = new WordingReader(semanticModel.Compilation, semanticModel);
         var ancestors = GetSourceAncestors(type, reader, cancellationToken);
+        var metadataName = type.ToDisplayString();
+        var baseTypeLocations = ImmutableArray.CreateBuilder<BaseTypeLocation>();
 
         // A class implements a contract generated here through its own base list, or through that of a class it derives
         // from: an abstract base shared by the languages, or the set a regional set rewords.
         var inheritedBaseTypes = ancestors.SelectMany(static ancestor => ancestor.UnresolvedBaseTypes).ToImmutableArray();
-        var unresolvedBaseTypes = GetUnresolvedBaseTypes(declaration, semanticModel, cancellationToken)
+        var unresolvedBaseTypes = GetUnresolvedBaseTypes(type, metadataName, declaration, semanticModel, baseTypeLocations, cancellationToken)
             .Concat(inheritedBaseTypes)
             .Distinct()
             .ToImmutableArray();
 
-        var listsLocalizationSet = Enumerable.Any(type.Interfaces, IsLocalizationSetInterface);
+        baseTypeLocations.AddRange(ancestors.SelectMany(static ancestor => ancestor.BaseTypeLocations));
+
+        var listsLocalizationSet = ListsLocalizationSet(type);
         var baseSet = type.BaseType is { IsAbstract: false, TypeKind: TypeKind.Class } baseType
                       && (ImplementsLocalizationSet(baseType) || ImplementsAnyContract(baseType) || inheritedBaseTypes.Length > 0)
             ? baseType
             : null;
-        var unmappedLanguageCode = MapLanguageCode(type).Unmapped;
+
+        // The LocalizationLanguageCode of the set once, and the code the build records for a set without one. Its
+        // language, its record, and whether it can register all ask for them.
+        var languageCode = ReadSetLanguageCode(type);
+        var declaresLanguageCode = languageCode.IsDeclared;
+        var recordedCode = declaresLanguageCode ? null : FindRecordedLanguageCode(type, ancestors, declaresLanguageCode: false);
+        var unmappedLanguageCode = languageCode.Mapping.Unmapped;
         var constructor = FindConstructorCalledWithoutArguments(type, semanticModel, cancellationToken);
-        var language = GetLanguage(type, ancestors, reader, cancellationToken, out var invalidLanguageCode);
+        var language = GetLanguage(type, languageCode, recordedCode, reader, cancellationToken, out var invalidLanguageCode, out var unknownLanguageCode);
         var location = DiagnosticLocation.From(type.Locations[0]);
         var depth = GetDepth(type, ancestors);
-        var readsContract = discoveredTexts is DiscoveredTexts.OfContract or DiscoveredTexts.OfBoth;
-        var readsRecord = discoveredTexts is DiscoveredTexts.OfRecord or DiscoveredTexts.OfBoth;
-        var enums = listsLocalizationSet && readsContract ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
+        var enums = listsLocalizationSet ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
 
         var set = new DiscoveredLocalization(
-            MetadataName: type.ToDisplayString(),
+            MetadataName: metadataName,
             FullyQualifiedName: GetFullyQualifiedName(type),
             Name: type.Name,
             Namespace: GetNamespaceName(type.ContainingNamespace),
             IsOverride: IsOverride(type),
             Depth: depth,
             UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
-            RegistrationProblem: GetRegistrationProblem(type, ancestors, constructor),
+            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguageCode: declaresLanguageCode || recordedCode is not null),
             IsObsoleteAsError: IsObsoleteAsError(type),
             SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(type)),
             HasPublicParameterlessConstructor: Enumerable.Any(type.InstanceConstructors, static candidate => candidate is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }),
             IsExcluded: IsExcluded(type),
-            Location: location,
+            Locations: new SetLocations(
+                Set: location,
+                InvalidLanguageCode: invalidLanguageCode,
+                UnknownLanguageCode: unknownLanguageCode,
+                UnmappedLanguageCode: unmappedLanguageCode is { ContainingType: { } declaring }
+                    ? new UnmappedLanguageCode(
+                        DeclaringType: declaring.Name,
+                        DeclaringTypeBase: declaring.BaseType?.Name ?? "object",
+                        // At the class that declares it, so that the sets deriving from that class report one error,
+                        // where the fix is. A class of another assembly has no place in this one, and is reported at
+                        // the set.
+                        Location: IsDeclaredIn(declaring, type.ContainingAssembly) ? DiagnosticLocation.From(declaring.Locations[0]) : location)
+                    : null,
+                BaseTypes: new EquatableArray<BaseTypeLocation>(baseTypeLocations.ToImmutable())),
             Language: language,
             // Not for a LocalizationLanguageCode the build can't read: such a set has a language, which only the run time knows.
-            NameGivesNoLanguage: language is null && invalidLanguageCode is null && !DeclaresLanguageCode(type) && MapLanguageCode(type).Unmapped is null,
-            InvalidLanguageCode: invalidLanguageCode,
-            RecordedLanguageCode: DeclaresLanguageCode(type) ? ReadImplementedLanguageCode(type, reader, cancellationToken) : FindRecordedLanguageCode(type, ancestors) ?? GetNameLanguage(type.Name),
+            NameGivesNoLanguage: language is null && invalidLanguageCode is null && !declaresLanguageCode && unmappedLanguageCode is null,
+            RecordedLanguageCode: declaresLanguageCode ? ReadImplementedLanguageCode(languageCode, reader, cancellationToken) : recordedCode ?? GetNameLanguage(type.Name),
             // Only for a set deriving from another: the registry asks it of such a set alone, and a set deriving from
             // none would list every text, in every language, in the generated code.
-            OwnTexts: new EquatableArray<string>(depth > 0 && readsRecord ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
+            OwnTexts: new EquatableArray<string>(depth > 0 ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
             ListsLocalizationSet: listsLocalizationSet,
             ContractNames: new EquatableArray<string>(GetPublicContractNames(type)),
             OwnContractNames: new EquatableArray<string>(GetOwnContractNames(type)),
             ImplementsInternalContract: ImplementsInternalContract(type),
-            AncestorNames: new EquatableArray<string>([.. ancestors.Select(static ancestor => ancestor.Type.ToDisplayString())]),
+            AncestorNames: new EquatableArray<string>([.. ancestors.Select(static ancestor => ancestor.Name)]),
             BaseSet: baseSet is null
                 ? null
                 : new BaseSet(
                     Name: baseSet.Name,
                     Language: GetLanguage(baseSet, [.. ancestors.Skip(1)], reader, cancellationToken),
                     Contracts: ImplementsLocalizationSet(baseSet) ? default : new EquatableArray<UnresolvedBaseType>(inheritedBaseTypes)),
-            UnmappedLanguageCode: unmappedLanguageCode is { ContainingType: { } declaring }
-                ? new UnmappedLanguageCode(
-                    DeclaringType: declaring.Name,
-                    DeclaringTypeBase: declaring.BaseType?.Name ?? "object",
-                    // At the class that declares it, so that the sets deriving from that class report one error, where
-                    // the fix is. A class of another assembly has no place in this one, and is reported at the set.
-                    Location: IsDeclaredIn(declaring, type.ContainingAssembly) ? DiagnosticLocation.From(declaring.Locations[0]) : location)
-                : null,
             IsRecord: type.IsRecord,
             IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
             EnumNames: new EquatableArray<string>([.. enums.Select(static @enum => @enum.FullyQualifiedName)]),
-            OfContract: !readsContract
-                ? default
-                : new SetTextsOfContract(
-                    DeclaredTexts: new EquatableArray<string>(GetDeclaredTexts(type)),
-                    InheritedTexts: new EquatableArray<InheritedText>(GetInheritedTexts(type)),
-                    Wordings: new EquatableArray<TextWording>(GetWordings(type, reader, cancellationToken)),
-                    Texts: default,
-                    UnsupportedTexts: default,
-                    Usings: default,
-                    Enums: new EquatableArray<LocalizedEnum>(enums),
-                    TypeNamedLikeTexts: null,
-                    TypeNamedLikeContract: language is not null ? FindTypeNamedLikeContract(type, language) : null,
-                    ReservedTexts: default,
-                    UndeclaredTexts: default));
+            OfContract: new SetTextsOfContract(
+                DeclaredTexts: new EquatableArray<string>(GetDeclaredTexts(type)),
+                InheritedTexts: new EquatableArray<InheritedText>(GetInheritedTexts(type)),
+                Wordings: new EquatableArray<TextWording>(GetWordings(type, reader, cancellationToken)),
+                Texts: default,
+                UnsupportedTexts: default,
+                Usings: default,
+                Enums: new EquatableArray<LocalizedEnum>(enums),
+                TypeNamedLikeTexts: null,
+                TypeNamedLikeContract: language is not null ? FindTypeNamedLikeContract(type, language) : null,
+                ReservedTexts: default,
+                UndeclaredTexts: default));
 
         // The texts a contract is written from, which only a set a contract may come from has: one in the default
         // language, or in any language while the build can't read the default one, as the analysis takes them
         // (ReadsAsDefaultSet). Discovery reads every set again on every edit, and the texts are what it reads longest,
         // so a set of another language is left without them.
-        if (!readsContract || !listsLocalizationSet || !ReadsAsDefaultSet(set, SupportedLanguages.ReadDefaultLanguage(type.ContainingAssembly)))
+        if (!listsLocalizationSet || !ReadsAsDefaultSet(set, SupportedLanguages.ReadDefaultLanguage(type.ContainingAssembly)))
             return set;
 
         var texts = GetTextMembers(type, enums, reader, cancellationToken, out var unsupportedTexts, out var usings);
@@ -476,13 +523,15 @@ internal static partial class LocalizationDiscovery
 
         for (var baseType = type.BaseType; baseType is { TypeKind: TypeKind.Class } && IsDeclaredIn(baseType, type.ContainingAssembly); baseType = baseType.BaseType)
         {
+            var name = baseType.ToDisplayString();
             var unresolved = ImmutableArray.CreateBuilder<UnresolvedBaseType>();
+            var locations = ImmutableArray.CreateBuilder<BaseTypeLocation>();
 
             foreach (var reference in baseType.DeclaringSyntaxReferences)
                 if (reference.GetSyntax(cancellationToken) is TypeDeclarationSyntax declaration && reader.FindModel(declaration.SyntaxTree) is { } model)
-                    unresolved.AddRange(GetUnresolvedBaseTypes(declaration, model, cancellationToken));
+                    unresolved.AddRange(GetUnresolvedBaseTypes(baseType, name, declaration, model, locations, cancellationToken));
 
-            ancestors.Add(new SourceAncestor(baseType, unresolved.ToImmutable()));
+            ancestors.Add(new SourceAncestor(baseType, name, unresolved.ToImmutable(), locations.ToImmutable()));
         }
 
         return ancestors.ToImmutable();
@@ -555,12 +604,15 @@ internal static partial class LocalizationDiscovery
     /// <see langword="null"/> when it can.
     /// </summary>
     /// <param name="type">The set.</param>
-    /// <param name="ancestors">The classes of this assembly it derives from, nearest first.</param>
     /// <param name="constructor">
     /// The constructor <c>new T()</c> calls (<see cref="FindConstructorCalledWithoutArguments"/>), or
     /// <see langword="null"/> when it calls none.
     /// </param>
-    private static string? GetRegistrationProblem(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, IMethodSymbol? constructor)
+    /// <param name="hasLanguageCode">
+    /// Whether the set implements <c>LocalizationLanguageCode</c>, or the build records a code for it
+    /// (<see cref="FindRecordedLanguageCode(INamedTypeSymbol, ImmutableArray{SourceAncestor}, bool)"/>).
+    /// </param>
+    private static string? GetRegistrationProblem(INamedTypeSymbol type, IMethodSymbol? constructor, bool hasLanguageCode)
     {
         // Naming it is an error (CS0619), which no pragma turns off.
         if (IsObsoleteAsError(type))
@@ -574,7 +626,7 @@ internal static partial class LocalizationDiscovery
             return $"it has a required member ('{required}'), which generated code can't set";
 
         // At run time this would throw while the assembly loads, where the cause is hard to see.
-        if (!EndsInTwoLetterSuffix(type.Name) && !DeclaresLanguageCode(type) && FindRecordedLanguageCode(type, ancestors) is null)
+        if (!EndsInTwoLetterSuffix(type.Name) && !hasLanguageCode)
             return "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LocalizationLanguageCode";
 
         return null;

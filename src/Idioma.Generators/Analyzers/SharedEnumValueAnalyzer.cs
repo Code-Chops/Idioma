@@ -22,6 +22,10 @@ namespace CodeChops.Idioma.Generators;
 /// For an enum with <c>[Localized]</c> members, only an enum of this assembly is checked, because the attribute isn't
 /// kept in a compiled assembly.
 /// </para>
+/// <para>
+/// Generated code is left alone, except what Razor generates from a <c>.razor</c> or <c>.cshtml</c> file, which is the
+/// user's own markup.
+/// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
@@ -49,7 +53,10 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
     public override void Initialize(AnalysisContext context)
     {
         context.EnableConcurrentExecution();
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+
+        // Razor's output counts as generated code, and a call written in markup must be read there.
+        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
 
@@ -67,8 +74,10 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod;
 
+        // By the name of the method first, which costs nothing: nearly every call is another one.
         if (method.Name is not (LocalizationSetsAnalysis.LookupName or LocalizationSetsAnalysis.ExtensionName)
-            || method.ReturnType.SpecialType is not SpecialType.System_String)
+            || method.ReturnType.SpecialType is not SpecialType.System_String
+            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
         {
             return;
         }
@@ -117,7 +126,7 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
         }
 
         var className = generatedClass.ToMinimalDisplayString(invocation.SemanticModel!, invocation.Syntax.SpanStart);
-        var ownText = $"{className}.{LocalizationSetsPart.EscapeIdentifier(member.Name)}";
+        var ownText = $"{className}.{CodeEscaping.EscapeIdentifier(member.Name)}";
 
         Report(context, invocation, value, @enum, first, member, ownText, ImmutableDictionary<string, string?>.Empty.Add(OwnTextProperty, ownText));
     }
@@ -140,7 +149,7 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
         }
 
         var enumName = @enum.ToMinimalDisplayString(invocation.SemanticModel!, invocation.Syntax.SpanStart);
-        var ownText = $"LocalizableText.GetTextByMember<{enumName}>(nameof({enumName}.{LocalizationSetsPart.EscapeIdentifier(member.Name)}))";
+        var ownText = $"LocalizableText.GetTextByMember<{enumName}>(nameof({enumName}.{CodeEscaping.EscapeIdentifier(member.Name)}))";
 
         Report(context, invocation, value, @enum, first, member, ownText, ImmutableDictionary<string, string?>.Empty);
 

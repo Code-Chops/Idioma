@@ -61,7 +61,7 @@ From the English set, the source generator writes the contract `IShopLocalizatio
 
 @* A text of a type, written as an attribute *@
 <label>
-  @LocalizableText.GetTextOfType<Address>()
+  @(LocalizableText.GetTextOfType<Address>())
 </label>
 @* A text of its member, written as an attribute *@
 <label>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace CodeChops.Idioma.Generators;
 
@@ -27,6 +28,14 @@ namespace CodeChops.Idioma.Generators;
 /// </remarks>
 internal static class LocalizedMembers
 {
+    /// <summary>
+    /// Per enum, the position of each of its members among them, in the order they're written.
+    /// </summary>
+    // Each marked member of an enum is read by itself and asks for its own position. Counted anew for each, an enum of
+    // a thousand members would be walked a thousand times. Held by the enum's symbol, and holding only its own
+    // members, so the entry goes when the compilation that made the symbol does.
+    private static readonly ConditionalWeakTable<INamedTypeSymbol, Dictionary<ISymbol, int>> EnumOrdinals = new();
+
     /// <summary>
     /// The name of the generated attribute class.
     /// </summary>
@@ -108,12 +117,8 @@ internal static class LocalizedMembers
     /// </summary>
     public static string GetRecorderName(string? assemblyName)
     {
-        var name = new StringBuilder("LocalizedMembers_");
-
-        foreach (var character in assemblyName ?? "")
-            name.Append(SyntaxFacts.IsIdentifierPartCharacter(character) ? character : '_');
-
-        return name.ToString();
+        var name = $"LocalizedMembers_{CodeEscaping.ToIdentifierPart(assemblyName)}";
+        return name;
     }
 
     /// <summary>
@@ -353,7 +358,7 @@ internal static class LocalizedMembers
 
         // As code names the type: Shop.Domain.Page<> for a typeof, where a type with type parameters has no other name.
         var reference = prefix + String.Join(".", chain.Select(static part =>
-            LocalizationSetsPart.EscapeIdentifier(part.Name) + (part.Arity > 0 ? $"<{new string(',', part.Arity - 1)}>" : "")));
+            CodeEscaping.EscapeIdentifier(part.Name) + (part.Arity > 0 ? $"<{new string(',', part.Arity - 1)}>" : "")));
 
         var isMember = symbol is not INamedTypeSymbol;
 
@@ -365,11 +370,11 @@ internal static class LocalizedMembers
 
             enumMember = new LocalizedMemberEnum(
                 Namespace: @namespace,
-                Name: String.Join(".", chain.Select(static part => LocalizationSetsPart.EscapeIdentifier(part.Name))),
+                Name: String.Join(".", chain.Select(static part => CodeEscaping.EscapeIdentifier(part.Name))),
                 HolderName: String.Join("_", chain.Select(static part => part.Name)) + ExtensionHolderSuffix,
                 IsPublic: chain.All(static part => part.DeclaredAccessibility is Accessibility.Public),
                 CanExtend: !isInGenericType,
-                Ordinal: field is null ? -1 : type.GetMembers().OfType<IFieldSymbol>().ToImmutableArray().IndexOf(field, SymbolEqualityComparer.Default),
+                Ordinal: field is null ? -1 : GetOrdinal(type, field),
                 Value: field is { HasConstantValue: true } ? Convert.ToString(field.ConstantValue, CultureInfo.InvariantCulture) : null,
                 IsObsoleteAsError: field is not null && LocalizationDiscovery.IsObsoleteAsError(field));
         }
@@ -385,6 +390,27 @@ internal static class LocalizedMembers
             Enum: enumMember);
 
         return member;
+    }
+
+    /// <summary>
+    /// The position of a member of an enum among its members, in the order they're written, or -1 for a field that
+    /// isn't one of them.
+    /// </summary>
+    private static int GetOrdinal(INamedTypeSymbol @enum, IFieldSymbol field)
+    {
+        var ordinals = EnumOrdinals.GetValue(@enum, static @enum =>
+        {
+            var ordinals = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
+
+            foreach (var member in @enum.GetMembers())
+                if (member is IFieldSymbol && !ordinals.ContainsKey(member))
+                    ordinals.Add(member, ordinals.Count);
+
+            return ordinals;
+        });
+
+        var ordinal = ordinals.TryGetValue(field, out var found) ? found : -1;
+        return ordinal;
     }
 
     /// <summary>

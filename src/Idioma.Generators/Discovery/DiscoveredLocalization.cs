@@ -40,13 +40,19 @@ namespace CodeChops.Idioma.Generators;
 /// <item><see cref="Language"/> is always a culture name, or <see langword="null"/> when the build can't read one.
 /// <see cref="NameGivesNoLanguage"/> tells a set without any language from one whose <c>LocalizationLanguageCode</c> the build
 /// can't read.</item>
-/// <item><see cref="InvalidLanguageCode"/> is the constant its <c>LocalizationLanguageCode</c> holds when that's no culture
-/// name.</item>
 /// <item><see cref="RecordedLanguageCode"/> is the code the generated registrar records for it. It's the constant its
 /// <c>LocalizationLanguageCode</c> returns, where the build can read one. For a set that doesn't implement
 /// <c>LocalizationLanguageCode</c>, it's read from its name, or from that of a set it derives from.</item>
-/// <item>The class whose <c>LocalizationLanguageCode</c> implements nothing, if any, with where to report it
-/// (<see cref="UnmappedLanguageCode"/>).</item>
+/// </list>
+/// <para>
+/// Where it's written:
+/// </para>
+/// <list type="bullet">
+/// <item><see cref="Locations"/> holds every source location of the set outside its texts: the set itself, its base
+/// types that bind to nothing, and what is reported about its <c>LocalizationLanguageCode</c>.</item>
+/// <item>The registrar's share of a set holds no location (<see cref="DiscoveredTexts.OfRecord"/>). An edit in the
+/// set's file gives every location in it a new syntax tree, so a share that held one would change with every
+/// wording.</item>
 /// </list>
 /// <para>
 /// Its texts:
@@ -58,8 +64,8 @@ namespace CodeChops.Idioma.Generators;
 /// <c>ILocalizationSet&lt;TEnum&gt;</c>.</item>
 /// <item><see cref="OfContract"/> holds what the part of the generator that writes the contracts reads of its texts
 /// (<see cref="DiscoveredTexts.OfContract"/>), and nothing for the registrar's part. Each part takes its own share
-/// with one field (<see cref="LocalizationDiscovery.ForPart"/>), so that an edit of a wording leaves the registrar's
-/// pipeline as it was.</item>
+/// (<see cref="LocalizationDiscovery.ForPart(DiscoveredLocalization, DiscoveredTexts)"/>), so that an edit of a
+/// wording leaves the registrar's pipeline as it was.</item>
 /// </list>
 /// </remarks>
 internal readonly record struct DiscoveredLocalization(
@@ -75,10 +81,9 @@ internal readonly record struct DiscoveredLocalization(
     EquatableArray<string> SuppressedDiagnostics,
     bool HasPublicParameterlessConstructor,
     bool IsExcluded,
-    DiagnosticLocation Location,
+    SetLocations Locations,
     string? Language,
     bool NameGivesNoLanguage,
-    InvalidLanguageCode? InvalidLanguageCode,
     string? RecordedLanguageCode,
     EquatableArray<string> OwnTexts,
     bool ListsLocalizationSet,
@@ -87,12 +92,65 @@ internal readonly record struct DiscoveredLocalization(
     bool ImplementsInternalContract,
     EquatableArray<string> AncestorNames,
     BaseSet? BaseSet,
-    UnmappedLanguageCode? UnmappedLanguageCode,
     bool IsRecord,
     bool IsSealed,
     bool IsPublic,
     EquatableArray<string> EnumNames,
-    SetTextsOfContract OfContract);
+    SetTextsOfContract OfContract)
+{
+    /// <summary>
+    /// Where the set is written, which is where most diagnostics about it are reported
+    /// (<see cref="SetLocations.Set"/>). It's no location in the registrar's share of the set.
+    /// </summary>
+    public DiagnosticLocation Location => this.Locations.Set;
+}
+
+/// <summary>
+/// Every source location of a set outside its texts, and what is reported at one of them. The registrar's share of a
+/// set holds this empty (<see cref="DiscoveredTexts.OfRecord"/>), so that share stays equal across an edit in the set's
+/// file.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item><see cref="Set"/> is where the set is written.</item>
+/// <item><see cref="InvalidLanguageCode"/> is the constant its <c>LocalizationLanguageCode</c> holds when that's no
+/// culture name.</item>
+/// <item><see cref="UnknownLanguageCode"/> is that constant when it's a culture name with a language or a region no
+/// culture has, such as <c>"dk"</c>. The set still has that language.</item>
+/// <item><see cref="UnmappedLanguageCode"/> is the class whose <c>LocalizationLanguageCode</c> implements nothing, if
+/// any, with where to report it.</item>
+/// <item><see cref="BaseTypes"/> says where each of its <see cref="DiscoveredLocalization.UnresolvedBaseTypes"/> is
+/// written, for the compiler to bind it (<see cref="LocalizationDiscovery.BindContracts"/>).</item>
+/// </list>
+/// </remarks>
+internal readonly record struct SetLocations(
+    DiagnosticLocation Set,
+    InvalidLanguageCode? InvalidLanguageCode,
+    UnknownLanguageCode? UnknownLanguageCode,
+    UnmappedLanguageCode? UnmappedLanguageCode,
+    EquatableArray<BaseTypeLocation> BaseTypes);
+
+/// <summary>
+/// Which entry of which base list a base type is. It names the entry without its location, so it stays equal across an
+/// edit that moves the entry or gives its file a new syntax tree.
+/// </summary>
+/// <param name="FilePath">The path of the file the base list is written in.</param>
+/// <param name="Type">The class that has the base list.</param>
+/// <param name="Declaration">Which declaration of that class in the file has the base list, counted from 0. Only a
+/// partial class has more than one.</param>
+/// <param name="Index">The position of the entry in the base list, counted from 0.</param>
+internal readonly record struct BaseTypeSite(
+    string FilePath,
+    string Type,
+    int Declaration,
+    int Index);
+
+/// <summary>
+/// Where the base type of a site is written (<see cref="BaseTypeSite"/>).
+/// </summary>
+internal readonly record struct BaseTypeLocation(
+    BaseTypeSite Site,
+    DiagnosticLocation Location);
 
 /// <summary>
 /// The set a set derives from directly: its name, and its language, or <see langword="null"/> when the build can't read
@@ -211,22 +269,32 @@ internal readonly record struct InvalidLanguageCode(
     DiagnosticLocation Location);
 
 /// <summary>
+/// A <c>LocalizationLanguageCode</c> holding a constant that is a culture name with a language or a region no culture
+/// has, such as <c>"dk"</c> or <c>"en-UK"</c>: the constant, and where the property is. What <c>LOC104</c> reports.
+/// </summary>
+internal readonly record struct UnknownLanguageCode(
+    string Code,
+    DiagnosticLocation Location);
+
+/// <summary>
 /// A base type a candidate lists that binds to nothing in the input compilation. It has a simple name, whether it's
 /// written with a qualifier, the namespace that qualifier names (<c>""</c> for <c>global::</c>, and
-/// <see langword="null"/> for one that names no namespace), and where it's written, for the compiler to bind it
-/// (<see cref="LocalizationDiscovery.BindContracts"/>).
+/// <see langword="null"/> for one that names no namespace), and which entry of which base list it is
+/// (<see cref="BaseTypeSite"/>). The compiler binds it by that site (<see cref="LocalizationDiscovery.BindContracts"/>).
 /// </summary>
+// The site, and not the location. A location holds the syntax tree of its file, so it would change with every edit in
+// that file, and with it every step that reads a set.
 internal readonly record struct UnresolvedBaseType(
     string Name,
     bool IsQualified,
     string? Namespace,
-    DiagnosticLocation Location);
+    BaseTypeSite Site);
 
 /// <summary>
 /// The generated contract a base type binds to, as the compiler binds it where two generated contracts share its name.
 /// </summary>
 internal readonly record struct ContractBinding(
-    DiagnosticLocation Location,
+    BaseTypeSite Site,
     string Contract);
 
 /// <summary>
@@ -258,7 +326,7 @@ internal sealed class GeneratedContracts : IEquatable<GeneratedContracts>
     /// </summary>
     private Dictionary<string, string?> BySimpleName { get; }
 
-    private Dictionary<DiagnosticLocation, string> Bindings { get; }
+    private Dictionary<BaseTypeSite, string> Bindings { get; }
 
     public GeneratedContracts(ImmutableArray<string> names, EquatableArray<ContractBinding> bindings)
     {
@@ -276,8 +344,8 @@ internal sealed class GeneratedContracts : IEquatable<GeneratedContracts>
         this.Bindings = [];
 
         foreach (var binding in bindings)
-            if (!this.Bindings.ContainsKey(binding.Location))
-                this.Bindings.Add(binding.Location, binding.Contract);
+            if (!this.Bindings.ContainsKey(binding.Site))
+                this.Bindings.Add(binding.Site, binding.Contract);
     }
 
     public bool Contains(string fullName)
@@ -299,9 +367,9 @@ internal sealed class GeneratedContracts : IEquatable<GeneratedContracts>
     /// <summary>
     /// The contract the compiler bound a base type to, or <see langword="null"/> where it wasn't asked or bound none.
     /// </summary>
-    public string? FindBinding(DiagnosticLocation location)
+    public string? FindBinding(BaseTypeSite site)
     {
-        var binding = this.Bindings.TryGetValue(location, out var contract) ? contract : null;
+        var binding = this.Bindings.TryGetValue(site, out var contract) ? contract : null;
         return binding;
     }
 
@@ -317,12 +385,14 @@ internal sealed class GeneratedContracts : IEquatable<GeneratedContracts>
 }
 
 /// <summary>
-/// A class of the current assembly a candidate derives from, with the base types it lists itself that bind to nothing.
-/// Lives within one transform only, so it may hold a symbol.
+/// A class of the current assembly a candidate derives from, with its name, the base types it lists itself that bind
+/// to nothing, and where each of them is written. Lives within one transform only, so it may hold a symbol.
 /// </summary>
 internal readonly record struct SourceAncestor(
     INamedTypeSymbol Type,
-    ImmutableArray<UnresolvedBaseType> UnresolvedBaseTypes);
+    string Name,
+    ImmutableArray<UnresolvedBaseType> UnresolvedBaseTypes,
+    ImmutableArray<BaseTypeLocation> BaseTypeLocations);
 
 /// <summary>
 /// Which <c>LocalizationLanguageCode</c> property implements <c>ILocalizationSet.LocalizationLanguageCode</c> for a set
@@ -331,6 +401,32 @@ internal readonly record struct SourceAncestor(
 internal readonly record struct LanguageCodeMapping(
     IPropertySymbol? Implementation,
     IPropertySymbol? Unmapped);
+
+/// <summary>
+/// The <c>LocalizationLanguageCode</c> of a set, read once per set: which property of its classes implements it
+/// (<see cref="Mapping"/>), and the implementation a contract gives it where no class does
+/// (<see cref="InterfaceImplementation"/>). Lives within one transform only, so it may hold a symbol.
+/// </summary>
+internal readonly record struct SetLanguageCode(
+    LanguageCodeMapping Mapping,
+    IPropertySymbol? InterfaceImplementation)
+{
+    /// <summary>
+    /// The property that gives the set its language at run time, or <see langword="null"/> when its name does.
+    /// </summary>
+    public IPropertySymbol? Implemented => this.Mapping.Implementation ?? this.InterfaceImplementation;
+
+    /// <summary>
+    /// Whether the set implements <c>LocalizationLanguageCode</c>, so that its name doesn't give its language.
+    /// </summary>
+    public bool IsDeclared => this.Implemented is not null;
+
+    /// <summary>
+    /// The property the build reads the language from: one that implements nothing counts as meant
+    /// (<see cref="LanguageCodeMapping.Unmapped"/>), then the one that runs.
+    /// </summary>
+    public IPropertySymbol? Property => this.Mapping.Unmapped ?? this.Implemented;
+}
 
 /// <summary>
 /// One text of a default-language set: the name of its property or method, whether that carries a doc comment (then
@@ -390,7 +486,8 @@ internal readonly record struct UnregistrableLocalization(
 /// A class listing <c>ILocalizationSet</c> and a contract that binds to nothing yet, as a default-language set does,
 /// which the generator can't use for its shape (nested, file-local, generic, or abstract): what <c>LOC200</c> reports
 /// when its language is the default language, and no contract it lists is generated from another set. Its language is
-/// <see langword="null"/> when the build can't read it.
+/// <see langword="null"/> when the build can't read it. The registrar's share of it holds no location
+/// (<see cref="DiscoveredTexts.OfRecord"/>): neither where the class is written, nor where its base types are.
 /// </summary>
 internal readonly record struct UnextendableSet(
     string MetadataName,
@@ -398,12 +495,14 @@ internal readonly record struct UnextendableSet(
     string Problem,
     string? Language,
     EquatableArray<UnresolvedBaseType> UnresolvedBaseTypes,
-    DiagnosticLocation Location);
+    DiagnosticLocation Location,
+    EquatableArray<BaseTypeLocation> BaseTypeLocations);
 
 /// <summary>
 /// What discovery finds in the current compilation: the candidate sets, the nested or file-local sets rewording another
 /// assembly's texts (<c>LOC208</c>), and the default-language sets the generator can't use (<c>LOC200</c>), the last
-/// two ordered by name.
+/// two ordered by name. The registrar's share holds no location, and none of the sets that are only reported
+/// (<see cref="UnnameableOverrides"/>).
 /// </summary>
 internal readonly record struct Discovery(
     EquatableArray<DiscoveredLocalization> Sets,
@@ -411,32 +510,32 @@ internal readonly record struct Discovery(
     EquatableArray<UnextendableSet> UnextendableSets);
 
 /// <summary>
-/// Which texts of a set discovery reads. It reads them again on every edit, so each part of the generator asks for what
-/// it uses.
+/// Which share of what discovery found a step of the generator reads. Discovery reads a class once, and each step
+/// takes its own share (<see cref="LocalizationDiscovery.ForPart(DiscoveredLocalization, DiscoveredTexts)"/>), so
+/// none sees what changes only for another.
 /// </summary>
 internal enum DiscoveredTexts
 {
     /// <summary>
-    /// What a contract is written from: <see cref="DiscoveredLocalization.Texts"/>,
-    /// <see cref="DiscoveredLocalization.UnsupportedTexts"/>, <see cref="DiscoveredLocalization.Usings"/>,
-    /// <see cref="DiscoveredLocalization.Enums"/>, <see cref="DiscoveredLocalization.DeclaredTexts"/>,
-    /// <see cref="DiscoveredLocalization.InheritedTexts"/>, and <see cref="DiscoveredLocalization.Wordings"/>.
-    /// <see cref="DiscoveredLocalization.OwnTexts"/> stays empty.
+    /// What a contract is written from, which is all of <see cref="DiscoveredLocalization.OfContract"/>:
+    /// <see cref="SetTextsOfContract.Texts"/>, <see cref="SetTextsOfContract.UnsupportedTexts"/>,
+    /// <see cref="SetTextsOfContract.Usings"/>, <see cref="SetTextsOfContract.Enums"/>,
+    /// <see cref="SetTextsOfContract.DeclaredTexts"/>, <see cref="SetTextsOfContract.InheritedTexts"/>,
+    /// <see cref="SetTextsOfContract.Wordings"/>, and the rest. <see cref="DiscoveredLocalization.OwnTexts"/> stays
+    /// empty. It also holds every source location (<see cref="DiscoveredLocalization.Locations"/>), so both parts of
+    /// the generator report their diagnostics about a set from this share. It changes with every edit in the file of
+    /// a set.
     /// </summary>
     OfContract,
 
     /// <summary>
-    /// What the registrar records: <see cref="DiscoveredLocalization.OwnTexts"/> alone, which are names. No wording is
-    /// read, and the texts a contract is written from stay empty.
+    /// What the registrar records: <see cref="DiscoveredLocalization.OwnTexts"/> alone, which are names.
+    /// <see cref="DiscoveredLocalization.OfContract"/> stays empty, so no wording is part of it.
+    /// <see cref="DiscoveredLocalization.Locations"/> stays empty too, so no syntax tree is part of it. This share
+    /// stays equal across an edit of a wording, and so does every step that reads it alone: the registrar, and the
+    /// contracts the compilation generates.
     /// </summary>
     OfRecord,
-
-    /// <summary>
-    /// What both parts of the generator read, as discovery reads a class once for the two of them. Each gets its own
-    /// share of it (<see cref="LocalizationDiscovery.ForPart(DiscoveredLocalization, DiscoveredTexts)"/>), so neither sees
-    /// what changes only for the other.
-    /// </summary>
-    OfBoth,
 }
 
 /// <summary>

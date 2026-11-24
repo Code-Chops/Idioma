@@ -88,6 +88,24 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
     }
 
     [Test]
+    [Arguments("", "[assembly: SupportedLanguages(\"en\", \"nl\")]\n\n")]
+    [Arguments("[assembly: System.CLSCompliant(false)]\n\n", "[assembly: System.CLSCompliant(false)]\n[assembly: SupportedLanguages(\"en\", \"nl\")]\n\n")]
+    public async Task FileWithWindowsLineEndings_ShouldKeepThemOnTheNewLines(string other, string expected)
+    {
+        // Arrange: a file with CRLF throughout, whichever line endings this file has.
+        const string arguments = "en: \"Orders\", nl: \"Bestellingen\"";
+        var source = Inline(arguments, other).ReplaceLineEndings("\r\n");
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: the attribute's line and the blank line after it end as the others do.
+        var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
+        fixedSource.ShouldBe(Inline(arguments, expected).ReplaceLineEndings("\r\n"));
+        fixedSource.Replace("\r\n", "", StringComparison.Ordinal).ShouldNotContain('\n');
+    }
+
+    [Test]
     public async Task FileWithAssemblyAttributes_ShouldGetItAfterThem()
     {
         // Arrange & Act

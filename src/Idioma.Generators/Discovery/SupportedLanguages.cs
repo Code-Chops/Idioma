@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
@@ -6,6 +8,14 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 internal static class SupportedLanguages
 {
+    /// <summary>
+    /// What the attribute of an assembly declares, read once per assembly (<see cref="ReadAssembly"/>).
+    /// </summary>
+    // Discovery asks for the languages of the assembly for every set, on every edit, and the attribute is the same
+    // for all of them. Held by the assembly's symbol, and holding only strings: the entry goes when the compilation
+    // that made the symbol does, and keeps nothing of it alive.
+    private static readonly ConditionalWeakTable<IAssemblySymbol, AssemblyLanguages> LanguagesByAssembly = new();
+
     /// <summary>
     /// The languages the current compilation declares, or <see langword="null"/> when it declares none.
     /// </summary>
@@ -25,11 +35,8 @@ internal static class SupportedLanguages
     /// </summary>
     public static ImmutableArray<string> ReadCodes(IAssemblySymbol assembly)
     {
-        foreach (var attribute in assembly.GetAttributes())
-            if (String.Equals(attribute.AttributeClass?.ToDisplayString(), PackageNames.SupportedLanguagesAttribute, StringComparison.Ordinal))
-                return ReadArguments(attribute).Select(static argument => argument.Code).OfType<string>().ToImmutableArray();
-
-        return ImmutableArray<string>.Empty;
+        var codes = LanguagesByAssembly.GetValue(assembly, ReadAssembly).Codes;
+        return codes;
     }
 
     /// <summary>
@@ -37,30 +44,59 @@ internal static class SupportedLanguages
     /// language of its attribute, or <see langword="null"/> when that is no culture name, or when the assembly declares
     /// none.
     /// </summary>
-    // Asked by discovery of every set on every edit, so it builds no string to tell the attribute by. Two attributes,
-    // which don't compile, give none, as the generators may read either.
+    // Two attributes, which don't compile, give none, as the generators may read either.
     public static string? ReadDefaultLanguage(IAssemblySymbol assembly)
     {
-        AttributeData? declared = null;
+        var defaultLanguage = LanguagesByAssembly.GetValue(assembly, ReadAssembly).DefaultLanguage;
+        return defaultLanguage;
+    }
+
+    /// <summary>
+    /// Reads the attribute of an assembly for <see cref="ReadCodes"/> and <see cref="ReadDefaultLanguage"/>.
+    /// </summary>
+    // It builds no string to tell the attribute by: an assembly has many attributes.
+    private static AssemblyLanguages ReadAssembly(IAssemblySymbol assembly)
+    {
+        AttributeData? first = null;
+        var count = 0;
 
         foreach (var attribute in assembly.GetAttributes())
         {
-            if (attribute.AttributeClass is not { Name: "SupportedLanguagesAttribute", ContainingType: null, ContainingNamespace: { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } } })
+            if (attribute.AttributeClass is not { Name: "SupportedLanguagesAttribute", Arity: 0, ContainingType: null, ContainingNamespace: { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } } })
                 continue;
 
-            if (declared is not null)
-                return null;
-
-            declared = attribute;
+            first ??= attribute;
+            count++;
         }
 
-        if (declared is null)
-            return null;
+        if (first is null)
+            return AssemblyLanguages.None;
 
-        foreach (var (code, isDefault) in ReadArguments(declared))
-            return isDefault && code is not null && IsCultureName(code) ? code : null;
+        var codes = ReadArguments(first).Select(static argument => argument.Code).OfType<string>().ToImmutableArray();
+        string? defaultLanguage = null;
 
-        return null;
+        if (count is 1)
+        {
+            foreach (var (code, isDefault) in ReadArguments(first))
+            {
+                defaultLanguage = isDefault && code is not null && IsCultureName(code) ? code : null;
+                break;
+            }
+        }
+
+        return new AssemblyLanguages(codes, defaultLanguage);
+    }
+
+    /// <summary>
+    /// What the attribute of an assembly declares: its languages in order, and its default language.
+    /// </summary>
+    private sealed class AssemblyLanguages(ImmutableArray<string> codes, string? defaultLanguage)
+    {
+        public static AssemblyLanguages None { get; } = new(ImmutableArray<string>.Empty, defaultLanguage: null);
+
+        public ImmutableArray<string> Codes { get; } = codes;
+
+        public string? DefaultLanguage { get; } = defaultLanguage;
     }
 
     /// <summary>
@@ -338,7 +374,130 @@ internal static class SupportedLanguages
 
         return true;
     }
+
+    /// <summary>
+    /// The two-letter language codes of ISO 639-1, without the ones it withdrew, such as <c>iw</c> for Hebrew.
+    /// </summary>
+    // Written out, and not asked of the cultures of this machine, for the reason IsCultureName gives.
+    // SupportedLanguages.Tests.cs fails when the runtime has a culture this table doesn't know.
+    private static readonly HashSet<string> LanguageCodes = new(
+        ("aa ab ae af ak am an ar as av ay az ba be bg bi bm bn bo br bs ca ce ch co cr cs cu cv cy da de dv dz "
+         + "ee el en eo es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz "
+         + "ia id ie ig ii ik io is it iu ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky "
+         + "la lb lg li ln lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny "
+         + "oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk sl sm sn so sq sr ss st su sv sw "
+         + "ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu").Split(' '),
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The two-letter region codes of ISO 3166-1, and the four others that .NET cultures use: <c>XK</c> for Kosovo,
+    /// and <c>DG</c>, <c>EA</c>, and <c>IC</c> for parts of a country. <c>UK</c> isn't among them, because the United
+    /// Kingdom is <c>GB</c>.
+    /// </summary>
+    private static readonly HashSet<string> RegionCodes = new(
+        ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ "
+         + "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET "
+         + "FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU "
+         + "ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ "
+         + "LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ "
+         + "NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW "
+         + "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ "
+         + "UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW "
+         + "DG EA IC XK").Split(' '),
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The part of a culture name that no culture has, with what the message of <c>LOC104</c> says about it, or
+    /// <see langword="null"/> when the build knows every part it checks. <c>dk</c> has the form of a culture name, but
+    /// Danish is <c>da</c>, so a set for <c>dk</c> matches no user's culture.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only two parts are checked, each against a table the build carries itself:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>A language of two letters is a code of ISO 639-1.</item>
+    /// <item>A region of two letters is a code of ISO 3166-1, or one of the four others .NET uses.</item>
+    /// </list>
+    /// <para>
+    /// A language of three letters or more, a script, a region of three digits such as <c>419</c>, and everything after
+    /// the region aren't checked. The first unknown part is given, the language before the region.
+    /// </para>
+    /// </remarks>
+    /// <param name="code">A culture name (<see cref="IsCultureName"/>).</param>
+    public static UnknownLanguagePart? FindUnknownPart(string code)
+    {
+        var parts = code.Split('-');
+        var language = parts[0];
+
+        if (language.Length is 2 && !LanguageCodes.Contains(language))
+        {
+            var meant = language.ToLowerInvariant() switch
+            {
+                "cn" => ("Chinese", "zh"),
+                "cz" => ("Czech", "cs"),
+                "dk" => ("Danish", "da"),
+                "gr" => ("Greek", "el"),
+                "in" => ("Indonesian", "id"),
+                "iw" => ("Hebrew", "he"),
+                "ji" => ("Yiddish", "yi"),
+                "jp" => ("Japanese", "ja"),
+                "jw" => ("Javanese", "jv"),
+                "ua" => ("Ukrainian", "uk"),
+                _ => ((string Name, string Code)?)null,
+            };
+
+            return new UnknownLanguagePart(code, language, "ISO 639-1 language", Advise(parts, index: 0, meant));
+        }
+
+        // A region stands right after the language, or after the script that follows it: en-GB, sr-Latn-RS. Two letters
+        // further on are something else, as the 'ca' of en-US-u-ca-gregory.
+        var regionIndex = parts.Length > 2 && parts[1].Length is 4 ? 2 : 1;
+
+        if (parts.Length > regionIndex && parts[regionIndex] is { Length: 2 } region && region.All(Ascii.IsLetter) && !RegionCodes.Contains(region))
+        {
+            var meant = region.ToUpperInvariant() switch
+            {
+                // Ukrainian, and not English, so the region meant is Ukraine.
+                "UK" when String.Equals(language, "uk", StringComparison.OrdinalIgnoreCase) => ("Ukraine", "UA"),
+                "UK" => ("The United Kingdom", "GB"),
+                "CS" => ("Czechia", "CZ"),
+                "DA" => ("Denmark", "DK"),
+                "EL" => ("Greece", "GR"),
+                "HE" => ("Israel", "IL"),
+                "JA" => ("Japan", "JP"),
+                "KO" => ("South Korea", "KR"),
+                "ZH" => ("China", "CN"),
+                _ => ((string Name, string Code)?)null,
+            };
+
+            return new UnknownLanguagePart(code, region, "ISO 3166-1 region", Advise(parts, regionIndex, meant));
+        }
+
+        return null;
+
+        // The whole code with the part put right, so that it can be copied: 'en-GB' for 'en-UK'.
+        static string Advise(string[] parts, int index, (string Name, string Code)? meant)
+        {
+            if (meant is not { } known)
+                return $"Check the code. If it's right, turn {LocalizableTextFactoryGenerator.UnknownLanguageCodeDiagnosticId} off where it's reported";
+
+            var corrected = String.Join("-", parts.Select((part, i) => i == index ? known.Code : part));
+            return $"{known.Name} is '{known.Code}', so write '{corrected}'";
+        }
+    }
 }
+
+/// <summary>
+/// A part of a culture name that no culture has: the whole code, the part, the kind of code the part should be, as
+/// the message of <c>LOC104</c> names it (<c>ISO 639-1 language</c>), and its advice, which names the code that was
+/// likely meant when the mistake is a known one.
+/// </summary>
+internal readonly record struct UnknownLanguagePart(
+    string Code,
+    string Part,
+    string Kind,
+    string Advice);
 
 /// <summary>
 /// What an assembly's attribute declares: the default language, the valid languages in order, what is wrong with the

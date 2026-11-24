@@ -264,7 +264,7 @@ What to know:
 
 - **A test project declares its languages.** It's an app, so it needs `[assembly: SupportedLanguages]` ([LOC103](build-errors.md#loc103)). List the languages your tests read, because the languages of the app it tests don't count in the test process.
 - **Choose the culture with `UseCulture`.** It flows with the test, so tests that run in parallel each keep their own culture. Setting `CultureInfo.CurrentUICulture` works too, unless your app sets `CurrentUICultureProvider`, which then wins.
-- **A text always reads the sets of the whole app.** A registry from `LocalizationRegistry.Create` doesn't change what `ShopLocalization.Checkout` gives. Use it to read a set with `Find`.
+- **A text always reads the sets of the whole app.** A test can't give `ShopLocalization.Checkout` a registry of its own. To read the set a culture gets, use `LocalizationRegistry.Current.Find<IShopLocalization>(culture)`.
 - **`LocalizationRegistry.Register` is for the whole process and has no undo.** A set a test registers stays for every test after it, also those that run in parallel. Register in a fixture that runs once, or keep such tests out of parallel runs.
 - **To check one set, create it.** `new ShopLocalizationNl().Checkout` needs no registry and no culture.
 

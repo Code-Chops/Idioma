@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
-using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;

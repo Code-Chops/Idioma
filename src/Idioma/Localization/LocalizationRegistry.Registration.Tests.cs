@@ -214,6 +214,130 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void RegisterSets_WhoseFieldInitializerReadsATextOfItsOwnContract_ShouldSayWhatToDoAndCreateItOnceItDoesNot()
+    {
+        // Arrange: recorded as the build records a set, so the registry creates it at the first text of its contract.
+        // The text needs the set, which reads the text again as it's created. That overflowed the stack.
+        GeneratedCode.RecordSet<RegistrySelfReadingLocalizationNl>("nl");
+        GeneratedCode.RegisterSets(asDefaults: true, (typeof(RegistrySelfReadingLocalizationNl), static () => new RegistrySelfReadingLocalizationNl()));
+
+        using var cultures = new TestHelpers.CulturesScope("nl");
+        InvalidOperationException failure;
+        InvalidOperationException failureAgain;
+
+        // Act
+        RegistrySelfReadingLocalizationNl.ReadsOwnText = true;
+
+        try
+        {
+            failure = Should.Throw<InvalidOperationException>(static () => ReadBrand<IRegistrySelfReadingLocalization, RegistrySelfReadingLocalizationEn>());
+            failureAgain = Should.Throw<InvalidOperationException>(static () => ReadBrand<IRegistrySelfReadingLocalization, RegistrySelfReadingLocalizationEn>());
+        }
+        finally
+        {
+            RegistrySelfReadingLocalizationNl.ReadsOwnText = false;
+        }
+
+        var retried = ReadBrand<IRegistrySelfReadingLocalization, RegistrySelfReadingLocalizationEn>();
+
+        // Assert: the exception names the set and isn't wrapped, every text of the contract says the same, and the
+        // next one creates the set again.
+        failure.Message.ShouldBe(
+            $"'{typeof(RegistrySelfReadingLocalizationNl)}' reads a text while it's being created, and that text needs '{typeof(RegistrySelfReadingLocalizationNl)}' itself. "
+            + "Read the text in a member with =>, not in the constructor or a field initializer. For example: public string Title => ShopLocalization.Brand;");
+        failure.InnerException.ShouldBeNull();
+        failureAgain.Message.ShouldBe(failure.Message);
+        retried.ShouldBe("Winkel");
+    }
+
+    [Test]
+    public void GetDefaultSet_WhoseFieldInitializerReadsATextOfItsOwnContract_ShouldSayWhatToDo()
+    {
+        // Arrange: no set of the contract is registered, so the text needs the set it was declared with.
+        using var cultures = new TestHelpers.CulturesScope("en");
+        InvalidOperationException failure;
+
+        // Act
+        RegistrySelfReadingDefaultLocalizationEn.ReadsOwnText = true;
+
+        try
+        {
+            failure = Should.Throw<InvalidOperationException>(static () => ReadBrand<IRegistrySelfReadingDefaultLocalization, RegistrySelfReadingDefaultLocalizationEn>());
+        }
+        finally
+        {
+            RegistrySelfReadingDefaultLocalizationEn.ReadsOwnText = false;
+        }
+
+        var retried = ReadBrand<IRegistrySelfReadingDefaultLocalization, RegistrySelfReadingDefaultLocalizationEn>();
+
+        // Assert
+        failure.Message.ShouldStartWith($"'{typeof(RegistrySelfReadingDefaultLocalizationEn)}' reads a text while it's being created");
+        retried.ShouldBe("Shop");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void RegisterSets_WhoseFieldInitializerReadsATextOfItsOwnContractBeforeItGivesItsLanguage_ShouldFailOnlyTheTextsOfItsContract()
+    {
+        // Arrange: a set that gives its language itself, which the registry creates when it's built, to file it. The
+        // text the set reads builds the registry too, which created the set again and overflowed the stack.
+        GeneratedCode.RegisterSets(
+            asDefaults: true,
+            (typeof(RegistrySelfReadingCodedLocalization), static () => new RegistrySelfReadingCodedLocalization()),
+            (typeof(RegistrySteadyLocalizationNl), static () => new RegistrySteadyLocalizationNl()));
+
+        var dutch = Culture("nl");
+        using var cultures = new TestHelpers.CulturesScope(dutch, dutch);
+        ILocalizationSet? other;
+        InvalidOperationException failure;
+
+        // Act
+        RegistrySelfReadingCodedLocalization.ReadsOwnText = true;
+
+        try
+        {
+            other = Should.NotThrow(() => LocalizationRegistry.Current.Find<IRegistrySteadyLocalization>(dutch));
+            failure = Should.Throw<InvalidOperationException>(static () => ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>());
+        }
+        finally
+        {
+            RegistrySelfReadingCodedLocalization.ReadsOwnText = false;
+        }
+
+        // The next text of its contract creates the set, and the registry files it for the texts after that.
+        _ = ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>();
+        var retried = ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>();
+
+        // Assert
+        other.ShouldBeOfType<RegistrySteadyLocalizationNl>();
+        failure.Message.ShouldStartWith($"'{typeof(RegistrySelfReadingCodedLocalization)}' reads a text while it's being created");
+        failure.InnerException.ShouldBeNull();
+        retried.ShouldBe("Winkel");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void RegisterSets_WhoseFieldInitializerReadsATextOfAnotherContractBeforeItGivesItsLanguage_ShouldFileTheSetAtOnce()
+    {
+        // Arrange: the registry creates the set when it's built, and the text the set reads builds a registry too.
+        // That one can't file the set, which is still being created, so it isn't the one every reader gets.
+        LocalizationRegistry.Register(new RegistryReadLocalizationNl());
+        GeneratedCode.RegisterSets(asDefaults: true, (typeof(RegistryReaderCodedLocalization), static () => new RegistryReaderCodedLocalization()));
+
+        var dutch = Culture("nl");
+        using var cultures = new TestHelpers.CulturesScope(dutch, dutch);
+
+        // Act
+        var found = LocalizationRegistry.Current.Find<IRegistryReaderLocalization>(dutch);
+
+        // Assert: filed at the first read, with the text it read. That's the Dutch wording, unless a test beside this
+        // one built the registry first, for an English reader.
+        found.ShouldBeOfType<RegistryReaderCodedLocalization>().Brand.ShouldBeOneOf("Winkel", "Shop");
+    }
+
+    [Test]
     public void Register_ShouldThrowForNullSet()
     {
         // Arrange & Act & Assert

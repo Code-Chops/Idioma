@@ -21,6 +21,7 @@ The first digit of a code names its subject. The subjects follow the order of th
 | [`LOC101`](#loc101)                                             | An invalid or repeated language                         |
 | [`LOC102`](#loc102)                                             | A C# version older than 14                              |
 | [`LOC103`](#loc103)                                             | An app without languages                                |
+| [`LOC104`](#loc104) (warning)                                   | A language code that no culture has                     |
 | **[Sets](#sets)**                                               |                                                         |
 | [`LOC200`](#loc200) (code fix)                                  | A default-language set the generator can't use          |
 | [`LOC201`](#loc201) (code fix)                                  | A language without a set                                |
@@ -73,6 +74,8 @@ The IDE fix declares the languages that an `Inline` call or a `[Localized]` name
 
 `[assembly: SupportedLanguages]` lists a language that isn't a culture name, or lists one twice. Both are build errors. List each language once, as a culture name such as `en` or `en-GB`.
 
+A code that has the form of a culture name but names no language, such as `dk` for Danish, is [LOC104](#loc104).
+
 ### LOC102
 
 The project declares its languages and compiles with a version of C# older than 14. Remove `<LangVersion>` from the project file, or set it to 14 or later. C# 14 is the default on .NET 10.
@@ -100,6 +103,47 @@ The app's attribute decides the languages your users get, and its first language
 - an app that keeps its texts in a library
 
 A library needs the attribute only for texts of its own ([LOC100](#loc100)).
+
+### LOC104
+
+A language code has the form of a culture name, but no culture has its language or its region. This is a warning. The code compiles and its sets are complete, but no user's culture ever matches it:
+
+```csharp
+[assembly: SupportedLanguages("en", "dk")] // LOC104: Danish is 'da'
+```
+
+```text
+warning LOC104: 'dk' won't match any user's culture, because 'dk' isn't an ISO 639-1 language code. Danish is 'da', so write 'da'.
+warning LOC104: 'en-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. The United Kingdom is 'GB', so write 'en-GB'.
+```
+
+Write the code as .NET names the culture. The usual mistake is the code of a country in place of the code of a language:
+
+| Written | Write   | Language or region |
+|---------|---------|--------------------|
+| `dk`    | `da`    | Danish             |
+| `jp`    | `ja`    | Japanese           |
+| `cz`    | `cs`    | Czech              |
+| `gr`    | `el`    | Greek              |
+| `ua`    | `uk`    | Ukrainian          |
+| `cn`    | `zh`    | Chinese            |
+| `en-UK` | `en-GB` | The United Kingdom |
+
+The build checks two parts of a code:
+
+- A language of two letters is a code of ISO 639-1.
+- A region of two letters is a code of ISO 3166-1. `XK` for Kosovo counts too, because .NET uses it.
+
+It doesn't check a longer language such as `fil`, a script such as `Hans`, or a region of three digits such as `419`. A code that doesn't have the form of a culture name is [LOC101](#loc101) or [LOC207](#loc207).
+
+The warning is reported in two places:
+
+- at `[assembly: SupportedLanguages]`, for a language it lists
+- at a set's `LocalizationLanguageCode`, for the constant it returns
+
+`se` gets no warning, because it's Northern Sami. Swedish is `sv`.
+
+The build carries its own lists of codes, so it reports the same on every machine. A list can lag behind its standard. If your code is right, turn the warning off with `#pragma warning disable LOC104` around the attribute or the property.
 
 ## Sets
 
@@ -143,7 +187,9 @@ public class AppLocalizationEn : ILocalizationSet, IAppLocalization, Shop.IShopL
 
 Write the texts of `IAppLocalization` in a set of their own, and implement `Shop.IShopLocalization` in another class.
 
-The IDE fix renames the class after its language, or removes `abstract` or `file`.
+Your sets can share an abstract class that lists `ILocalizationSet` and the contract, as in `abstract class ShopBase : ILocalizationSet, IShopLocalization` and `class ShopLocalizationEn : ShopBase`. The default-language set that derives from it gives the contract, from the texts it declares itself ([LOC303](#loc303)).
+
+The IDE fix renames the class after its language, or removes `abstract` or `file`. An abstract set with an abstract member gets no fix, because it wouldn't compile without `abstract`.
 
 ### LOC201
 
@@ -239,6 +285,8 @@ A set's `LocalizationLanguageCode` isn't a culture name, such as `"en_GB"`. Regi
 
 This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which would throw where you register it.
 
+A code that has the form of a culture name but names no language or region, such as `"en-UK"`, is [LOC104](#loc104).
+
 ### LOC208
 
 A set can't be registered automatically, so its texts won't be found. This is a warning. The generated code that registers sets needs:
@@ -303,7 +351,7 @@ The IDE offers both fixes:
 - Override the text. The fix puts `override` in place of `new`. Where the text isn't virtual yet, it makes it virtual in the set that declares it, so the fix can change two files. A library's text that isn't virtual gets no such fix, and neither does a text implemented explicitly.
 - List the contract again. This fix is always offered.
 
-"Fix all" changes each text once, however many sets hide it.
+"Fix all" changes each text once, however many sets hide it. A set that hides texts of two contracts lists both.
 
 ### LOC303
 

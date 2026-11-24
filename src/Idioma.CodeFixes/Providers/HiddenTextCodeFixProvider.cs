@@ -40,7 +40,8 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// Applies the fix the IDE asks for to every diagnostic at once. Each member and each class changes once, because
-    /// two sets can hide one text, and one set can hide two texts of a contract.
+    /// two sets can hide one text, and one set can hide two texts of a contract. A set that hides texts of two
+    /// contracts lists both.
     /// </summary>
     private static readonly FixAllProvider FixAll = new FixAllByKey(
         overriding: new ReplaceNodesFixAllProvider<MemberDeclarationSyntax>(
@@ -54,7 +55,8 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
             ListContractKey,
             static (root, semanticModel, diagnostic, cancellationToken) => Find(root, semanticModel, diagnostic, cancellationToken) is { } hiding
                 ? ListContract(hiding, semanticModel.Compilation, cancellationToken)
-                : null));
+                : null,
+            merge: ListBoth));
 
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [HiddenTextAnalyzer.HiddenTextDiagnosticId];
 
@@ -306,6 +308,26 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
         };
 
         return changes;
+    }
+
+    /// <summary>
+    /// A part of a set on which two diagnostics list a contract: the earlier result, with each contract of the later
+    /// one that it lacks. A contract has one name in a part (<see cref="NameContract"/>), so the names tell them apart.
+    /// </summary>
+    private static MemberDeclarationSyntax ListBoth(MemberDeclarationSyntax earlier, MemberDeclarationSyntax later)
+    {
+        if (earlier is not TypeDeclarationSyntax { BaseList: not null } listed || later is not TypeDeclarationSyntax { BaseList: { } laterList })
+            return earlier;
+
+        foreach (var entry in laterList.Types)
+        {
+            var name = entry.Type.WithoutTrivia();
+
+            if (!listed.BaseList!.Types.Any(type => String.Equals(type.Type.WithoutTrivia().ToString(), name.ToString(), StringComparison.Ordinal)))
+                listed = CodeFixSupport.InsertBaseType(listed, listed.BaseList.Types.Count, SyntaxFactory.SimpleBaseType(name));
+        }
+
+        return listed;
     }
 
     /// <summary>

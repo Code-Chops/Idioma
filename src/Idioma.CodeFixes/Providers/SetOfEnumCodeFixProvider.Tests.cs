@@ -143,6 +143,48 @@ public sealed class SetOfEnumCodeFixProviderTests
     }
 
     [Test]
+    public async Task PartOfPartialSetListingOnlyAWrongEnum_ShouldLoseItsBaseList()
+    {
+        // Arrange: the part that lists nothing but an enum the contract has no texts of.
+        const string Source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending }
+            public enum PaymentStatus { Paid }
+
+            public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+            }
+
+            public partial class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+            }
+
+            public partial class OrderStatusLocalizationNl : ILocalizationSet<PaymentStatus> // Payments
+            {
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(Source);
+
+        // Assert: the part keeps what stood after its base list, and the build has nothing left to report.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Title.ShouldBe("Remove 'ILocalizationSet<PaymentStatus>'");
+
+        var source = fix.Sources.ShouldHaveSingleItem();
+        source.ShouldBe(Source.Replace("OrderStatusLocalizationNl : ILocalizationSet<PaymentStatus> // Payments", "OrderStatusLocalizationNl // Payments", StringComparison.Ordinal));
+        (await GeneratorTestHelper.AnalyzeAsync(Analyzer, source, [])).ShouldBeEmpty();
+        GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task SetsWithoutSetOfEnum_ShouldAllBeFixedByFixAll()
     {
         // Arrange

@@ -351,23 +351,61 @@ public sealed partial class LocalizationRegistry
         }
     }
 
+    // The types of the sets this thread is creating, the outermost first, or null on a thread that has created none.
+    // A constructor runs on one thread, so the types tell a set that needs itself while it's created. Read only where a
+    // set is created, so no text pays for it.
+    [ThreadStatic]
+    private static List<Type>? SetsBeingCreated;
+
+    // The exception this thread threw last for a set that needs itself, so that the sets being created around it hand
+    // it on as it is.
+    [ThreadStatic]
+    private static InvalidOperationException? ThrownForSetNeedingItself;
+
+    /// <summary>
+    /// Whether this thread is creating a set, so that what runs now is the set's constructor or a field initializer.
+    /// </summary>
+    private static bool IsCreatingSet => SetsBeingCreated is { Count: > 0 };
+
     /// <summary>
     /// Creates a set the registry registered by its type, and says which set it was if its constructor throws.
     /// </summary>
-    /// <exception cref="InvalidOperationException">When the set's constructor throws, with that exception inside.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// When the set's constructor throws, with that exception inside. Also when the constructor, or a field
+    /// initializer, reads a text that needs the set itself.
+    /// </exception>
+    // A set that reads a text of its own contract as it's created needs itself for that text. Nothing is kept until a
+    // set exists, so the read created the set again, without end, until the stack overflowed and the process died.
     internal static ILocalizationSet CreateSet(Type type, Func<ILocalizationSet> create)
     {
+        var beingCreated = SetsBeingCreated ??= [];
+
+        if (beingCreated.Contains(type))
+        {
+            var needsItself = new InvalidOperationException($"'{type}' reads a text while it's being created, and that text needs '{type}' itself. Read the text in a member with =>, not in the constructor or a field initializer. For example: public string Title => ShopLocalization.Brand;");
+            ThrownForSetNeedingItself = needsItself;
+            throw needsItself;
+        }
+
         ILocalizationSet? set;
+        beingCreated.Add(type);
 
         try
         {
             set = create();
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!ReferenceEquals(exception, ThrownForSetNeedingItself))
         {
             throw new InvalidOperationException(
                 $"'{type}' threw when it was created, so the texts of its contract can't be shown. The registry creates a set when a text of its contract is first shown, and tries again at the next one. See the inner exception for why it threw, and make its constructor succeed.",
                 exception);
+        }
+        finally
+        {
+            beingCreated.RemoveAt(beingCreated.Count - 1);
+
+            if (beingCreated.Count is 0)
+                ThrownForSetNeedingItself = null;
         }
 
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract - What creates it is the consumer's.
@@ -407,6 +445,12 @@ public sealed partial class LocalizationRegistry
             // two threads may build at once. The first one done gives the registry every reader gets, so that a cache
             // a consumer keys on the instance sees one.
             var created = CreateOfRegistrations(registrations, this.Languages);
+
+            // Built for a text that the constructor of a set reads, while this thread builds the registry that creates
+            // the set to read its language. The set can't be created again meanwhile, so this registry couldn't file
+            // it. It serves that one text and isn't kept, so that the registry every reader gets has the set filed.
+            if (IsCreatingSet)
+                return created;
 
             return Interlocked.CompareExchange(ref this._registry, created, comparand: null) ?? created;
         }

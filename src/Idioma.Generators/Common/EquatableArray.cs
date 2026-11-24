@@ -29,6 +29,18 @@ internal readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable
         return hash;
     }
 
+    /// <summary>
+    /// Whether an item matches. It takes the place of LINQ's <c>Any</c>, which would box the array to enumerate it.
+    /// </summary>
+    public bool Any(Func<T, bool> predicate)
+    {
+        foreach (var item in this.AsImmutableArray())
+            if (predicate(item))
+                return true;
+
+        return false;
+    }
+
     public ImmutableArray<T>.Enumerator GetEnumerator() => this.AsImmutableArray().GetEnumerator();
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => ((IEnumerable<T>)this.AsImmutableArray()).GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable)this.AsImmutableArray()).GetEnumerator();

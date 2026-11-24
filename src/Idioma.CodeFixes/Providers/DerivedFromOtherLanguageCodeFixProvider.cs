@@ -49,6 +49,12 @@ public sealed class DerivedFromOtherLanguageCodeFixProvider : CodeFixProvider
         }
 
         var compilation = semanticModel.Compilation;
+        var parts = await CodeFixSupport.GetPartsAsync(type, context.CancellationToken).ConfigureAwait(false);
+
+        // Both fixes change the part that lists the set the class derives from. Without one, as when the code changed
+        // since the diagnostic was reported, a fix would change nothing.
+        if (!parts.Any(part => ListsBaseSet(part, compilation.GetSemanticModel(part.SyntaxTree), baseSet, context.CancellationToken)))
+            return;
 
         if (FindSetOfOwnLanguage(type, baseSet, compilation, context.CancellationToken) is { } setOfOwnLanguage)
         {

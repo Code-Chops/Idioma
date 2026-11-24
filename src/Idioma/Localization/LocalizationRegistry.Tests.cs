@@ -84,6 +84,130 @@ public sealed partial class LocalizationRegistryTests
         string ILocalizationSet.LocalizationLanguageCode => "nl";
     }
 
+    /// <summary>
+    /// The one text of the contracts below, which a set reads while it's created.
+    /// </summary>
+    private interface IRegistryBrandTexts
+    {
+        string Brand { get; }
+    }
+
+    /// <summary>
+    /// Reads the text as a property of a generated class reads it.
+    /// </summary>
+    private static string ReadBrand<TContract, TDefaultSet>()
+        where TContract : class, IRegistryBrandTexts
+        where TDefaultSet : class, ILocalizationSet, TContract, new()
+    {
+        var brand = Internals.GeneratedCode.FindSet<TContract>(0, 1)?.Brand
+            ?? Internals.GeneratedCode.WordSetText<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
+
+        return brand;
+    }
+
+    private interface IRegistrySelfReadingLocalization : ILocalizationSet, IRegistryBrandTexts;
+
+    /// <summary>
+    /// The set the text takes its default wording from. Never registered.
+    /// </summary>
+    private sealed class RegistrySelfReadingLocalizationEn : IRegistrySelfReadingLocalization
+    {
+        public string Brand => "Shop";
+    }
+
+    /// <summary>
+    /// A set with a field initializer that reads a text of its own contract, on the thread that sets
+    /// <see cref="ReadsOwnText"/>. Per thread, so that a test running beside it creates the set without failing.
+    /// </summary>
+    private sealed class RegistrySelfReadingLocalizationNl : IRegistrySelfReadingLocalization
+    {
+        [ThreadStatic]
+        public static bool ReadsOwnText;
+
+        private readonly string _brand = ReadsOwnText ? ReadBrand<IRegistrySelfReadingLocalization, RegistrySelfReadingLocalizationEn>() : "Winkel";
+
+        public string Brand => this._brand;
+    }
+
+    private interface IRegistrySelfReadingDefaultLocalization : ILocalizationSet, IRegistryBrandTexts;
+
+    /// <summary>
+    /// The same, for the set a text takes its default wording from, which no registry holds.
+    /// </summary>
+    private sealed class RegistrySelfReadingDefaultLocalizationEn : IRegistrySelfReadingDefaultLocalization
+    {
+        [ThreadStatic]
+        public static bool ReadsOwnText;
+
+        private readonly string _brand = ReadsOwnText ? ReadBrand<IRegistrySelfReadingDefaultLocalization, RegistrySelfReadingDefaultLocalizationEn>() : "Shop";
+
+        public string Brand => this._brand;
+    }
+
+    private interface IRegistrySelfReadingCodedLocalization : ILocalizationSet, IRegistryBrandTexts;
+
+    private sealed class RegistrySelfReadingCodedLocalizationEn : IRegistrySelfReadingCodedLocalization
+    {
+        public string Brand => "Shop";
+    }
+
+    /// <summary>
+    /// The same, for a set that gives its language itself, which the registry creates when it's built.
+    /// </summary>
+    private sealed class RegistrySelfReadingCodedLocalization : IRegistrySelfReadingCodedLocalization
+    {
+        [ThreadStatic]
+        public static bool ReadsOwnText;
+
+        private readonly string _brand = ReadsOwnText ? ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>() : "Winkel";
+
+        public string Brand => this._brand;
+
+        string ILocalizationSet.LocalizationLanguageCode => "nl";
+    }
+
+    private interface IRegistryReadLocalization : ILocalizationSet, IRegistryBrandTexts;
+
+    private sealed class RegistryReadLocalizationEn : IRegistryReadLocalization
+    {
+        public string Brand => "Shop";
+    }
+
+    private sealed class RegistryReadLocalizationNl : IRegistryReadLocalization
+    {
+        public string Brand => "Winkel";
+    }
+
+    private interface IRegistryReaderLocalization : ILocalizationSet, IRegistryBrandTexts;
+
+    /// <summary>
+    /// A set that gives its language itself, with a field initializer that reads a text of another contract.
+    /// </summary>
+    private sealed class RegistryReaderCodedLocalization : IRegistryReaderLocalization
+    {
+        public string Brand { get; } = ReadBrand<IRegistryReadLocalization, RegistryReadLocalizationEn>();
+
+        string ILocalizationSet.LocalizationLanguageCode => "nl";
+    }
+
+    /// <summary>
+    /// A culture that counts how often its name is read, which a lookup by name does and a comparison by reference
+    /// doesn't.
+    /// </summary>
+    private sealed class RegistryCountingCulture(string name) : CultureInfo(name)
+    {
+        public int NameReads { get; private set; }
+
+        public override string Name
+        {
+            get
+            {
+                this.NameReads++;
+                return base.Name;
+            }
+        }
+    }
+
     private interface IRegistryConcurrentLocalization : ILocalizationSet
     {
         string Name { get; }

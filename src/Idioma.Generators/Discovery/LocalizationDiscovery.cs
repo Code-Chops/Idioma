@@ -78,6 +78,8 @@ internal static partial class LocalizationDiscovery
     // what its base list names (MayBeSet), which costs one binding per name and file, and resolves the class only when
     // that leads on. A set is then read once with every text either part uses, and each part takes its own share of it,
     // class by class (ForPart). So an edit that changes only what one part uses leaves the other's pipeline as it was.
+    // The registrar's share holds no wording and no location. A location holds the syntax tree of its file, which every
+    // edit in that file renews, so a share with one location in it would change with every wording.
     public static (IncrementalValueProvider<Discovery> OfContract, IncrementalValueProvider<Discovery> OfRecord) Read(
         IncrementalGeneratorInitializationContext context)
     {
@@ -157,8 +159,9 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// The contracts the current compilation generates, worked out once for both parts of the generator, from what the
     /// registrar's part reads of the sets (<see cref="DiscoveredTexts.OfRecord"/>). That holds everything that decides
-    /// where a contract comes from, and stays as it was when a wording changes. A partial set counts with the base types
-    /// of all its declarations (<see cref="Merge"/>).
+    /// where a contract comes from. It holds no wording and no location, so it stays as it was when a wording changes,
+    /// and this step doesn't run again. A partial set counts with the base types of all its declarations
+    /// (<see cref="Merge"/>).
     /// </summary>
     public static IncrementalValueProvider<GeneratedContracts> ReadGeneratedContracts(IncrementalValueProvider<Discovery> recordDiscovery,
         IncrementalValueProvider<DeclaredLanguages?> languages, IncrementalValueProvider<EquatableArray<ContractBinding>> bindings)
@@ -297,7 +300,7 @@ internal static partial class LocalizationDiscovery
             return null;
 
         // Two share the name: the contract the compiler bound it to, as long as the compilation still generates it.
-        found ??= generatedContracts.FindBinding(baseType.Location) is { } bound && generatedContracts.Contains(bound) ? bound : null;
+        found ??= generatedContracts.FindBinding(baseType.Site) is { } bound && generatedContracts.Contains(bound) ? bound : null;
 
         return found;
     }
@@ -327,8 +330,9 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether a set has the shape of the set a contract comes from: it lists <c>ILocalizationSet</c> itself, in the
-    /// default language, implements no contract already (<see cref="ImplementsContract"/>), and rewords no set
+    /// Whether a set has the shape of the set a contract comes from: it lists <c>ILocalizationSet</c>, itself or
+    /// through an abstract class it derives from (<see cref="ListsLocalizationSet"/>), in the default language,
+    /// implements no contract already (<see cref="ImplementsContract"/>), and rewords no set
     /// (<see cref="RewordsSet"/>). Without a default language to go by (<see cref="DeclaredLanguages.DefaultLanguage"/>),
     /// a set of any language the build can read is taken for it, so that its contract is still written while the
     /// attribute is wrong. Every language's set of one contract then gives the same contract, which is written once.
@@ -427,17 +431,31 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// What one part of the generator reads of what discovery found in a class
-    /// (<see cref="ForPart(DiscoveredLocalization, DiscoveredTexts)"/>).
+    /// (<see cref="ForPart(DiscoveredLocalization, DiscoveredTexts)"/>). The registrar's share holds no location, so
+    /// it leaves out a set that is only reported (<see cref="DiscoveryResult.UnnameableOverride"/>), and where a class
+    /// the generator can't extend is written.
     /// </summary>
-    private static DiscoveryResult ForPart(DiscoveryResult result, DiscoveredTexts texts)
+    internal static DiscoveryResult ForPart(DiscoveryResult result, DiscoveredTexts texts)
     {
-        var forPart = result.Set is { } set ? result with { Set = ForPart(set, texts) } : result;
+        var forPart = result with { Set = result.Set is { } set ? ForPart(set, texts) : null };
+
+        if (texts is DiscoveredTexts.OfRecord)
+        {
+            forPart = forPart with
+            {
+                UnnameableOverride = null,
+                UnextendableSet = result.UnextendableSet is { } unextendable
+                    ? unextendable with { Location = default, BaseTypeLocations = default }
+                    : null,
+            };
+        }
+
         return forPart;
     }
 
     /// <summary>
-    /// The share of a set that one part of the generator reads, as <see cref="DiscoverSet"/> gives it for
-    /// <paramref name="texts"/> alone: the texts a contract is written from, or the names the registrar records. So an
+    /// The share of a set that one part of the generator reads, of what <see cref="DiscoverSet"/> reads for both: the
+    /// texts a contract is written from, with every location, or the names the registrar records, without one. So an
     /// edit that changes only the other share leaves that part's pipeline as it was.
     /// </summary>
     internal static DiscoveredLocalization ForPart(DiscoveredLocalization set, DiscoveredTexts texts)
@@ -446,8 +464,9 @@ internal static partial class LocalizationDiscovery
         {
             DiscoveredTexts.OfContract => set with { OwnTexts = default },
             // The registrar's part asks which enums a set holds the texts of (EnumNames), so that an enum doesn't get a
-            // second GetText from its [Localized] members, and reads nothing else of its texts.
-            DiscoveredTexts.OfRecord => set with { OfContract = default },
+            // second GetText from its [Localized] members, and reads nothing else of its texts. It holds no location
+            // either. Every other field of a set is a name or a number, which an edit of a wording leaves as it was.
+            DiscoveredTexts.OfRecord => set with { OfContract = default, Locations = default },
             _ => set,
         };
 
@@ -480,7 +499,7 @@ internal static partial class LocalizationDiscovery
             return null;
 
         var result = new DiscoveryResult(
-            DiscoverSet(type, declaration, context.SemanticModel, DiscoveredTexts.OfBoth, cancellationToken),
+            DiscoverSet(type, declaration, context.SemanticModel, cancellationToken),
             UnnameableOverride: null,
             UnextendableSet: null);
 

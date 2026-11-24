@@ -3,6 +3,7 @@ using CodeChops.Idioma.CodeFixes;
 using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace CodeChops.Idioma.Tests;
@@ -884,5 +885,69 @@ public sealed class PlaceholderCodeFixProviderTests
 
         // Assert
         fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task FixAll_TextThatCodeUsesAsPropertyNextToOthers_ShouldFixTheOthersOnly()
+    {
+        // Arrange: three texts with a placeholder in both languages. Another text shows the farewell, so that one
+        // can't become a method.
+        var source = Sets(
+            """
+            public string Greeting => "Hello, {0}!";
+            public string Total => "Total: {0}";
+            public string Farewell => "Bye, {0}!";
+            public string Closing => Farewell + " See you.";
+            """,
+            """
+            public string Greeting => "Hallo, {0}!";
+            public string Total => "Totaal: {0}";
+            public string Farewell => "Dag, {0}!";
+            public string Closing => "Tot ziens.";
+            """);
+
+        // Act
+        var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), source)).ShouldHaveSingleItem();
+
+        // Assert: each of the other texts changes once, in both languages.
+        fixedSource.ShouldBe(Sets(
+            """
+            public string Greeting(object? arg0) => $"Hello, {arg0}!";
+            public string Total(object? arg0) => $"Total: {arg0}";
+            public string Farewell => "Bye, {0}!";
+            public string Closing => Farewell + " See you.";
+            """,
+            """
+            public string Greeting(object? arg0) => $"Hallo, {arg0}!";
+            public string Total(object? arg0) => $"Totaal: {arg0}";
+            public string Farewell => "Dag, {0}!";
+            public string Closing => "Tot ziens.";
+            """));
+        GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task FixAll_InSolution_AppWithSetOfLibrarysContract_ShouldChangeTheLibraryOnly()
+    {
+        // Arrange: a library project with a placeholder in both its languages, and an app that adds German to it.
+        var library = Sets("""public string Greeting => "Hello, {0}!";""", """public string Greeting => "Hallo, {0}!";""").Replace("TestApp", "ShopLibrary", StringComparison.Ordinal);
+        var app = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            {{GermanSet("""public string Greeting => "Hallo, {0}!";""")}}
+            """;
+
+        // Act
+        var projects = await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), FixAllScope.Solution, from: (Project: 0, File: 0),
+            new TestProject("ShopLibrary", [library]),
+            new TestProject("TestApp", [app], "ShopLibrary"));
+
+        // Assert: the fix of the library's text doesn't reach into the app, and the app's set of another assembly's
+        // contract has no fix of its own until that contract takes the value.
+        projects[0].ShouldHaveSingleItem().ShouldBe(Sets("""public string Greeting(object? arg0) => $"Hello, {arg0}!";""", """public string Greeting(object? arg0) => $"Hallo, {arg0}!";""")
+            .Replace("TestApp", "ShopLibrary", StringComparison.Ordinal));
+        projects[1].ShouldHaveSingleItem().ShouldBe(app);
     }
 }

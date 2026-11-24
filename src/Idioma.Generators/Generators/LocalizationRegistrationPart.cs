@@ -60,26 +60,14 @@ public static class LocalizationRegistrationPart
     private const string RegistrarNamespace = PackageNames.Namespace + ".Generated";
 
     /// <summary>
+    /// The name of the pipeline step that holds the registrar to write, for a test to read it.
+    /// </summary>
+    internal const string RegistrarTrackingName = "Registrar";
+
+    /// <summary>
     /// The class next to the registrar, outside its namespace, that registers the sets of the assembly itself.
     /// </summary>
     private const string OwnSetsName = "OwnLocalizationSets";
-
-    /// <summary>
-    /// The warnings about naming something marked <c>[Obsolete]</c>, without and with a message. Every generated file
-    /// turns them off for all of its code, which names the package's own obsolete types and any set marked
-    /// <c>[Obsolete]</c>.
-    /// </summary>
-    internal const string ObsoleteWarnings = "CS0612, CS0618";
-
-    /// <summary>
-    /// <see cref="ObsoleteWarnings"/>, followed by what naming the sets a file names reports besides
-    /// (<see cref="DiscoveredLocalization.SuppressedDiagnostics"/>), as a pragma lists them.
-    /// </summary>
-    internal static string WithSuppressed(string warnings, EquatableArray<string> suppressed)
-    {
-        var withSuppressed = suppressed.Length is 0 ? warnings : $"{warnings}, {String.Join(", ", suppressed)}";
-        return withSuppressed;
-    }
 
     private static readonly DiagnosticDescriptor AppWithoutLanguagesRule = new(
         id: AppWithoutLanguagesDiagnosticId,
@@ -126,14 +114,24 @@ public static class LocalizationRegistrationPart
     /// </summary>
     internal static void Initialize(IncrementalGeneratorInitializationContext context, LocalizationInputs inputs)
     {
-        var languages = inputs.Languages;
+        var languages = inputs.RecordLanguages;
+
+        // What the registrar is written from holds no location, so an edit of a wording leaves every step up to the
+        // registrar as it was. What is reported comes from the share that holds the locations, which every edit in the
+        // file of a set renews.
         var discovery = inputs.RecordDiscovery;
+        var reported = inputs.ContractDiscovery;
 
         // Every set, an excluded one included. Discovery finds only classes that implement ILocalizationSet.
         var allSets = discovery.Select(static (discovery, _) => discovery.Sets);
+        var allReportedSets = reported.Select(static (discovery, _) => discovery.Sets);
 
         // An excluded set is registered by hand, so it gets no registration and no warning about one.
         var sets = allSets.Select(static (sets, _) => new EquatableArray<DiscoveredLocalization>(sets
+            .Where(static set => !set.IsExcluded)
+            .ToImmutableArray()));
+
+        var reportedSets = allReportedSets.Select(static (sets, _) => new EquatableArray<DiscoveredLocalization>(sets
             .Where(static set => !set.IsExcluded)
             .ToImmutableArray()));
 
@@ -147,8 +145,8 @@ public static class LocalizationRegistrationPart
             .OrderBy(static set => set.MetadataName, StringComparer.Ordinal)
             .ToImmutableArray()));
 
-        // Two outputs, so that an edit in the file of a set, which renews its location, reports the diagnostic anew
-        // without rewriting the generated code: the registrations hold no location, and so compare equal.
+        // Without a location, as everything the registrar is written from. So an edit in the file of a set, which
+        // renews its locations, reports the diagnostics anew and leaves the registrar as it was.
         var registrations = sets.Select(static (sets, _) => new EquatableArray<RegisteredLocalization>(sets
             .Where(set => set.RegistrationProblem is null)
             .Select(set => new RegisteredLocalization(set.MetadataName, set.FullyQualifiedName, set.IsOverride, set.Depth))
@@ -159,7 +157,7 @@ public static class LocalizationRegistrationPart
 
         // Not a default-language set: one the generated code can't create gets no contract and no texts either, which
         // LOC200 reports, and the advice of LOC208, to exclude the set and register it by hand, is no way out for it.
-        var unregistrable = sets
+        var unregistrable = reportedSets
             .Combine(languages)
             .Combine(inputs.Contracts)
             .Select(static (data, _) =>
@@ -239,23 +237,33 @@ public static class LocalizationRegistrationPart
                     Records: records,
                     MemberTexts: memberTexts,
                     SuppressedDiagnostics: suppressedDiagnostics);
-            });
+            })
+            .WithTrackingName(RegistrarTrackingName);
 
         // Once per class that declares the property, where the fix is, however many sets derive from it.
-        var unmapped = sets.Select(static (sets, _) => new EquatableArray<UnmappedLanguageCode>(sets
-            .Where(set => set.UnmappedLanguageCode is not null)
-            .Select(set => set.UnmappedLanguageCode!.Value)
+        var unmapped = reportedSets.Select(static (sets, _) => new EquatableArray<UnmappedLanguageCode>(sets
+            .Where(set => set.Locations.UnmappedLanguageCode is not null)
+            .Select(set => set.Locations.UnmappedLanguageCode!.Value)
             .Distinct()
             .OrderBy(set => set.DeclaringType, StringComparer.Ordinal)
             .ToImmutableArray()));
 
         // An excluded set included: registered by hand, it throws just the same. Once per property, as each set that
         // inherits it carries it.
-        var invalidLanguageCodes = allSets.Select(static (sets, _) => new EquatableArray<InvalidLanguageCode>(sets
-            .Where(static set => set.InvalidLanguageCode is not null)
-            .Select(static set => set.InvalidLanguageCode!.Value)
+        var invalidLanguageCodes = allReportedSets.Select(static (sets, _) => new EquatableArray<InvalidLanguageCode>(sets
+            .Where(static set => set.Locations.InvalidLanguageCode is not null)
+            .Select(static set => set.Locations.InvalidLanguageCode!.Value)
             .Distinct()
             .OrderBy(static code => code.DeclaringType, StringComparer.Ordinal)
+            .ToImmutableArray()));
+
+        // A code that is a culture name with a part no culture has, such as "dk". Once per property, as above.
+        var unknownLanguageCodes = allReportedSets.Select(static (sets, _) => new EquatableArray<UnknownLanguageCode>(sets
+            .Where(static set => set.Locations.UnknownLanguageCode is not null)
+            .Select(static set => set.Locations.UnknownLanguageCode!.Value)
+            .Distinct()
+            .OrderBy(static code => code.Location.Tree?.FilePath, StringComparer.Ordinal)
+            .ThenBy(static code => code.Location.Span.Start)
             .ToImmutableArray()));
 
         // An application without the attribute, by its name. Not one whose attribute is invalid, which LOC101 reports.
@@ -276,7 +284,7 @@ public static class LocalizationRegistrationPart
                 context.ReportDiagnostic(Diagnostic.Create(CannotRegisterRule, set.Location.ToLocation(), set.MetadataName, set.Problem));
         });
 
-        context.RegisterSourceOutput(discovery.Select(static (discovery, _) => discovery.UnnameableOverrides), static (context, sets) =>
+        context.RegisterSourceOutput(reported.Select(static (discovery, _) => discovery.UnnameableOverrides), static (context, sets) =>
         {
             foreach (var set in sets.AsImmutableArray())
                 context.ReportDiagnostic(Diagnostic.Create(CannotRegisterRule, set.Location.ToLocation(), set.MetadataName, set.Problem));
@@ -303,6 +311,14 @@ public static class LocalizationRegistrationPart
                 context.ReportDiagnostic(Diagnostic.Create(InvalidLanguageCodeRule, code.Location.ToLocation(), code.DeclaringType, code.Code));
         });
 
+        // The descriptor of LocalizableTextFactoryGenerator, which reports the same for a language of the attribute.
+        context.RegisterSourceOutput(unknownLanguageCodes, static (context, codes) =>
+        {
+            foreach (var code in codes.AsImmutableArray())
+                if (SupportedLanguages.FindUnknownPart(code.Code) is { } unknown)
+                    context.ReportDiagnostic(LocalizableTextFactoryGenerator.CreateUnknownLanguageCode(unknown, code.Location.ToLocation()));
+        });
+
         context.RegisterSourceOutput(registrar.WhereItCompiles(compiles), static (context, registrar) =>
         {
             // Nothing of its own to register or record, and nothing referenced to register first.
@@ -322,12 +338,8 @@ public static class LocalizationRegistrationPart
     /// </summary>
     private static string GetRegistrarName(string? assemblyName)
     {
-        var name = new StringBuilder("LocalizationRegistrar_");
-
-        foreach (var c in assemblyName ?? "")
-            name.Append(SyntaxFacts.IsIdentifierPartCharacter(c) ? c : '_');
-
-        return name.ToString();
+        var name = $"LocalizationRegistrar_{CodeEscaping.ToIdentifierPart(assemblyName)}";
+        return name;
     }
 
     /// <summary>
@@ -395,12 +407,10 @@ public static class LocalizationRegistrationPart
         // The pragma also covers a set marked [Obsolete] or [Experimental], which registers for as long as it exists.
         // The warning about naming it is one its author can't act on in generated code, and a build that treats
         // warnings as errors would stop at it.
-        var warnings = WithSuppressed(ObsoleteWarnings, registrar.SuppressedDiagnostics);
+        var warnings = GeneratedFile.WithSuppressed(GeneratedFile.ObsoleteWarnings, registrar.SuppressedDiagnostics);
         var sb = new StringBuilder();
         sb.AppendLine($$"""
-            // <auto-generated/>
-            #nullable enable
-            #pragma warning disable {{warnings}} // Only generated code calls GeneratedCode.
+            {{GeneratedFile.GetHeader(warnings, "Only generated code calls GeneratedCode.")}}
 
             namespace {{RegistrarNamespace}}
             {
@@ -529,8 +539,7 @@ public static class LocalizationRegistrationPart
                 """);
         }
 
-        sb.AppendLine($"#pragma warning restore {warnings}");
-        sb.AppendLine("#nullable restore");
+        GeneratedFile.AppendFooter(sb, warnings);
 
         return sb.ToString();
     }

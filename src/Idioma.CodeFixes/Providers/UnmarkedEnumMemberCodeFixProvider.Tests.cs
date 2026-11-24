@@ -108,4 +108,30 @@ public sealed class UnmarkedEnumMemberCodeFixProviderTests
                 Returned = 9,
             """));
     }
+
+    [Test]
+    public async Task FileWithWindowsLineEndings_ShouldKeepThemOnTheNewLine()
+    {
+        // Arrange: a file with CRLF throughout, whichever line endings this file has.
+        var source = Source("""
+                [Localized(en: "Assigned", nl: "Toegewezen")]
+                Assigned,
+                Lost,
+                Returned = 9,
+            """).ReplaceLineEndings("\r\n");
+
+        // Act
+        var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new UnmarkedEnumMemberCodeFixProvider(), new LocalizedMemberAnalyzer(), source)).ShouldHaveSingleItem();
+
+        // Assert: the line of each new attribute ends as the others do.
+        fixedSource.ShouldBe(Source("""
+                [Localized(en: "Assigned", nl: "Toegewezen")]
+                Assigned,
+                [Localized(en: "Lost")]
+                Lost,
+                [Localized(en: "Returned")]
+                Returned = 9,
+            """).ReplaceLineEndings("\r\n"));
+        fixedSource.Replace("\r\n", "", StringComparison.Ordinal).ShouldNotContain('\n');
+    }
 }

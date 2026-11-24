@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
-using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis.CodeFixes;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -259,5 +259,40 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
         derived.ShouldBe(source.Replace("ShopLocalizationEnUs : ShopLocalizationEnGb", "ShopLocalizationEnUs : ShopLocalizationEn", StringComparison.Ordinal));
         GeneratorTestHelper.GetGeneratorDiagnostics(derived).ShouldBeEmpty();
         GeneratorTestHelper.CompileWithGenerators(derived).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task FixAll_InProject_ShouldImplementTheContractOfEverySet()
+    {
+        // Arrange: a Dutch set of the shop, and in another file a Dutch set of the cart, each deriving from English.
+        const string Shop = "namespace TestApp;\n\npublic class ShopLocalizationNl : ShopLocalizationEn\n{\n    public override string Checkout => \"Afrekenen\";\n\n    public override string Cart => \"Winkelwagen\";\n}\n";
+        const string Cart = """
+            using CodeChops.Idioma;
+
+            namespace TestApp;
+
+            public class CartLocalizationEn : ILocalizationSet, ICartLocalization
+            {
+                public virtual string Total => "Total";
+            }
+
+            public class CartLocalizationNl : CartLocalizationEn
+            {
+                public override string Total => "Totaal";
+            }
+            """;
+
+        // Act
+        var sources = await CodeFixTestHelper.FixAllAsync(new DerivedFromOtherLanguageCodeFixProvider(), LocalizationParts.Sets(), FixAllScope.Project, fromFile: 1, Header, Shop, Cart);
+
+        // Assert
+        sources[0].ShouldBe(Header);
+        sources[1].ShouldBe(Shop
+            .Replace(": ShopLocalizationEn", ": CodeChops.Idioma.ILocalizationSet, IShopLocalization", StringComparison.Ordinal)
+            .Replace("public override", "public virtual", StringComparison.Ordinal));
+        sources[2].ShouldBe(Cart
+            .Replace("CartLocalizationNl : CartLocalizationEn", "CartLocalizationNl : ILocalizationSet, ICartLocalization", StringComparison.Ordinal)
+            .Replace("public override", "public virtual", StringComparison.Ordinal));
+        GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), [.. sources]).Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
     }
 }

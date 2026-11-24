@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using CodeChops.Idioma.CodeFixes;
 using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
+using Microsoft.CodeAnalysis.CodeFixes;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -13,6 +14,9 @@ namespace CodeChops.Idioma.Tests;
 public sealed class UnnamedLanguageCodeFixProviderTests
 {
     #region Fixture
+    private static readonly UnnamedLanguageCodeFixProvider Provider = new();
+    private static readonly UnnamedLanguageAnalyzer Analyzer = new();
+
     private static string Source(string languages, string text) => $$"""
         using CodeChops.Idioma;
 
@@ -107,5 +111,48 @@ public sealed class UnnamedLanguageCodeFixProviderTests
 
         // Assert: each name goes after the line break and the indentation, before the wording.
         fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(Source("\"en\", \"nl\"", expectedText));
+    }
+
+    [Test]
+    public async Task FixAll_InDocument_ShouldNameEveryCallOfThatFileOnly()
+    {
+        // Arrange: a file with two calls, and another file with one.
+        var first = Source("\"en\", \"nl\"", """LocalizableText.Inline("Orders", "Bestellingen") + LocalizableText.Inline("Total", "Totaal")""");
+        const string Second = """
+            using CodeChops.Idioma;
+
+            namespace TestApp;
+
+            public static class MoreTexts
+            {
+                public static string Cart => LocalizableText.Inline("Cart", "Winkelwagen");
+            }
+            """;
+
+        // Act
+        var sources = await CodeFixTestHelper.FixAllAfterGeneratorsAsync(Provider, Analyzer, FixAllScope.Document, fromFile: 0, first, Second);
+
+        // Assert
+        sources[0].ShouldBe(Source("\"en\", \"nl\"", """LocalizableText.Inline(en: "Orders", nl: "Bestellingen") + LocalizableText.Inline(en: "Total", nl: "Totaal")"""));
+        sources[1].ShouldBe(Second);
+    }
+
+    [Test]
+    [Arguments(FixAllScope.Project, false)]
+    [Arguments(FixAllScope.Solution, true)]
+    public async Task FixAll_InAppThatReferencesLibrary_ShouldChangeTheLibraryOnlyInSolution(FixAllScope scope, bool libraryChanges)
+    {
+        // Arrange: a library and an app that references it, each with a call that names no language.
+        var library = Source("\"en\", \"nl\"", """LocalizableText.Inline("Orders", "Bestellingen")""").Replace("TestApp", "ShopLibrary", StringComparison.Ordinal);
+        var app = Source("\"en\", \"nl\"", """LocalizableText.Inline("Cart", "Winkelwagen") + ShopLibrary.Texts.Orders""");
+
+        // Act: "Fix all" is chosen in the file of the app.
+        var projects = await CodeFixTestHelper.FixAllAfterGeneratorsAsync(Provider, Analyzer, scope, from: (Project: 1, File: 0),
+            new TestProject("ShopLibrary", [library]),
+            new TestProject("TestApp", [app], "ShopLibrary"));
+
+        // Assert: a fix of the project leaves the other project as it is.
+        projects[0].ShouldHaveSingleItem().ShouldBe(libraryChanges ? library.Replace("(\"Orders\", \"Bestellingen\")", "(en: \"Orders\", nl: \"Bestellingen\")", StringComparison.Ordinal) : library);
+        projects[1].ShouldHaveSingleItem().ShouldBe(Source("\"en\", \"nl\"", """LocalizableText.Inline(en: "Cart", nl: "Winkelwagen") + ShopLibrary.Texts.Orders"""));
     }
 }

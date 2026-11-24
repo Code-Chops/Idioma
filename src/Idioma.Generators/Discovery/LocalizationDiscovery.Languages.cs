@@ -20,7 +20,12 @@ internal static partial class LocalizationDiscovery
     /// <param name="cancellationToken">Cancels the read.</param>
     private static string? GetLanguage(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, WordingReader reader, CancellationToken cancellationToken)
     {
-        var language = GetLanguage(type, ancestors, reader, cancellationToken, out _);
+        var languageCode = ReadSetLanguageCode(type);
+
+        // The recorded code only where it's asked for: a set without a LocalizationLanguageCode of any kind.
+        var recordedCode = languageCode.Property is null ? FindRecordedLanguageCode(type, ancestors, declaresLanguageCode: false) : null;
+
+        var language = GetLanguage(type, languageCode, recordedCode, reader, cancellationToken, out _, out _);
         return language;
     }
 
@@ -37,23 +42,44 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The language the set serves (see the overload without <paramref name="invalidLanguageCode"/>), and the constant
-    /// its <c>LocalizationLanguageCode</c> holds when that is no culture name: what <c>LOC207</c> reports.
+    /// its <c>LocalizationLanguageCode</c> holds when that is no culture name: what <c>LOC207</c> reports. A constant
+    /// that is a culture name with a part no culture has, such as <c>"dk"</c>, is the set's language all the same, and
+    /// <paramref name="unknownLanguageCode"/> holds it: what <c>LOC104</c> reports.
     /// </summary>
+    /// <param name="type">The set.</param>
+    /// <param name="languageCode">The <c>LocalizationLanguageCode</c> of the set (<see cref="ReadSetLanguageCode"/>).</param>
+    /// <param name="recordedCode">The code the build records for the set (<see cref="FindRecordedLanguageCode(INamedTypeSymbol, ImmutableArray{SourceAncestor}, bool)"/>).
+    /// It's read only for a set without a <c>LocalizationLanguageCode</c>.</param>
+    /// <param name="reader">What reads a constant.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <param name="invalidLanguageCode">Gets the constant that is no culture name.</param>
+    /// <param name="unknownLanguageCode">Gets the constant with a part no culture has.</param>
     // Every language the checks and the generated code work with comes through here, so it is a culture name or nothing:
     // a constant such as "" or "en_GB" is in no language, and is held to none, like one that could not be read.
-    private static string? GetLanguage(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, WordingReader reader,
-        CancellationToken cancellationToken, out InvalidLanguageCode? invalidLanguageCode)
+    private static string? GetLanguage(INamedTypeSymbol type, SetLanguageCode languageCode, string? recordedCode, WordingReader reader,
+        CancellationToken cancellationToken, out InvalidLanguageCode? invalidLanguageCode, out UnknownLanguageCode? unknownLanguageCode)
     {
         invalidLanguageCode = null;
+        unknownLanguageCode = null;
 
-        var mapping = MapLanguageCode(type);
+        var mapping = languageCode.Mapping;
 
-        if ((mapping.Unmapped ?? mapping.Implementation ?? FindInterfaceLanguageCode(type)) is { } property)
+        if (languageCode.Property is { } property)
         {
             var code = reader.Read(property, cancellationToken);
 
-            if (code is null || SupportedLanguages.IsCultureName(code))
+            if (code is null)
+                return null;
+
+            if (SupportedLanguages.IsCultureName(code))
+            {
+                // Not for a LocalizationLanguageCode that implements nothing, as below. A property of another assembly
+                // has no place in this one, and its own build reports it.
+                if (mapping.Unmapped is null && property.Locations[0].IsInSource && SupportedLanguages.FindUnknownPart(code) is not null)
+                    unknownLanguageCode = new UnknownLanguageCode(code, DiagnosticLocation.From(property.Locations[0]));
+
                 return code;
+            }
 
             // Not for a LocalizationLanguageCode that implements nothing: nothing reads it at run time, and LOC206 reports it.
             if (mapping.Unmapped is null)
@@ -62,8 +88,21 @@ internal static partial class LocalizationDiscovery
             return null;
         }
 
-        var language = FindRecordedLanguageCode(type, ancestors) ?? GetNameLanguage(type.Name);
+        var language = recordedCode ?? GetNameLanguage(type.Name);
         return language;
+    }
+
+    /// <summary>
+    /// The <c>LocalizationLanguageCode</c> of a set, read once for everything discovery asks about it
+    /// (<see cref="SetLanguageCode"/>).
+    /// </summary>
+    private static SetLanguageCode ReadSetLanguageCode(INamedTypeSymbol type)
+    {
+        var mapping = MapLanguageCode(type);
+
+        // A contract's own implementation applies only when no class of the set implements the property.
+        var languageCode = new SetLanguageCode(mapping, mapping.Implementation is null ? FindInterfaceLanguageCode(type) : null);
+        return languageCode;
     }
 
     /// <summary>
@@ -72,10 +111,9 @@ internal static partial class LocalizationDiscovery
     /// under its language without creating it.
     /// </summary>
     // The implementation alone, which is what runs, and not a LocalizationLanguageCode that implements nothing (LOC206).
-    private static string? ReadImplementedLanguageCode(INamedTypeSymbol type, WordingReader reader, CancellationToken cancellationToken)
+    private static string? ReadImplementedLanguageCode(SetLanguageCode languageCode, WordingReader reader, CancellationToken cancellationToken)
     {
-        var property = MapLanguageCode(type).Implementation ?? FindInterfaceLanguageCode(type);
-        var code = property is null ? null : reader.Read(property, cancellationToken);
+        var code = languageCode.Implemented is { } property ? reader.Read(property, cancellationToken) : null;
 
         return code is not null && SupportedLanguages.IsCultureName(code) ? code : null;
     }
@@ -101,9 +139,11 @@ internal static partial class LocalizationDiscovery
     /// </summary>
     /// <param name="type">The set.</param>
     /// <param name="ancestors">The classes of this assembly it derives from, nearest first.</param>
-    private static string? FindRecordedLanguageCode(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors)
+    /// <param name="declaresLanguageCode">Whether the set implements <c>LocalizationLanguageCode</c>
+    /// (<see cref="SetLanguageCode.IsDeclared"/>).</param>
+    private static string? FindRecordedLanguageCode(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors, bool declaresLanguageCode)
     {
-        if (!DeclaresLanguageCode(type) && FindOwnRecordedLanguageCode(type) is { } own)
+        if (!declaresLanguageCode && FindOwnRecordedLanguageCode(type) is { } own)
             return own;
 
         var index = 0;
@@ -141,7 +181,7 @@ internal static partial class LocalizationDiscovery
 
     private static bool DeclaresLanguageCode(INamedTypeSymbol type)
     {
-        var declaresLanguageCode = MapLanguageCode(type).Implementation is not null || FindInterfaceLanguageCode(type) is not null;
+        var declaresLanguageCode = ReadSetLanguageCode(type).IsDeclared;
         return declaresLanguageCode;
     }
 

@@ -34,12 +34,12 @@ A user whose language the app doesn't have, such as a German user, sees English.
 
 Each benchmark first checks that every approach shows the expected wording, so no approach is timed doing less work.
 
-Apart from that table, the numbers come from one machine, an AMD Ryzen AI 9 HX PRO 370 on Windows 11. They ran on .NET 11.0.0 with BenchmarkDotNet 0.16.0-preview.2, and in Blazor WebAssembly on .NET 11.0.0 in a headless Chrome 157. [Its tables](../benchmarks/results/second-machine) are kept. Compare the approaches with each other rather than with your own numbers, because those depend on the machine.
+Apart from that table, the numbers come from one machine, an AMD Ryzen AI 9 HX PRO 370 on Windows 11. They ran on .NET 11.0.0 with BenchmarkDotNet 0.16.0-preview.2, and in Blazor WebAssembly on .NET 11.0.0 in a headless Chrome 157. [Its tables](../benchmarks/results) are kept. Compare the approaches with each other rather than with your own numbers, because those depend on the machine.
 
 What wasn't measured again since a text became a `string`:
 
 - Mono's AOT in Blazor WebAssembly, which needs the `wasm-tools` workload.
-- A second machine. The tables directly in [`benchmarks/results`](../benchmarks/results) are from an Apple M2 Max and from before that change, so they describe the earlier design.
+- A second machine, apart from the rows for [a language that falls back](#a-language-that-falls-back). The tables in [`benchmarks/earlier-design-results`](../benchmarks/earlier-design-results) are from an Apple M2 Max and from before that change, so they describe the earlier design.
 
 An earlier, shorter run on the same machine gave the plain texts within 2% of these times.
 
@@ -79,7 +79,7 @@ With Mono's interpreter:
 
 ### A language that falls back
 
-A German user of an app in English and Dutch sees English. These rows come from another machine, an Apple M2 Max on macOS. They ran on the same .NET and BenchmarkDotNet, and with Mono's interpreter in a headless Chrome 158. So compare them with the default language of the same run, shown next to them, rather than with the tables above.
+A German user of an app in English and Dutch sees English. These rows come from another machine, an Apple M2 Max on macOS. They ran on the same .NET and BenchmarkDotNet, and with Mono's interpreter in a headless Chrome 158. The tables of that run weren't kept. So compare them with the default language of the same run, shown next to them, rather than with the tables above.
 
 On .NET:
 
@@ -170,7 +170,7 @@ Where the first and the third row come from:
 
 What to know:
 
-- What Idioma keeps of .NET is `System.Collections.Immutable` (1.9 KB), `System.Threading` (1.7 KB), `System.Linq` (0.8 KB) and `System.Private.CoreLib` (0.4 KB). An app that uses them itself downloads them anyway, so Idioma costs it less. resx keeps 2.4 KB of `System.Private.CoreLib`, for `ResourceManager`.
+- What Idioma keeps of .NET is mostly `System.Collections.Immutable` (1.9 KB), `System.Threading` (1.7 KB), `System.Linq` (0.8 KB) and `System.Private.CoreLib` (0.4 KB). Smaller files make up the last 0.2 KB. An app that uses them itself downloads them anyway, so Idioma costs it less. resx keeps 2.4 KB of `System.Private.CoreLib`, for `ResourceManager`.
 - The app's assembly holds each approach's texts in the default language, and the code generated for them. For resx, that's its resources and the class resx generates. The class stays even though `IStringLocalizer` never calls it, because Blazor doesn't trim the app's own assembly by default (`TrimMode` is `partial`). For Idioma, it's the sets, and the contract, the generated class and the registrar that the source generator writes.
 - A user of resx downloads only the satellite assembly of their own language. A user of the default language downloads none. So resx and `IStringLocalizer` cost a user 19.3 KB, or 23.2 KB for a user whose language isn't the default.
 - Idioma compiles the set of every language into the app's assembly, so every user downloads all of them. So an app in three languages costs every user 30.1 KB plus 2 × 1.8 KB, which is 33.7 KB.
