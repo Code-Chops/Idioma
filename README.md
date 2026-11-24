@@ -169,7 +169,7 @@ public string Title => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
 
 `Inline` takes one argument per language you declared, so leaving out a translation doesn't compile. It returns the wording for the user's language, so write the property with `=>`. A property with an initializer keeps the wording of the first user.
 
-To include a value, write it into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC302`).
+To include a value, write it into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC402`).
 
 #### Write an attribute
 
@@ -228,7 +228,7 @@ static readonly string Frozen = ShopLocalization.Checkout; // The first user's l
 static string Label => ShopLocalization.Checkout;          // Each user's own language
 ```
 
-The build warns about a text in the initializer of a static field or property (`LOC506`).
+The build warns about a text in the initializer of a static field or property (`LOC602`).
 
 ### The user's language
 
@@ -275,10 +275,10 @@ Every language implements the method, so each can put the value where it reads b
 Use the value in every language. A Dutch greeting that lost its `{name}` is a build error:
 
 ```text
-error LOC302: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', but the default wording of 'IShopLocalization.Greeting' shows it. Use 'name' in every language, or users of 'nl' won't see it.
+error LOC402: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', but the default wording of 'IShopLocalization.Greeting' shows it. Use 'name' in every language, or users of 'nl' won't see it.
 ```
 
-A placeholder such as `{0}` gets build warning `LOC502`, because nothing fills it in. Your IDE turns such a text into a method that takes the value.
+A placeholder such as `{0}` gets build warning `LOC403`, because nothing fills it in. Your IDE turns such a text into a method that takes the value.
 
 The values are formatted for `CultureInfo.CurrentCulture`, as in any interpolated string.
 

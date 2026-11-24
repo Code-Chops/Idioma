@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Holds every language of <c>LocalizableText.Inline</c> to the values its default wording shows (<c>LOC302</c>), as
+/// Holds every language of <c>LocalizableText.Inline</c> to the values its default wording shows (<c>LOC402</c>), as
 /// <see cref="TextParametersAnalyzer"/> holds a text of a set.
 /// </summary>
 /// <remarks>

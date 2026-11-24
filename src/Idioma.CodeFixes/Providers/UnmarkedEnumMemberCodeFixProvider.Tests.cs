@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="UnmarkedEnumMemberCodeFixProvider"/>: a member of an enum without <c>[Localized]</c> next to
-/// members that have it (<c>LOC503</c>) gets the attribute with its name as the default wording, and the compiler then
+/// members that have it (<c>LOC501</c>) gets the attribute with its name as the default wording, and the compiler then
 /// asks for the other languages.
 /// </summary>
 public sealed class UnmarkedEnumMemberCodeFixProviderTests

@@ -50,7 +50,7 @@ The attribute reads the text for each request, so the label and the message foll
 
 A server serves users of different languages at once, so a text that's kept shows one user the language of another:
 
-- **A static field or property.** `static readonly string Label = ShopLocalization.Checkout;` keeps the language of the first request. The build warns about it ([LOC506](build-errors.md#loc506)). Write `static string Label => ShopLocalization.Checkout;`.
+- **A static field or property.** `static readonly string Label = ShopLocalization.Checkout;` keeps the language of the first request. The build warns about it ([LOC602](build-errors.md#loc602)). Write `static string Label => ShopLocalization.Checkout;`.
 - **A singleton or a cache.** A text kept in a field of a singleton, or in a cached view model, stays in the language it was read in. The build doesn't see this. Keep what the text depends on, such as an id, and read the text per request.
 - **Work outside a request.** A background job or an email has no request, so it runs in the language of the server. Wrap the block that reads the texts in `LocalizationRegistry.UseCulture`, with the culture of the recipient ([Another language](advanced-topics.md#another-language)).
 

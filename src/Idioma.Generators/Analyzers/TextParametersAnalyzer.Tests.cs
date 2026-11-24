@@ -130,7 +130,7 @@ public sealed class TextParametersAnalyzerTests
     [Arguments("""public string Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd";""", "", "ShopLocalizationNl")]
     [Arguments("""string IShopLocalization.Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd";""", "", "ShopLocalizationNl")]
     [Arguments("""public string Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd";""", """public override string Invited(string guest, string host) => $"{host} has invited {guest}";""", "ShopLocalizationEnGb")]
-    public async Task SetNamingParametersTheOtherWayRound_ShouldReportLOC301AtEach(string dutch, string british, string set)
+    public async Task SetNamingParametersTheOtherWayRound_ShouldReportLOC401AtEach(string dutch, string british, string set)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(
@@ -144,7 +144,7 @@ public sealed class TextParametersAnalyzerTests
         // default set's.
         diagnostics.Length.ShouldBe(2);
         diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == TextParametersAnalyzer.ParameterNamesDifferDiagnosticId);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC301");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC401");
         diagnostics.ShouldAllBe(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         var first = diagnostics.OrderBy(static diagnostic => diagnostic.Location.SourceSpan.Start).First();
@@ -153,7 +153,7 @@ public sealed class TextParametersAnalyzerTests
     }
 
     [Test]
-    public async Task SetNamingOneParameterDifferently_ShouldReportLOC301AtThatParameter()
+    public async Task SetNamingOneParameterDifferently_ShouldReportLOC401AtThatParameter()
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets("""
@@ -184,7 +184,7 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC301");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC401");
     }
 
     [Test]
@@ -248,7 +248,7 @@ public sealed class TextParametersAnalyzerTests
     [Arguments("""string IGreetingLocalization.Greeting(string name) => "Hallo!";""", DutchDear, "", "GreetingLocalizationNl", "Greeting", "nl")]
     [Arguments(DutchGreeting, """public string Dear(Salutation salutation, string name) => salutation is Salutation.Madam ? "Geachte mevrouw" : "Geachte klant";""", "", "GreetingLocalizationNl", "Dear", "nl")]
     [Arguments(DutchGreeting, DutchDear, """public override string Greeting(string name) => "Hello there!";""", "GreetingLocalizationEnGb", "Greeting", "en-GB")]
-    public async Task SetLeavingOutValueTheDefaultWordingShows_ShouldReportLOC302AtItsParameter(string greeting, string dear, string british, string set, string text, string language)
+    public async Task SetLeavingOutValueTheDefaultWordingShows_ShouldReportLOC402AtItsParameter(string greeting, string dear, string british, string set, string text, string language)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Greetings(
@@ -263,7 +263,7 @@ public sealed class TextParametersAnalyzerTests
         // default set's, and whatever shape its body has.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(TextParametersAnalyzer.ValueLeftOutDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.Id.ShouldBe("LOC402");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe($"'{set}.{text}' doesn't use its parameter 'name', but the default wording of 'IGreetingLocalization.{text}' shows it. Use 'name' in every language, or users of '{language}' won't see it.");
         diagnostic.Location.SourceTree!.ToString()[diagnostic.Location.SourceSpan.Start..].ShouldStartWith("name)");
@@ -280,7 +280,7 @@ public sealed class TextParametersAnalyzerTests
             """));
 
         // Assert
-        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC301", "LOC302"], ignoreOrder: true);
+        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC401", "LOC402"], ignoreOrder: true);
     }
 
     [Test]
@@ -300,12 +300,12 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.Id.ShouldBe("LOC402");
         diagnostic.GetMessage().ShouldBe("'ShopLocalizationDe.Invited' doesn't use its parameter 'guest', but the default wording of 'IShopLocalization.Invited' shows it. Use 'guest' in every language, or users of 'de' won't see it.");
     }
 
     [Test]
-    public async Task SetWhoseLanguageTheBuildCannotRead_ShouldReportLOC302WithoutNamingIt()
+    public async Task SetWhoseLanguageTheBuildCannotRead_ShouldReportLOC402WithoutNamingIt()
     {
         // Arrange & Act: the German set's LocalizationLanguageCode is no constant, so only the running app knows its language.
         var diagnostics = await AnalyzeAsync("""
@@ -323,7 +323,7 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.Id.ShouldBe("LOC402");
         diagnostic.GetMessage().ShouldEndWith("Use 'guest' in every language, or users of that language won't see it.");
     }
 
@@ -350,7 +350,7 @@ public sealed class TextParametersAnalyzerTests
     }
 
     [Test]
-    public async Task PartialMethodLeavingValueOut_ShouldReportLOC302AtItsBody()
+    public async Task PartialMethodLeavingValueOut_ShouldReportLOC402AtItsBody()
     {
         // Arrange & Act: the set names the part that declares the method as the text's implementation, and the part
         // that implements it holds the wording.
@@ -373,12 +373,12 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.Id.ShouldBe("LOC402");
         diagnostic.GetMessage().ShouldStartWith("'GreetingLocalizationNl.Greeting' doesn't use its parameter 'name'");
     }
 
     [Test]
-    public async Task PartialMethodNamingParameterDifferently_ShouldReportLOC301Once()
+    public async Task PartialMethodNamingParameterDifferently_ShouldReportLOC401Once()
     {
         // Arrange & Act: both parts name it, and the part that declares it is reported.
         var diagnostics = await AnalyzeAsync($$"""
@@ -399,7 +399,7 @@ public sealed class TextParametersAnalyzerTests
             """);
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC301");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC401");
     }
 
     [Test]
@@ -434,7 +434,7 @@ public sealed class TextParametersAnalyzerTests
 
         // Assert: the name, and not the form of address.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.Id.ShouldBe("LOC402");
         diagnostic.GetMessage().ShouldBe("'MailLocalizationNl.Welcome' doesn't use its parameter 'name', but the default wording of 'IMailLocalization.Welcome' shows it. Use 'name' in every language, or users of 'nl' won't see it.");
     }
 }

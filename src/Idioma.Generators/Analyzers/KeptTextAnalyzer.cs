@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reports a text that is read once and kept for the whole app: one in the initializer of a static field or a static
-/// property (<c>LOC506</c>), as in <c>static readonly string Label = ShopLocalization.Checkout;</c>.
+/// property (<c>LOC602</c>), as in <c>static readonly string Label = ShopLocalization.Checkout;</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,7 +33,7 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
 {
-    public const string KeptTextDiagnosticId = "LOC506";
+    public const string KeptTextDiagnosticId = "LOC602";
 
     private const string ContractAttributeName = "LocalizationContractAttribute";
 

@@ -24,9 +24,9 @@ namespace CodeChops.Idioma;
 /// where you show it, because a string kept in a static field stays in the language of the first user.
 /// </para>
 /// <para>
-/// In an application, the first language is the fallback for every text, including the texts of the libraries it
-/// uses. See <see cref="LocalizableText"/>. A library's own default language applies only in an application that
-/// declares no languages.
+/// An application always declares its languages, even without texts of its own (<c>LOC103</c>), because they're the
+/// languages its users get. Its first language is the fallback for every text, including the texts of the libraries
+/// it uses. See <see cref="LocalizableText"/>. A library's languages only describe the library's own texts.
 /// </para>
 /// <para>
 /// To add a language, add it to the list. The build then reports every text without it, including those of the
@@ -40,7 +40,7 @@ namespace CodeChops.Idioma;
 /// your English.
 /// </para>
 /// <para>
-/// An assembly without this attribute has no texts of its own to translate. Neither <c>LocalizableText.Inline</c> nor
+/// A library without this attribute has no texts of its own to translate. Neither <c>LocalizableText.Inline</c> nor
 /// <c>[Localized]</c> exists there. It can still reword a library's set, or give a library's contract another
 /// language.
 /// </para>

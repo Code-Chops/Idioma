@@ -5,9 +5,9 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC505</c>), a member of an enum without
-/// <c>[Localized]</c> next to members that have it (<c>LOC503</c>), and a call of <c>GetTextByMember</c> or
-/// <c>GetTextOfType</c> that names a member or a type without a text (<c>LOC504</c>). Without these,
+/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC502</c>), a member of an enum without
+/// <c>[Localized]</c> next to members that have it (<c>LOC501</c>), and a call of <c>GetTextByMember</c> or
+/// <c>GetTextOfType</c> that names a member or a type without a text (<c>LOC601</c>). Without these,
 /// <c>GetTextByMember</c> would silently give nothing, and <c>GetText()</c> would silently show the member's name.
 /// </summary>
 /// <remarks>
@@ -31,9 +31,9 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 {
-    public const string UnmarkedEnumMemberDiagnosticId = "LOC503";
-    public const string NoTextToFindDiagnosticId = "LOC504";
-    public const string CannotRegisterDiagnosticId = "LOC505";
+    public const string UnmarkedEnumMemberDiagnosticId = "LOC501";
+    public const string NoTextToFindDiagnosticId = "LOC601";
+    public const string CannotRegisterDiagnosticId = "LOC502";
 
     private const string GetTextByMemberName = "GetTextByMember";
     private const string GetTextOfTypeName = "GetTextOfType";
@@ -104,7 +104,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Reports a call of <c>GetTextByMember</c> or <c>GetTextOfType</c> that names its type and its member in the code,
-    /// when that member or type has no text (<c>LOC504</c>): <c>GetTextByMember&lt;Address&gt;(nameof(Address.Street))</c>,
+    /// when that member or type has no text (<c>LOC601</c>): <c>GetTextByMember&lt;Address&gt;(nameof(Address.Street))</c>,
     /// <c>GetTextByMember(typeof(Address), "Street")</c>, or <c>GetTextOfType&lt;Address&gt;()</c>.
     /// </summary>
     // Not a call that takes a MemberInfo or a Type the code only has at run time, such as the property a form shows,
@@ -237,7 +237,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports a <c>[Localized]</c> that gives its member no text (<c>LOC505</c>).
+    /// Reports a <c>[Localized]</c> that gives its member no text (<c>LOC502</c>).
     /// </summary>
     private static void AnalyzeLocalized(SyntaxNodeAnalysisContext context, ImmutableArray<string> codes)
     {
@@ -307,7 +307,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Reports each member of an enum without <c>[Localized]</c>, where another member of the enum has it
-    /// (<c>LOC503</c>).
+    /// (<c>LOC501</c>).
     /// </summary>
     private static void AnalyzeEnum(SyntaxNodeAnalysisContext context, string sample)
     {

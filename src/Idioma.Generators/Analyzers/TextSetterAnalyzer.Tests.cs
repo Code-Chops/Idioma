@@ -84,7 +84,7 @@ public sealed class TextSetterAnalyzerTests
     [Arguments(EnglishGreeting, """public string Greeting { get; private set; } = "Hallo!";""", "ShopLocalizationNl")]
     [Arguments(EnglishGreeting, """public string Greeting { get => "Hallo!"; set { } }""", "ShopLocalizationNl")]
     [Arguments("""public virtual string Greeting { get; private set; } = "Hello!";""", DutchGreeting, "ShopLocalizationEn")]
-    public async Task TextWithSetter_ShouldReportLOC206(string english, string dutch, string set)
+    public async Task TextWithSetter_ShouldReportLOC301(string english, string dutch, string set)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(english, dutch));
@@ -93,7 +93,7 @@ public sealed class TextSetterAnalyzerTests
         // one included.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(TextSetterAnalyzer.TextSetterDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC206");
+        diagnostic.Id.ShouldBe("LOC301");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe(
             $"'{set}.Greeting' has a setter, so its wording can change after the set is created. Remove the setter. "
@@ -102,7 +102,7 @@ public sealed class TextSetterAnalyzerTests
     }
 
     [Test]
-    public async Task OverrideOfTextWithSetter_ShouldReportLOC206AtEach()
+    public async Task OverrideOfTextWithSetter_ShouldReportLOC301AtEach()
     {
         // Arrange & Act: a British set that overrides the English text, setter and all.
         var diagnostics = await AnalyzeAsync(Sets(
@@ -112,7 +112,7 @@ public sealed class TextSetterAnalyzerTests
 
         // Assert
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC206");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC301");
         diagnostics.Select(static diagnostic => diagnostic.GetMessage()).ShouldContain(message => message.StartsWith("'ShopLocalizationEn.Greeting' has a setter", StringComparison.Ordinal));
         diagnostics.Select(static diagnostic => diagnostic.GetMessage()).ShouldContain(message => message.StartsWith("'ShopLocalizationEnGb.Greeting' has a setter", StringComparison.Ordinal));
     }
@@ -167,7 +167,7 @@ public sealed class TextSetterAnalyzerTests
     }
 
     [Test]
-    public async Task SetOfContractOfAnotherAssembly_ShouldReportLOC206()
+    public async Task SetOfContractOfAnotherAssembly_ShouldReportLOC301()
     {
         // Arrange & Act: an app adds German to a library, in an assembly that declares no languages itself.
         var diagnostics = await AnalyzeAsync("""
@@ -183,7 +183,7 @@ public sealed class TextSetterAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC206");
+        diagnostic.Id.ShouldBe("LOC301");
         diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationDe.Total' has a setter");
     }
 }

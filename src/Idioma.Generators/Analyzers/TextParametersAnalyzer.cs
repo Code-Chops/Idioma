@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Holds a text that takes values to the parameters of its contract, in every language: to their names
-/// (<c>LOC301</c>), and to the values the default wording shows (<c>LOC302</c>).
+/// (<c>LOC401</c>), and to the values the default wording shows (<c>LOC402</c>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,11 +27,11 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
 {
-    public const string ParameterNamesDifferDiagnosticId = "LOC301";
-    public const string ValueLeftOutDiagnosticId = "LOC302";
+    public const string ParameterNamesDifferDiagnosticId = "LOC401";
+    public const string ValueLeftOutDiagnosticId = "LOC402";
 
     /// <summary>
-    /// The property of <c>LOC301</c> that holds the names the contract gives the text's parameters, in their order,
+    /// The property of <c>LOC401</c> that holds the names the contract gives the text's parameters, in their order,
     /// separated by commas: <c>host,guest</c>. Its code fix names the parameters from it, also in a workspace that
     /// hasn't run the generator that writes the contract.
     /// </summary>
@@ -109,19 +109,19 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         // Read once, and only for a text that has a value to hold the method to.
         ImmutableArray<ISymbol>? used = null;
 
-        // The language of the set as LOC302 names it: 'nl', or "that language" when the build can't read it.
+        // The language of the set as LOC402 names it: 'nl', or "that language" when the build can't read it.
         string? language = null;
 
         // A partial method is implemented by the part that holds its body, and the set names the part that declares it
         // as the implementation of a text. Each part is read for itself: the names where it declares them, and the
-        // values where its body uses them. So LOC301 is reported at the declaring part alone.
+        // values where its body uses them. So LOC401 is reported at the declaring part alone.
         var declaringPart = method.PartialDefinitionPart;
 
         foreach (var text in ContractTexts.FindImplementedTexts(method, set).OfType<IMethodSymbol>())
         {
             var reported = false;
 
-            // The names of the contract for the code fix of LOC301, made once per text that a name differs from.
+            // The names of the contract for the code fix of LOC401, made once per text that a name differs from.
             ImmutableDictionary<string, string?>? properties = null;
 
             for (var i = 0; i < method.Parameters.Length && i < text.Parameters.Length; i++)

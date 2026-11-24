@@ -590,7 +590,7 @@ public sealed class LocalizationRegistrationPartTests
     [Arguments("public ShopLocalizationDe(string wording) { }", "it has no parameterless constructor")]
     [Arguments("private ShopLocalizationDe() { }", "it has no parameterless constructor")]
     [Arguments("public ShopLocalizationDe(string wording = \"\") { } public ShopLocalizationDe(int count = 0) { }", "it has no parameterless constructor")]
-    public void SetWithoutParameterlessConstructor_ReportsLOC400AndIsLeftOut(string constructor, string expectedReason)
+    public void SetWithoutParameterlessConstructor_ReportsLOC208AndIsLeftOut(string constructor, string expectedReason)
     {
         // Arrange & Act: the sibling shows that the rest of the assembly still registers.
         var result = Run($$"""
@@ -612,7 +612,7 @@ public sealed class LocalizationRegistrationPartTests
         var run = result.Results.ShouldHaveSingleItem();
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizationRegistrationPart.CannotRegisterDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC400");
+        diagnostic.Id.ShouldBe("LOC208");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldContain("TestApp.ShopLocalizationDe");
         diagnostic.GetMessage().ShouldContain(expectedReason);
@@ -662,7 +662,7 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void SetWithPrimaryConstructor_ReportsLOC400()
+    public void SetWithPrimaryConstructor_ReportsLOC208()
     {
         // Arrange & Act
         var result = Run($$"""
@@ -676,16 +676,16 @@ public sealed class LocalizationRegistrationPartTests
 
         // Assert: not registered, and its language recorded for when it's registered by hand.
         var run = result.Results.ShouldHaveSingleItem();
-        run.Diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC400");
+        run.Diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC208");
         var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
         text.ShouldNotContain("new TestApp.ShopLocalizationDe(");
         text.ShouldContain("ShopLocalizationDe>(\"de\");");
     }
 
     [Test]
-    public void DefaultLanguageSetWithoutParameterlessConstructor_ReportsNoLOC400()
+    public void DefaultLanguageSetWithoutParameterlessConstructor_ReportsNoLOC208()
     {
-        // Arrange & Act: such a set gets its contract but no texts, which LOC200 reports. The advice of LOC400, to
+        // Arrange & Act: such a set gets its contract but no texts, which LOC200 reports. The advice of LOC208, to
         // exclude the set and register it by hand, is no way out for it.
         var result = Run("""
             using CodeChops.Idioma;
@@ -716,7 +716,7 @@ public sealed class LocalizationRegistrationPartTests
     [Test]
     [Arguments("ShopLocalization1")]
     [Arguments("ShopLocalizationSet")]
-    public void SetWithoutLanguageCode_ReportsLOC400RatherThanThrowingAtLoad(string name)
+    public void SetWithoutLanguageCode_ReportsLOC208RatherThanThrowingAtLoad(string name)
     {
         // Arrange & Act: registering this would throw while the assembly loads. The letters of "Set" hold no code,
         // because a code starts with a capital, so the set isn't Estonian (et).
@@ -732,13 +732,13 @@ public sealed class LocalizationRegistrationPartTests
         // Assert
         var run = result.Results.ShouldHaveSingleItem();
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC400");
+        diagnostic.Id.ShouldBe("LOC208");
         diagnostic.GetMessage().ShouldContain("its name doesn't end in a language code");
         run.GeneratedSources.ShouldBeEmpty();
     }
 
     [Test]
-    public void SetNamedAfterDeclaredCodeEndingInDigits_ReportsNoLOC400()
+    public void SetNamedAfterDeclaredCodeEndingInDigits_ReportsNoLOC208()
     {
         // Arrange & Act: es-419 (Latin American Spanish) ends in digits, which the name gives through the declaration.
         var text = GeneratedText(Run("""
@@ -983,7 +983,7 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LanguageCodeOfDerivedSetNotListingInterface_ReportsLOC401()
+    public void LanguageCodeOfDerivedSetNotListingInterface_ReportsLOC206()
     {
         // Arrange & Act: the set inherits the mapping of ILocalizationSet from its base, so its own LocalizationLanguageCode is
         // never read, and it registers under the last two letters of its name: uk, which is Ukrainian.
@@ -1010,7 +1010,7 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LanguageCodeOfSetDerivedFromSetOfGeneratedContract_ReportsLOC401()
+    public void LanguageCodeOfSetDerivedFromSetOfGeneratedContract_ReportsLOC206()
     {
         // Arrange & Act: the base implements the contract generated here, which binds to nothing yet. The set registers
         // under be, which is Belarusian.
@@ -1084,7 +1084,7 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LanguageCodeImplementingNothingOnSetWithoutLanguageInName_ReportsLOC401AndLOC400()
+    public void LanguageCodeImplementingNothingOnSetWithoutLanguageInName_ReportsLOC206AndLOC208()
     {
         // Arrange & Act: the name gives no language either, so registering it would throw while the assembly loads. It
         // used to be registered, as its property seemed to implement LocalizationLanguageCode.
@@ -1106,8 +1106,8 @@ public sealed class LocalizationRegistrationPartTests
         var run = result.Results.ShouldHaveSingleItem();
         run.Diagnostics.Select(diagnostic => diagnostic.Id).Order(StringComparer.Ordinal).ShouldBe(
         [
-            LocalizationRegistrationPart.CannotRegisterDiagnosticId,
             LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId,
+            LocalizationRegistrationPart.CannotRegisterDiagnosticId,
         ]);
         run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString().ShouldNotContain("new TestApp.ShopLocalizationBritish2(");
     }
@@ -1115,7 +1115,7 @@ public sealed class LocalizationRegistrationPartTests
     [Test]
     public void ExcludedSetWithoutParameterlessConstructor_ReportsNothing()
     {
-        // Arrange & Act: excluding it is the fix LOC400 names.
+        // Arrange & Act: excluding it is the fix LOC208 names.
         var result = Run($$"""
             {{ShopContract}}
 
@@ -1235,10 +1235,11 @@ public sealed class LocalizationRegistrationPartTests
     [Test]
     public Task ApplicationReferencingAssemblyWithSets_CallsItsRegistrarFirst()
     {
-        // Arrange & Act: an app without sets or languages of its own still registers what it references, used or not.
+        // Arrange & Act: an app without sets of its own still registers what it references, used or not. Without
+        // languages it doesn't build (LOC103), and its registrar is written all the same.
         var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary));
 
-        // Assert: and, declaring no languages, it leaves every text its own default language.
+        // Assert
         text.ShouldNotContain("RegisterLanguages");
 
         return Verify(text);
@@ -1277,17 +1278,16 @@ public sealed class LocalizationRegistrationPartTests
             namespace TestApp;
             """));
 
-        // Assert: public, so that a host referencing this application registers its languages at its own start.
-        text.ShouldContain("public static class LocalizationRegistrar_TestAssembly");
+        // Assert: internal, because a host referencing this application registers its own languages first.
+        text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
         text.ShouldContain("GeneratedCode.RegisterLanguages(\"nl-BE\", \"en\");");
     }
 
     [Test]
-    public void ApplicationReferencingApplicationDeclaringLanguages_CallsItsRegistrarFirst()
+    public void ApplicationReferencingApplicationDeclaringLanguages_RegistersItsOwnLanguagesAlone()
     {
         // Arrange: a Blazor Web App's server referencing its client, which declares languages and writes only inline
-        // texts. While the client's registrar was internal, the server had no app languages until the client's own code
-        // first ran, so what it rendered before that ignored the client's default language.
+        // texts. The server declares its own, and those of the client never count.
         var client = GeneratorTestHelper.CompileApplicationWithGenerators("LanguagesClient", """
             using CodeChops.Idioma;
 
@@ -1304,10 +1304,83 @@ public sealed class LocalizationRegistrationPartTests
             """);
 
         // Act
-        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", client));
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+            """, client));
+
+        // Assert: the client's registrar is internal, as it has nothing the server must register.
+        text.ShouldContain("GeneratedCode.RegisterLanguages(\"en\", \"nl\");");
+        text.ShouldNotContain("LanguagesClient");
+    }
+
+    [Test]
+    public void ApplicationWithoutLanguages_ReportsLOC103()
+    {
+        // Arrange & Act: a host without texts of its own, whose process would have no languages.
+        var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary);
+
+        // Assert: by the name of the assembly, and without a location, as no source says that it's an app.
+        var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe(LocalizationRegistrationPart.AppWithoutLanguagesDiagnosticId);
+        diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
+        diagnostic.Location.ShouldBe(Location.None);
+        diagnostic.GetMessage().ShouldBe("'TestAssembly' is an app, but it declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.");
+    }
+
+    [Test]
+    public void ApplicationWithoutLanguagesOrReferences_ReportsLOC103()
+    {
+        // Arrange & Act: nothing uses the package but the app itself.
+        var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;");
 
         // Assert
-        text.ShouldContain("RegisterReferenced(\"LanguagesClient\", static () => CodeChops.Idioma.Generated.LocalizationRegistrar_LanguagesClient.Register());");
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem().Id.ShouldBe(LocalizationRegistrationPart.AppWithoutLanguagesDiagnosticId);
+    }
+
+    [Test]
+    public void AndroidApplicationWithoutLanguages_ReportsLOC103()
+    {
+        // Arrange & Act: built as a library, and an app by the Android SDK's property.
+        var result = GeneratorTestHelper.RunWithBuildProperties(
+            LocalizationParts.Registration(),
+            "namespace TestApp;",
+            [SetsLibrary],
+            (LocalizationRegistrationPart.AndroidApplicationProperty, "true"));
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem().Id.ShouldBe(LocalizationRegistrationPart.AppWithoutLanguagesDiagnosticId);
+    }
+
+    [Test]
+    public void LibraryWithoutLanguages_ReportsNoLOC103()
+    {
+        // Arrange & Act: a library's attribute describes only its own texts, and it has none.
+        var result = Run("namespace TestApp; public static class Nothing;", SetsLibrary);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("\"en\", \"nl\"")]
+    [Arguments("\"e\", \"nl\"")]
+    public void ApplicationWithLanguagesOrAnInvalidAttribute_ReportsNoLOC103(string languages)
+    {
+        // Arrange & Act: an invalid attribute is there, and LOC101 says what is wrong with it.
+        var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages({{languages}})]
+
+            namespace TestApp;
+            """, SetsLibrary);
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldNotContain(diagnostic => diagnostic.Id == LocalizationRegistrationPart.AppWithoutLanguagesDiagnosticId);
     }
 
     [Test]
@@ -1349,15 +1422,15 @@ public sealed class LocalizationRegistrationPartTests
             namespace TestApp;
             """, [], (LocalizationRegistrationPart.AndroidApplicationProperty, "true")));
 
-        // Assert: as for an application built as an executable, by a registrar a host referencing it can call.
-        text.ShouldContain("public static class LocalizationRegistrar_TestAssembly");
+        // Assert: as for an application built as an executable.
+        text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
         text.ShouldContain("GeneratedCode.RegisterLanguages(\"nl\", \"en\");");
     }
 
     [Test]
     public void AndroidApplicationReferencingAssemblyWithSets_CallsItsRegistrar()
     {
-        // Arrange & Act: no sets and no languages of its own, like the plain library below, which emits nothing.
+        // Arrange & Act: no sets of its own, like the plain library below, which emits nothing.
         var text = GeneratedText(GeneratorTestHelper.RunWithBuildProperties(
             LocalizationParts.Registration(),
             "namespace TestApp;",
@@ -1537,7 +1610,7 @@ public sealed class LocalizationRegistrationPartTests
     {
         // Arrange: a library, an add-on holding only a German set for the library's contract, and an app that declares
         // German and never touches the add-on. Before the app called the add-on's registrar, the add-on never loaded,
-        // while its set still satisfied the app's LOC600 check.
+        // while its set still satisfied the app's LOC700 check.
         var library = GeneratorTestHelper.EmitLibraryWithGenerators("UnusedAddOnLibrary", """
             using CodeChops.Idioma;
 
@@ -1812,7 +1885,7 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void SetWithRequiredMember_ReportsLOC400AndIsLeftOut()
+    public void SetWithRequiredMember_ReportsLOC208AndIsLeftOut()
     {
         // Arrange: new T() sets no member, so the generated registration would not compile (CS9035).
         const string source = $$"""
@@ -1835,7 +1908,7 @@ public sealed class LocalizationRegistrationPartTests
 
         // Assert
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC400");
+        diagnostic.Id.ShouldBe("LOC208");
         diagnostic.GetMessage().ShouldContain("it has a required member ('Checkout'), which generated code can't set");
         var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
         text.ShouldContain("new TestApp.ShopLocalizationNl()");
@@ -1876,7 +1949,7 @@ public sealed class LocalizationRegistrationPartTests
     [Arguments("public string LocalizationLanguageCode => \"en_GB\";", "en_GB")]
     [Arguments("string ILocalizationSet.LocalizationLanguageCode => \"\";", "")]
     [Arguments("public string LocalizationLanguageCode => \"english\" + \" \";", "english ")]
-    public void SetWithLanguageCodeThatIsNoCultureName_ReportsLOC402(string languageCode, string expectedCode)
+    public void SetWithLanguageCodeThatIsNoCultureName_ReportsLOC207(string languageCode, string expectedCode)
     {
         // Arrange & Act: in an assembly without [assembly: SupportedLanguages], where no language check looks at the
         // set. Registering it throws when the assembly loads, far from the cause.
@@ -1893,7 +1966,7 @@ public sealed class LocalizationRegistrationPartTests
         // Assert: at the property that holds the code.
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizationRegistrationPart.InvalidLanguageCodeDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC402");
+        diagnostic.Id.ShouldBe("LOC207");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldStartWith($"'ShopLocalizationBritish' gives \"{expectedCode}\" as its LocalizationLanguageCode, which isn't a culture name");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("LocalizationLanguageCode");
@@ -1944,12 +2017,12 @@ public sealed class LocalizationRegistrationPartTests
 
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC402");
+        diagnostic.Id.ShouldBe("LOC207");
         diagnostic.GetMessage().ShouldStartWith("'BritishWording' gives \"en_GB\" as its LocalizationLanguageCode");
     }
 
     [Test]
-    public void ExcludedSetWithLanguageCodeThatIsNoCultureName_ReportsLOC402()
+    public void ExcludedSetWithLanguageCodeThatIsNoCultureName_ReportsLOC207()
     {
         // Arrange & Act: registered by hand, the set throws just the same, where it is registered.
         var result = Run($$"""
@@ -1964,11 +2037,11 @@ public sealed class LocalizationRegistrationPartTests
             """);
 
         // Assert
-        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC402");
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC207");
     }
 
     [Test]
-    public void SetWithLanguageCodeThatIsNoCultureNameInAssemblyDeclaringLanguages_ReportsLOC402Alone()
+    public void SetWithLanguageCodeThatIsNoCultureNameInAssemblyDeclaringLanguages_ReportsLOC207Alone()
     {
         // Arrange & Act: with every generator at work. Taken for a language, the code would be reported as unlisted,
         // with the advice to list it, which the attribute then refuses (LOC101).
@@ -1987,7 +2060,7 @@ public sealed class LocalizationRegistrationPartTests
             """);
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC402");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC207");
     }
 
     [Test]
@@ -2014,7 +2087,7 @@ public sealed class LocalizationRegistrationPartTests
 
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC401");
+        diagnostic.Id.ShouldBe("LOC206");
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationUk' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopLocalizationUk");
     }
@@ -2041,7 +2114,7 @@ public sealed class LocalizationRegistrationPartTests
 
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC401");
+        diagnostic.Id.ShouldBe("LOC206");
         diagnostic.GetMessage().ShouldContain("'class BritishWording : ShopLocalizationEn, ILocalizationSet'");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("BritishWording");
     }
@@ -2102,7 +2175,7 @@ public sealed class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void SetObsoleteAsError_ShouldReportLOC400AndLeaveGeneratedCodeCompiling()
+    public void SetObsoleteAsError_ShouldReportLOC208AndLeaveGeneratedCodeCompiling()
     {
         // Arrange: naming the set is an error (CS0619), which no pragma turns off, so generated code mustn't name it.
         const string source = """
@@ -2131,7 +2204,7 @@ public sealed class LocalizationRegistrationPartTests
         // Assert: it isn't registered, and the warning says why.
         errors.ShouldBeEmpty();
         var warning = warnings.ShouldHaveSingleItem();
-        warning.Id.ShouldBe("LOC400");
+        warning.Id.ShouldBe("LOC208");
         warning.GetMessage().ShouldContain("because it's marked [Obsolete] as an error, and generated code can't name such a class");
     }
 
@@ -2449,7 +2522,7 @@ public sealed class LocalizationRegistrationPartTests
     public void Discovery_ShouldNotRecordATextThatAMemberOnlyHides()
     {
         // Arrange & Act: a member that hides a text words nothing, because the contract calls the member it hides
-        // (LOC207). Recorded, it would keep the registry from a rewording of English. A set that lists the contract again
+        // (LOC302). Recorded, it would keep the registry from a rewording of English. A set that lists the contract again
         // maps the contract to its own member, which then words the text.
         var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RecordTrackingName, """
             using CodeChops.Idioma;
@@ -2503,15 +2576,15 @@ public sealed class LocalizationRegistrationPartTests
         // Assert: the diagnostic lies in the tree the file has now, where a pragma of that file applies to it, and the
         // registrar is not written again.
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC400");
+        diagnostic.Id.ShouldBe("LOC208");
         diagnostic.Location.SourceTree.ShouldBeSameAs(edited);
         GeneratorTestHelper.GetSourceOutputReasons(run).ShouldHaveSingleItem().ShouldBe(IncrementalStepRunReason.Cached);
     }
 
     [Test]
-    public void DefaultSetWhoseNameGivesNoLanguage_ReportsNoLOC400()
+    public void DefaultSetWhoseNameGivesNoLanguage_ReportsNoLOC208()
     {
-        // Arrange & Act: LOC200 reports this set, with the name to give it. The advice of LOC400, to exclude the set
+        // Arrange & Act: LOC200 reports this set, with the name to give it. The advice of LOC208, to exclude the set
         // and register it by hand, is no way out for a default-language set.
         var result = Run("""
             using CodeChops.Idioma;

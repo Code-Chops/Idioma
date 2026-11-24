@@ -44,7 +44,7 @@ public sealed partial class LocalizationRegistry
     /// The set wins over the sets registered before it, for every text it changes. See <see cref="ILocalizationSet"/>.
     /// </para>
     /// <para>
-    /// When your app declares languages, a set for another language never shows, because a culture outside
+    /// A set for a language your app doesn't declare never shows, because a culture outside
     /// <see cref="SupportedLanguages"/> gets the app's default language. Only <see cref="Find{TContract}(CultureInfo)"/>
     /// returns such a set.
     /// </para>
@@ -70,7 +70,7 @@ public sealed partial class LocalizationRegistry
     /// Registering a set of the same type and language again replaces the earlier one.
     /// </para>
     /// <para>
-    /// When your app declares languages, a set for another language never shows, because a culture outside
+    /// A set for a language your app doesn't declare never shows, because a culture outside
     /// <see cref="SupportedLanguages"/> gets the app's default language. Only <see cref="Find{TContract}(CultureInfo)"/>
     /// returns such a set.
     /// </para>

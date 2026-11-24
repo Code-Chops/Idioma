@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="SharedEnumValueCodeFixProvider"/>: a call that names an enum member whose value an earlier
-/// member has (<c>LOC500</c>) becomes the member's own text in the generated class of its set.
+/// member has (<c>LOC600</c>) becomes the member's own text in the generated class of its set.
 /// </summary>
 public sealed class SharedEnumValueCodeFixProviderTests
 {

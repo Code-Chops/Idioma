@@ -101,7 +101,7 @@ internal static partial class LocalizationDiscovery
 
         foreach (var member in type.GetMembers())
         {
-            // A member that hides a text words nothing, because the contract calls the member it hides (LOC207).
+            // A member that hides a text words nothing, because the contract calls the member it hides (LOC302).
             // Recorded, it would keep the registry from the wording a rewording of the language gives that text.
             if (HidesText(member, type))
                 continue;
@@ -126,7 +126,7 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// The texts a set inherits from the classes of its assembly it derives from, without declaring them: public string
     /// properties, and methods of the shape of a text that takes values. A contract takes only the texts its set
-    /// declares, so it leaves these out, and no other language has to word them (<c>LOC208</c>).
+    /// declares, so it leaves these out, and no other language has to word them (<c>LOC303</c>).
     /// </summary>
     /// <remarks>
     /// A member the set declares again, overrides, or implements explicitly settles its name, and so does one of a
@@ -331,7 +331,7 @@ internal static partial class LocalizationDiscovery
     /// own contract). <c>LocalizationLanguageCode</c> (the <c>ILocalizationSet</c> member, which a set may override) and explicit
     /// interface implementations are not texts, and neither is a member marked
     /// <c>[ExcludeFromLocalizationDiscovery]</c>. A method of that shape that can't be a text
-    /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC300</c>). So is
+    /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC400</c>). So is
     /// a text written as a method without parameters (<see cref="TextParameters.IsTextWithoutParameters"/>). With
     /// them come the using directives the contract repeats (<see cref="RepeatedUsings"/>).
     /// </summary>
@@ -340,7 +340,7 @@ internal static partial class LocalizationDiscovery
     /// property named after the member. A member the class declares no such text for gets one all the same, after the
     /// texts that are written, in the order of the enum. The contract then asks every set for it, the
     /// default-language set too (<c>CS0535</c>). A method with the name of a member can't be its text, and is handed
-    /// back to be reported (<c>LOC300</c>).
+    /// back to be reported (<c>LOC400</c>).
     /// </remarks>
     private static ImmutableArray<LocalizationMember> GetTextMembers(INamedTypeSymbol type, ImmutableArray<LocalizedEnum> enums, WordingReader reader,
         CancellationToken cancellationToken, out ImmutableArray<UnsupportedText> unsupported, out RepeatedUsings usings)

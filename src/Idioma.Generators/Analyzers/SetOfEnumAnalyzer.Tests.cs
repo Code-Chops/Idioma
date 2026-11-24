@@ -123,14 +123,14 @@ public sealed class SetOfEnumAnalyzerTests
     [Test]
     [Arguments("ILocalizationSet, IOrderStatusLocalization", "ILocalizationSet, IOrderStatusLocalization")]
     [Arguments("IOrderStatusLocalization, CodeChops.Idioma.ILocalizationSet", "CodeChops.Idioma.ILocalizationSet")]
-    public async Task DutchSetListingILocalizationSet_ShouldReportLOC211AtIt(string dutchBase, string at)
+    public async Task DutchSetListingILocalizationSet_ShouldReportLOC205AtIt(string dutchBase, string at)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(dutchBase));
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC211");
+        diagnostic.Id.ShouldBe("LOC205");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationNl' doesn't list 'ILocalizationSet<OrderStatus>', which every set of 'IOrderStatusLocalization' lists. List it in place of 'ILocalizationSet'.");
         At(diagnostic).ShouldStartWith(at);
@@ -166,7 +166,7 @@ public sealed class SetOfEnumAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC211");
+        diagnostic.Id.ShouldBe("LOC205");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationNl' lists 'ILocalizationSet<PaymentStatus>', but 'IOrderStatusLocalization' has no texts of 'PaymentStatus'. Remove it, or list it in the default-language set too.");
         At(diagnostic).ShouldStartWith("ILocalizationSet<PaymentStatus>");
@@ -286,7 +286,7 @@ public sealed class SetOfEnumAnalyzerTests
     }
 
     [Test]
-    public async Task AppSetOfLibraryEnumListingILocalizationSet_ShouldReportLOC211()
+    public async Task AppSetOfLibraryEnumListingILocalizationSet_ShouldReportLOC205()
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync("""

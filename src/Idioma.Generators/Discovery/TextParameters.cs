@@ -13,7 +13,7 @@ internal static class TextParameters
     public const int MaxValues = 8;
 
     /// <summary>
-    /// What <c>LOC300</c> says of a text written as a method without parameters
+    /// What <c>LOC400</c> says of a text written as a method without parameters
     /// (<see cref="IsTextWithoutParameters"/>), as the clause of its message.
     /// </summary>
     public const string WithoutParametersProblem = "it takes no parameters, so write it as a property";
@@ -45,7 +45,7 @@ internal static class TextParameters
     /// Whether a member is a text written as a method without parameters, as in
     /// <c>public string Greeting() => "Hello";</c>. It has the shape of a text that takes values
     /// (<see cref="IsTextMethod"/>) but takes none, so it is no text, and what calls it as one would not compile.
-    /// <c>LOC300</c> says to write it as a property.
+    /// <c>LOC400</c> says to write it as a property.
     /// </summary>
     /// <remarks>
     /// A method that plainly is no text is left alone:
@@ -104,7 +104,7 @@ internal static class TextParameters
 
     /// <summary>
     /// What keeps a method of the shape of a text (<see cref="IsTextMethod"/>) from being one, as the clause of the
-    /// <c>LOC300</c> message, or <see langword="null"/> when nothing does.
+    /// <c>LOC400</c> message, or <see langword="null"/> when nothing does.
     /// </summary>
     // Each of these would not compile in the generated class, or would compile into something else than the set says:
     // the class repeats the parameters, and hands the values to the set of the user's language, through a function
@@ -175,7 +175,7 @@ internal static class TextParameters
     /// <c>salutation switch { Salutation.Madam => "Dear madam", _ => "Dear customer" }</c> only chooses by
     /// <c>salutation</c>.
     /// </summary>
-    // What every other language is held to (LOC302): a value the default wording shows must be in theirs, and a value
+    // What every other language is held to (LOC402): a value the default wording shows must be in theirs, and a value
     // it only chooses by may mean nothing in a language that makes no such distinction. Told from where the value
     // stands, which errs to the side of showing: a value handed on to a helper counts as shown.
     private static bool[] FindShownParameters(IMethodSymbol method, MethodDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
@@ -699,7 +699,7 @@ internal static class TextParameters
 
 /// <summary>
 /// A parameter of a text that takes values: its name, its type as generated code can write it, whether the
-/// default-language wording shows the value, which every other language is then held to (<c>LOC302</c>), and what
+/// default-language wording shows the value, which every other language is then held to (<c>LOC402</c>), and what
 /// writing its type in generated code reports besides <c>CS0612</c> and <c>CS0618</c>, such as the id of a type marked
 /// <c>[Experimental]</c> (<see cref="LocalizationDiscovery.GetSuppressedDiagnosticsOfType"/>).
 /// </summary>

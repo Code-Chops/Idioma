@@ -125,7 +125,7 @@ internal readonly record struct BaseSet(
 /// <item><see cref="ReservedTexts"/> are its texts with a name its generated class can't give them, with where each is
 /// written. Most sets have none.</item>
 /// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
-/// which its contract leaves out (<c>LOC208</c>). Most sets have none.</item>
+/// which its contract leaves out (<c>LOC303</c>). Most sets have none.</item>
 /// </list>
 /// </remarks>
 internal readonly record struct SetTextsOfContract(
@@ -203,7 +203,7 @@ internal readonly record struct InheritedText(
 
 /// <summary>
 /// A <c>LocalizationLanguageCode</c> holding a constant that is no culture name: the class or interface that declares it, the
-/// constant, and where the property is. What <c>LOC402</c> reports.
+/// constant, and where the property is. What <c>LOC207</c> reports.
 /// </summary>
 internal readonly record struct InvalidLanguageCode(
     string DeclaringType,
@@ -352,7 +352,7 @@ internal readonly record struct LocalizationMember(
 
 /// <summary>
 /// A method of a default-language set that has the shape of a text that takes values but can't be one: its name, why
-/// not, as the clause of the message, and where it is. What <c>LOC300</c> reports.
+/// not, as the clause of the message, and where it is. What <c>LOC400</c> reports.
 /// </summary>
 internal readonly record struct UnsupportedText(
     string Name,
@@ -361,7 +361,7 @@ internal readonly record struct UnsupportedText(
 
 /// <summary>
 /// A text of a default-language set with a name its generated class can't give it: its name, and where it's written.
-/// That's the member of the set, or the member of the enum for a text the set doesn't declare. What <c>LOC205</c>
+/// That's the member of the set, or the member of the enum for a text the set doesn't declare. What <c>LOC300</c>
 /// reports.
 /// </summary>
 internal readonly record struct ReservedText(
@@ -379,7 +379,7 @@ internal readonly record struct RegisteredLocalization(
     int Depth);
 
 /// <summary>
-/// A set that can't be registered automatically: what <c>LOC400</c> reports.
+/// A set that can't be registered automatically: what <c>LOC208</c> reports.
 /// </summary>
 internal readonly record struct UnregistrableLocalization(
     string MetadataName,
@@ -402,7 +402,7 @@ internal readonly record struct UnextendableSet(
 
 /// <summary>
 /// What discovery finds in the current compilation: the candidate sets, the nested or file-local sets rewording another
-/// assembly's texts (<c>LOC400</c>), and the default-language sets the generator can't use (<c>LOC200</c>), the last
+/// assembly's texts (<c>LOC208</c>), and the default-language sets the generator can't use (<c>LOC200</c>), the last
 /// two ordered by name.
 /// </summary>
 internal readonly record struct Discovery(

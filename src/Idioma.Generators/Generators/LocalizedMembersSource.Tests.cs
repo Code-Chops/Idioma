@@ -364,7 +364,7 @@ public sealed class LocalizedMembersSourceTests
     [Test]
     public void UnnamedArguments_ShouldTakeTheLanguagesInOrder()
     {
-        // Arrange & Act: LOC501 reports the missing names. The text is what the compiler makes of the arguments.
+        // Arrange & Act: LOC500 reports the missing names. The text is what the compiler makes of the arguments.
         var text = Texts(Run($$"""
             {{Header}}
 
@@ -490,7 +490,7 @@ public sealed class LocalizedMembersSourceTests
     public void MemberOfTypeMarkedObsoleteAsError_ShouldGetNoText(string onType, string onOuterType)
     {
         // Arrange: generated code can't name the type, so the member gets no text, and LocalizedMemberAnalyzer reports
-        // it (LOC505). The rest of the assembly keeps its texts.
+        // it (LOC502). The rest of the assembly keeps its texts.
         var source = $$"""
             {{Header}}
 

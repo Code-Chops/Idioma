@@ -10,7 +10,7 @@ A set's language code is the end of its name, written in PascalCase. A two-lette
 
 A longer code, such as `en-GB`, `zh-Hans`, or `fil`, comes from the name only when `[assembly: SupportedLanguages]` lists it. It's written in PascalCase too: `ShopLocalizationEnGb`, `ShopLocalizationZhHans`, `ShopLocalizationFil`. A set deriving from such a set serves the same language.
 
-Only the capital that starts the code counts. After it, the code matches in any letter case, so `ShopLocalizationEN` and `ShopLocalizationEnGB` work too. Without that capital, a name has no code. So `LocalizationSet` doesn't serve Estonian (`et`), and gets build warning `LOC400`. A set without a code serves no language, so the build still asks for a set of each language its contract lacks (`LOC201`).
+Only the capital that starts the code counts. After it, the code matches in any letter case, so `ShopLocalizationEN` and `ShopLocalizationEnGB` work too. Without that capital, a name has no code. So `LocalizationSet` doesn't serve Estonian (`et`), and gets build warning `LOC208`. A set without a code serves no language, so the build still asks for a set of each language its contract lacks (`LOC201`).
 
 An inline text and an attribute take the same codes as parameter names, in camelCase: `nl:` where a set's name ends in `Nl`, and `enGb:`, `zhHans:`, and `fil:` for the sets above.
 
@@ -45,7 +45,7 @@ You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and
   }
   ```
 
-A set that derives from another set lists `ILocalizationSet` again to implement `LocalizationLanguageCode`, as in the second example. Without it, its `LocalizationLanguageCode` implements nothing (`LOC401`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC402`.
+A set that derives from another set lists `ILocalizationSet` again to implement `LocalizationLanguageCode`, as in the second example. Without it, its `LocalizationLanguageCode` implements nothing (`LOC206`). The code it returns must be a culture name. A constant that isn't one, such as `"en_GB"`, is build error `LOC207`.
 
 Separate `en-US` and `en-GB` sets without an `en` set work too, with two drawbacks:
 

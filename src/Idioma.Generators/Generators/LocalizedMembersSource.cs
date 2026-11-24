@@ -12,11 +12,11 @@ namespace CodeChops.Idioma.Generators;
 /// <para>
 /// The code lies in one file, at the top level of the assembly. A type it can't name from there, which is a private
 /// or protected nested type or a file-local one, gets no text, and <c>LocalizedMemberAnalyzer</c> says so
-/// (<c>LOC505</c>).
+/// (<c>LOC502</c>).
 /// </para>
 /// <para>
 /// The file marks its assembly <c>[assembly: InlineTexts]</c>, because a text on a member carries its wording itself,
-/// as an inline text does. So no assembly referencing this one can add a language to it (<c>LOC601</c>).
+/// as an inline text does. So no assembly referencing this one can add a language to it (<c>LOC701</c>).
 /// </para>
 /// </remarks>
 internal static class LocalizedMembersSource

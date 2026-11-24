@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a member of a set that hides a text of a class it derives from, instead of overriding it (<c>LOC207</c>).
+/// Reports a member of a set that hides a text of a class it derives from, instead of overriding it (<c>LOC302</c>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,7 +21,7 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
 {
-    public const string HiddenTextDiagnosticId = "LOC207";
+    public const string HiddenTextDiagnosticId = "LOC302";
 
     /// <summary>
     /// The property of a diagnostic that holds the full name of the contract whose text is hidden, such as

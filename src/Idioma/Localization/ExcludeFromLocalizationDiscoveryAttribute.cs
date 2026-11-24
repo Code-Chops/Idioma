@@ -9,7 +9,7 @@ namespace CodeChops.Idioma;
 /// <remarks>
 /// <para>
 /// <b>On a set.</b> Mark a set that can't be registered automatically, such as one that needs constructor arguments.
-/// Build warning <c>LOC400</c> points these out.
+/// Build warning <c>LOC208</c> points these out.
 /// </para>
 /// <para>
 /// <b>On a member.</b> Every public string property of the set of your default language is a text. So is every public

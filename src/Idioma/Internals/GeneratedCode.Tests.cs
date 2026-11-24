@@ -115,7 +115,7 @@ public sealed class GeneratedCodeTests
             .Where(static method => method.Name is nameof(GeneratedCode.WordSetText))
             .Select(static method => method.GetGenericArguments().Length);
 
-        // Assert: the contract and the set of the default language, and then a type per value (LOC300 allows 8).
+        // Assert: the contract and the set of the default language, and then a type per value (LOC400 allows 8).
         typeParameters.ShouldBe([2, 3, 4, 5, 6, 7, 8, 9, 10], ignoreOrder: true);
     }
 

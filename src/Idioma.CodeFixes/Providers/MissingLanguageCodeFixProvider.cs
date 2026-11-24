@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
 /// Fixes a contract without a set for one of the languages: a contract of this assembly (<c>LOC201</c>), or one of a
-/// library it references (<c>LOC600</c>). It adds the set the message names, in a file of its own next to the file the
+/// library it references (<c>LOC700</c>). It adds the set the message names, in a file of its own next to the file the
 /// diagnostic is in: <c>ShopLocalizationDe.cs</c> with
 /// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>. A region of a language that has a set
 /// derives from that set instead, as in <c>public class ShopLocalizationEnGb : ShopLocalizationEn</c>.

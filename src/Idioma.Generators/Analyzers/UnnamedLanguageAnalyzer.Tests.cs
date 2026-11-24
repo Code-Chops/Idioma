@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="UnnamedLanguageAnalyzer"/>: in an assembly that declares languages, a language argument must
-/// be named (<c>LOC501</c>). In an assembly without languages, a call of <c>LocalizableText.Inline</c> is reported
+/// be named (<c>LOC500</c>). In an assembly without languages, a call of <c>LocalizableText.Inline</c> is reported
 /// (<c>LOC100</c>). A plain string is never reported, because a text is a string.
 /// </summary>
 public sealed class UnnamedLanguageAnalyzerTests
@@ -56,7 +56,7 @@ public sealed class UnnamedLanguageAnalyzerTests
     [Test]
     [Arguments("""LocalizableText.Inline("Orders", "Bestellingen")""")]
     [Arguments("""LocalizableText.Inline("Orders", nl: "Bestellingen")""")]
-    public async Task UnnamedLanguage_ShouldReportLOC501(string text)
+    public async Task UnnamedLanguage_ShouldReportLOC500(string text)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeMemberAsync($"public static string Bad => {text};");
@@ -65,7 +65,7 @@ public sealed class UnnamedLanguageAnalyzerTests
         // fix.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(UnnamedLanguageAnalyzer.UnnamedLanguageDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC501");
+        diagnostic.Id.ShouldBe("LOC500");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("Name the language of this wording: LocalizableText.Inline(en: \"...\", nl: \"...\"). Without names, two languages can swap unnoticed.");
         diagnostic.Properties[UnnamedLanguageAnalyzer.ParameterNamesProperty].ShouldBe("en,nl");
@@ -75,7 +75,7 @@ public sealed class UnnamedLanguageAnalyzerTests
     [Arguments("""[Localized("City", "Plaats")]""", "\"City\"")]
     [Arguments("""[Localized("City", nl: "Plaats")]""", "\"City\"")]
     [Arguments("""[Localized(en: "City", "Plaats")]""", "\"Plaats\"")]
-    public async Task UnnamedLanguageOfLocalized_ShouldReportLOC501(string attribute, string at)
+    public async Task UnnamedLanguageOfLocalized_ShouldReportLOC500(string attribute, string at)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeMemberAsync($"{attribute} public static string City {{ get; }} = \"\";");
@@ -83,7 +83,7 @@ public sealed class UnnamedLanguageAnalyzerTests
         // Assert: once per attribute, at the first argument without a name, with the language of each argument for
         // the fix.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC501");
+        diagnostic.Id.ShouldBe("LOC500");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("Name the language of this wording: [Localized(en: \"...\", nl: \"...\")]. Without names, two languages can swap unnoticed.");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe(at);
@@ -163,7 +163,7 @@ public sealed class UnnamedLanguageAnalyzerTests
     [Test]
     [Arguments("Page_razor.g.cs")]
     [Arguments("Pages/Index_cshtml.g.cs")]
-    public async Task UnnamedLanguageInRazorOutput_ShouldReportLOC501(string outputPath)
+    public async Task UnnamedLanguageInRazorOutput_ShouldReportLOC500(string outputPath)
     {
         // Arrange: what Razor writes for <Comp Caption="@LocalizableText.Inline("Orders", "Bestellingen")" /> in a
         // component or a page: generated code, but the user's own markup.
@@ -182,7 +182,7 @@ public sealed class UnnamedLanguageAnalyzerTests
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync(Member(""), (outputPath, razorOutput));
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC501");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC500");
     }
 
     [Test]

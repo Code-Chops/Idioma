@@ -14,7 +14,7 @@
     <NoWarn>MA0004;$(NoWarn);</NoWarn> <!-- Use Task.ConfigureAwait - not necessary for tests -->
     <NoWarn>MA0048;$(NoWarn);</NoWarn> <!-- File name must match type name - a fixture the generators must discover can't nest -->
     <NoWarn>CS0618;$(NoWarn);</NoWarn> <!-- Tests call GeneratedCode, which is obsolete for consumers -->
-    <NoWarn>LOC504;$(NoWarn);</NoWarn> <!-- A test asks for the text of a member without one, which gives null -->
+    <NoWarn>LOC601;$(NoWarn);</NoWarn> <!-- A test asks for the text of a member without one, which gives null -->
   </PropertyGroup>
 
   <ItemGroup>

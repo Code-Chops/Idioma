@@ -38,11 +38,11 @@ public static class LocalizationSetsPart
     public const string UnlistedLanguageDiagnosticId = "LOC202";
     public const string DerivedFromOtherLanguageDiagnosticId = "LOC203";
     public const string MissingContractDiagnosticId = "LOC204";
-    public const string LibraryMissingLanguageDiagnosticId = "LOC600";
-    public const string LibraryCannotBeTranslatedDiagnosticId = "LOC601";
-    public const string ReservedTextNameDiagnosticId = "LOC205";
-    public const string UndeclaredTextDiagnosticId = "LOC208";
-    public const string UnsupportedTextDiagnosticId = "LOC300";
+    public const string LibraryMissingLanguageDiagnosticId = "LOC700";
+    public const string LibraryCannotBeTranslatedDiagnosticId = "LOC701";
+    public const string ReservedTextNameDiagnosticId = "LOC300";
+    public const string UndeclaredTextDiagnosticId = "LOC303";
+    public const string UnsupportedTextDiagnosticId = "LOC400";
 
     // The namespaces the file of a contract imports, for what the method that gives a text by its key names (AppendGet).
     private static readonly string[] ImportedNamespaces = ["System", "System.Collections.Generic"];
@@ -51,19 +51,19 @@ public static class LocalizationSetsPart
     /// The property of a diagnostic that holds the name that resolves it, for its code fix to apply: the name the class
     /// should carry (<c>LOC200</c>, when a rename resolves it), the language to list in
     /// <c>[assembly: SupportedLanguages]</c> (<c>LOC202</c>), the contract to add next to <c>ILocalizationSet</c>
-    /// (<c>LOC204</c>, when this build generates that contract), or the set to add (<c>LOC201</c> and <c>LOC600</c>).
+    /// (<c>LOC204</c>, when this build generates that contract), or the set to add (<c>LOC201</c> and <c>LOC700</c>).
     /// </summary>
     public const string SuggestedNameProperty = "SuggestedName";
 
     /// <summary>
     /// The property of <c>LOC201</c> that holds the namespace of the set to add, empty for the global namespace.
-    /// <c>LOC600</c> has none, because the set of a library's contract lies in a namespace of the app, which the fix
+    /// <c>LOC700</c> has none, because the set of a library's contract lies in a namespace of the app, which the fix
     /// chooses.
     /// </summary>
     public const string SuggestedNamespaceProperty = "SuggestedNamespace";
 
     /// <summary>
-    /// The property of <c>LOC201</c> and <c>LOC600</c> that holds the declaration of the set to add, without a body:
+    /// The property of <c>LOC201</c> and <c>LOC700</c> that holds the declaration of the set to add, without a body:
     /// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>.
     /// </summary>
     public const string SuggestedDeclarationProperty = "SuggestedDeclaration";
@@ -411,7 +411,7 @@ public static class LocalizationSetsPart
         }
 
         // Each member of the contract inherits the doc comment of its text, which says the same. A member writes its
-        // own when the class doesn't hold its text (LOC205). A text named like the class doesn't hide the class from a
+        // own when the class doesn't hold its text (LOC300). A text named like the class doesn't hide the class from a
         // cref, which looks for a type in front of the dot.
         var inheritingDocs = new HashSet<string>(StringComparer.Ordinal);
 
@@ -419,7 +419,7 @@ public static class LocalizationSetsPart
             inheritingDocs.UnionWith(texts.Select(static text => text.Name));
 
         // The contract, which every set lists itself. The contract of a set of an enum names its enums, which each set
-        // lists as ILocalizationSet<TEnum> (LOC211).
+        // lists as ILocalizationSet<TEnum> (LOC205).
         var setInterface = contract.Enums.Length is 0
             ? $"<see cref=\"{PackageNames.LocalizationSet}\"/>"
             : $"<c>{EscapeXml(String.Join(", ", contract.Enums.Select(@enum => $"{SupportedLanguages.SetInterface}<{RenderType(@enum.Type, contract.Namespace)}>")))}</c>";
@@ -528,7 +528,7 @@ public static class LocalizationSetsPart
             {
             """);
 
-        // Nothing but the texts, so that a text can take any name but the class's own and those of the methods below (LOC205). Each text
+        // Nothing but the texts, so that a text can take any name but the class's own and those of the methods below (LOC300). Each text
         // passes its position among the texts and their number as literals: a constant for either would take a name
         // from the texts.
         for (var i = 0; i < texts.Length; i++)
@@ -586,7 +586,7 @@ public static class LocalizationSetsPart
     /// markup need not name the generated class.
     /// </summary>
     // Of two members of one value, the first gives its text: a switch takes a value once. A member whose text the
-    // class doesn't hold, because of its name (LOC205), has no arm, and shows as a value that is no member.
+    // class doesn't hold, because of its name (LOC300), has no arm, and shows as a value that is no member.
     private static void AppendLookup(StringBuilder sb, StringBuilder lookups, LocalizationContract contract,
         string name, string textsName, LocalizationMember[] texts, LocalizedEnum @enum)
     {

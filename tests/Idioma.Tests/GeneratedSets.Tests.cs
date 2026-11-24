@@ -109,7 +109,7 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
-    /// The texts of an enum: one per member, and one that is no member, which the build warns about (LOC210) and which
+    /// The texts of an enum: one per member, and one that is no member, which the build warns about (LOC305) and which
     /// still works.
     /// </summary>
     public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
@@ -118,9 +118,9 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         public virtual string Shipped => "Shipped";
         public virtual string Delivered => "Delivered";
         public virtual string Arrived => "Arrived";
-#pragma warning disable LOC210
+#pragma warning disable LOC305
         public virtual string Caption => "Order status";
-#pragma warning restore LOC210
+#pragma warning restore LOC305
     }
 
     public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
@@ -129,9 +129,9 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
         public string Shipped => "Verzonden";
         public string Delivered => "Bezorgd";
         public string Arrived => "Aangekomen";
-#pragma warning disable LOC210
+#pragma warning disable LOC305
         public string Caption => "Bestelstatus";
-#pragma warning restore LOC210
+#pragma warning restore LOC305
     }
 
     /// <summary>
@@ -749,11 +749,11 @@ namespace CodeChops.Idioma.Tests
             using var _ = new UICultureScope("en-US");
 
             // Act & Assert: both members have a text, and the value gives the first one. The build warns about naming
-            // the second (LOC500).
+            // the second (LOC600).
             OrderStatusLocalization.Arrived.ShouldBe("Arrived");
-#pragma warning disable LOC500
+#pragma warning disable LOC600
             OrderStatusLocalization.GetTextByValue(OrderStatus.Arrived).ShouldBe("Delivered");
-#pragma warning restore LOC500
+#pragma warning restore LOC600
         }
 
         [Test]

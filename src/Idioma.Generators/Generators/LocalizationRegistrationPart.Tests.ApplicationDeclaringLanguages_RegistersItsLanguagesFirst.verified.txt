@@ -9,7 +9,7 @@ namespace CodeChops.Idioma.Generated
     /// Registers the app's languages first.
     /// </summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    public static class LocalizationRegistrar_TestAssembly
+    internal static class LocalizationRegistrar_TestAssembly
     {
         private static int registered;
 

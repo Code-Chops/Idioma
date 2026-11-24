@@ -34,9 +34,9 @@ The build leads it there in three steps:
 2. Build error `CS0535` names each text a new set lacks. Your IDE's "Implement interface" adds them, for the assistant to translate.
 3. Build error `CS7036` names each inline text and each attribute without German, because every language is a parameter of `Inline` and `[Localized]`.
 
-A library you use that lacks German gets build error `LOC600`, which names the set to add to your app ([details](libraries-and-apps.md#a-language-the-library-lacks)).
+A library you use that lacks German gets build error `LOC700`, which names the set to add to your app ([details](libraries-and-apps.md#a-language-the-library-lacks)).
 
-A translation that drops a value, such as a German greeting without `{name}`, is build error `LOC302`. So the assistant can't lose a value that your default language shows.
+A translation that drops a value, such as a German greeting without `{name}`, is build error `LOC402`. So the assistant can't lose a value that your default language shows.
 
 ## Reviewing translations
 

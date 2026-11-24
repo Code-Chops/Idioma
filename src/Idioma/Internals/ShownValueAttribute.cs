@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Internals;
 /// <para>
 /// Records that the default wording of a text shows a value it takes, such as <c>name</c> in
 /// <c>public string Greeting(string name) => $"Hello, {name}!";</c>. The build of every set implementing the contract
-/// then checks that its method uses the value too (<c>LOC302</c>), also in another assembly. The source generator
+/// then checks that its method uses the value too (<c>LOC402</c>), also in another assembly. The source generator
 /// writes this on a method of a contract it generates, once for each value the default wording shows.
 /// </para>
 /// </summary>

@@ -69,21 +69,21 @@ public sealed class HiddenTextAnalyzerTests
     [Test]
     [Arguments("""public new string Color => "Colour";""")]
     [Arguments("""public string Color => "Colour";""")] // CS0108 warns, and the IDE's fix for it adds 'new'
-    public async Task PropertyHidingText_ShouldReportLOC207(string british)
+    public async Task PropertyHidingText_ShouldReportLOC302(string british)
     {
         // Arrange & Act: the contract calls ShopLocalizationEn.Color, so British users see "Color".
         var diagnostics = await AnalyzeAsync(Sets("""public string Color => "Color";""", british));
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC207");
+        diagnostic.Id.ShouldBe("LOC302");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("'ShopLocalizationEnGb.Color' hides 'ShopLocalizationEn.Color' instead of overriding it, so users of 'en-GB' won't see its wording. Make 'ShopLocalizationEn.Color' virtual and override it, or list 'IShopLocalization' again next to 'ShopLocalizationEn'.");
         At(diagnostic).ShouldStartWith("Color => \"Colour\"");
     }
 
     [Test]
-    public async Task MethodHidingText_ShouldReportLOC207()
+    public async Task MethodHidingText_ShouldReportLOC302()
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(
@@ -110,7 +110,7 @@ public sealed class HiddenTextAnalyzerTests
     }
 
     [Test]
-    public async Task AppSetHidingTextOfLibrarySet_ShouldReportLOC207()
+    public async Task AppSetHidingTextOfLibrarySet_ShouldReportLOC302()
     {
         // Arrange & Act: the library's text isn't virtual, so 'override' doesn't compile, and 'new' hides it.
         var diagnostics = await AnalyzeAsync("""

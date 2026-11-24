@@ -75,7 +75,7 @@ public sealed class InlineTextValuesAnalyzerTests
     [Arguments("""en: $"Owned by {this.Owner}", nl: "Eigendom", enGb: $"Owned by {Owner}" """, "nl: \"Eigendom\"", "nl", "Owner")]
     [Arguments("""en: $"{count} {Unit}", nl: $"{count} kilometer", enGb: $"{count} {Unit}" """, "nl: $\"{count} kilometer\"", "nl", "Unit")]
     [Arguments("""en: $"Hello, {name}!", nl: $"Hallo, {Format(count)}!", enGb: $"Hello, {name}!" """, "nl: $\"Hallo, {Format(count)}!\"", "nl", "name")]
-    public async Task WordingLeavingOutValueTheDefaultWordingShows_ShouldReportLOC302AtItsArgument(string arguments, string at, string language, string value)
+    public async Task WordingLeavingOutValueTheDefaultWordingShows_ShouldReportLOC402AtItsArgument(string arguments, string at, string language, string value)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Inline(arguments));
@@ -85,7 +85,7 @@ public sealed class InlineTextValuesAnalyzerTests
         // the class can't read a parameter, so calling one doesn't excuse leaving the name out.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(InlineTextValuesAnalyzer.ValueLeftOutDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC302");
+        diagnostic.Id.ShouldBe("LOC402");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe($"The '{language}' wording doesn't use '{value}', but the 'en' wording shows it. Use '{value}' in every language, or users of '{language}' won't see it.");
         At(diagnostic).ShouldStartWith(at);
@@ -256,7 +256,7 @@ public sealed class InlineTextValuesAnalyzerTests
     [Test]
     [Arguments("string upper; upper = count.ToString();", "upper")]
     [Arguments("var list = \"\"; list += count;", "list")]
-    public async Task WordingReadingLocalAssignedAnotherValue_ShouldReportLOC302(string statements, string local)
+    public async Task WordingReadingLocalAssignedAnotherValue_ShouldReportLOC402(string statements, string local)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Inline($$"""en: $"Hello, {name}!", nl: $"Hallo, {{{local}}}!", enGb: $"Hello, {name}!" """, statements));
@@ -385,6 +385,6 @@ public sealed class InlineTextValuesAnalyzerTests
 
         // Assert
         diagnostics.Length.ShouldBe(expected);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC302");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC402");
     }
 }

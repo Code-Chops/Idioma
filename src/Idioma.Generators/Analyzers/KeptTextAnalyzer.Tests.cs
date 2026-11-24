@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="KeptTextAnalyzer"/>: a text in the initializer of a static field or property is reported
-/// (<c>LOC506</c>), and a text that is read later isn't.
+/// (<c>LOC602</c>), and a text that is read later isn't.
 /// </summary>
 public sealed class KeptTextAnalyzerTests
 {
@@ -76,14 +76,14 @@ public sealed class KeptTextAnalyzerTests
     [Arguments("private static readonly string[] All = [ShopLocalization.Checkout];", "ShopLocalization.Checkout", "All")]
     [Arguments("""private static readonly Dictionary<string, string> ByKey = new() { ["checkout"] = ShopLocalization.Checkout };""", "ShopLocalization.Checkout", "ByKey")]
     [Arguments("""private static readonly string Label = "Go to " + ShopLocalization.Checkout.ToLowerInvariant();""", "ShopLocalization.Checkout", "Label")]
-    public async Task TextInStaticInitializer_ShouldReportLOC506(string member, string expectedText, string expectedMember)
+    public async Task TextInStaticInitializer_ShouldReportLOC602(string member, string expectedText, string expectedMember)
     {
         // Act
         var diagnostics = await AnalyzeAsync(Members(member));
 
         // Assert: one warning, on the text, that names the text and the member that keeps it.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC506");
+        diagnostic.Id.ShouldBe("LOC602");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.Location.SourceTree!.ToString().Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length).ShouldBe(expectedText);
         diagnostic.GetMessage().ShouldBe(

@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a text of a set that has a setter (<c>LOC206</c>), whatever the accessibility of the setter.
+/// Reports a text of a set that has a setter (<c>LOC301</c>), whatever the accessibility of the setter.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,7 +23,7 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class TextSetterAnalyzer : DiagnosticAnalyzer
 {
-    public const string TextSetterDiagnosticId = "LOC206";
+    public const string TextSetterDiagnosticId = "LOC301";
 
     private static readonly DiagnosticDescriptor TextSetterRule = new(
         id: TextSetterDiagnosticId,

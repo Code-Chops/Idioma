@@ -211,7 +211,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
         // Act
         var fixes = await FixAsync(source);
 
-        // Assert: no LOC211 follows.
+        // Assert: no LOC205 follows.
         var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
         fixedSource.ShouldContain("public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization");
         GeneratorTestHelper.GetGeneratorDiagnostics(fixedSource).ShouldBeEmpty();

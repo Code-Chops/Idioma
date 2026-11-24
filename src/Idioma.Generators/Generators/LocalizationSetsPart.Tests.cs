@@ -258,7 +258,7 @@ public sealed class LocalizationSetsPartTests
     [Arguments("GetTextByKey")]
     public void TextTheClassDoesntHold_ShouldBeDocumentedInTheContract(string name)
     {
-        // Arrange: a text the generated class can't hold for its name (LOC205), next to one it holds. Inside the
+        // Arrange: a text the generated class can't hold for its name (LOC300), next to one it holds. Inside the
         // contract, a text named like the class doesn't hide the class from the cref of the other member.
         var source = $$"""
             using CodeChops.Idioma;
@@ -1211,7 +1211,7 @@ public sealed class LocalizationSetsPartTests
 
     [Test]
     [Arguments("OptionLocalization")]
-    public void TextNamedLikeGeneratedClass_ShouldReportLOC205AndCompileOtherwise(string name)
+    public void TextNamedLikeGeneratedClass_ShouldReportLOC300AndCompileOtherwise(string name)
     {
         // Arrange & Act: the contract keeps the text, so the sets still compile; only the generated text is left out.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
@@ -1237,7 +1237,7 @@ public sealed class LocalizationSetsPartTests
         // Assert
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe(LocalizationSetsPart.ReservedTextNameDiagnosticId);
-        error.Id.ShouldBe("LOC205");
+        error.Id.ShouldBe("LOC300");
         error.GetMessage().ShouldContain($"'OptionLocalizationEn' has a text named '{name}'");
         error.GetMessage().ShouldContain($"'OptionLocalization.{name}' isn't generated");
 
@@ -1539,7 +1539,7 @@ public sealed class LocalizationSetsPartTests
     [Test]
     public void ExcludedSet_ShouldCountAsSetOfItsLanguage()
     {
-        // Arrange & Act: the fix LOC400 names for a set that needs a constructor argument; registering it is up to the
+        // Arrange & Act: the fix LOC208 names for a set that needs a constructor argument; registering it is up to the
         // app.
         var result = Run($$"""
             {{Header}}
@@ -2626,7 +2626,7 @@ public sealed class LocalizationSetsPartTests
     [Test]
     public void SetWithLanguageCodeImplementingNothing_ShouldReportNoLanguageErrorOfItsOwn()
     {
-        // Arrange & Act: the property implements nothing (LOC401, reported by the registration), and the language checks
+        // Arrange & Act: the property implements nothing (LOC206, reported by the registration), and the language checks
         // go by what it says rather than adding LOC202 for the language its name gives (sh).
         var result = Run($$"""
             {{Header}}
@@ -2800,7 +2800,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void ClassImplementingLibraryContractWithoutILocalizationSet_ShouldReportLOC600()
+    public void ClassImplementingLibraryContractWithoutILocalizationSet_ShouldReportLOC700()
     {
         // Arrange & Act: the library's contract is marked, and doesn't derive from ILocalizationSet.
         var result = Run("""
@@ -3038,7 +3038,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void LibraryMissingLanguage_ShouldReportLOC600AtAttribute()
+    public void LibraryMissingLanguage_ShouldReportLOC700AtAttribute()
     {
         // Arrange & Act
         var result = Run("""
@@ -3051,7 +3051,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryMissingLanguageDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC600");
+        diagnostic.Id.ShouldBe("LOC700");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("No set serves 'GridLibrary.IGridLocalization' in 'de'");
         diagnostic.GetMessage().ShouldContain("'class GridLocalizationDe : ILocalizationSet, GridLibrary.IGridLocalization'");
@@ -3084,7 +3084,7 @@ public sealed class LocalizationSetsPartTests
             }
             """);
 
-        // Act: every set of the contract of an enum lists ILocalizationSet<TEnum> (LOC211).
+        // Act: every set of the contract of an enum lists ILocalizationSet<TEnum> (LOC205).
         var result = Run("""
             using CodeChops.Idioma;
 
@@ -3172,7 +3172,7 @@ public sealed class LocalizationSetsPartTests
             namespace TestApp;
             """, library);
 
-        // Assert: no LOC600 asking the app for the Dutch set the library has.
+        // Assert: no LOC700 asking the app for the Dutch set the library has.
         DiagnosticIds(result).ShouldBeEmpty();
     }
 
@@ -3220,7 +3220,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void LibraryWithInlineTextsMissingLanguage_ShouldWarnWithLOC601()
+    public void LibraryWithInlineTextsMissingLanguage_ShouldWarnWithLOC701()
     {
         // Arrange & Act: nothing the app could add, so a warning rather than an error it can't fix.
         var result = Run("""
@@ -3233,7 +3233,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC601");
+        diagnostic.Id.ShouldBe("LOC701");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe("'InlineLibrary' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.");
     }
@@ -3260,7 +3260,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void LibraryWithTextsOnMembersMissingLanguage_ShouldWarnWithLOC601()
+    public void LibraryWithTextsOnMembersMissingLanguage_ShouldWarnWithLOC701()
     {
         // Arrange: a library whose only texts are on its members. They carry their wording themselves, as an inline
         // text does, so no set of the app can add German to them.
@@ -3289,14 +3289,14 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC601");
+        diagnostic.Id.ShouldBe("LOC701");
         diagnostic.GetMessage().ShouldContain("'MemberLibrary' has inline texts without 'de'");
     }
 
     [Test]
     public void LibraryWithSetsAndInlineTextsMissingLanguage_ShouldReportBoth()
     {
-        // Arrange: the app can add German to the contract (LOC600), but not to the inline text (LOC601).
+        // Arrange: the app can add German to the contract (LOC700), but not to the inline text (LOC701).
         var library = GeneratorTestHelper.CompileLibraryWithGenerators("MixedLibrary", """
             using CodeChops.Idioma;
 
@@ -3330,7 +3330,7 @@ public sealed class LocalizationSetsPartTests
             """, library);
 
         // Assert
-        DiagnosticIds(result).ShouldBe(["LOC600", "LOC601"]);
+        DiagnosticIds(result).ShouldBe(["LOC700", "LOC701"]);
     }
 
     [Test]
@@ -3495,10 +3495,10 @@ public sealed class LocalizationSetsPartTests
         // Act
         var result = Run(source);
 
-        // Assert: nothing about its language from here; LOC402 says what is wrong with the code.
+        // Assert: nothing about its language from here; LOC207 says what is wrong with the code.
         DiagnosticIds(result).ShouldBeEmpty();
         ContractText(result).ShouldContain("interface IShopLocalization");
-        GeneratorTestHelper.GetGeneratorDiagnostics(source).Select(diagnostic => diagnostic.Id).ShouldBe(["LOC402"]);
+        GeneratorTestHelper.GetGeneratorDiagnostics(source).Select(diagnostic => diagnostic.Id).ShouldBe(["LOC207"]);
     }
 
     [Test]
@@ -3941,7 +3941,7 @@ public sealed class LocalizationSetsPartTests
     public void ExcludedSetOfGeneratedContractWithUnreadableLanguage_ShouldNotBeReportedAsMissing()
     {
         // Arrange & Act: one class for every other language, created with its language and registered by hand, which
-        // is what LOC400 advises for a set that takes constructor arguments.
+        // is what LOC208 advises for a set that takes constructor arguments.
         var result = Run($$"""
             {{Header}}
 
@@ -4028,7 +4028,7 @@ public sealed class LocalizationSetsPartTests
     [Test]
     public void SetWhoseNameGivesNoLanguage_ShouldNotHideMissingLanguages()
     {
-        // Arrange & Act: a Dutch set renamed so that its name gives no language. It serves none (LOC400), and isn't a
+        // Arrange & Act: a Dutch set renamed so that its name gives no language. It serves none (LOC208), and isn't a
         // set of a language the build can't read, which would leave Dutch and German unreported.
         var result = Run("""
             using CodeChops.Idioma;
@@ -4516,7 +4516,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TextInheritedByDefaultSet_ShouldReportLOC208AtTheText()
+    public void TextInheritedByDefaultSet_ShouldReportLOC303AtTheText()
     {
         // Arrange & Act: the contract is written from what the English set declares, so Brand and Welcome would be left
         // out without a word, and Dutch would never word them. Cart is declared again, Note is marked as no text, and
@@ -4548,7 +4548,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert: once per name, at the text.
         var diagnostics = result.Results.ShouldHaveSingleItem().Diagnostics;
-        diagnostics.ShouldAllBe(static diagnostic => diagnostic.Id == "LOC208" && diagnostic.Severity == DiagnosticSeverity.Error);
+        diagnostics.ShouldAllBe(static diagnostic => diagnostic.Id == "LOC303" && diagnostic.Severity == DiagnosticSeverity.Error);
         diagnostics.Select(static diagnostic => diagnostic.GetMessage()).ShouldBe(
         [
             "'ShopLocalizationEn' inherits the text 'Brand' from 'ShopBase', so its contract leaves 'Brand' out, and no other language has to word it. Declare 'Brand' in 'ShopLocalizationEn', or mark it [ExcludeFromLocalizationDiscovery] in 'ShopBase' if it isn't a text.",
@@ -4586,7 +4586,7 @@ public sealed class LocalizationSetsPartTests
     public void OnlyPublicInstanceMethodsReturningStringWithParametersAreTexts()
     {
         // Arrange: a virtual method is a text (so a set can derive and override), an inherited method marked as no text
-        // stays out (LOC208 would report one that isn't), and the rest are not texts by shape.
+        // stays out (LOC303 would report one that isn't), and the rest are not texts by shape.
         const string source = """
             using CodeChops.Idioma;
 
@@ -4640,7 +4640,7 @@ public sealed class LocalizationSetsPartTests
     [Arguments("public unsafe string Greeting(int* count) => \"\";", "its parameter 'count' is of a type the generated class can't pass on")]
     [Arguments("public string Greeting(dynamic name) => \"\";", "its parameter 'name' is dynamic")]
     [Arguments("public string Greeting(int a, int b, int c, int d, int e, int f, int g, int h, int i) => \"\";", "it takes 9 values, and a text takes at most 8")]
-    public void MethodThatCannotBeAText_ShouldReportLOC300AtItAndEmitNoTextForIt(string method, string expectedReason)
+    public void MethodThatCannotBeAText_ShouldReportLOC400AtItAndEmitNoTextForIt(string method, string expectedReason)
     {
         // Arrange
         var source = $$"""
@@ -4662,7 +4662,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert: at the method, which is what to change. The other texts are generated all the same.
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnsupportedTextDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC300");
+        diagnostic.Id.ShouldBe("LOC400");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationEn.Greeting' is a public method that returns a string");
         diagnostic.GetMessage().ShouldContain(expectedReason);
@@ -4674,7 +4674,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TextWrittenAsMethodWithoutParameters_ShouldReportLOC300SayingToWriteAProperty()
+    public void TextWrittenAsMethodWithoutParameters_ShouldReportLOC400SayingToWriteAProperty()
     {
         // Arrange: a text without values is a property. Written as a method it is no text, and what calls it as one
         // would only be told that nothing has its name (CS0117). The Dutch set starts no contract, so its method is
@@ -4704,10 +4704,10 @@ public sealed class LocalizationSetsPartTests
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("'ShopLocalizationEn.Greeting' is a public method that returns a string, which makes it a text with parameters, but it takes no parameters, so write it as a property. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("Greeting");
-        DiagnosticIds(result).ShouldBe(["LOC300"]);
+        DiagnosticIds(result).ShouldBe(["LOC400"]);
         ContractText(result).ShouldContain("    string Checkout { get; }");
         ContractText(result).ShouldNotContain("Greeting");
-        errors.Select(static error => error.Id).ShouldBe(["LOC300"]);
+        errors.Select(static error => error.Id).ShouldBe(["LOC400"]);
     }
 
     [Test]
@@ -4758,7 +4758,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TwoPublicMethodsOfOneName_ShouldEachReportLOC300()
+    public void TwoPublicMethodsOfOneName_ShouldEachReportLOC400()
     {
         // Arrange & Act: a text is told from the others by its name, which is its key, so neither can be one.
         var result = Run($$"""
@@ -4774,14 +4774,14 @@ public sealed class LocalizationSetsPartTests
             """);
 
         // Assert
-        DiagnosticIds(result).ShouldBe(["LOC300", "LOC300"]);
+        DiagnosticIds(result).ShouldBe(["LOC400", "LOC400"]);
         ContractText(result).ShouldNotContain("Greeting");
     }
 
     [Test]
     public void MethodThatCannotBeAText_ShouldBeNoPartOfTheContract()
     {
-        // Arrange & Act: LOC300 is the only error, so the Dutch set, which has no such method, implements the contract.
+        // Arrange & Act: LOC400 is the only error, so the Dutch set, which has no such method, implements the contract.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
             {{Header}}
 
@@ -4798,7 +4798,7 @@ public sealed class LocalizationSetsPartTests
             """);
 
         // Assert
-        errors.ShouldHaveSingleItem().Id.ShouldBe("LOC300");
+        errors.ShouldHaveSingleItem().Id.ShouldBe("LOC400");
     }
 
     [Test]
@@ -5128,7 +5128,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TextThatTakesValuesNamedLikeGeneratedClass_ShouldReportLOC205AndCompileOtherwise()
+    public void TextThatTakesValuesNamedLikeGeneratedClass_ShouldReportLOC300AndCompileOtherwise()
     {
         // Arrange & Act: the contract keeps the text, so the sets still compile; only the generated method is left out.
         var errors = GeneratorTestHelper.CompileWithGenerators("""
@@ -5151,7 +5151,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var error = errors.ShouldHaveSingleItem();
-        error.Id.ShouldBe("LOC205");
+        error.Id.ShouldBe("LOC300");
         error.GetMessage().ShouldContain("'OptionLocalizationEn' has a text named 'OptionLocalization'");
     }
 
@@ -5756,7 +5756,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void MethodNamedAfterEnumMember_ShouldReportLOC300AndLeaveItsTextAProperty()
+    public void MethodNamedAfterEnumMember_ShouldReportLOC400AndLeaveItsTextAProperty()
     {
         // Arrange & Act
         var result = Run($$"""
@@ -5787,7 +5787,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TextNamedGetTextByValueInSetOfEnum_ShouldReportLOC205AndCompileOtherwise()
+    public void TextNamedGetTextByValueInSetOfEnum_ShouldReportLOC300AndCompileOtherwise()
     {
         // Arrange & Act: the contract keeps the text, so the sets still compile; only the generated text is left out.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
@@ -5810,7 +5810,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var error = errors.ShouldHaveSingleItem();
-        error.Id.ShouldBe("LOC205");
+        error.Id.ShouldBe("LOC300");
         error.GetMessage().ShouldBe("'OrderStatusLocalizationEn' has a text named 'GetTextByValue', like the generated method 'OrderStatusLocalization.GetTextByValue', which gives the text of an enum value. The text 'OrderStatusLocalization.GetTextByValue' isn't generated. Rename the text.");
         error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe("GetTextByValue");
     }
@@ -5840,7 +5840,7 @@ public sealed class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TextNamedGetTextInSetOfEnum_ShouldReportLOC205AndCompileOtherwise()
+    public void TextNamedGetTextInSetOfEnum_ShouldReportLOC300AndCompileOtherwise()
     {
         // Arrange & Act: the generated class gets an extension method of that name, which is a method of the class.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
@@ -5863,7 +5863,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var error = errors.ShouldHaveSingleItem();
-        error.Id.ShouldBe("LOC205");
+        error.Id.ShouldBe("LOC300");
         error.GetMessage().ShouldBe("'OrderStatusLocalizationEn' has a text named 'GetText', like the generated extension method 'GetText', which gives an enum value its text. The text 'OrderStatusLocalization.GetText' isn't generated. Rename the text.");
         error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe("GetText");
     }
@@ -6149,7 +6149,7 @@ public sealed class LocalizationSetsPartTests
     [Test]
     [Arguments("public string GetTextByKey => \"Get\";")]
     [Arguments("public string GetTextByKey(string what) => $\"Get {what}\";")]
-    public void TextNamedGetTextByKey_ShouldReportLOC205AndCompileOtherwise(string text)
+    public void TextNamedGetTextByKey_ShouldReportLOC300AndCompileOtherwise(string text)
     {
         // Arrange & Act: the contract keeps the text, so the set still compiles; only the generated text is left out.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
@@ -6168,7 +6168,7 @@ public sealed class LocalizationSetsPartTests
 
         // Assert
         var error = errors.ShouldHaveSingleItem();
-        error.Id.ShouldBe("LOC205");
+        error.Id.ShouldBe("LOC300");
         error.GetMessage().ShouldBe("'ShopLocalizationEn' has a text named 'GetTextByKey', like the generated method 'ShopLocalization.GetTextByKey', which gives a text by its key. The text 'ShopLocalization.GetTextByKey' isn't generated. Rename the text.");
         error.Location.SourceTree!.GetText().ToString(error.Location.SourceSpan).ShouldBe("GetTextByKey");
     }

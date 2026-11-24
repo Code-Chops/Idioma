@@ -3,7 +3,7 @@
 Idioma turns translation mistakes into build errors. Each message names what's wrong and what to change:
 
 ```text
-error LOC302: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', but the default wording of 'IShopLocalization.Greeting' shows it. Use 'name' in every language, or users of 'nl' won't see it.
+error LOC402: 'ShopLocalizationNl.Greeting' doesn't use its parameter 'name', but the default wording of 'IShopLocalization.Greeting' shows it. Use 'name' in every language, or users of 'nl' won't see it.
 ```
 
 This page lists every code, grouped by subject, with an example and the fix. Your IDE offers a fix for the codes marked *(code fix)*.
@@ -14,44 +14,46 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 The first digit of a code names its subject. The subjects follow the order of this page.
 
-| Code                                                | Mistake                                                 |
-|-----------------------------------------------------|---------------------------------------------------------|
-| **[Languages](#languages)**                         |                                                         |
-| [`LOC100`](#loc100) (code fix)                      | A set or inline text in an assembly without languages   |
-| [`LOC101`](#loc101)                                 | An invalid or repeated language                         |
-| [`LOC102`](#loc102)                                 | A C# version older than 14                              |
-| **[Sets](#sets)**                                   |                                                         |
-| [`LOC200`](#loc200) (code fix)                      | A default-language set the generator can't use          |
-| [`LOC201`](#loc201) (code fix)                      | A language without a set                                |
-| [`LOC202`](#loc202) (code fix)                      | A set for a language that isn't listed                  |
-| [`LOC203`](#loc203) (code fix)                      | A set deriving from another language, as `nl` from `en` |
-| [`LOC204`](#loc204) (code fix)                      | A set that doesn't list its contract                    |
-| [`LOC205`](#loc205)                                 | A text with a name the generated class can't give it    |
-| [`LOC206`](#loc206) (code fix)                      | A text with a setter                                    |
-| [`LOC207`](#loc207) (code fix)                      | A text hidden instead of overridden                     |
-| [`LOC208`](#loc208)                                 | A text the default-language set only inherits           |
-| [`LOC209`](#loc209) (warning)                       | A text the default-language set lacks                   |
-| [`LOC210`](#loc210) (warning)                       | A text of a set of an enum that isn't a member          |
-| [`LOC211`](#loc211) (warning, code fix)             | A set whose enums don't match its contract              |
-| **[Texts with parameters](#texts-with-parameters)** |                                                         |
-| [`LOC300`](#loc300)                                 | A public method that can't be a text                    |
-| [`LOC301`](#loc301) (code fix)                      | A parameter named differently than in the contract      |
-| [`LOC302`](#loc302)                                 | A value that a translation never uses                   |
-| **[Registration](#registration)**                   |                                                         |
-| [`LOC400`](#loc400) (warning)                       | A set that can't be registered automatically            |
-| [`LOC401`](#loc401) (code fix)                      | A `LocalizationLanguageCode` that implements nothing    |
-| [`LOC402`](#loc402)                                 | A `LocalizationLanguageCode` that isn't a culture name  |
-| **[Wording](#wording)**                             |                                                         |
-| [`LOC500`](#loc500) (warning, code fix)             | An enum member that gives another member's text         |
-| [`LOC501`](#loc501) (code fix)                      | A language argument without its name                    |
-| [`LOC502`](#loc502) (warning, code fix)             | A placeholder such as `{0}` in a wording                |
-| [`LOC503`](#loc503) (warning, code fix)             | An enum member without a label next to members with one |
-| [`LOC504`](#loc504)                                 | A text asked of a member or a type that has none        |
-| [`LOC505`](#loc505) (warning)                       | A `[Localized]` text that won't be found                |
-| [`LOC506`](#loc506) (warning)                       | A text kept in a static field or property               |
-| **[Libraries](#libraries)**                         |                                                         |
-| [`LOC600`](#loc600) (code fix)                      | A library without a set for one of your languages       |
-| [`LOC601`](#loc601) (warning)                       | A library whose inline texts lack one of your languages |
+| Code                                                            | Mistake                                                 |
+|-----------------------------------------------------------------|---------------------------------------------------------|
+| **[Languages](#languages)**                                     |                                                         |
+| [`LOC100`](#loc100) (code fix)                                  | A set or inline text in an assembly without languages   |
+| [`LOC101`](#loc101)                                             | An invalid or repeated language                         |
+| [`LOC102`](#loc102)                                             | A C# version older than 14                              |
+| [`LOC103`](#loc103)                                             | An app without languages                                |
+| **[Sets](#sets)**                                               |                                                         |
+| [`LOC200`](#loc200) (code fix)                                  | A default-language set the generator can't use          |
+| [`LOC201`](#loc201) (code fix)                                  | A language without a set                                |
+| [`LOC202`](#loc202) (code fix)                                  | A set for a language that isn't listed                  |
+| [`LOC203`](#loc203) (code fix)                                  | A set deriving from another language, as `nl` from `en` |
+| [`LOC204`](#loc204) (code fix)                                  | A set that doesn't list its contract                    |
+| [`LOC205`](#loc205) (warning, code fix)                         | A set whose enums don't match its contract              |
+| [`LOC206`](#loc206) (code fix)                                  | A `LocalizationLanguageCode` that implements nothing    |
+| [`LOC207`](#loc207)                                             | A `LocalizationLanguageCode` that isn't a culture name  |
+| [`LOC208`](#loc208) (warning)                                   | A set that can't be registered automatically            |
+| **[Texts of a set](#texts-of-a-set)**                           |                                                         |
+| [`LOC300`](#loc300)                                             | A text with a name the generated class can't give it    |
+| [`LOC301`](#loc301) (code fix)                                  | A text with a setter                                    |
+| [`LOC302`](#loc302) (code fix)                                  | A text hidden instead of overridden                     |
+| [`LOC303`](#loc303)                                             | A text the default-language set only inherits           |
+| [`LOC304`](#loc304) (warning)                                   | A text the default-language set lacks                   |
+| [`LOC305`](#loc305) (warning)                                   | A text of a set of an enum that isn't a member          |
+| **[Texts with parameters](#texts-with-parameters)**             |                                                         |
+| [`LOC400`](#loc400)                                             | A public method that can't be a text                    |
+| [`LOC401`](#loc401) (code fix)                                  | A parameter named differently than in the contract      |
+| [`LOC402`](#loc402)                                             | A value that a translation never uses                   |
+| [`LOC403`](#loc403) (warning, code fix)                         | A placeholder such as `{0}` in a wording                |
+| **[Inline texts and attributes](#inline-texts-and-attributes)** |                                                         |
+| [`LOC500`](#loc500) (code fix)                                  | A language argument without its name                    |
+| [`LOC501`](#loc501) (warning, code fix)                         | An enum member without a label next to members with one |
+| [`LOC502`](#loc502) (warning)                                   | A `[Localized]` text that won't be found                |
+| **[Reading a text](#reading-a-text)**                           |                                                         |
+| [`LOC600`](#loc600) (warning, code fix)                         | An enum member that gives another member's text         |
+| [`LOC601`](#loc601)                                             | A text asked of a member or a type that has none        |
+| [`LOC602`](#loc602) (warning)                                   | A text kept in a static field or property               |
+| **[Libraries](#libraries)**                                     |                                                         |
+| [`LOC700`](#loc700) (code fix)                                  | A library without a set for one of your languages       |
+| [`LOC701`](#loc701) (warning)                                   | A library whose inline texts lack one of your languages |
 
 ## Languages
 
@@ -81,7 +83,23 @@ error LOC102: Idioma needs C# 14 or later, and this project uses C# 13.0. Remove
 
 The code generated for your languages uses extension members, which C# 14 brings. So the generators write none of it, and the compiler reports what your code then misses, such as the contract of a set (`CS0246`) or `LocalizableText.Inline` (`CS0117`).
 
-A project that declares no languages builds with an older version, such as one that only references a library that uses Idioma.
+A library that declares no languages builds with an older version, such as one that only references a library that uses Idioma. An app always declares its languages ([LOC103](#loc103)), so it needs C# 14.
+
+### LOC103
+
+The project builds an app, and it declares no languages. Add `[assembly: SupportedLanguages("en", "nl")]` with your languages, the default first.
+
+```text
+error LOC103: 'Shop.Server' is an app, but it declares no languages. Add [assembly: SupportedLanguages("en", "nl")] with your languages, the default first.
+```
+
+The app's attribute decides the languages your users get, and its first language is the fallback for every text. A library's attribute only describes the library's own texts. So an app declares its languages even when it has no texts of its own:
+
+- a test project
+- the server project of a Blazor Web App, which declares the same languages as its client
+- an app that keeps its texts in a library
+
+A library needs the attribute only for texts of its own ([LOC100](#loc100)).
 
 ## Sets
 
@@ -176,6 +194,71 @@ A set lists `ILocalizationSet` without its contract, so no text reads it. This a
 
 ### LOC205
 
+A set's `ILocalizationSet<TEnum>` doesn't match the enums of its contract. This is a warning, with these causes:
+
+- A set of the contract of an enum lists `ILocalizationSet` instead of `ILocalizationSet<TEnum>`.
+- A set lists `ILocalizationSet<TEnum>` for an enum its contract has no texts of.
+
+```csharp
+public class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalization // LOC205
+{
+    public string Pending => "In behandeling";
+    public string Shipped => "Verzonden";
+}
+```
+
+```text
+warning LOC205: 'OrderStatusLocalizationNl' doesn't list 'ILocalizationSet<OrderStatus>', which every set of 'IOrderStatusLocalization' lists. List it in place of 'ILocalizationSet'.
+warning LOC205: 'ShopLocalizationNl' lists 'ILocalizationSet<PaymentStatus>', but 'IShopLocalization' has no texts of 'PaymentStatus'. Replace it with 'ILocalizationSet', or list it in the default-language set too.
+```
+
+List the enums the default-language set lists, in every language, and no other. Each set then shows which enum it words. The IDE fix does this for you: it lists a missing enum in place of `ILocalizationSet`, and it removes an enum of no texts. It compiles either way, because `ILocalizationSet<TEnum>` has no members.
+
+- An enum listed in place of the right one is reported once, as the right one missing.
+- To add an enum to the contract, list it in the default-language set. The contract takes its enums from that set.
+- A regional set that derives from the set of its language lists it through that set.
+- A set of a library's enum lists it too. An internal enum of a library is the exception, because no set outside the library can name it.
+- A contract generated by Idioma 0.9.0 or earlier doesn't name its enum, so its sets aren't checked. Neither is a library's contract of no enum, because the build can't tell it from such a contract.
+
+### LOC206
+
+A set derives from another set and declares a `LocalizationLanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LocalizationLanguageCode` then implements nothing, and the set serves the language of its name instead:
+
+```csharp
+public class ShopLocalizationBritish : ShopLocalizationEn // LOC206: LocalizationLanguageCode is never read
+{
+    public string LocalizationLanguageCode => "en-GB";
+}
+```
+
+List the interface again: `class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet`. The IDE fix does this for you.
+
+### LOC207
+
+A set's `LocalizationLanguageCode` isn't a culture name, such as `"en_GB"`. Registering the set would throw when the app starts. Return a culture name such as `en`, `en-GB` or `zh-Hans`.
+
+This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which would throw where you register it.
+
+### LOC208
+
+A set can't be registered automatically, so its texts won't be found. This is a warning. The generated code that registers sets needs:
+
+- a parameterless constructor
+- no `required` members
+- a language code: the end of its name, starting with a capital, such as `En`, or an implementation of `ILocalizationSet.LocalizationLanguageCode` (see [language codes](language-codes.md) for a longer code such as `EnGb`)
+- a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
+- no `[Obsolete]` marked as an error, because generated code can't name such a class
+
+Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an instance to `LocalizationRegistry.Register`.
+
+A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
+
+A member marked `[Localized]` whose text can't be registered gets [LOC502](#loc502).
+
+## Texts of a set
+
+### LOC300
+
 A text has a name the generated class can't give it, so that text isn't generated. Rename the text. Four names are taken:
 
 - The name of the generated class, as in `ShopLocalization.ShopLocalization`. In C#, a member can't have the name of its own class.
@@ -183,12 +266,12 @@ A text has a name the generated class can't give it, so that text isn't generate
 - `GetTextByValue`, in a [set of an enum](enums.md#a-set-of-the-enum). The generated class has a method of that name, which gives the text of an enum value.
 - `GetText`, in a set of an enum. The generated class has an extension method of that name, which gives a value its text: `order.Status.GetText()`.
 
-### LOC206
+### LOC301
 
 A text has a setter, so its wording can change after the set is created:
 
 ```csharp
-public string Greeting { get; set; } = "Hallo!"; // LOC206
+public string Greeting { get; set; } = "Hallo!"; // LOC301
 ```
 
 Remove the setter. One instance of each set serves every user, so a change of wording reaches all of them. Any setter counts, also a `private` one.
@@ -200,14 +283,14 @@ The IDE fix removes the setter, along with its body. An auto-property can still 
 
 A member that isn't a text may have a setter, such as a helper marked `[ExcludeFromLocalizationDiscovery]`. The build doesn't catch a getter that returns a field which a method changes.
 
-### LOC207
+### LOC302
 
 A set that derives from another hides one of its texts instead of overriding it, so users never see its wording:
 
 ```csharp
 public class ShopLocalizationEnGb : ShopLocalizationEn
 {
-    public new string Color => "Colour"; // LOC207: British users still see "Color"
+    public new string Color => "Colour"; // LOC302: British users still see "Color"
 }
 ```
 
@@ -222,14 +305,14 @@ The IDE offers both fixes:
 
 "Fix all" changes each text once, however many sets hide it.
 
-### LOC208
+### LOC303
 
 The default-language set inherits a text from a class of its assembly without declaring it, so its contract leaves the text out:
 
 ```csharp
 public abstract class ShopBase
 {
-    public string Brand => "Idioma"; // LOC208: no other language has to translate it
+    public string Brand => "Idioma"; // LOC303: no other language has to translate it
 }
 
 public class ShopLocalizationEn : ShopBase, ILocalizationSet, IShopLocalization
@@ -242,7 +325,7 @@ Declare the text in the default-language set, by overriding it or by moving it t
 
 A member of the base that isn't a text needs `[ExcludeFromLocalizationDiscovery]`. A class of another assembly isn't read, so a property such as `Exception.Message` isn't reported.
 
-### LOC209
+### LOC304
 
 A set has a text that the default-language set doesn't have, so no user sees it:
 
@@ -250,23 +333,23 @@ A set has a text that the default-language set doesn't have, so no user sees it:
 public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
 {
     public string Checkout => "Afrekenen";
-    public string Basket => "Mandje"; // LOC209: ShopLocalizationEn has no Basket
+    public string Basket => "Mandje"; // LOC304: ShopLocalizationEn has no Basket
 }
 ```
 
 ```text
-warning LOC209: 'ShopLocalizationNl.Basket' isn't a text of 'IShopLocalization', so users of 'nl' won't see it. Add 'Basket' to the default-language set, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.
+warning LOC304: 'ShopLocalizationNl.Basket' isn't a text of 'IShopLocalization', so users of 'nl' won't see it. Add 'Basket' to the default-language set, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.
 ```
 
 Add the text to the default-language set, and write its wording there. The contract is written from the texts that set declares, so a text that only another language has isn't in it. No generated text reads it then.
 
 - A set of a library's contract can't add a text to it, so remove the text there.
 - Mark a member that isn't a text `[ExcludeFromLocalizationDiscovery]`.
-- To keep a text you'll add to the default-language set later, turn the warning off around it: `#pragma warning disable LOC209`.
+- To keep a text you'll add to the default-language set later, turn the warning off around it: `#pragma warning disable LOC304`.
 
-A member with the name of a text isn't reported, because another code says what's wrong with it, such as [LOC207](#loc207) for a hidden text.
+A member with the name of a text isn't reported, because another code says what's wrong with it, such as [LOC302](#loc302) for a hidden text.
 
-### LOC210
+### LOC305
 
 A set of an enum has a text that isn't a member of the enum, so `GetText()` never gives it:
 
@@ -277,12 +360,12 @@ public class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderSt
 {
     public string Pending => "In behandeling";
     public string Shipped => "Verzonden";
-    public string Delivered => "Bezorgd"; // LOC210: OrderStatus has no Delivered
+    public string Delivered => "Bezorgd"; // LOC305: OrderStatus has no Delivered
 }
 ```
 
 ```text
-warning LOC210: 'OrderStatusLocalizationNl.Delivered' isn't a member of 'OrderStatus', so GetText() never gives it. Add 'Delivered' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.
+warning LOC305: 'OrderStatusLocalizationNl.Delivered' isn't a member of 'OrderStatus', so GetText() never gives it. Add 'Delivered' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.
 ```
 
 Add the member to the enum if it's missing there. Every language then needs its text, so the build reports `CS0535` for each set that lacks it. Otherwise the text is usually left over from a member that was removed, so remove it from each set.
@@ -290,43 +373,15 @@ Add the member to the enum if it's missing there. Every language then needs its 
 - Write a caption for the enum, or a text that takes values, in a set of its own that lists `ILocalizationSet`.
 - An enum of another assembly, such as `DayOfWeek`, can't get a member, so move the text.
 - Mark a member that isn't a text `[ExcludeFromLocalizationDiscovery]`.
-- To keep the text in the set of the enum, turn the warning off around it: `#pragma warning disable LOC210`.
+- To keep the text in the set of the enum, turn the warning off around it: `#pragma warning disable LOC305`.
 
-Each set that lists `ILocalizationSet<TEnum>` is reported, the default-language set too. In another language, LOC210 takes the place of [LOC209](#loc209), because adding the text to the default-language set wouldn't help. A text of a library's contract isn't reported, because the set has to implement it.
-
-### LOC211
-
-A set's `ILocalizationSet<TEnum>` doesn't match the enums of its contract. This is a warning, with these causes:
-
-- A set of the contract of an enum lists `ILocalizationSet` instead of `ILocalizationSet<TEnum>`.
-- A set lists `ILocalizationSet<TEnum>` for an enum its contract has no texts of.
-
-```csharp
-public class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalization // LOC211
-{
-    public string Pending => "In behandeling";
-    public string Shipped => "Verzonden";
-}
-```
-
-```text
-warning LOC211: 'OrderStatusLocalizationNl' doesn't list 'ILocalizationSet<OrderStatus>', which every set of 'IOrderStatusLocalization' lists. List it in place of 'ILocalizationSet'.
-warning LOC211: 'ShopLocalizationNl' lists 'ILocalizationSet<PaymentStatus>', but 'IShopLocalization' has no texts of 'PaymentStatus'. Replace it with 'ILocalizationSet', or list it in the default-language set too.
-```
-
-List the enums the default-language set lists, in every language, and no other. Each set then shows which enum it words. The IDE fix does this for you: it lists a missing enum in place of `ILocalizationSet`, and it removes an enum of no texts. It compiles either way, because `ILocalizationSet<TEnum>` has no members.
-
-- An enum listed in place of the right one is reported once, as the right one missing.
-- To add an enum to the contract, list it in the default-language set. The contract takes its enums from that set.
-- A regional set that derives from the set of its language lists it through that set.
-- A set of a library's enum lists it too. An internal enum of a library is the exception, because no set outside the library can name it.
-- A contract generated by Idioma 0.9.0 or earlier doesn't name its enum, so its sets aren't checked. Neither is a library's contract of no enum, because the build can't tell it from such a contract.
+Each set that lists `ILocalizationSet<TEnum>` is reported, the default-language set too. In another language, LOC305 takes the place of [LOC304](#loc304), because adding the text to the default-language set wouldn't help. A text of a library's contract isn't reported, because the set has to implement it.
 
 ## Texts with parameters
 
-### LOC300
+### LOC400
 
-A public method of the default-language set that returns a `string` is a text with parameters. LOC300 means it can't be one, because the method:
+A public method of the default-language set that returns a `string` is a text with parameters. LOC400 means it can't be one, because the method:
 
 - takes no parameters
 - is generic
@@ -338,13 +393,13 @@ A public method of the default-language set that returns a `string` is a text wi
 
 A method that can't become a property isn't reported: an override such as `ToString()`, or a method that another interface of the set asks for.
 
-### LOC301
+### LOC401
 
 A set names a parameter differently than the contract does. The compiler checks only the types and order of parameters, so two values of one type could swap unnoticed:
 
 ```csharp
 // The contract has Invited(string host, string guest)
-public string Invited(string guest, string host) => $"{host} has invited {guest}"; // LOC301
+public string Invited(string guest, string host) => $"{host} has invited {guest}"; // LOC401
 ```
 
 Use the same parameter names in every language.
@@ -357,13 +412,13 @@ When a name is one the contract doesn't have, as `aantal` for `count`, the fix r
 - the new name is already used in the method
 - the method is partial
 
-### LOC302
+### LOC402
 
 A translation never uses a value that the default wording shows:
 
 ```csharp
 public string Greeting(string name) => $"Hello, {name}!"; // In ShopLocalizationEn
-public string Greeting(string name) => "Hallo!";          // In ShopLocalizationNl: LOC302, the name is missing
+public string Greeting(string name) => "Hallo!";          // In ShopLocalizationNl: LOC402, the name is missing
 ```
 
 Use the value in every language. Any use counts, in a condition or in the wording, so `count is 1 ? "1 artikel" : "meer artikelen"` uses `count`. A value that the default wording only uses to choose between wordings, such as a form of address, may go unused.
@@ -371,7 +426,7 @@ Use the value in every language. Any use counts, in a condition or in the wordin
 An inline text is held to the same rule. The wording of the default language shows a value where it holds one in an interpolated string:
 
 ```csharp
-LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!") // LOC302: the 'nl' wording doesn't use 'name'
+LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!") // LOC402: the 'nl' wording doesn't use 'name'
 ```
 
 A value is a local variable, a parameter, or a field or property of your own assembly. A constant is wording, so it isn't a value. The build reports only what it can read, so these get no error:
@@ -381,76 +436,7 @@ A value is a local variable, a parameter, or a field or property of your own ass
 - a wording that reads a local variable declared with the value or assigned it, as in `var name = user.Name;`
 - a wording that reads a local variable the build can't follow, such as one from a pattern, a deconstruction or `out var`
 
-## Registration
-
-### LOC400
-
-A set can't be registered automatically, so its texts won't be found. This is a warning. The generated code that registers sets needs:
-
-- a parameterless constructor
-- no `required` members
-- a language code: the end of its name, starting with a capital, such as `En`, or an implementation of `ILocalizationSet.LocalizationLanguageCode` (see [language codes](language-codes.md) for a longer code such as `EnGb`)
-- a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
-- no `[Obsolete]` marked as an error, because generated code can't name such a class
-
-Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an instance to `LocalizationRegistry.Register`.
-
-A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
-
-A member marked `[Localized]` whose text can't be registered gets [LOC505](#loc505).
-
-### LOC401
-
-A set derives from another set and declares a `LocalizationLanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LocalizationLanguageCode` then implements nothing, and the set serves the language of its name instead:
-
-```csharp
-public class ShopLocalizationBritish : ShopLocalizationEn // LOC401: LocalizationLanguageCode is never read
-{
-    public string LocalizationLanguageCode => "en-GB";
-}
-```
-
-List the interface again: `class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet`. The IDE fix does this for you.
-
-### LOC402
-
-A set's `LocalizationLanguageCode` isn't a culture name, such as `"en_GB"`. Registering the set would throw when the app starts. Return a culture name such as `en`, `en-GB` or `zh-Hans`.
-
-This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which would throw where you register it.
-
-## Wording
-
-### LOC500
-
-A call names an enum member whose value an earlier member has. This is a warning. A value can't tell the two members apart, so the call gets the text of the earlier member:
-
-```csharp
-public enum OrderStatus { Default, None = Default }
-
-OrderStatus.None.GetText()                               // LOC500: shows the text of Default
-OrderStatusLocalization.GetTextByValue(OrderStatus.None) // LOC500
-```
-
-```text
-warning LOC500: GetText() gives the text of 'OrderStatus.Default' for 'OrderStatus.None', because the two have the same value. Use 'OrderStatusLocalization.None' for the text of 'None'.
-```
-
-Use the member's own text:
-
-- In a [set of the enum](enums.md#a-set-of-the-enum), that's `OrderStatusLocalization.None`. The IDE fix writes it.
-- For a member marked `[Localized]`, that's `LocalizableText.GetTextByMember<OrderStatus>(nameof(OrderStatus.None))`. It gives a `string?`, so it gets no fix.
-
-The build checks a call that names the member in the code. A value your code only has at run time, as in `order.Status.GetText()`, gets no warning, because no member is named there. Such a value gives the text of the first member.
-
-A member without `[Localized]` next to marked members, such as `Default = Active`, gets no warning either, because it has no text of its own.
-
-### LOC501
-
-An argument of `LocalizableText.Inline` or of `[Localized]` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or `[Localized(en: "City", nl: "Plaats")]`.
-
-The IDE fix names each argument after the language of its position.
-
-### LOC502
+### LOC403
 
 A wording holds a placeholder of a format string, such as `{0}`. This is a warning. Nothing fills the placeholder in, so users would see `{0}` as written.
 
@@ -471,14 +457,14 @@ A placeholder is a number in braces, as `string.Format` reads it. An alignment o
 - `{0}`, `{1,8}`, `{1, -8}` and `{0:N2}` are placeholders.
 - `{name}`, `{}` and `{1, 2, 3}` are text, so they get no warning.
 
-A wording that shows such braces on purpose, as `"Type {0} to confirm"` might, needs the warning turned off: `#pragma warning disable LOC502` around the text.
+A wording that shows such braces on purpose, as `"Type {0} to confirm"` might, needs the warning turned off: `#pragma warning disable LOC403` around the text.
 
 The IDE fix writes a parameter in place of each placeholder of a set's text. A method uses its own parameters, the first for `{0}`. A property becomes a method:
 
 - When the contract's text takes no values yet, as in the default-language set, the method takes an `object?` per placeholder number. So `"Hello, {0}!"` becomes `public string Greeting(object? arg0) => $"Hello, {arg0}!";`. Then give each parameter its name and type.
 - When the contract's text takes values, the method takes the contract's parameters. So fix the default-language set first, and name its parameters before you fix the other languages.
 
-The fix changes the text in every language of your project at once, so every set still implements the contract. It counts the placeholders of every language, so each language gets the same parameters: `arg0`, `arg1` and so on. A Dutch wording that holds `{0}` alone still takes `arg1` when the English one holds `{1}`. A Dutch wording without a placeholder becomes a method too. The build then reports the value Dutch leaves out (`LOC302`).
+The fix changes the text in every language of your project at once, so every set still implements the contract. It counts the placeholders of every language, so each language gets the same parameters: `arg0`, `arg1` and so on. A Dutch wording that holds `{0}` alone still takes `arg1` when the English one holds `{1}`. A Dutch wording without a placeholder becomes a method too. The build then reports the value Dutch leaves out (`LOC402`).
 
 Fixing Dutch changes the default-language set too. A set that implements the text explicitly changes with it, and so does one that overrides it.
 
@@ -496,40 +482,31 @@ A wording in a raw string keeps its placeholder and its warning, so write its va
 
 An inline text gets no fix, because its wording has no parameter to take the value. Neither does a label written with `[Localized]`.
 
-### LOC503
+## Inline texts and attributes
+
+### LOC500
+
+An argument of `LocalizableText.Inline` or of `[Localized]` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or `[Localized(en: "City", nl: "Plaats")]`.
+
+The IDE fix names each argument after the language of its position.
+
+### LOC501
 
 A member of an enum has no `[Localized]`, and another member of that enum has one. This is a warning. Users would see the member's name as written, in every language. It's usually a member added later, so mark it too:
 
 ```text
-warning LOC503: 'ParcelStatus.Lost' has no text, but other members of 'ParcelStatus' have one, so users would see 'Lost' as written. Mark it [Localized(en: "...", nl: "...")].
+warning LOC501: 'ParcelStatus.Lost' has no text, but other members of 'ParcelStatus' have one, so users would see 'Lost' as written. Mark it [Localized(en: "...", nl: "...")].
 ```
 
 An enum without a marked member gets no warning, also when the enum itself is marked, because its values may never be shown. Neither does a member with the value of a marked member, such as `Default = Active`, because it shows that member's text.
 
 The IDE fix marks the member with its name as the wording in your default language, as in `[Localized(en: "Lost")]`. That's what users see now. The compiler then names each language the attribute lacks (`CS7036`).
 
-For a member that's never shown, turn the warning off around it: `#pragma warning disable LOC503`.
+For a member that's never shown, turn the warning off around it: `#pragma warning disable LOC501`.
 
 Where a missing text has to be a build error, write a [set of the enum](enums.md#a-set-of-the-enum) instead. An enum that has a set gets its `GetText()` from the set, also while its members are still marked.
 
-### LOC504
-
-A call asks for the text of a member or a type that has none, so it always gives `null`:
-
-```csharp
-LocalizableText.GetTextByMember<Address>(nameof(Address.Street)) // LOC504: Street isn't marked [Localized]
-LocalizableText.GetTextOfType<Customer>()                        // LOC504: Customer has no text of its own
-```
-
-Mark the member or the type `[Localized(en: "...", nl: "...")]`. An override has the text of the property it overrides, so a marked property in a base class is enough. A type's own text isn't inherited.
-
-The build checks a call that names its type and its member in the code: by a type argument or by `typeof`, and by a member name that's a constant, such as `nameof(Address.Street)`. It doesn't check a call that takes a `Type` or a `PropertyInfo` your code only has at run time. There, `null` is the answer for a member without a text, as a form gets it for a field without a label.
-
-A type of another assembly is checked only when that assembly doesn't use Idioma, such as `DayOfWeek` of .NET itself. The attribute isn't kept in a compiled assembly, so the build can't see which members of a library have a text.
-
-To ask for a text that isn't there yet on purpose, turn the error off around the call: `#pragma warning disable LOC504`.
-
-### LOC505
+### LOC502
 
 A member marked `[Localized]` has a text that can't be registered, so `LocalizableText.GetTextByMember` won't find it. This is a warning, with these causes:
 
@@ -542,18 +519,61 @@ A member marked `[Localized]` has a text that can't be registered, so `Localizab
 - The attribute is written through an alias, as after `using Label = LocalizedAttribute;`. The source generator finds the attribute by its name, so write it as `[Localized]`.
 
 ```text
-warning LOC505: The text of 'Line.Article' can't be registered because generated code can't name 'Line', which is private, so it won't be found. Make 'Line' internal or public.
+warning LOC502: The text of 'Line.Article' can't be registered because generated code can't name 'Line', which is private, so it won't be found. Make 'Line' internal or public.
 ```
 
 See [attributes](attributes.md).
 
-### LOC506
+## Reading a text
+
+### LOC600
+
+A call names an enum member whose value an earlier member has. This is a warning. A value can't tell the two members apart, so the call gets the text of the earlier member:
+
+```csharp
+public enum OrderStatus { Default, None = Default }
+
+OrderStatus.None.GetText()                               // LOC600: shows the text of Default
+OrderStatusLocalization.GetTextByValue(OrderStatus.None) // LOC600
+```
+
+```text
+warning LOC600: GetText() gives the text of 'OrderStatus.Default' for 'OrderStatus.None', because the two have the same value. Use 'OrderStatusLocalization.None' for the text of 'None'.
+```
+
+Use the member's own text:
+
+- In a [set of the enum](enums.md#a-set-of-the-enum), that's `OrderStatusLocalization.None`. The IDE fix writes it.
+- For a member marked `[Localized]`, that's `LocalizableText.GetTextByMember<OrderStatus>(nameof(OrderStatus.None))`. It gives a `string?`, so it gets no fix.
+
+The build checks a call that names the member in the code. A value your code only has at run time, as in `order.Status.GetText()`, gets no warning, because no member is named there. Such a value gives the text of the first member.
+
+A member without `[Localized]` next to marked members, such as `Default = Active`, gets no warning either, because it has no text of its own.
+
+### LOC601
+
+A call asks for the text of a member or a type that has none, so it always gives `null`:
+
+```csharp
+LocalizableText.GetTextByMember<Address>(nameof(Address.Street)) // LOC601: Street isn't marked [Localized]
+LocalizableText.GetTextOfType<Customer>()                        // LOC601: Customer has no text of its own
+```
+
+Mark the member or the type `[Localized(en: "...", nl: "...")]`. An override has the text of the property it overrides, so a marked property in a base class is enough. A type's own text isn't inherited.
+
+The build checks a call that names its type and its member in the code: by a type argument or by `typeof`, and by a member name that's a constant, such as `nameof(Address.Street)`. It doesn't check a call that takes a `Type` or a `PropertyInfo` your code only has at run time. There, `null` is the answer for a member without a text, as a form gets it for a field without a label.
+
+A type of another assembly is checked only when that assembly doesn't use Idioma, such as `DayOfWeek` of .NET itself. The attribute isn't kept in a compiled assembly, so the build can't see which members of a library have a text.
+
+To ask for a text that isn't there yet on purpose, turn the error off around the call: `#pragma warning disable LOC601`.
+
+### LOC602
 
 A text is read in the initializer of a static field or a static property. This is a warning:
 
 ```csharp
-private static readonly string Label = ShopLocalization.Checkout; // LOC506
-public static string Title { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen"); // LOC506
+private static readonly string Label = ShopLocalization.Checkout; // LOC602
+public static string Title { get; } = LocalizableText.Inline(en: "Orders", nl: "Bestellingen"); // LOC602
 ```
 
 A text is the wording for the user's language at the moment it's read. A static initializer runs once, so it keeps the wording of whoever used the class first. On a server, every user then sees that language. Read the text where you show it:
@@ -564,7 +584,7 @@ public static string Title => LocalizableText.Inline(en: "Orders", nl: "Bestelli
 ```
 
 ```text
-warning LOC506: 'ShopLocalization.Checkout' is read once, when 'Label' is initialized, so every user gets the wording of the first user's language. Read the text where you show it, such as in a property written with '=>'.
+warning LOC602: 'ShopLocalization.Checkout' is read once, when 'Label' is initialized, so every user gets the wording of the first user's language. Read the text where you show it, such as in a property written with '=>'.
 ```
 
 What counts as a text:
@@ -589,7 +609,7 @@ Write it as `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or in a 
 
 Second, plain text in Razor markup, such as `<h1>Orders</h1>`, isn't a text either. Write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
 
-Third, a text that's kept outside a static initializer holds the wording of the moment it was read. The build reports a static field or property ([LOC506](#loc506)), and nothing else:
+Third, a text that's kept outside a static initializer holds the wording of the moment it was read. The build reports a static field or property ([LOC602](#loc602)), and nothing else:
 
 ```csharp
 public sealed class Menu // Registered as a singleton
@@ -602,26 +622,26 @@ Read the text where you show it instead ([details](../README.md#read-a-text-wher
 
 ## Libraries
 
-### LOC600
+### LOC700
 
 A library you reference has no set for one of your languages. The message names the set to add to your app:
 
 ```text
-error LOC600: No set serves 'Shop.IShopLocalization' in 'de', which this assembly supports. Add 'class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization'.
+error LOC700: No set serves 'Shop.IShopLocalization' in 'de', which this assembly supports. Add 'class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization'.
 ```
 
 The IDE fix adds that class in a file of its own, without texts, as the fix of [LOC201](#loc201) does. The file goes next to the one that lists your languages, and the class gets that file's namespace. It names the contract after a `using` of its namespace, as in `using Shop;` and `IShopLocalization`, and writes its full name only where the short one would mean another type. "Fix all" adds a set for every library and language at once.
 
 See [a language the library lacks](libraries-and-apps.md#a-language-the-library-lacks).
 
-### LOC601
+### LOC701
 
 A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in your app's default language. Where the library lacks that language too, they see the library's default language. The message names the language they see:
 
 ```text
-warning LOC601: 'Shop' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.
+warning LOC701: 'Shop' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.
 ```
 
 The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too.
 
-To accept it, add `LOC601` to `<NoWarn>` in the project file, or put `#pragma warning disable LOC601` around `[assembly: SupportedLanguages]`, where it's reported.
+To accept it, add `LOC701` to `<NoWarn>` in the project file, or put `#pragma warning disable LOC701` around `[assembly: SupportedLanguages]`, where it's reported.

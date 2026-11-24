@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="HiddenTextCodeFixProvider"/>: a member of a set that hides a text (<c>LOC207</c>) overrides it,
+/// Tests for <see cref="HiddenTextCodeFixProvider"/>: a member of a set that hides a text (<c>LOC302</c>) overrides it,
 /// with the text made virtual where this project declares it, or the set lists the contract again.
 /// </summary>
 public sealed class HiddenTextCodeFixProviderTests

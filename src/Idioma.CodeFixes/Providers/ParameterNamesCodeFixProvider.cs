@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a text of a set that names a parameter differently than its contract does (<c>LOC301</c>). It names every
+/// Fixes a text of a set that names a parameter differently than its contract does (<c>LOC401</c>). It names every
 /// parameter of the method as the contract does, in one of two ways.
 /// </summary>
 /// <remarks>

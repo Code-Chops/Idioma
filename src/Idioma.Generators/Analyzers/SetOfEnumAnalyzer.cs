@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a set whose <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't match the enums of its contract (<c>LOC211</c>):
+/// Reports a set whose <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't match the enums of its contract (<c>LOC205</c>):
 /// a Dutch set that lists <c>ILocalizationSet</c> where the contract is of an enum, or a set that lists
 /// <c>ILocalizationSet&lt;TEnum&gt;</c> for an enum its contract has no texts of.
 /// </summary>
@@ -28,7 +28,7 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
 {
-    public const string SetOfEnumDiagnosticId = "LOC211";
+    public const string SetOfEnumDiagnosticId = "LOC205";
 
     private const string Title = "Set whose enums don't match its contract";
     private const string Description = "The contract of a set of an enum has a text for each member of the enum. Every set of it lists ILocalizationSet<TEnum>, in each language, and no other enum, so each set shows which enum it words. List it in place of ILocalizationSet.";
@@ -242,7 +242,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
 }
 
 /// <summary>
-/// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists (<c>LOC211</c>), as
+/// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists (<c>LOC205</c>), as
 /// <see cref="SetOfEnumAnalyzer.Plan"/> finds it.
 /// </summary>
 /// <param name="Contract">The contract a message names: the first the set lists itself whose enums are known.</param>

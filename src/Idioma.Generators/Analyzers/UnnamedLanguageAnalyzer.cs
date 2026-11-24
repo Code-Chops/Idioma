@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Closes what the generated factory can't in an assembly that declares <c>[assembly: SupportedLanguages(...)]</c>:
-/// <c>LOC501</c> for a language argument without its name, of <c>LocalizableText.Inline</c> or of <c>[Localized]</c>.
+/// <c>LOC500</c> for a language argument without its name, of <c>LocalizableText.Inline</c> or of <c>[Localized]</c>.
 /// In an assembly without the attribute, it reports a call of <c>LocalizableText.Inline</c> (<c>LOC100</c>), which the
 /// compiler alone reports as a method that doesn't exist. The generator reports a member marked <c>[Localized]</c>
 /// there (<see cref="LocalizableTextFactoryGenerator"/>), because the compiler stops at an attribute that doesn't exist
@@ -18,9 +18,9 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
 {
-    // LOC500 reported wording written in one language where a text was expected. A text is a string now, so the build
+    // LOC600 reported wording written in one language where a text was expected. A text is a string now, so the build
     // can't tell such wording from any other string, and the code is no longer reported. It stays reserved.
-    public const string UnnamedLanguageDiagnosticId = "LOC501";
+    public const string UnnamedLanguageDiagnosticId = "LOC500";
 
     /// <summary>
     /// The code a set in an assembly without languages gets too (<see cref="LocalizationSetsPart"/>).
@@ -28,7 +28,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     public const string NoLanguagesDeclaredDiagnosticId = LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId;
 
     /// <summary>
-    /// The property of <c>LOC501</c> that holds the language of each argument of the call or the attribute, in the
+    /// The property of <c>LOC500</c> that holds the language of each argument of the call or the attribute, in the
     /// order they're written, separated by commas: <c>en,nl</c>. Its code fix names the arguments from it, also in a
     /// workspace that hasn't run the generator that writes <c>LocalizableText.Inline</c> and <c>[Localized]</c>.
     /// </summary>
@@ -114,7 +114,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports the first argument of <c>[Localized]</c> without the name of its language (<c>LOC501</c>).
+    /// Reports the first argument of <c>[Localized]</c> without the name of its language (<c>LOC500</c>).
     /// </summary>
     private static void AnalyzeLocalized(SyntaxNodeAnalysisContext context, string sample)
     {

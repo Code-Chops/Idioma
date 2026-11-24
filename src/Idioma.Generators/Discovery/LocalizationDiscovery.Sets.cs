@@ -7,7 +7,7 @@ internal static partial class LocalizationDiscovery
 {
     /// <summary>
     /// What an abstract, generic, nested, or file-local class gives discovery: a set rewording another assembly's texts
-    /// where generated code can't reach it (<c>LOC400</c>), or a class listing <c>ILocalizationSet</c> as a
+    /// where generated code can't reach it (<c>LOC208</c>), or a class listing <c>ILocalizationSet</c> as a
     /// default-language set does, which its shape keeps the generator from extending (<c>LOC200</c> in the default
     /// language); <see langword="null"/> for anything else, such as a test fixture.
     /// </summary>
@@ -347,7 +347,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The texts of a set with a name its generated class can't give them (<c>LOC205</c>), each with where it's
+    /// The texts of a set with a name its generated class can't give them (<c>LOC300</c>), each with where it's
     /// written: the member of the set, or the member of the enum for a text the set doesn't declare. A member outside
     /// this compilation has no place in it, so the set stands in.
     /// </summary>
@@ -551,7 +551,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Why generated code can't register the set, as the clause of the <c>LOC400</c> message, or
+    /// Why generated code can't register the set, as the clause of the <c>LOC208</c> message, or
     /// <see langword="null"/> when it can.
     /// </summary>
     /// <param name="type">The set.</param>

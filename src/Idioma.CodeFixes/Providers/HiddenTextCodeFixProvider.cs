@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a member of a set that hides a text of a class it derives from, instead of overriding it (<c>LOC207</c>). It
+/// Fixes a member of a set that hides a text of a class it derives from, instead of overriding it (<c>LOC302</c>). It
 /// overrides the text, as in <c>public override string Color => "Colour";</c>, or it lists the contract again, as in
 /// <c>class ShopLocalizationEnGb : ShopLocalizationEn, IShopLocalization</c>.
 /// </summary>

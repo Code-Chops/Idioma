@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reports a call that asks for the text of an enum member by its value, where an earlier member has that value too
-/// (<c>LOC500</c>). <c>OrderStatus.None.GetText()</c> next to <c>Default = 0</c> gives the text of <c>Default</c>.
+/// (<c>LOC600</c>). <c>OrderStatus.None.GetText()</c> next to <c>Default = 0</c> gives the text of <c>Default</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,7 +26,7 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
 {
-    public const string SharedValueDiagnosticId = "LOC500";
+    public const string SharedValueDiagnosticId = "LOC600";
 
     /// <summary>
     /// The key of the property of a diagnostic that holds the member's own text as code at the call, such as

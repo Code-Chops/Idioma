@@ -17,9 +17,8 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 /// <remarks>
 /// An assembly that nothing uses never loads, so its module initializer never runs, while its sets already count for
-/// the language checks of the build referencing it (<c>LOC600</c>). So the registrar of an assembly with sets is
-/// public, and so is that of an application declaring languages, which a host referencing it (a Blazor Web App's server
-/// references its client) must register before it renders anything. An app, an assembly that declares languages, and an
+/// the language checks of the build referencing it (<c>LOC700</c>). So the registrar of an assembly with sets is
+/// public, and so is that of an assembly with texts on its members. An app, an assembly that declares languages, and an
 /// assembly with sets of its own call the registrar of every assembly they reference first. They call it directly, not
 /// through a forced module constructor, because a direct call keeps the assembly when trimming, and works under
 /// NativeAOT. Each call is guarded, because a referenced assembly need not be there when the app starts (a Blazor
@@ -29,12 +28,17 @@ namespace CodeChops.Idioma.Generators;
 /// it is there. Catching the call when it fails is not enough, because the WebAssembly runtime remembers that this
 /// assembly could not reach the other one, and refuses every later use of it from here, also once it has loaded.
 /// <para>
-/// The registrar of an application that declares languages also registers them
-/// (<c>GeneratedCode.RegisterLanguages</c>), before calling any other registrar. A culture none of them serves,
-/// or a text lacks, then gets the app's default language, also for the texts of the libraries it references, even a
-/// library that has the culture's language. Only the first registration counts, and the app's own registrar runs
-/// first. An application is an assembly built as an executable, or an Android app, which the Android SDK builds as a
-/// library and marks with its <c>AndroidApplication</c> property.
+/// The registrar of an application also registers its languages (<c>GeneratedCode.RegisterLanguages</c>), before
+/// calling any other registrar. A culture none of them serves, or a text lacks, then gets the app's default language,
+/// also for the texts of the libraries it references, even a library that has the culture's language. Only the first
+/// registration counts, and the app's own registrar runs first. So an application it references never decides, such
+/// as the client of a Blazor Web App's server, or the app a test project tests. An application is an assembly built
+/// as an executable, or an Android app, which the Android SDK builds as a library and marks with its
+/// <c>AndroidApplication</c> property.
+/// </para>
+/// <para>
+/// So an application must declare its languages, also one without texts of its own (<c>LOC103</c>). Without them, its
+/// process would have no languages, and each text would fall back to the default language of its own assembly.
 /// </para>
 /// <para>
 /// It's a part of <see cref="LocalizationGenerator"/>, which reads the sets once for this part and the contracts'.
@@ -42,9 +46,10 @@ namespace CodeChops.Idioma.Generators;
 /// </remarks>
 public static class LocalizationRegistrationPart
 {
-    public const string CannotRegisterDiagnosticId = "LOC400";
-    public const string UnmappedLanguageCodeDiagnosticId = "LOC401";
-    public const string InvalidLanguageCodeDiagnosticId = "LOC402";
+    public const string AppWithoutLanguagesDiagnosticId = "LOC103";
+    public const string CannotRegisterDiagnosticId = "LOC208";
+    public const string UnmappedLanguageCodeDiagnosticId = "LOC206";
+    public const string InvalidLanguageCodeDiagnosticId = "LOC207";
 
     /// <summary>
     /// The MSBuild property with which the Android SDK marks the project of an app (<see langword="true"/>), as the compiler's
@@ -75,6 +80,16 @@ public static class LocalizationRegistrationPart
         var withSuppressed = suppressed.Length is 0 ? warnings : $"{warnings}, {String.Join(", ", suppressed)}";
         return withSuppressed;
     }
+
+    private static readonly DiagnosticDescriptor AppWithoutLanguagesRule = new(
+        id: AppWithoutLanguagesDiagnosticId,
+        title: "App without languages",
+        messageFormat: "'{0}' is an app, but it declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
+        category: "Design",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "An app's [assembly: SupportedLanguages] decides the languages its users get. Its first language is the fallback for every text, including the texts of the libraries the app uses. So every app declares its languages, even one without texts of its own, such as a test project or the server project of a Blazor Web App. A library's attribute only describes the library's own texts.",
+        helpLinkUri: PackageNames.HelpLink(AppWithoutLanguagesDiagnosticId));
 
     private static readonly DiagnosticDescriptor CannotRegisterRule = new(
         id: CannotRegisterDiagnosticId,
@@ -124,7 +139,7 @@ public static class LocalizationRegistrationPart
 
         // Every set whose language comes from its name, or that derives from another set, an excluded one included.
         // Registered by hand, it must serve the language the build counted it for, and reword what the build saw.
-        // Not a set marked [Obsolete] as an error, which no generated code may name (LOC400).
+        // Not a set marked [Obsolete] as an error, which no generated code may name (LOC208).
         var records = allSets.Select(static (sets, _) => new EquatableArray<SetRecord>(sets
             .Where(static set => (set.RecordedLanguageCode is not null || set.Depth > 0) && !set.IsObsoleteAsError)
             .Select(static set => new SetRecord(set.MetadataName, set.FullyQualifiedName, set.RecordedLanguageCode, set.OwnTexts))
@@ -143,7 +158,7 @@ public static class LocalizationRegistrationPart
             .ToImmutableArray()));
 
         // Not a default-language set: one the generated code can't create gets no contract and no texts either, which
-        // LOC200 reports, and the advice of LOC400, to exclude the set and register it by hand, is no way out for it.
+        // LOC200 reports, and the advice of LOC208, to exclude the set and register it by hand, is no way out for it.
         var unregistrable = sets
             .Combine(languages)
             .Combine(inputs.Contracts)
@@ -243,6 +258,18 @@ public static class LocalizationRegistrationPart
             .OrderBy(static code => code.DeclaringType, StringComparer.Ordinal)
             .ToImmutableArray()));
 
+        // An application without the attribute, by its name. Not one whose attribute is invalid, which LOC101 reports.
+        var appWithoutLanguages = assembly
+            .Combine(languages)
+            .Select(static (data, _) => data.Left.IsApplication && data.Right is null ? data.Left.AssemblyName : null);
+
+        // Without a location, because nothing in the source says that the project builds an app.
+        context.RegisterSourceOutput(appWithoutLanguages, static (context, assemblyName) =>
+        {
+            if (assemblyName is not null)
+                context.ReportDiagnostic(Diagnostic.Create(AppWithoutLanguagesRule, Location.None, assemblyName));
+        });
+
         context.RegisterSourceOutput(unregistrable, static (context, sets) =>
         {
             foreach (var set in sets.AsImmutableArray())
@@ -333,6 +360,7 @@ public static class LocalizationRegistrationPart
             .ToImmutableArray();
 
         var assembly = new RegistrarAssembly(
+            compilation.AssemblyName ?? "",
             ownName,
             compilation.Options.OutputKind is OutputKind.ConsoleApplication or OutputKind.WindowsApplication or OutputKind.WindowsRuntimeApplication,
             new EquatableArray<ReferencedRegistrar>(referenced));
@@ -357,11 +385,11 @@ public static class LocalizationRegistrationPart
 
     private static string GenerateSource(Registrar registrar)
     {
-        // Public only with something another assembly must register before it starts: sets of its own, the texts of
-        // its members, or the languages of an application, which a host referencing it (a Blazor Web App's server
-        // references its client) would otherwise not have until the application's own code first runs. A member's
-        // text is asked for by its type, which an app can hold before any code of the type's assembly ran.
-        var accessibility = registrar.Sets.Length > 0 || registrar.Languages.Length > 0 || registrar.MemberTexts is not null ? "public" : "internal";
+        // Public only with something another assembly must register before it starts: sets of its own, or the texts of
+        // its members. A member's text is asked for by its type, which an app can hold before any code of the type's
+        // assembly ran. Not for the languages of an application: the application that starts registers its own first,
+        // so those of one it references never count.
+        var accessibility = registrar.Sets.Length > 0 || registrar.MemberTexts is not null ? "public" : "internal";
         var hasOwnSets = registrar.Sets.Length > 0 || registrar.Records.Length > 0;
 
         // The pragma also covers a set marked [Obsolete] or [Experimental], which registers for as long as it exists.
@@ -527,10 +555,11 @@ public static class LocalizationRegistrationPart
 }
 
 /// <summary>
-/// What the registrar of an assembly needs to know about it: the registrar's name, whether the assembly is an
-/// application, and the public registrars of the assemblies it references.
+/// What the registrar of an assembly needs to know about it: the assembly's name, the registrar's name, whether the
+/// assembly is an application, and the public registrars of the assemblies it references.
 /// </summary>
 internal readonly record struct RegistrarAssembly(
+    string AssemblyName,
     string RegistrarName,
     bool IsApplication,
     EquatableArray<ReferencedRegistrar> ReferencedRegistrars);
@@ -545,7 +574,7 @@ internal readonly record struct ReferencedRegistrar(
 
 /// <summary>
 /// A class declaring a <c>LocalizationLanguageCode</c> that implements nothing, with the class it derives from and where to report
-/// it: what <c>LOC401</c> reports.
+/// it: what <c>LOC206</c> reports.
 /// </summary>
 internal readonly record struct UnmappedLanguageCode(
     string DeclaringType,

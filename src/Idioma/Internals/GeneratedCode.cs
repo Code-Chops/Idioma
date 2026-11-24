@@ -254,7 +254,7 @@ public static class GeneratedCode
     /// <exception cref="InvalidOperationException">
     /// When every set gives <see langword="null"/> as the wording. Return a string from the set of the default
     /// language, such as an empty one where a value is missing. Also when the constructor of that set throws, or it has
-    /// no language code (<c>LOC400</c>).
+    /// no language code (<c>LOC208</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static string WordSetText<TContract, TDefaultSet>(int text, int count, string name, Func<TContract, string?> selector)
@@ -280,7 +280,7 @@ public static class GeneratedCode
     /// <para>
     /// The set's method runs in the culture the text is worded for. Where
     /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/> gives a culture, the values are formatted for that
-    /// culture too. A text takes at most 8 values (<c>LOC300</c>).
+    /// culture too. A text takes at most 8 values (<c>LOC400</c>).
     /// </para>
     /// <para>
     /// The text falls back as a text without parameters does
@@ -305,7 +305,7 @@ public static class GeneratedCode
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When every set gives <see langword="null"/> as the wording. Also when the constructor of the set of the default
-    /// language throws, or that set has no language code (<c>LOC400</c>).
+    /// language throws, or that set has no language code (<c>LOC208</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static string WordSetText<TContract, TDefaultSet, TValue1>(
@@ -589,9 +589,9 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// Sets the app's <see cref="LocalizationRegistry.SupportedLanguages"/> when an application that declares
-    /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> starts. Only the first call counts,
-    /// so an application loaded later, such as the app a test project tests, can't change them.
+    /// Sets the app's <see cref="LocalizationRegistry.SupportedLanguages"/> when an application starts, to what its
+    /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> declares. Only the first call
+    /// counts, so an application loaded later, such as the app a test project tests, can't change them.
     /// </para>
     /// </summary>
     /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>en-GB</c>.</param>

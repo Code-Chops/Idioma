@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a text of a set that has a setter (<c>LOC206</c>). It removes the setter, along with its body:
+/// Fixes a text of a set that has a setter (<c>LOC301</c>). It removes the setter, along with its body:
 /// <c>{ get; set; } = "Hallo";</c> becomes <c>{ get; } = "Hallo";</c>.
 /// </summary>
 /// <remarks>

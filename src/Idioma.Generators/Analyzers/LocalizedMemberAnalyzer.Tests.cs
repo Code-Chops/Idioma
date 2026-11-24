@@ -7,8 +7,8 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="LocalizedMemberAnalyzer"/>: a member marked <c>[Localized]</c> that gets no text is reported
-/// (<c>LOC505</c>), and so is a member of an enum without <c>[Localized]</c> next to members that have it
-/// (<c>LOC503</c>), and a call that asks for the text of a member or a type without one (<c>LOC504</c>).
+/// (<c>LOC502</c>), and so is a member of an enum without <c>[Localized]</c> next to members that have it
+/// (<c>LOC501</c>), and a call that asks for the text of a member or a type without one (<c>LOC601</c>).
 /// </summary>
 public sealed class LocalizedMemberAnalyzerTests
 {
@@ -32,13 +32,13 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     /// <summary>
-    /// The one <c>LOC505</c> for a source, which is a warning.
+    /// The one <c>LOC502</c> for a source, which is a warning.
     /// </summary>
     private static async Task<Diagnostic> SingleCannotRegisterAsync(string source, params (string Path, string Text)[] files)
     {
         var diagnostic = (await AnalyzeAsync(source, files)).ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizedMemberAnalyzer.CannotRegisterDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC505");
+        diagnostic.Id.ShouldBe("LOC502");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
 
         return diagnostic;
@@ -125,7 +125,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Arguments("private", "private")]
     [Arguments("protected", "protected")]
     [Arguments("private protected", "private protected")]
-    public async Task MemberOfTypeGeneratedCodeCannotName_ShouldReportLOC505(string accessibility, string kind)
+    public async Task MemberOfTypeGeneratedCodeCannotName_ShouldReportLOC502(string accessibility, string kind)
     {
         // Arrange & Act
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -168,7 +168,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task MemberOfFileLocalType_ShouldReportLOC505()
+    public async Task MemberOfFileLocalType_ShouldReportLOC502()
     {
         // Arrange & Act
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -186,7 +186,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task MemberOfTypeMarkedObsoleteAsError_ShouldReportLOC505()
+    public async Task MemberOfTypeMarkedObsoleteAsError_ShouldReportLOC502()
     {
         // Arrange & Act: naming the type is an error (CS0619), which no pragma turns off.
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -230,7 +230,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Arguments("""en: "City", nl: null!""", "nl")]
     [Arguments("""en: null!, nl: "Plaats" """, "en")]
     [Arguments(""" "City", null!""", "nl")]
-    public async Task WordingThatIsNull_ShouldReportLOC505WithItsLanguage(string arguments, string language)
+    public async Task WordingThatIsNull_ShouldReportLOC502WithItsLanguage(string arguments, string language)
     {
         // Arrange & Act
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -250,7 +250,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Test]
     [Arguments("Page_razor.g.cs")]
     [Arguments("Pages/Index_cshtml.g.cs")]
-    public async Task MemberMarkedInRazorOutput_ShouldReportLOC505(string outputPath)
+    public async Task MemberMarkedInRazorOutput_ShouldReportLOC502(string outputPath)
     {
         // Arrange: what Razor writes for a class in the @code of a component. The attribute compiles there, and the
         // source generator that writes the texts never saw it, because no generator sees what another writes.
@@ -299,7 +299,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task AttributeWrittenThroughAnAlias_ShouldReportLOC505()
+    public async Task AttributeWrittenThroughAnAlias_ShouldReportLOC502()
     {
         // Arrange & Act: the attribute compiles under its alias, and the source generator finds it by its name alone.
         var diagnostic = await SingleCannotRegisterAsync("""
@@ -326,7 +326,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task MarkedIndexer_ShouldReportLOC505()
+    public async Task MarkedIndexer_ShouldReportLOC502()
     {
         // Arrange & Act: the compiler takes the attribute on an indexer, which is a property to it.
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -345,7 +345,7 @@ public sealed class LocalizedMemberAnalyzerTests
 
     [Test]
     [Arguments("""[field: Localized(en: "City", nl: "Plaats")] public string City { get; } = "";""", "Write the attribute without 'field:'")]
-    public async Task AttributeOnTheFieldBehindAProperty_ShouldReportLOC505(string member, string advice)
+    public async Task AttributeOnTheFieldBehindAProperty_ShouldReportLOC502(string member, string advice)
     {
         // Arrange & Act: 'field:' puts the attribute on the field the compiler keeps the property's value in.
         var diagnostic = await SingleCannotRegisterAsync($$"""
@@ -362,7 +362,7 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    public async Task EnumWithMarkedAndUnmarkedMembers_ShouldReportLOC503ForEachUnmarkedOne()
+    public async Task EnumWithMarkedAndUnmarkedMembers_ShouldReportLOC501ForEachUnmarkedOne()
     {
         // Arrange & Act: two members added later, without a text.
         var diagnostics = await AnalyzeAsync($$"""
@@ -384,7 +384,7 @@ public sealed class LocalizedMemberAnalyzerTests
 
         // Assert: at the name of each, as a warning, with the attribute to write.
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(static diagnostic => diagnostic.Id == "LOC503" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        diagnostics.ShouldAllBe(static diagnostic => diagnostic.Id == "LOC501" && diagnostic.Severity == DiagnosticSeverity.Warning);
         diagnostics.Select(At).ShouldBe(["Lost", "Returned"]);
         diagnostics[0].GetMessage().ShouldBe("'ParcelStatus.Lost' has no text, but other members of 'ParcelStatus' have one, so users would see 'Lost' as written. Mark it [Localized(en: \"...\", nl: \"...\")].");
     }
@@ -476,9 +476,9 @@ public sealed class LocalizedMemberAnalyzerTests
                 [Localized(en: "Assigned", nl: "Toegewezen")]
                 Assigned,
 
-            #pragma warning disable LOC503
+            #pragma warning disable LOC501
                 Internal,
-            #pragma warning restore LOC503
+            #pragma warning restore LOC501
             }
             """);
 
@@ -568,7 +568,7 @@ public sealed class LocalizedMemberAnalyzerTests
 
         // Assert: Uri lies in an assembly without Idioma, so only that one is reported.
         if (call.Contains("System.Uri", StringComparison.Ordinal))
-            diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC504");
+            diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC601");
         else
             diagnostics.ShouldBeEmpty();
     }
@@ -581,7 +581,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Arguments("LocalizableText.GetTextByMember<Person>(\"Nmae\")", "\"Nmae\"", "'Person.Nmae' has no text, so GetTextByMember gives null. 'Person' has no property or field of that name. Name the member with nameof, which the compiler checks.")]
     [Arguments("LocalizableText.GetTextOfType<Customer>()", "GetTextOfType<Customer>", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
     [Arguments("LocalizableText.GetTextOfType(typeof(Customer))", "GetTextOfType", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
-    public async Task LookupOfMemberOrTypeWithoutText_ShouldReportLOC504(string call, string at, string message)
+    public async Task LookupOfMemberOrTypeWithoutText_ShouldReportLOC601(string call, string at, string message)
     {
         // Arrange & Act: a type's own text isn't inherited, so Customer has none.
         var diagnostic = (await AnalyzeAsync(Lookup(call))).ShouldHaveSingleItem();
@@ -596,7 +596,7 @@ public sealed class LocalizedMemberAnalyzerTests
     [Test]
     [Arguments("LocalizableText.GetTextOfType<System.DayOfWeek>()", "GetTextOfType<System.DayOfWeek>", "'DayOfWeek' has no text, so GetTextOfType gives null.")]
     [Arguments("LocalizableText.GetTextByMember<System.DayOfWeek>(nameof(System.DayOfWeek.Monday))", "nameof(System.DayOfWeek.Monday)", "'DayOfWeek.Monday' has no text, so GetTextByMember gives null.")]
-    public async Task LookupOfTypeOfAssemblyWithoutIdioma_ShouldReportLOC504(string call, string at, string start)
+    public async Task LookupOfTypeOfAssemblyWithoutIdioma_ShouldReportLOC601(string call, string at, string start)
     {
         // Arrange & Act: an assembly that doesn't reference the package has no texts on its members.
         var diagnostic = (await AnalyzeAsync(Lookup(call))).ShouldHaveSingleItem();
@@ -679,9 +679,9 @@ public sealed class LocalizedMemberAnalyzerTests
 
             public static class Labels
             {
-            #pragma warning disable LOC504 // No label yet
+            #pragma warning disable LOC601 // No label yet
                 public static string? Street => LocalizableText.GetTextByMember<Address>(nameof(Address.Street));
-            #pragma warning restore LOC504
+            #pragma warning restore LOC601
             }
             """);
 

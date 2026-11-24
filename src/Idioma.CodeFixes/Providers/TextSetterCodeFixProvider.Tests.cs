@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="TextSetterCodeFixProvider"/>: a text of a set that has a setter (<c>LOC206</c>) loses the
+/// Tests for <see cref="TextSetterCodeFixProvider"/>: a text of a set that has a setter (<c>LOC301</c>) loses the
 /// setter, along with its body.
 /// </summary>
 public sealed class TextSetterCodeFixProviderTests
@@ -179,7 +179,7 @@ public sealed class TextSetterCodeFixProviderTests
         var fixes = await FixAsync(source, ShopLibrary);
 
         // Assert: reported, and left to its author, because a property without accessors doesn't compile.
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC206");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC301");
         fixes.ShouldBeEmpty();
     }
 }

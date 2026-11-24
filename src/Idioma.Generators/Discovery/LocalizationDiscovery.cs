@@ -351,7 +351,7 @@ internal static partial class LocalizationDiscovery
     /// contract, which <c>LOC200</c> reports with the name to give it.
     /// </summary>
     // Only with such a contract in its base list. A set that lists a contract another set starts is a set of that
-    // contract in a language the build can't read from its name, which LOC400 reports.
+    // contract in a language the build can't read from its name, which LOC208 reports.
     public static bool IsDefaultSetWithoutLanguage(DiscoveredLocalization set, GeneratedContracts generatedContracts)
     {
         var isDefaultSetWithoutLanguage = set is { NameGivesNoLanguage: true, ListsLocalizationSet: true, IsExcluded: false, UnresolvedBaseTypes.Length: > 0 }

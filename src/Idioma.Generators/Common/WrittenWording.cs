@@ -2,7 +2,7 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Finds the strings a text returns as they're written, which is where its wording stands in the source. A placeholder
-/// in one of them reaches the user as written (<c>LOC502</c>).
+/// in one of them reaches the user as written (<c>LOC403</c>).
 /// </summary>
 /// <remarks>
 /// <para>

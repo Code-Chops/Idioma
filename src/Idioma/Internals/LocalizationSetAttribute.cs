@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Internals;
 /// <para>
 /// Records that an assembly holds a set of a public contract, and the language the set serves. The build of an app
 /// that references the assembly reads these attributes instead of searching the assembly's types. It reports each
-/// language of the app that a contract has no set for (<c>LOC600</c>).
+/// language of the app that a contract has no set for (<c>LOC700</c>).
 /// </para>
 /// </summary>
 // Matched by its full name and read by constructor position.

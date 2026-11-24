@@ -36,7 +36,7 @@ internal sealed record LocalizationSetsAnalysis(
     public const string GetName = "GetTextByKey";
 
     /// <summary>
-    /// Whether a text can't become a member of the generated texts class (<c>LOC205</c>). It carries the class's own
+    /// Whether a text can't become a member of the generated texts class (<c>LOC300</c>). It carries the class's own
     /// name, which C# allows no member, the name of the method that gives a text by its key
     /// (<see cref="GetName"/>), or the name of a method that gives the text of an enum value
     /// (<see cref="LookupName"/>, and <see cref="ExtensionName"/> on the value itself). The class declares no other
@@ -67,7 +67,7 @@ internal sealed record LocalizationSetsAnalysis(
 
         // A set marked [ExcludeFromLocalizationDiscovery] is registered by hand, so nothing is reported about it, but it
         // does translate its contract: it counts as a set of its language, here and for the assemblies referencing this
-        // one. Otherwise the fix LOC400 names for a set needing constructor arguments would end in LOC201 or LOC600,
+        // one. Otherwise the fix LOC208 names for a set needing constructor arguments would end in LOC201 or LOC700,
         // asking for the very set that exists.
         var excludedSets = candidates.Where(static candidate => candidate.IsExcluded).ToImmutableArray();
         var excluded = excludedSets.Where(static set => set.Language is not null).ToImmutableArray();
@@ -75,7 +75,7 @@ internal sealed record LocalizationSetsAnalysis(
         // A set whose language the build can't read (its LocalizationLanguageCode is no constant, or comes from another assembly)
         // may be the set of any language. So a contract it implements is not said to miss one, here or in an assembly
         // referencing this one: that would ask for a set that exists.
-        // A set whose name gives no language, and that has no LocalizationLanguageCode, serves none. It gets LOC400, and
+        // A set whose name gives no language, and that has no LocalizationLanguageCode, serves none. It gets LOC208, and
         // its contract is held to every language as if it weren't there: taken for a set of any language, a Dutch set
         // renamed ShopLocalizationDutch would hide every missing language of its contract behind that one warning.
         var unreadable = sets.Concat(excludedSets).Where(static set => set is { Language: null, NameGivesNoLanguage: false }).ToImmutableArray();
@@ -230,7 +230,7 @@ internal sealed record LocalizationSetsAnalysis(
             if (IsServed(referencedSets, contract, ProvidedLocalizationSet.UnreadableLanguage) || IsServed(ownSets, contract, ProvidedLocalizationSet.UnreadableLanguage))
                 continue;
 
-            // ILocalizationSet<TEnum> for the contract of an enum, which every set of it lists (LOC211).
+            // ILocalizationSet<TEnum> for the contract of an enum, which every set of it lists (LOC205).
             var setInterface = references
                 .SelectMany(static reference => reference.SetsOfEnums)
                 .FirstOrDefault(setOfEnum => String.Equals(setOfEnum.Contract, contract, StringComparison.Ordinal))
@@ -379,7 +379,7 @@ internal sealed record LocalizationSetsAnalysis(
 
             // The generated texts take their default wording from an instance the generated code creates, so a set it
             // can't create gets no texts. It still gets its contract, which it lists, as every other language does.
-            // Reported here, and not as LOC400: that one advises to exclude the set and register it by hand, which a
+            // Reported here, and not as LOC208: that one advises to exclude the set and register it by hand, which a
             // default-language set must never be. A default-language set has its language, so only how it is created
             // can keep it from registering.
             var hasTexts = true;
@@ -998,8 +998,8 @@ internal readonly record struct ReferencedLocalization(
 
 /// <summary>
 /// A public contract of a referenced assembly that holds the texts of an enum, with what each of its sets lists in place
-/// of <c>ILocalizationSet</c>, such as <c>ILocalizationSet&lt;Lib.OrderStatus&gt;</c> (<c>LOC211</c>). The set an app
-/// adds for it (<c>LOC600</c>) lists that too.
+/// of <c>ILocalizationSet</c>, such as <c>ILocalizationSet&lt;Lib.OrderStatus&gt;</c> (<c>LOC205</c>). The set an app
+/// adds for it (<c>LOC700</c>) lists that too.
 /// </summary>
 internal readonly record struct ReferencedSetOfEnum(
     string Contract,
@@ -1009,7 +1009,7 @@ internal readonly record struct ReferencedSetOfEnum(
 /// A diagnostic to report: which rule, where, and the arguments of its message. A finding a name resolves carries it,
 /// for the code fix to apply: the name the class should carry (<c>LOC200</c>), the language to list
 /// (<c>LOC202</c>), the contract it should implement (<c>LOC204</c>), or the set to add (<c>LOC201</c> and
-/// <c>LOC600</c>), which also carries how to write that set.
+/// <c>LOC700</c>), which also carries how to write that set.
 /// </summary>
 internal readonly record struct LocalizationSetsFinding(
     LocalizationSetsRule Rule,
@@ -1019,10 +1019,10 @@ internal readonly record struct LocalizationSetsFinding(
     NewLocalizationSet? NewSet = null);
 
 /// <summary>
-/// A set the code fix of <c>LOC201</c> or <c>LOC600</c> adds in a file of its own: its namespace, empty for the global
+/// A set the code fix of <c>LOC201</c> or <c>LOC700</c> adds in a file of its own: its namespace, empty for the global
 /// one, and its declaration without a body, such as
 /// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>. The namespace is
-/// <see langword="null"/> for a set of a library's contract (<c>LOC600</c>), which the fix gives the namespace of the
+/// <see langword="null"/> for a set of a library's contract (<c>LOC700</c>), which the fix gives the namespace of the
 /// app.
 /// </summary>
 internal readonly record struct NewLocalizationSet(
@@ -1066,29 +1066,29 @@ internal enum LocalizationSetsRule
     MissingContract,
 
     /// <summary>
-    /// <c>LOC600</c>: a referenced contract has no set for a supported language.
+    /// <c>LOC700</c>: a referenced contract has no set for a supported language.
     /// </summary>
     LibraryMissingLanguage,
 
     /// <summary>
-    /// <c>LOC601</c>: a referenced library writes texts inline, and lacks a supported language.
+    /// <c>LOC701</c>: a referenced library writes texts inline, and lacks a supported language.
     /// </summary>
     LibraryCannotBeTranslated,
 
     /// <summary>
-    /// <c>LOC205</c>: a text of a default-language set is named like the generated texts class, or like a method of
+    /// <c>LOC300</c>: a text of a default-language set is named like the generated texts class, or like a method of
     /// that class: the one that gives a text by its key, or one of the two that give the text of an enum
     /// value.
     /// </summary>
     ReservedTextName,
 
     /// <summary>
-    /// <c>LOC300</c>: a method of a default-language set has the shape of a text that takes values, but can't be one.
+    /// <c>LOC400</c>: a method of a default-language set has the shape of a text that takes values, but can't be one.
     /// </summary>
     UnsupportedText,
 
     /// <summary>
-    /// <c>LOC208</c>: a default-language set inherits a text from a class of its assembly without declaring it, so its
+    /// <c>LOC303</c>: a default-language set inherits a text from a class of its assembly without declaring it, so its
     /// contract leaves the text out.
     /// </summary>
     UndeclaredText,

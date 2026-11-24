@@ -96,7 +96,7 @@ public sealed class PlaceholderAnalyzerTests
     [Arguments("""nl: "{1,8} van {0}", en: "Some", enGb: "Some" """, "\"{1,8} van {0}\"", "The 'nl' wording holds the placeholder {1,8}. Nothing fills it in")]
     [Arguments("""en: $"{name}", nl: $"{name}: {{0}}", enGb: $"{name}" """, ": {{0}}\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
     [Arguments("""en: "Hello!", nl: Wording, enGb: "Hello!" """, "nl: Wording", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
-    public async Task InlineWordingWithPlaceholder_ShouldReportLOC502(string arguments, string at, string message)
+    public async Task InlineWordingWithPlaceholder_ShouldReportLOC403(string arguments, string at, string message)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Inline(arguments));
@@ -105,7 +105,7 @@ public sealed class PlaceholderAnalyzerTests
         // interpolated string, and at the argument for a constant it names.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(PlaceholderAnalyzer.PlaceholderDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Id.ShouldBe("LOC403");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldStartWith(message);
         diagnostic.GetMessage().ShouldEndWith("Write the value into the wording of every language, as in '$\"Hello, {name}!\"'.");
@@ -117,7 +117,7 @@ public sealed class PlaceholderAnalyzerTests
     [Arguments("""en: "Total", nl: "Totaal", enGb: "Total: {0:N2}" """, "\"Total: {0:N2}\"", "The 'en-GB' wording holds the placeholder {0:N2}. Nothing fills it in")]
     [Arguments(""" "Name", "Naam {0}", "Name" """, "\"Naam {0}\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
     [Arguments("""en: "Hello!", nl: Wording, enGb: "Hello!" """, "nl: Wording", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
-    public async Task WordingOfLocalizedWithPlaceholder_ShouldReportLOC502(string arguments, string at, string message)
+    public async Task WordingOfLocalizedWithPlaceholder_ShouldReportLOC403(string arguments, string at, string message)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync($$"""
@@ -135,7 +135,7 @@ public sealed class PlaceholderAnalyzerTests
         // Assert: at the string that holds it, also for an argument without a name, and at the argument for a
         // constant it names. A text on a member can't take the value, so the advice is a method of a set.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Id.ShouldBe("LOC403");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldStartWith(message);
         diagnostic.GetMessage().ShouldEndWith("A text on a member can't take a value, so write a text with a value as a method of a set, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'.");
@@ -186,7 +186,7 @@ public sealed class PlaceholderAnalyzerTests
     [Arguments(EnglishGreeting, """public string Greeting => Wording;""", "", "Greeting => Wording", "'ShopLocalizationNl.Greeting'")]
     [Arguments(EnglishGreeting, DutchGreeting, """public override string Greeting => "Hello there, {0}!";""", "\"Hello there, {0}!\"", "'ShopLocalizationEnGb.Greeting'")]
     [Arguments("""public virtual string Greeting(string name) => $"Hello, {name}!";""", """public string Greeting => "Hallo, {0}!";""", "", "\"Hallo, {0}!\"", "'ShopLocalizationNl.Greeting'")]
-    public async Task TextOfSetWithPlaceholder_ShouldReportLOC502(string english, string dutch, string british, string at, string subject)
+    public async Task TextOfSetWithPlaceholder_ShouldReportLOC403(string english, string dutch, string british, string at, string subject)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(english, dutch, british));
@@ -195,14 +195,14 @@ public sealed class PlaceholderAnalyzerTests
         // implements the text, implements it explicitly, or overrides the default set's, and at the property for a
         // constant it names. Also a property where the text takes a value, as the default language wrote it before.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Id.ShouldBe("LOC403");
         diagnostic.GetMessage().ShouldStartWith($"{subject} holds the placeholder {{0}}. Nothing fills it in");
         diagnostic.GetMessage().ShouldEndWith("Write the text as a method that takes the value, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'.");
         At(diagnostic).ShouldStartWith(at);
     }
 
     [Test]
-    public async Task TextThatTakesValuesWithPlaceholder_ShouldReportLOC502AtEachString()
+    public async Task TextThatTakesValuesWithPlaceholder_ShouldReportLOC403AtEachString()
     {
         // Arrange & Act: a method that kept a placeholder next to the value it takes, in one of its wordings and in
         // the text of an interpolated string.
@@ -212,7 +212,7 @@ public sealed class PlaceholderAnalyzerTests
 
         // Assert
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC502");
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC403");
         diagnostics.ShouldAllBe(diagnostic => diagnostic.GetMessage().StartsWith("'ShopLocalizationNl.Items' holds the placeholder {1}", StringComparison.Ordinal));
         diagnostics.Select(At).ShouldContain(at => at.StartsWith("\"1 artikel bij {1}\"", StringComparison.Ordinal));
     }
@@ -266,7 +266,7 @@ public sealed class PlaceholderAnalyzerTests
     }
 
     [Test]
-    public async Task TextWithBlockBody_ShouldReportLOC502AtEachStringItReturns()
+    public async Task TextWithBlockBody_ShouldReportLOC403AtEachStringItReturns()
     {
         // Arrange & Act: two returns, the second a concatenation, next to a string passed to a method.
         var diagnostics = await AnalyzeAsync(Sets(
@@ -321,7 +321,7 @@ public sealed class PlaceholderAnalyzerTests
     }
 
     [Test]
-    public async Task SetOfContractOfAnotherAssembly_ShouldReportLOC502()
+    public async Task SetOfContractOfAnotherAssembly_ShouldReportLOC403()
     {
         // Arrange & Act: an app adds German to a library, in an assembly that declares no languages itself.
         var diagnostics = await AnalyzeAsync("""
@@ -337,12 +337,12 @@ public sealed class PlaceholderAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Id.ShouldBe("LOC403");
         diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationDe.Total' holds the placeholder {0}");
     }
 
     [Test]
-    public async Task InlineWordingInMarkup_ShouldReportLOC502()
+    public async Task InlineWordingInMarkup_ShouldReportLOC403()
     {
         // Arrange & Act: what Razor generates from a page counts as generated code, and is the user's own markup.
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), Header, [], ("Pages/Index_razor.g.cs", """
@@ -358,11 +358,11 @@ public sealed class PlaceholderAnalyzerTests
             """));
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC403");
     }
 
     [Test]
-    public async Task PartialPropertyWithPlaceholder_ShouldReportLOC502()
+    public async Task PartialPropertyWithPlaceholder_ShouldReportLOC403()
     {
         // Arrange & Act: the set names the part that declares the property as the text's implementation, and the part
         // that implements it holds the wording.
@@ -385,7 +385,7 @@ public sealed class PlaceholderAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC502");
+        diagnostic.Id.ShouldBe("LOC403");
         diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationNl.Note' holds the placeholder {0}");
     }
 }

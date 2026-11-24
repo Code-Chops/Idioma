@@ -3,9 +3,9 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a text of a set that its contract doesn't have (<c>LOC209</c>), such as a Dutch text that the
+/// Reports a text of a set that its contract doesn't have (<c>LOC304</c>), such as a Dutch text that the
 /// default-language set lacks. In a set of an enum, it reports a text that isn't a member of the enum instead
-/// (<c>LOC210</c>).
+/// (<c>LOC305</c>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,24 +22,24 @@ namespace CodeChops.Idioma.Generators;
 /// <para>
 /// A member is a text by the shape discovery reads a text by: a public string property, or a method of the shape of a
 /// text that takes values. A member marked <c>[ExcludeFromLocalizationDiscovery]</c> isn't reported, and neither is a
-/// method that can't be a text (<c>LOC300</c>).
+/// method that can't be a text (<c>LOC400</c>).
 /// </para>
 /// <para>
-/// <c>LOC209</c> doesn't report these:
+/// <c>LOC304</c> doesn't report these:
 /// </para>
 /// <list type="bullet">
 /// <item>A member of the name of a member of an interface the set implements. What's wrong with it is reported
-/// elsewhere: a member that hides a text (<c>LOC207</c>), a property named like a text that takes values
-/// (<c>LOC502</c>), or a method with other parameters (<c>CS0535</c>). So the default-language set isn't reported,
+/// elsewhere: a member that hides a text (<c>LOC302</c>), a property named like a text that takes values
+/// (<c>LOC403</c>), or a method with other parameters (<c>CS0535</c>). So the default-language set isn't reported,
 /// because its contract has each text it declares.</item>
 /// <item>A member of the name of a member of a class the set derives from. It overrides or hides that member, which is
 /// reported where it's declared.</item>
 /// </list>
 /// <para>
-/// <c>LOC210</c> doesn't report these, which are still checked for <c>LOC209</c>:
+/// <c>LOC305</c> doesn't report these, which are still checked for <c>LOC304</c>:
 /// </para>
 /// <list type="bullet">
-/// <item>A text with a name the generated class takes (<c>LOC205</c>).</item>
+/// <item>A text with a name the generated class takes (<c>LOC300</c>).</item>
 /// <item>A text of a contract of another assembly, which the set has to implement.</item>
 /// <item>A member of the name of a member of a set of an enum the set derives from, which is reported there. A class
 /// that isn't such a set isn't analyzed, so a text it declares is reported where it's overridden.</item>
@@ -48,8 +48,8 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
 {
-    public const string TextOutsideContractDiagnosticId = "LOC209";
-    public const string TextOutsideEnumDiagnosticId = "LOC210";
+    public const string TextOutsideContractDiagnosticId = "LOC304";
+    public const string TextOutsideEnumDiagnosticId = "LOC305";
 
     private const string ExcludeAdvice = "or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text";
 
@@ -118,7 +118,7 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
                 continue;
 
             // A text of a set of an enum that isn't a member is reported as such, also where the contract has it, and
-            // in place of LOC209.
+            // in place of LOC304.
             if (enums.Length > 0 && !IsMemberOfAny(enums, member.Name) && IsOutsideEnums(set, member.Name, contract, context.Compilation))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -206,7 +206,7 @@ public sealed class TextOutsideContractAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Whether a text of a set of an enum that isn't a member is reported here. Another code reports a name the
-    /// generated class takes (<c>LOC205</c>). A text of a contract of another assembly is that assembly's, and the set
+    /// generated class takes (<c>LOC300</c>). A text of a contract of another assembly is that assembly's, and the set
     /// has to implement it. A set of an enum the set derives from reports a text it declares, which the set overrides or
     /// hides. A class that isn't such a set isn't analyzed, so its text is reported where it's overridden.
     /// </summary>

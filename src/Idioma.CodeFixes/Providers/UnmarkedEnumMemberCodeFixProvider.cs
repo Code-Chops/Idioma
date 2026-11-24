@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a member of an enum without <c>[Localized]</c> next to members that have it (<c>LOC503</c>). It marks the
+/// Fixes a member of an enum without <c>[Localized]</c> next to members that have it (<c>LOC501</c>). It marks the
 /// member with its wording in the default language: <c>Lost</c> becomes <c>[Localized(en: "Lost")] Lost</c>. The
 /// compiler then names each language the attribute lacks (<c>CS7036</c>).
 /// </summary>

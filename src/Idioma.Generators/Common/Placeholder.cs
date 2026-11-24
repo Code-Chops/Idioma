@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// Finds a placeholder of a format string in a wording: <c>{0}</c>, with or without an alignment or a format, as in
 /// <c>{1,8}</c> and <c>{0:N2}</c>. Nothing fills one in, so in a wording it is a value that was meant to be there and
-/// is not (<c>LOC502</c>).
+/// is not (<c>LOC403</c>).
 /// </summary>
 /// <remarks>
 /// A placeholder is written as <see cref="string.Format(string, object?)"/> reads it: a number, then an alignment, then

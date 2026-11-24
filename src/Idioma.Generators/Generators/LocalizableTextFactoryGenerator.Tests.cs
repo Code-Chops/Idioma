@@ -161,8 +161,8 @@ public sealed class LocalizableTextFactoryGeneratorTests
     [Test]
     public void ProjectBelowCSharp14WithoutLanguages_ShouldBuild()
     {
-        // Arrange & Act: a project that only references a library using the package declares no languages, and its
-        // registrar needs no C# 14.
+        // Arrange & Act: a library that only references a library using the package declares no languages, and its
+        // registrar needs no C# 14. An app declares its languages (LOC103), so it needs C# 14.
         var library = GeneratorTestHelper.CompileLibraryWithGenerators("VersionLibrary", """
             using CodeChops.Idioma;
 
@@ -183,12 +183,12 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         var options = new CSharpParseOptions(LanguageVersion.CSharp12);
         var tree = CSharpSyntaxTree.ParseText("""
-            public static class Program
+            public static class Reader
             {
-                public static void Main() { }
+                public static string Read() { return new VersionLibrary.GridLocalizationEn().First; }
             }
             """, options);
-        var compilation = CSharpCompilation.Create("OldApp", [tree], [.. GeneratorTestHelper.References, library], new CSharpCompilationOptions(OutputKind.ConsoleApplication));
+        var compilation = CSharpCompilation.Create("OldLibrary", [tree], [.. GeneratorTestHelper.References, library], new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         GeneratorTestHelper.CreateFullDriver(options).RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics);
 

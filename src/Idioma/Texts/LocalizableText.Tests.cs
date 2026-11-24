@@ -19,10 +19,10 @@ namespace CodeChops.Idioma.Tests.Members
         [Localized(en: "Picked", nl: "Gepickt")]
         Picked = 2,
 
-        // Without a text on purpose, which the build would report (LOC503).
-#pragma warning disable LOC503
+        // Without a text on purpose, which the build would report (LOC501).
+#pragma warning disable LOC501
         Lost = 4,
-#pragma warning restore LOC503
+#pragma warning restore LOC501
 
         [Localized(en: "Collected", nl: "Opgehaald")]
         Collected = Picked,
@@ -379,10 +379,10 @@ namespace CodeChops.Idioma.Tests
             // Arrange
             using var _ = new CulturesScope("nl-NL");
 
-            // Act & Assert: a value can't tell the two apart. The build warns about naming the second (LOC500).
-#pragma warning disable LOC500
+            // Act & Assert: a value can't tell the two apart. The build warns about naming the second (LOC600).
+#pragma warning disable LOC600
             ParcelStatus.Collected.GetText().ShouldBe("Gepickt");
-#pragma warning restore LOC500
+#pragma warning restore LOC600
         }
 
         [Test]

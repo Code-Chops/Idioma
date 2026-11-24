@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a wording that holds a placeholder of a format string, such as <c>{0}</c> (<c>LOC502</c>): in a text of a
+/// Reports a wording that holds a placeholder of a format string, such as <c>{0}</c> (<c>LOC403</c>): in a text of a
 /// set, in any language, in a language of <c>LocalizableText.Inline</c>, and in a language of <c>[Localized]</c> on a
 /// member.
 /// </summary>
@@ -30,7 +30,7 @@ namespace CodeChops.Idioma.Generators;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
 {
-    public const string PlaceholderDiagnosticId = "LOC502";
+    public const string PlaceholderDiagnosticId = "LOC403";
 
     private const string SetAdvice = "Write the text as a method that takes the value, as in 'public string Greeting(string name) => $\"Hello, {name}!\";'";
     private const string InlineAdvice = "Write the value into the wording of every language, as in '$\"Hello, {name}!\"'";

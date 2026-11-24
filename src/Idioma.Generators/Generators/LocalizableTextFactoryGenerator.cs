@@ -29,7 +29,7 @@ namespace CodeChops.Idioma.Generators;
 /// <para>
 /// An assembly that calls the factory, in code or in Razor markup, is marked <c>[assembly: InlineTexts]</c>. No
 /// assembly referencing it can add a language to such a text, so its build warns about the languages it lacks
-/// (<c>LOC601</c>). An assembly with a text on a member gets the same mark from the file that holds those texts.
+/// (<c>LOC701</c>). An assembly with a text on a member gets the same mark from the file that holds those texts.
 /// </para>
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
@@ -264,7 +264,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
                 /// The wording of the member's text in every language: <c>[{{LocalizedMembers.AttributeName}}({{sample}})]</c>.
                 /// </summary>
                 /// <remarks>
-                /// Name each argument after its language. An unnamed one is a build error (<c>LOC501</c>), because two swapped languages
+                /// Name each argument after its language. An unnamed one is a build error (<c>LOC500</c>), because two swapped languages
                 /// would go unnoticed. The wording is a constant, so it can't show a value. Write a text with a value as a method of a set.
                 /// </remarks>
             """);
@@ -328,7 +328,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
                     /// default language, else the <c>{{codes[0]}}</c> wording.
                     /// </summary>
                     /// <remarks>
-                    /// Name each argument after its language. An unnamed one is a build error (<c>LOC501</c>), because two swapped languages
+                    /// Name each argument after its language. An unnamed one is a build error (<c>LOC500</c>), because two swapped languages
                     /// would go unnoticed. To include a value, write it into every language, as in <c>$"Hello, {name}!"</c>.
                     /// The string holds the wording of the moment it's made, so call this where you show the text.
                     /// </remarks>

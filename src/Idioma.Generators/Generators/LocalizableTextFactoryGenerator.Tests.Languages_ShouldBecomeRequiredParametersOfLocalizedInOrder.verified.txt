@@ -21,7 +21,7 @@ internal sealed class LocalizedAttribute : System.Attribute
     /// The wording of the member's text in every language: <c>[Localized(en: "...", nl: "...", enGb: "...")]</c>.
     /// </summary>
     /// <remarks>
-    /// Name each argument after its language. An unnamed one is a build error (<c>LOC501</c>), because two swapped languages
+    /// Name each argument after its language. An unnamed one is a build error (<c>LOC500</c>), because two swapped languages
     /// would go unnoticed. The wording is a constant, so it can't show a value. Write a text with a value as a method of a set.
     /// </remarks>
     /// <param name="en">The wording in <c>en</c>.</param>

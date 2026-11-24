@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="SetOfEnumCodeFixProvider"/>: a set of the contract of an enum that doesn't list
-/// <c>ILocalizationSet&lt;TEnum&gt;</c> (<c>LOC211</c>) lists it in place of <c>ILocalizationSet</c>.
+/// <c>ILocalizationSet&lt;TEnum&gt;</c> (<c>LOC205</c>) lists it in place of <c>ILocalizationSet</c>.
 /// </summary>
 public sealed class SetOfEnumCodeFixProviderTests
 {

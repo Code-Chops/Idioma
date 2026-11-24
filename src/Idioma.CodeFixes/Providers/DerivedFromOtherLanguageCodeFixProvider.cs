@@ -66,7 +66,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProvider : CodeFixProvider
             return;
 
         // A set of an enum lists ILocalizationSet<TEnum> for each enum the set it derived from lists, as every set of
-        // its contract does (LOC211).
+        // its contract does (LOC205).
         var setsOfEnums = baseSet.AllInterfaces.Where(PackageNames.IsLocalizationSetOfEnum).ToImmutableArray();
         ImmutableArray<INamedTypeSymbol> setInterfaces = setsOfEnums.IsEmpty ? [localizationSet] : setsOfEnums;
 

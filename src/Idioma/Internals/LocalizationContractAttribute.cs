@@ -13,7 +13,7 @@ namespace CodeChops.Idioma.Internals;
 /// <para>
 /// The contract of a set of an enum names its enums, as in <c>[LocalizationContract(typeof(OrderStatus))]</c>. The
 /// build then warns about a set of it that doesn't list <see cref="ILocalizationSet{TEnum}"/> of each enum, or that
-/// lists another enum (<c>LOC211</c>).
+/// lists another enum (<c>LOC205</c>).
 /// </para>
 /// </summary>
 // Matched by its name and namespaces, part by part, and read by constructor position.

@@ -48,7 +48,7 @@ namespace CodeChops.Idioma;
 /// </list>
 /// <para>
 /// The build doesn't recognize a class that breaks one of the first three as a set, and reports its language as
-/// missing (<c>LOC201</c>). A set without such a constructor gets build warning <c>LOC400</c>. To register a set
+/// missing (<c>LOC201</c>). A set without such a constructor gets build warning <c>LOC208</c>. To register a set
 /// yourself, mark it
 /// <see cref="ExcludeFromLocalizationDiscoveryAttribute">[ExcludeFromLocalizationDiscovery]</see> and call
 /// <see cref="LocalizationRegistry.Register{TSet}">LocalizationRegistry.Register</see>.
@@ -66,13 +66,13 @@ namespace CodeChops.Idioma;
 /// overrides <c>Greeting</c>, both show. When both override the same text, the set registered last wins.</item>
 /// </list>
 /// <para>
-/// When your app declares a language that a library lacks, the build names the set to add (<c>LOC600</c>). Implement
+/// When your app declares a language that a library lacks, the build names the set to add (<c>LOC700</c>). Implement
 /// the library's contract in your app:
 /// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>.
 /// </para>
 /// <para>
 /// <b>Texts with parameters.</b> Give each property fixed wording, because one instance of each set serves every user.
-/// A property with a setter is build error <c>LOC206</c>, and your IDE removes the setter. A text with a value that
+/// A property with a setter is build error <c>LOC301</c>, and your IDE removes the setter. A text with a value that
 /// changes, such as a customer's name, is a public method. It takes the value as a parameter and returns the wording:
 /// <c>public string Greeting(string name) => $"Hello, {name}!";</c>. The contract repeats the method, and the generated
 /// class gets one with the same name and parameters. So you show the text as
@@ -84,10 +84,10 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <list type="bullet">
 /// <item>Every language implements the method with the parameters of the default-language set, named alike
-/// (<c>LOC301</c>).</item>
-/// <item>Every language uses every value the default wording shows (<c>LOC302</c>).</item>
-/// <item>A method the generated class can't repeat, such as a generic one, is build error <c>LOC300</c>.</item>
-/// <item>A placeholder such as <c>{0}</c> in a wording is build warning <c>LOC502</c>, because nothing fills it in.
+/// (<c>LOC401</c>).</item>
+/// <item>Every language uses every value the default wording shows (<c>LOC402</c>).</item>
+/// <item>A method the generated class can't repeat, such as a generic one, is build error <c>LOC400</c>.</item>
+/// <item>A placeholder such as <c>{0}</c> in a wording is build warning <c>LOC403</c>, because nothing fills it in.
 /// Your IDE turns such a text into a method that takes the value.</item>
 /// </list>
 /// <para>
@@ -99,7 +99,7 @@ namespace CodeChops.Idioma;
 /// name at run time: <c>ShopLocalization.GetTextByKey("Checkout")</c>. The key is the text's name, in the same letter
 /// case. <c>GetTextByKey</c> returns what <c>ShopLocalization.Checkout</c> returns. A text with parameters takes its values after the key, as in
 /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c>. A key no text has throws
-/// <see cref="KeyNotFoundException"/>. No text can be named <c>GetTextByKey</c> (<c>LOC205</c>).
+/// <see cref="KeyNotFoundException"/>. No text can be named <c>GetTextByKey</c> (<c>LOC300</c>).
 /// </para>
 /// <para>
 /// <b>Enums.</b> To translate an enum, list <see cref="ILocalizationSet{TEnum}"/> in place of this interface. Every
@@ -143,7 +143,7 @@ public interface ILocalizationSet
     /// The code is a culture name in any letter case. The set serves that culture and every culture under it, so
     /// <c>en</c> serves <c>en-US</c> and <c>en-GB</c>. A set for <c>en-GB</c> serves only British English, and wins
     /// over the <c>en</c> set there. A constant that isn't a culture name, such as <c>en_GB</c>, is build
-    /// error <c>LOC402</c>.
+    /// error <c>LOC207</c>.
     /// </para>
     /// <para>
     /// An assembly that lists <c>en-GB</c> in <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see>
@@ -175,7 +175,7 @@ public interface ILocalizationSet
     /// Implement this property in two cases: for such a code in an assembly that doesn't list it, or for a set whose
     /// name doesn't end in its language. For example: <c>string ILocalizationSet.LocalizationLanguageCode => "en-GB";</c>. A set
     /// that derives from another set lists <see cref="ILocalizationSet"/> again for that, as in the example below.
-    /// Without it, the property implements nothing, and the build reports <c>LOC401</c>.
+    /// Without it, the property implements nothing, and the build reports <c>LOC206</c>.
     /// </para>
     /// </remarks>
     /// <example>
@@ -192,7 +192,7 @@ public interface ILocalizationSet
     /// </example>
     /// <exception cref="InvalidOperationException">
     /// When this property isn't implemented and the set's name doesn't end in a language, such as a name ending in a
-    /// digit. The build warns about such a set with <c>LOC400</c>. Name the set after its language
+    /// digit. The build warns about such a set with <c>LOC208</c>. Name the set after its language
     /// (<c>ShopLocalizationDe</c>), or implement this property.
     /// </exception>
     string LocalizationLanguageCode => GetLanguageCode(this.GetType());
@@ -261,19 +261,19 @@ public interface ILocalizationSet
 /// </para>
 /// <list type="bullet">
 /// <item>The text of a member is a property, because it takes no values. A method with the name of a member is build
-/// error <c>LOC300</c>.</item>
-/// <item>No text can be named <c>GetTextByValue</c>, because the generated method has that name (<c>LOC205</c>).</item>
+/// error <c>LOC400</c>.</item>
+/// <item>No text can be named <c>GetTextByValue</c>, because the generated method has that name (<c>LOC300</c>).</item>
 /// <item>Two members with the same value, such as <c>Default = 0</c> next to <c>None = 0</c>, each need a text.
 /// <c>GetTextByValue</c> gives the text of the first one. A call that names the other, as in
-/// <c>OrderStatus.None.GetText()</c>, is build warning <c>LOC500</c>.</item>
+/// <c>OrderStatus.None.GetText()</c>, is build warning <c>LOC600</c>.</item>
 /// <item><c>GetTextByValue</c> shows a value that isn't a member, such as a combination of flags, as
 /// <see cref="Enum.ToString()"/> writes it.</item>
-/// <item>A text that isn't a member is build warning <c>LOC210</c>, because <c>GetTextByValue</c> never gives it. Write a
+/// <item>A text that isn't a member is build warning <c>LOC305</c>, because <c>GetTextByValue</c> never gives it. Write a
 /// caption for the enum in a set of its own.</item>
 /// </list>
 /// <para>
 /// Every set of the enum lists this interface, in every language, so each set shows which enum it words. A set that
-/// lists <see cref="ILocalizationSet"/> in its place is build warning <c>LOC211</c>, and so is one that lists an enum
+/// lists <see cref="ILocalizationSet"/> in its place is build warning <c>LOC205</c>, and so is one that lists an enum
 /// its contract has no texts of.
 /// </para>
 /// </remarks>

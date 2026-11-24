@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="UnnamedLanguageCodeFixProvider"/>: a call of <c>LocalizableText.Inline</c> with a language
-/// argument without its name (<c>LOC501</c>) gets each such argument named after its language, and so does
+/// argument without its name (<c>LOC500</c>) gets each such argument named after its language, and so does
 /// <c>[Localized]</c> on a member.
 /// </summary>
 public sealed class UnnamedLanguageCodeFixProviderTests

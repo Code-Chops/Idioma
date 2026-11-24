@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a set whose <c>LocalizationLanguageCode</c> implements nothing (<c>LOC401</c>). It lists
+/// Fixes a set whose <c>LocalizationLanguageCode</c> implements nothing (<c>LOC206</c>). It lists
 /// <c>ILocalizationSet</c> again, at the end of the base list, as in
 /// <c>class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet</c>. The property then implements the
 /// interface, so the set serves the language it returns.

@@ -22,8 +22,8 @@ public enum ParcelStatus
     [Localized(en: "Picked", nl: "Gepickt")]
     Picked,
 
-    // Without a text on purpose, which the build would report (LOC503).
-#pragma warning disable LOC503
+    // Without a text on purpose, which the build would report (LOC501).
+#pragma warning disable LOC501
     Lost,
-#pragma warning restore LOC503
+#pragma warning restore LOC501
 }

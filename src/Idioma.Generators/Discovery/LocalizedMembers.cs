@@ -490,7 +490,7 @@ internal static class LocalizedMembers
         {
             var argument = member.Wordings[i];
 
-            // An argument without a name takes the parameter of its place, as the compiler has it (LOC501 reports it).
+            // An argument without a name takes the parameter of its place, as the compiler has it (LOC500 reports it).
             var index = argument.Parameter is null ? i : FindParameter(codes, argument.Parameter);
 
             if (index < 0 || index >= codes.Length || wordings[index] is not null || argument.Wording is null)

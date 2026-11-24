@@ -47,8 +47,8 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// Your app's languages, its default language first, as its
-    /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> declares them. Empty in an app that
-    /// declares no languages.
+    /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> declares them. Empty only in a
+    /// process that no app of yours started, such as a host written in F# that loads your library.
     /// </summary>
     /// <remarks>
     /// A culture none of these languages serves gets the wording in <see cref="DefaultLanguage"/>, for every text. For
@@ -60,11 +60,11 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// Your app's default language, the first language it declares. For example, <c>nl</c> for
     /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("nl", "en")]</see>. <see langword="null"/>
-    /// in an app that declares no languages.
+    /// only where <see cref="SupportedLanguages"/> is empty.
     /// </summary>
     /// <remarks>
     /// Every text falls back to this language, including the texts of the libraries your app uses. See
-    /// <see cref="LocalizableText"/>. In an app that declares no languages, each text falls back to its own default
+    /// <see cref="LocalizableText"/>. Where it's <see langword="null"/>, each text falls back to its own default
     /// language instead.
     /// </remarks>
     public static string? DefaultLanguage => SupportedLanguages is [var defaultLanguage, ..] ? defaultLanguage : null;

@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="PlaceholderCodeFixProvider"/>: a text of a set whose wording holds a placeholder (<c>LOC502</c>)
+/// Tests for <see cref="PlaceholderCodeFixProvider"/>: a text of a set whose wording holds a placeholder (<c>LOC403</c>)
 /// gets a parameter in place of each placeholder. A property becomes a method that takes the values.
 /// </summary>
 public sealed class PlaceholderCodeFixProviderTests
@@ -113,7 +113,7 @@ public sealed class PlaceholderCodeFixProviderTests
     private static async Task ShouldCompileWithoutPlaceholders(string fixedSource)
     {
         GeneratorTestHelper.CompileWithGenerators(fixedSource).ShouldBeEmpty();
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), fixedSource, [])).ShouldNotContain(diagnostic => diagnostic.Id == "LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), fixedSource, [])).ShouldNotContain(diagnostic => diagnostic.Id == "LOC403");
     }
 
     /// <summary>
@@ -283,7 +283,7 @@ public sealed class PlaceholderCodeFixProviderTests
 
         // Assert: a number without a parameter, a raw string, a ninth value, a property with a setter, and a name the
         // text already uses.
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -309,7 +309,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(source);
 
         // Assert: a method in English alone would leave Dutch without the text of the contract (CS0535).
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -489,7 +489,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(source);
 
         // Assert: the fix doesn't change the contract, which would then no longer match the sets (CS0535).
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -526,7 +526,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(source, library);
 
         // Assert
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [library])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [library])).ShouldHaveSingleItem().Id.ShouldBe("LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -552,7 +552,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(source, library);
 
         // Assert
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [library])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [library])).ShouldHaveSingleItem().Id.ShouldBe("LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -577,7 +577,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(source);
 
         // Assert: its wording has no parameter to take the value.
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -603,7 +603,7 @@ public sealed class PlaceholderCodeFixProviderTests
         var fixes = await FixAsync(source);
 
         // Assert: the property isn't turned into a method.
-        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC502");
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldHaveSingleItem().Id.ShouldBe("LOC403");
         fixes.ShouldBeEmpty();
     }
 
@@ -764,7 +764,7 @@ public sealed class PlaceholderCodeFixProviderTests
         // Act
         var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(new PlaceholderCodeFixProvider(), new PlaceholderAnalyzer(), source)).ShouldHaveSingleItem();
 
-        // Assert: Dutch takes both values, so it still implements the contract. That it leaves one out is LOC302's to say.
+        // Assert: Dutch takes both values, so it still implements the contract. That it leaves one out is LOC402's to say.
         fixedSource.ShouldBe(Sets(
             """public virtual string Greeting(object? arg0, object? arg1) => $"Hello, {arg0}! You have {arg1} items.";""",
             """public string Greeting(object? arg0, object? arg1) => $"Hallo, {arg0}!";"""));

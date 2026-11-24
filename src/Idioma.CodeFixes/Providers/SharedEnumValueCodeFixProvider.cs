@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
 /// Fixes a call that asks for the text of an enum member by its value, where an earlier member has that value too
-/// (<c>LOC500</c>). It asks the generated class for the member's own text instead:
+/// (<c>LOC600</c>). It asks the generated class for the member's own text instead:
 /// <c>OrderStatus.None.GetText()</c> becomes <c>OrderStatusLocalization.None</c>.
 /// </summary>
 /// <remarks>

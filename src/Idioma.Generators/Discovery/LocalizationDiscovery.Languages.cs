@@ -11,7 +11,7 @@ internal static partial class LocalizationDiscovery
     /// (<see cref="FindRecordedLanguageCode"/>), else the last two letters of its name (<see cref="GetNameLanguage"/>).
     /// <see langword="null"/> when that
     /// can't be known here: the property is no constant, comes from another assembly, or holds a constant that is no
-    /// culture name. A <c>LocalizationLanguageCode</c> that implements nothing counts as meant (<c>LOC401</c> reports it), so the
+    /// culture name. A <c>LocalizationLanguageCode</c> that implements nothing counts as meant (<c>LOC206</c> reports it), so the
     /// language checks add no errors of their own about it.
     /// </summary>
     /// <param name="type">The set.</param>
@@ -37,7 +37,7 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The language the set serves (see the overload without <paramref name="invalidLanguageCode"/>), and the constant
-    /// its <c>LocalizationLanguageCode</c> holds when that is no culture name: what <c>LOC402</c> reports.
+    /// its <c>LocalizationLanguageCode</c> holds when that is no culture name: what <c>LOC207</c> reports.
     /// </summary>
     // Every language the checks and the generated code work with comes through here, so it is a culture name or nothing:
     // a constant such as "" or "en_GB" is in no language, and is held to none, like one that could not be read.
@@ -55,7 +55,7 @@ internal static partial class LocalizationDiscovery
             if (code is null || SupportedLanguages.IsCultureName(code))
                 return code;
 
-            // Not for a LocalizationLanguageCode that implements nothing: nothing reads it at run time, and LOC401 reports it.
+            // Not for a LocalizationLanguageCode that implements nothing: nothing reads it at run time, and LOC206 reports it.
             if (mapping.Unmapped is null)
                 invalidLanguageCode = new InvalidLanguageCode(property.ContainingType.Name, code, DiagnosticLocation.From(property.Locations[0]));
 
@@ -71,7 +71,7 @@ internal static partial class LocalizationDiscovery
     /// culture name, or else <see langword="null"/>. The generated registrar records it, so that the registry files the set
     /// under its language without creating it.
     /// </summary>
-    // The implementation alone, which is what runs, and not a LocalizationLanguageCode that implements nothing (LOC401).
+    // The implementation alone, which is what runs, and not a LocalizationLanguageCode that implements nothing (LOC206).
     private static string? ReadImplementedLanguageCode(INamedTypeSymbol type, WordingReader reader, CancellationToken cancellationToken)
     {
         var property = MapLanguageCode(type).Implementation ?? FindInterfaceLanguageCode(type);

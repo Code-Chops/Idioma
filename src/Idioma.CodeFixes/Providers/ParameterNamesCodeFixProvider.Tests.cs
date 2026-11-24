@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="ParameterNamesCodeFixProvider"/>: a text of a set that names a parameter differently than its
-/// contract (<c>LOC301</c>) gets the contract's names. Names in another order move and leave the body as it is, and a
+/// contract (<c>LOC401</c>) gets the contract's names. Names in another order move and leave the body as it is, and a
 /// name the contract lacks is renamed along with its uses.
 /// </summary>
 public sealed class ParameterNamesCodeFixProviderTests

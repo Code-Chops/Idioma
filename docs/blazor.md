@@ -91,7 +91,7 @@ app.MapGet("/culture/set", (string culture, string? returnUrl, HttpContext http)
 
 The cookie gets an expiry, so it lasts as long as the choice in local storage does. A cookie without one is gone when the browser closes. The server would then render the next visit in the browser's language, and the page would switch to the stored language once WebAssembly takes over.
 
-The languages come from your app's `[assembly: SupportedLanguages]`, so the server lists them nowhere else. The server project takes them from its client project, so it needs no declaration of its own ([details](libraries-and-apps.md#the-apps-languages)).
+The languages come from the `[assembly: SupportedLanguages]` of the server project, so the server lists them nowhere else. In a Blazor Web App, the server project and the client project are each an app, so each declares the same languages ([details](libraries-and-apps.md#the-apps-languages)).
 
 ### Showing the new language everywhere
 

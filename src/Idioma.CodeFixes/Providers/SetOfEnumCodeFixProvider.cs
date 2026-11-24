@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a set whose <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't match the enums of its contract (<c>LOC211</c>). It
+/// Fixes a set whose <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't match the enums of its contract (<c>LOC205</c>). It
 /// lists <c>ILocalizationSet&lt;OrderStatus&gt;</c> in place of <c>ILocalizationSet</c>, as in
 /// <c>class OrderStatusLocalizationNl : ILocalizationSet&lt;OrderStatus&gt;, IOrderStatusLocalization</c>, and it removes
 /// the interface of an enum the contract has no texts of.

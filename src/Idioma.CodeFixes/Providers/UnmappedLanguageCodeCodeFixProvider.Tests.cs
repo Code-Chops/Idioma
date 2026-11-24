@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="UnmappedLanguageCodeCodeFixProvider"/>: a set whose <c>LocalizationLanguageCode</c> implements
-/// nothing (<c>LOC401</c>) lists <c>ILocalizationSet</c> again, so the property implements it.
+/// nothing (<c>LOC206</c>) lists <c>ILocalizationSet</c> again, so the property implements it.
 /// </summary>
 public sealed class UnmappedLanguageCodeCodeFixProviderTests
 {

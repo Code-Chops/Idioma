@@ -144,42 +144,42 @@ public sealed class TextOutsideContractAnalyzerTests
     [Test]
     [Arguments("""public string Basket => "Mandje";""", "Basket")]
     [Arguments("""public string ItemsInBasket(int count) => $"{count} in je mandje";""", "ItemsInBasket")]
-    public async Task TextOnlyInDutch_ShouldReportLOC209(string dutch, string text)
+    public async Task TextOnlyInDutch_ShouldReportLOC304(string dutch, string text)
     {
         // Arrange & Act: the contract comes from the English set, which has no such text.
         var diagnostics = await AnalyzeAsync(Sets("", dutch));
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC209");
+        diagnostic.Id.ShouldBe("LOC304");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe($"'ShopLocalizationNl.{text}' isn't a text of 'IShopLocalization', so users of 'nl' won't see it. Add '{text}' to the default-language set, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
         At(diagnostic).ShouldStartWith(text);
     }
 
     [Test]
-    public async Task TextOnlyInDutchSetOfEnum_ShouldReportLOC210InPlaceOfLOC209()
+    public async Task TextOnlyInDutchSetOfEnum_ShouldReportLOC305InPlaceOfLOC304()
     {
         // Arrange & Act: adding it to the English set would make it a text that isn't a member there.
         var diagnostics = await AnalyzeAsync(EnumSets("""public string Shipped => "Shipped";""", """public string Lost { get; } = "Kwijt";"""));
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC210");
+        diagnostic.Id.ShouldBe("LOC305");
         diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationNl.Lost' isn't a member of 'OrderStatus', so GetText() never gives it. Add 'Lost' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
     }
 
     [Test]
     [Arguments("""public string Caption => "Order status";""", """public string Caption => "Bestelstatus";""", "Caption")]
     [Arguments("""public string Orders(int count) => $"{count} orders";""", """public string Orders(int count) => $"{count} bestellingen";""", "Orders")]
-    public async Task TextThatIsNoMemberInSetsOfEnum_ShouldReportLOC210InEachSet(string english, string dutch, string text)
+    public async Task TextThatIsNoMemberInSetsOfEnum_ShouldReportLOC305InEachSet(string english, string dutch, string text)
     {
         // Arrange & Act: the contract has the text, because the English set declares it.
         var diagnostics = await AnalyzeAsync(EnumSets($"""public string Shipped => "Shipped"; {english}""", dutch));
 
         // Assert
         diagnostics.Length.ShouldBe(2);
-        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC210" && diagnostic.Severity == DiagnosticSeverity.Warning);
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.Id == "LOC305" && diagnostic.Severity == DiagnosticSeverity.Warning);
         diagnostics.Select(static diagnostic => diagnostic.GetMessage()).OrderBy(static message => message, StringComparer.Ordinal).ShouldBe([
             $"'OrderStatusLocalizationEn.{text}' isn't a member of 'OrderStatus', so GetText() never gives it. Add '{text}' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.",
             $"'OrderStatusLocalizationNl.{text}' isn't a member of 'OrderStatus', so GetText() never gives it. Add '{text}' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.",
@@ -296,7 +296,7 @@ public sealed class TextOutsideContractAnalyzerTests
     }
 
     [Test]
-    public async Task TextThatIsNoMemberOverridingBaseThatIsNoSet_ShouldReportLOC210()
+    public async Task TextThatIsNoMemberOverridingBaseThatIsNoSet_ShouldReportLOC305()
     {
         // Arrange & Act: the base isn't a set, so nothing reports the text where it's declared.
         var diagnostics = await AnalyzeAsync("""
@@ -325,7 +325,7 @@ public sealed class TextOutsideContractAnalyzerTests
     }
 
     [Test]
-    public async Task TextOnlyInBritishSet_ShouldReportLOC209()
+    public async Task TextOnlyInBritishSet_ShouldReportLOC304()
     {
         // Arrange & Act: the British set rewords Cart, and adds Trolley, which English doesn't have.
         var diagnostics = await AnalyzeAsync(RegionalSets(
@@ -401,11 +401,11 @@ public sealed class TextOutsideContractAnalyzerTests
     [Arguments("", """public int Count => 2;""")]
     [Arguments("", """public string this[int index] => "";""")]
     [Arguments("", """public string Basket() => "Mandje";""")] // No text that takes values, as it takes none
-    [Arguments("", """public string Format<T>(T value) => "";""")] // Can't be a text (LOC300)
+    [Arguments("", """public string Format<T>(T value) => "";""")] // Can't be a text (LOC400)
     [Arguments("", """public string Greeting(string name, int visits) => "";""")] // Another method of a text's name
     [Arguments("", """public string LocalizationLanguageCode => "nl";""")]
-    [Arguments("""public string Format<T>(T value) => "";""", "")] // In the default-language set: LOC300
-    [Arguments("""public string GetTextByKey => "Key";""", """public string GetTextByKey => "Sleutel";""")] // LOC205, still in the contract
+    [Arguments("""public string Format<T>(T value) => "";""", "")] // In the default-language set: LOC400
+    [Arguments("""public string GetTextByKey => "Key";""", """public string GetTextByKey => "Sleutel";""")] // LOC300, still in the contract
     public async Task MemberThatIsATextOfTheContractOrNoText_ShouldReportNothing(string english, string dutch)
     {
         // Arrange & Act
@@ -417,9 +417,9 @@ public sealed class TextOutsideContractAnalyzerTests
 
     [Test]
     [Arguments("""public string Shipped => "Shipped";""", "")]
-    [Arguments("""public string Shipped(string carrier) => $"Shipped by {carrier}";""", "")] // LOC300: a member's text takes no values
+    [Arguments("""public string Shipped(string carrier) => $"Shipped by {carrier}";""", "")] // LOC400: a member's text takes no values
     [Arguments("""public string Shipped => "Shipped"; [ExcludeFromLocalizationDiscovery] public string Helper => "";""", "")]
-    [Arguments("""public string Shipped => "Shipped"; public string GetText => "Text";""", """public string GetText => "Tekst";""")] // LOC205
+    [Arguments("""public string Shipped => "Shipped"; public string GetText => "Text";""", """public string GetText => "Tekst";""")] // LOC300
     public async Task SetOfEnumWithTextsOfItsMembersOrNoText_ShouldReportNothing(string english, string dutch)
     {
         // Arrange & Act
@@ -430,7 +430,7 @@ public sealed class TextOutsideContractAnalyzerTests
     }
 
     [Test]
-    [Arguments("""public string Cart => "Cart";""", """public new string Cart => "Basket";""")] // LOC207
+    [Arguments("""public string Cart => "Cart";""", """public new string Cart => "Basket";""")] // LOC302
     [Arguments("""public string Cart => "Cart"; [ExcludeFromLocalizationDiscovery] public string Helper => "";""", """public new string Helper => "x";""")]
     [Arguments("""public string Cart => "Cart"; [ExcludeFromLocalizationDiscovery] public virtual string Helper => "";""", """public override string Helper => "x";""")]
     public async Task BritishMemberOfANameItInherits_ShouldReportNothing(string english, string british)
@@ -445,7 +445,7 @@ public sealed class TextOutsideContractAnalyzerTests
     [Test]
     public async Task PropertyNamedLikeTextThatTakesValues_ShouldReportNothing()
     {
-        // Arrange & Act: the Dutch text is still a property, which LOC502 reports.
+        // Arrange & Act: the Dutch text is still a property, which LOC403 reports.
         var diagnostics = await AnalyzeAsync("""
             using CodeChops.Idioma;
 

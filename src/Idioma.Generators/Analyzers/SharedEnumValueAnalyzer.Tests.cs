@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="SharedEnumValueAnalyzer"/>: a call that names an enum member whose value an earlier member has
-/// is reported (<c>LOC500</c>), and a call that names the first member, or a value the code only has at run time, isn't.
+/// is reported (<c>LOC600</c>), and a call that names the first member, or a value the code only has at run time, isn't.
 /// </summary>
 public sealed class SharedEnumValueAnalyzerTests
 {
@@ -87,14 +87,14 @@ public sealed class SharedEnumValueAnalyzerTests
     [Arguments(
         "public static string Label => OrderStatus.Waiting.GetText();",
         "GetText() gives the text of 'OrderStatus.Pending' for 'OrderStatus.Waiting', because the two have the same value. Use 'OrderStatusLocalization.Waiting' for the text of 'Waiting'.")]
-    public async Task LaterMemberOfSet_ShouldReportLOC500WithItsOwnText(string member, string expectedMessage)
+    public async Task LaterMemberOfSet_ShouldReportLOC600WithItsOwnText(string member, string expectedMessage)
     {
         // Act
         var diagnostics = await AnalyzeAsync(Members(member));
 
         // Assert: a warning on the member, which carries the text the fix writes.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC500");
+        diagnostic.Id.ShouldBe("LOC600");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("OrderStatus.Waiting");
         diagnostic.GetMessage().ShouldBe(expectedMessage);
@@ -102,14 +102,14 @@ public sealed class SharedEnumValueAnalyzerTests
     }
 
     [Test]
-    public async Task LaterMarkedMember_ShouldReportLOC500WithoutAFix()
+    public async Task LaterMarkedMember_ShouldReportLOC600WithoutAFix()
     {
         // Act
         var diagnostics = await AnalyzeAsync(Members("public static string Label => ParcelStatus.Collected.GetText();"));
 
         // Assert: GetTextByMember gives a string?, which the fix doesn't write in place of a string.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC500");
+        diagnostic.Id.ShouldBe("LOC600");
         diagnostic.GetMessage().ShouldBe(
             "GetText() gives the text of 'ParcelStatus.Picked' for 'ParcelStatus.Collected', because the two have the same value. "
             + "Use 'LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Collected))' for the text of 'Collected'.");

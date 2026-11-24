@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Internals;
 /// <para>
 /// Records that a library writes texts inline, with <c>LocalizableText.Inline</c> or with <c>[Localized]</c> on a
 /// member. No app that references the library can add a language to those texts. So the app's build warns about each
-/// of its languages the library lacks (<c>LOC601</c>).
+/// of its languages the library lacks (<c>LOC701</c>).
 /// </para>
 /// </summary>
 // Located by its metadata-name string.

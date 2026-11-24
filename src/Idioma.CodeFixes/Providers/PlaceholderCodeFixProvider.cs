@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Formatting;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a text of a set whose wording holds a placeholder of a format string (<c>LOC502</c>). It writes a parameter in
+/// Fixes a text of a set whose wording holds a placeholder of a format string (<c>LOC403</c>). It writes a parameter in
 /// place of each placeholder, so that the wording shows the value. A property becomes a method that takes the values,
 /// in every language of this assembly at once, and a method uses its own parameters, the first for <c>{0}</c>.
 /// </summary>
@@ -24,7 +24,7 @@ namespace CodeChops.Idioma.CodeFixes;
 /// The same text of every other set of this assembly becomes a method with it, also one without a placeholder, so
 /// that each set still implements the contract. The fix finds each through the contract, so the default-language set
 /// changes whichever language is fixed. An explicit implementation changes too, and so do an override and an abstract
-/// property. A set without a placeholder then leaves the value out, which the build reports (<c>LOC302</c>). A wording
+/// property. A set without a placeholder then leaves the value out, which the build reports (<c>LOC402</c>). A wording
 /// in a raw string keeps its placeholder, and its warning.
 /// </para>
 /// <para>
@@ -54,7 +54,7 @@ namespace CodeChops.Idioma.CodeFixes;
 public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 {
     /// <summary>
-    /// The most values a text takes (<c>LOC300</c>).
+    /// The most values a text takes (<c>LOC400</c>).
     /// </summary>
     private const int MaxValues = 8;
 

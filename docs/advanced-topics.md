@@ -113,7 +113,7 @@ public static partial class ShopLocalization
 
 Each call hands the values to the method of the set for the user's language, and returns its wording. Nothing is kept. A call allocates only the string the set's method makes.
 
-Write a text without values as a property, because a method without parameters isn't a text. The build rejects such a method in the default-language set (`LOC300`), unless it's an override such as `ToString()` or implements an interface member.
+Write a text without values as a property, because a method without parameters isn't a text. The build rejects such a method in the default-language set (`LOC400`), unless it's an override such as `ToString()` or implements an interface member.
 
 A public method of the default-language set that returns a `string` and takes parameters becomes a text, also when it's a helper. Every language then has to implement it. To keep a helper out:
 
@@ -121,11 +121,11 @@ A public method of the default-language set that returns a `string` and takes pa
 - Make it `static`. A static method is never a text, so it can stay public for other assemblies.
 - Mark it `[ExcludeFromLocalizationDiscovery]` where it has to stay public on the instance, such as an override of a public member of a base class. The attribute also keeps a public `string` property from being a text.
 
-The generated class repeats the parameters as the set declares them. So the build rejects a method it can't repeat, such as a generic one or one with a `ref` parameter (`LOC300`). [LOC300](build-errors.md#loc300) lists every case.
+The generated class repeats the parameters as the set declares them. So the build rejects a method it can't repeat, such as a generic one or one with a `ref` parameter (`LOC400`). [LOC400](build-errors.md#loc400) lists every case.
 
-Every language names the parameters as the default-language set does (`LOC301`). The compiler checks their types and order, but not their names. Without this check, a set could swap two parameters of the same type and word each value as the other.
+Every language names the parameters as the default-language set does (`LOC401`). The compiler checks their types and order, but not their names. Without this check, a set could swap two parameters of the same type and word each value as the other.
 
-Every language also uses the values the default wording shows (`LOC302`). A Dutch `Greeting(string name) => "Hallo!"` next to an English `$"Hello, {name}!"` is a build error, because Dutch users wouldn't see the name. What counts as showing a value:
+Every language also uses the values the default wording shows (`LOC402`). A Dutch `Greeting(string name) => "Hallo!"` next to an English `$"Hello, {name}!"` is a build error, because Dutch users wouldn't see the name. What counts as showing a value:
 
 - A value the default wording only chooses by, such as `salutation` in a `switch`, doesn't count. So it may go unused in a language that doesn't make that distinction.
 - A variable that a pattern declares for the whole value counts as the value. So `count switch { 1 => "1 item", var n => $"{n} items" }` shows `count`.
@@ -148,8 +148,8 @@ What else to know:
 - **Formatting values.** A value in an interpolated string is formatted for `CultureInfo.CurrentCulture`, as anywhere in C#, and can carry a format, as in `{amount:N2}`. With `CurrentUICultureProvider` set, a text of a set formats its values for the culture it returns. A value in an inline text, or in a property of a set, keeps the format of the thread, because only a method of a set runs in the provider's culture. Inside `UseCulture`, every value follows the scope.
 - **A text as a value.** A text is a `string`, so pass it like any other value: `ShopLocalization.Removed(ShopLocalization.Cart)`. Both are worded at the call, for the same user, so they read in one language.
 - **A text inside a wording.** A set can read another text in its wording, as in `$"Press {ShopLocalization.Checkout} to pay"`. That text follows the language of the set. So when a text falls back to English for a Dutch user, the text inside it is English too.
-- **Inline texts.** An inline text takes a value as you write it: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC302`). C# builds the wording of every language before `Inline` picks one. So write a text with a costly value as a method of a set, which builds one wording.
-- **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC502`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in.
+- **Inline texts.** An inline text takes a value as you write it: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC402`). C# builds the wording of every language before `Inline` picks one. So write a text with a costly value as a method of a set, which builds one wording.
+- **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC403`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in.
 
 ## What the source generator writes
 
@@ -180,11 +180,11 @@ Every set lists `ILocalizationSet` and the contract, the default-language set to
 
 A text always has wording, so the contract declares it as `string`. A set that returns `string?` for a text gets compiler warning `CS8766`, because it doesn't match the contract. Return a `string`.
 
-The contract takes the texts the default-language set declares itself, overrides included. A text it only inherits from a class of its assembly would be left out, so that's build error `LOC208`. A text that only another language declares isn't in the contract either, so no user sees it. The build warns about it (`LOC209`).
+The contract takes the texts the default-language set declares itself, overrides included. A text it only inherits from a class of its assembly would be left out, so that's build error `LOC303`. A text that only another language declares isn't in the contract either, so no user sees it. The build warns about it (`LOC304`).
 
 Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
 
-Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only the method `GetTextByKey`, and `GetTextByValue` and `GetText` in a [set of an enum](enums.md#a-set-of-the-enum). So a text can take any name except those and the name of the class itself (`LOC205`).
+Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only the method `GetTextByKey`, and `GetTextByValue` and `GetText` in a [set of an enum](enums.md#a-set-of-the-enum). So a text can take any name except those and the name of the class itself (`LOC300`).
 
 Each generated text is a `string` property, which finds the set for the user's language on every read. The package keeps that set per culture, so a read is one call of the set's own property and allocates nothing ([Performance](performance.md)).
 
@@ -217,7 +217,7 @@ A set is registered by its type, and created when a text of its contract is firs
 
 A set whose `LocalizationLanguageCode` the build can't read is created earlier, at the first text of your app, because only the set itself can tell its language. That's a code that isn't a constant, or one the set inherits from a set of another assembly.
 
-A set that can't be registered automatically gets build warning `LOC400`, such as a set without a parameterless constructor. [LOC400](build-errors.md#loc400) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC505](build-errors.md#loc505).
+A set that can't be registered automatically gets build warning `LOC208`, such as a set without a parameterless constructor. [LOC208](build-errors.md#loc208) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC502](build-errors.md#loc502).
 
 A nested, generic, or file-local class with your own texts isn't recognized, so its language is reported as missing (`LOC201`). Make it a top-level class that isn't generic.
 
@@ -262,12 +262,13 @@ using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-NL")))
 
 What to know:
 
+- **A test project declares its languages.** It's an app, so it needs `[assembly: SupportedLanguages]` ([LOC103](build-errors.md#loc103)). List the languages your tests read, because the languages of the app it tests don't count in the test process.
 - **Choose the culture with `UseCulture`.** It flows with the test, so tests that run in parallel each keep their own culture. Setting `CultureInfo.CurrentUICulture` works too, unless your app sets `CurrentUICultureProvider`, which then wins.
 - **A text always reads the sets of the whole app.** A registry from `LocalizationRegistry.Create` doesn't change what `ShopLocalization.Checkout` gives. Use it to read a set with `Find`.
 - **`LocalizationRegistry.Register` is for the whole process and has no undo.** A set a test registers stays for every test after it, also those that run in parallel. Register in a fixture that runs once, or keep such tests out of parallel runs.
 - **To check one set, create it.** `new ShopLocalizationNl().Checkout` needs no registry and no culture.
 
-A set of a test project may implement the internal contract of the library it tests, which it sees through `InternalsVisibleTo`. It translates that contract, as a set of a public contract does, so the test project needs no languages of its own.
+A set of a test project may implement the internal contract of the library it tests, which it sees through `InternalsVisibleTo`. It translates that contract, as a set of a public contract does.
 
 ### A contract you write yourself
 
@@ -285,7 +286,7 @@ public class GridLocalizationEn : ILocalizationSet, IGridLocalization
 }
 ```
 
-The build holds every language to it as to a generated contract. Each language needs a set (`LOC201`), and each set uses the values that the default-language set shows (`LOC302`).
+The build holds every language to it as to a generated contract. Each language needs a set (`LOC201`), and each set uses the values that the default-language set shows (`LOC402`).
 
 The generator writes no contract and no generated class next to it. Read its texts through the registry, as in `LocalizationRegistry.Current.Find<IGridLocalization>(culture)?.First`.
 
