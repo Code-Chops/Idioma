@@ -202,17 +202,19 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LibraryMarkedAsApplication_RegistersItsLanguagesFirst()
+    [Arguments("true")]
+    [Arguments("True")]
+    public void LibraryMarkedAsApplication_RegistersItsLanguagesFirst(string idiomaApplication)
     {
         // Arrange & Act: a project built as a library that a host loads, such as an AWS Lambda function, says in its
-        // attribute that it's the app.
+        // project file that it's the app. MSBuild reads a boolean in any letter case.
         var text = GeneratedText(GeneratorTestHelper.RunWithBuildProperties(LocalizationParts.Registration(), """
             using CodeChops.Idioma;
 
-            [assembly: SupportedLanguages("nl", "en", IsApplication = true)]
+            [assembly: SupportedLanguages("nl", "en")]
 
             namespace TestApp;
-            """, [SetsLibrary]));
+            """, [SetsLibrary], (LocalizationRegistrationPart.IdiomaApplicationProperty, idiomaApplication)));
 
         // Assert: as for an application built as an executable.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
@@ -221,16 +223,32 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LibraryMarkedAsNoApplication_RegistersNoLanguages()
+    public void LibraryMarkedAsApplicationWithoutLanguages_ReportsLOC103()
     {
-        // Arrange & Act
+        // Arrange & Act: the property makes it the app, so it declares its languages as an executable does.
+        var result = GeneratorTestHelper.RunWithBuildProperties(
+            LocalizationParts.Registration(),
+            "namespace TestApp;",
+            [SetsLibrary],
+            (LocalizationRegistrationPart.IdiomaApplicationProperty, "true"));
+
+        // Assert
+        result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem().Id.ShouldBe(LocalizationRegistrationPart.AppWithoutLanguagesDiagnosticId);
+    }
+
+    [Test]
+    [Arguments("false")]
+    [Arguments("")]
+    public void LibraryMarkedAsNoApplication_RegistersNoLanguages(string idiomaApplication)
+    {
+        // Arrange & Act: the build passes an empty value for a property the project doesn't set.
         var result = GeneratorTestHelper.RunWithBuildProperties(LocalizationParts.Registration(), """
             using CodeChops.Idioma;
 
-            [assembly: SupportedLanguages("nl", "en", IsApplication = false)]
+            [assembly: SupportedLanguages("nl", "en")]
 
             namespace TestApp;
-            """, []);
+            """, [], (LocalizationRegistrationPart.IdiomaApplicationProperty, idiomaApplication));
 
         // Assert: as for any library that only declares languages.
         ShouldEmitNothing(result);

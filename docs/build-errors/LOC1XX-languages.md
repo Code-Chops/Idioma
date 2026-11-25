@@ -48,7 +48,7 @@ The app's attribute decides the languages your users get, and its first language
 
 A library needs the attribute only for texts of its own ([LOC100](#loc100)).
 
-The build takes a project for an app when it builds an executable or an Android app. A project that builds as a library but runs as the app, such as an AWS Lambda function, gets no LOC103. Declare its languages all the same, with `IsApplication = true` ([details](../libraries-and-apps.md#the-apps-languages)).
+The build takes a project for an app when it builds an executable or an Android app. A project that builds as a library but runs as the app, such as an AWS Lambda function, sets the MSBuild property `<IdiomaApplication>true</IdiomaApplication>` in its project file. It then gets LOC103 too ([details](../libraries-and-apps.md#the-apps-languages)).
 
 ## LOC104
 

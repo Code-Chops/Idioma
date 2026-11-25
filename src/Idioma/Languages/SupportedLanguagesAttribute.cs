@@ -29,6 +29,11 @@ namespace CodeChops.Idioma;
 /// it uses. See <see cref="LocalizableText"/>. A library's languages only describe the library's own texts.
 /// </para>
 /// <para>
+/// The build takes a project for an application when it builds an executable or an Android app. A project that a host
+/// loads, such as an AWS Lambda function, builds as a library. It says it's the application with an MSBuild property in
+/// its project file: <c>&lt;IdiomaApplication&gt;true&lt;/IdiomaApplication&gt;</c>.
+/// </para>
+/// <para>
 /// To add a language, add it to the list. The build then reports every text without it, including those of the
 /// libraries you use, so you can work through them. Each language is a culture name in any letter case, neutral
 /// (<c>en</c>) or specific (<c>en-GB</c>).
@@ -79,28 +84,6 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// read <see cref="LocalizationRegistry.SupportedLanguages"/> instead.
     /// </summary>
     public IReadOnlyList<string> Languages { get; }
-
-    /// <summary>
-    /// Marks a project that builds as a library as the app, such as an AWS Lambda function or an add-in of Excel:
-    /// <c>[assembly: SupportedLanguages("en", "nl", IsApplication = true)]</c>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The build takes a project for the app when it builds an executable or an Android app. A project that builds as a
-    /// library, and that a host which doesn't use Idioma loads, isn't recognized. So set this to <see langword="true"/>
-    /// there. Its languages then become <see cref="LocalizationRegistry.SupportedLanguages"/>, and its default language
-    /// is the fallback for every text, as in any other app.
-    /// </para>
-    /// <para>
-    /// Without it, the process has no languages. Each text then falls back to the default language of its own assembly.
-    /// So a library that has German shows German next to your English.
-    /// </para>
-    /// <para>
-    /// An app that another app references doesn't decide, as for an executable. So a test project that references the
-    /// project still declares its own languages.
-    /// </para>
-    /// </remarks>
-    public bool IsApplication { get; init; }
 
     /// <summary>
     /// Declares the languages of this assembly, the default language first.

@@ -45,7 +45,7 @@ The codes of the build's messages have new numbers, grouped by subject, from LOC
 
 A language code that no user's culture matches is a build warning (LOC104), such as dk for Danish, which is da, or en-UK, which is en-GB. The set of your default language can list ILocalizationSet through an abstract class it derives from. A set whose constructor reads a text of its own contract throws an InvalidOperationException that names the set, where the app stopped before. LOC600 is reported in Razor markup too.
 
-A project that builds as a library but runs as the app, such as an AWS Lambda function or an add-in of Excel, says so: [assembly: SupportedLanguages("en", "nl", IsApplication = true)]. Its languages are then the app's, as for an executable.
+A project that builds as a library but runs as the app, such as an AWS Lambda function or an add-in of Excel, sets the MSBuild property &lt;IdiomaApplication&gt;true&lt;/IdiomaApplication&gt; in its project file. Its languages are then the app's, and it needs [assembly: SupportedLanguages] as an executable does (LOC103). IsApplication on [SupportedLanguages], which version 0.12.0 had for this, is gone.
 
 Two sets of one contract for one language are a build error (LOC209), unless one derives from the other. Only one of them showed, without a word. A test double that lists ILocalizationSet is such a set, so let it list only the contract.
 

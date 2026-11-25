@@ -27,8 +27,6 @@ CodeChops.Idioma.LocalizationRegistry.Languages.get -> System.Collections.Generi
 CodeChops.Idioma.LocalizationRegistry.Sets.get -> System.Collections.Immutable.ImmutableArray<CodeChops.Idioma.ILocalizationSet!>
 CodeChops.Idioma.SupportedLanguagesAttribute
 CodeChops.Idioma.SupportedLanguagesAttribute.DefaultLanguage.get -> string!
-CodeChops.Idioma.SupportedLanguagesAttribute.IsApplication.get -> bool
-CodeChops.Idioma.SupportedLanguagesAttribute.IsApplication.init -> void
 CodeChops.Idioma.SupportedLanguagesAttribute.Languages.get -> System.Collections.Generic.IReadOnlyList<string!>!
 CodeChops.Idioma.SupportedLanguagesAttribute.SupportedLanguagesAttribute(string! defaultLanguage, params string![]! otherLanguages) -> void
 static CodeChops.Idioma.Internals.GeneratedCode.CreateUnknownKeyException<TContract>(string? key, string! className) -> System.Exception!

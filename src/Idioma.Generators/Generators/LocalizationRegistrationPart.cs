@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.Diagnostics;
+
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
@@ -34,8 +36,8 @@ namespace CodeChops.Idioma.Generators;
 /// registration counts, and the app's own registrar runs first. So an application it references never decides, such
 /// as the client of a Blazor Web App's server, or the app a test project tests. An application is an assembly built
 /// as an executable, or an Android app, which the Android SDK builds as a library and marks with its
-/// <c>AndroidApplication</c> property. Any other project built as a library says so in its attribute, as in
-/// <c>[assembly: SupportedLanguages("en", "nl", IsApplication = true)]</c>, such as an AWS Lambda function.
+/// <c>AndroidApplication</c> property. Any other project built as a library says so with the MSBuild property
+/// <c>IdiomaApplication</c>, such as an AWS Lambda function.
 /// </para>
 /// <para>
 /// So an application must declare its languages, also one without texts of its own (<c>LOC103</c>). Without them, its
@@ -57,6 +59,12 @@ public static class LocalizationRegistrationPart
     /// options hand it to a generator.
     /// </summary>
     internal const string AndroidApplicationProperty = "build_property.AndroidApplication";
+
+    /// <summary>
+    /// The MSBuild property with which a project that builds as a library says it's the app (<see langword="true"/>), such
+    /// as an AWS Lambda function, as the compiler's options hand it to a generator.
+    /// </summary>
+    internal const string IdiomaApplicationProperty = "build_property.IdiomaApplication";
 
     private const string RegistrarNamespace = PackageNames.Namespace + ".Generated";
 
@@ -181,19 +189,20 @@ public static class LocalizationRegistrationPart
                     .ToImmutableArray());
             });
 
-        // An Android app builds as a library: the Android SDK turns its OutputType from Exe into Library, as it needs
-        // no Main. The output kind alone would take it for a library, and leave its languages unregistered, so the SDK's
-        // own property says which project is the app. The package makes that property visible to the compiler
-        // (build/CodeChops.Idioma.props).
-        var isAndroidApplication = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
-            options.GlobalOptions.TryGetValue(AndroidApplicationProperty, out var value)
-            && String.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
+        // A project that builds as a library can be the app, and the output kind alone would leave its languages
+        // unregistered. So an MSBuild property says which project is the app, and the package makes each one visible to
+        // the compiler (build/CodeChops.Idioma.props):
+        // - The Android SDK sets AndroidApplication, because it turns the OutputType of an app from Exe into Library.
+        //   An Android app needs no Main.
+        // - A project that a host loads, such as an AWS Lambda function, sets IdiomaApplication itself.
+        var isMarkedApplication = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
+            IsTrue(options.GlobalOptions, AndroidApplicationProperty) || IsTrue(options.GlobalOptions, IdiomaApplicationProperty));
 
         // Runs on every change of the compilation in an IDE, so it reads no more than a type lookup per referenced
         // assembly, and ends in a plain value that keeps everything after it cached.
         var assembly = context.CompilationProvider
             .Select(static (compilation, _) => ReadAssembly(compilation))
-            .Combine(isAndroidApplication)
+            .Combine(isMarkedApplication)
             .Select(static (data, _) => data.Right ? data.Left with { IsApplication = true } : data.Left);
 
         // The texts of members marked [Localized]. Read here alone, and not by a part or a generator of their own,
@@ -229,11 +238,9 @@ public static class LocalizationRegistrationPart
             .Select(static (data, _) =>
             {
                 var (((((sets, records), assembly), languages), memberTexts), suppressedDiagnostics) = data;
-                // A project built as a library may say that it's the app, in its attribute.
-                var isApplication = assembly.IsApplication || languages is { IsApplication: true };
-                var forwards = sets.Length > 0 || isApplication || languages is { Codes.Length: > 0 };
+                var forwards = sets.Length > 0 || assembly.IsApplication || languages is { Codes.Length: > 0 };
                 // Not without a default language (LOC101): the first valid language must not become the app's default.
-                var appLanguages = isApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
+                var appLanguages = assembly.IsApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
 
                 return new Registrar(
                     Name: assembly.RegistrarName,
@@ -384,6 +391,15 @@ public static class LocalizationRegistrationPart
             new EquatableArray<ReferencedRegistrar>(referenced));
 
         return assembly;
+    }
+
+    /// <summary>
+    /// Whether the build sets a property of the project to <see langword="true"/>, in any letter case, as MSBuild reads a boolean.
+    /// </summary>
+    private static bool IsTrue(AnalyzerConfigOptions options, string key)
+    {
+        var isTrue = options.TryGetValue(key, out var value) && String.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        return isTrue;
     }
 
     /// <summary>
