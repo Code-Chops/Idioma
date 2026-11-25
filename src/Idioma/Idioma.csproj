@@ -51,6 +51,8 @@ Two sets of one contract for one language are a build error (LOC209), unless one
 
 A text that the set of your default language marks [Obsolete] or [Experimental] is marked the same in the generated class. So the code that shows it gets the warning or the error.
 
+A text with parameters for a user whose language falls back, such as a German user of an app in English and Dutch, takes less time than IStringLocalizer takes. It allocates only its wording, and so does such a text for a culture that CurrentUICultureProvider gives and the thread doesn't have.
+
 A set of your default language without its contract gets LOC204 alone, with no error in generated code. A set named after your default language whose LocalizationLanguageCode gives another language gets LOC200, where it got no message. A text of a set of an enum that isn't a member gets LOC305 next to the error it causes in the other languages. LOC206 no longer comes with a LOC208 that says the opposite. A set whose LocalizationLanguageCode isn't a culture name no longer hides a missing language (LOC201).
 
 LOC402 no longer asks the other languages of an inline text to show a text the default language shows, because a text is wording. LOC602 warns about a text read in a LINQ query that a static initializer enumerates, or in Lazy&lt;T&gt;, and no longer about a helper next to the texts. The fix for LOC700 names the enum of a set of an enum as it names the contract. The fix for LOC401 renames a named argument that names the parameter too. The set of your default language is no longer created twice where no set serves a culture.
@@ -127,11 +129,13 @@ The details have a page per subject under docs/, which the README links to. New 
 
     The badge that opens a codespace is packed as a plain link: nuget.org shows images of a few hosts only, and
     github.com/codespaces is not among them. The NuGet badge is left out, because nuget.org shows the version itself.
+    The CI badge is left out too, because it shows the state of main, not that of the package. So is the status badge,
+    because it links to the page of the package on nuget.org, where it would show.
   -->
   <Target Name="WritePackageReadme" BeforeTargets="_GetPackageFiles">
     <PropertyGroup>
       <PackageReadmePath>$(IntermediateOutputPath)README.md</PackageReadmePath>
-      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/').Replace('[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)]', '[Open in GitHub Codespaces]').Replace('[![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)', ''))</PackageReadmeText>
+      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/').Replace('[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)]', '[Open in GitHub Codespaces]').Replace('[![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)', '').Replace('[![CI](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml)', '').Replace('[![Status](https://img.shields.io/badge/status-preview-orange)](https://www.nuget.org/packages/CodeChops.Idioma)', ''))</PackageReadmeText>
     </PropertyGroup>
 
     <!-- A README that links to the details in another way would be packed with its links still on main. -->

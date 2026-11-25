@@ -4,16 +4,16 @@ Showing one text, in nanoseconds, after the cost of the loop and the call is tak
 
 | Text | Approach | en | nl | en-GB | de |
 |---|---|---:|---:|---:|---:|
-| Checkout | IStringLocalizer | 704 | 723 | 1969 | 715 |
-| Checkout | Idioma set | 64 | 58 | 57 | 60 |
-| Checkout | Idioma inline | 74 | 74 | 73 | 73 |
-| Checkout | Idioma attribute | 110 | 112 | 110 | 109 |
-| Cart | IStringLocalizer | 683 | 703 | 675 | 685 |
-| Cart | Idioma set | 61 | 58 | 57 | 60 |
-| Cart | Idioma inline | 74 | 74 | 74 | 73 |
-| Cart | Idioma attribute | 110 | 112 | 111 | 109 |
-| Greeting(name) | IStringLocalizer | 1160 | 1175 | 2460 | 1177 |
-| Greeting(name) | Idioma set | 151 | 149 | 149 | 1581 |
-| Greeting(name) | Idioma inline | 344 | 344 | 343 | 343 |
+| Checkout | IStringLocalizer | 725 | 724 | 2038 | 730 |
+| Checkout | Idioma set | 62 | 62 | 62 | 61 |
+| Checkout | Idioma inline | 72 | 72 | 74 | 71 |
+| Checkout | Idioma attribute | 113 | 113 | 113 | 112 |
+| Cart | IStringLocalizer | 694 | 710 | 699 | 714 |
+| Cart | Idioma set | 63 | 62 | 62 | 61 |
+| Cart | Idioma inline | 73 | 74 | 74 | 75 |
+| Cart | Idioma attribute | 113 | 113 | 114 | 113 |
+| Greeting(name) | IStringLocalizer | 1173 | 1175 | 2585 | 1179 |
+| Greeting(name) | Idioma set | 151 | 152 | 152 | 933 |
+| Greeting(name) | Idioma inline | 344 | 345 | 351 | 365 |
 
-The loop and the call cost: en 11.6 ns, nl 11.4 ns, en-GB 11.4 ns, de 11.4 ns.
+The loop and the call cost: en 11.9 ns, nl 11.3 ns, en-GB 11.6 ns, de 11.6 ns.

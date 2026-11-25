@@ -261,7 +261,7 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, selector, takesValues: false);
+        var wording = Wording<TContract, TDefaultSet>.Of(text, count, name, selector);
         return wording;
     }
 
@@ -312,7 +312,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1),
+            static (set, call) => call.selector(set, call.value1));
+
         return wording;
     }
 
@@ -327,7 +329,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2),
+            static (set, call) => call.selector(set, call.value1, call.value2));
+
         return wording;
     }
 
@@ -342,7 +346,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3),
+            static (set, call) => call.selector(set, call.value1, call.value2, call.value3));
+
         return wording;
     }
 
@@ -357,7 +363,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4),
+            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4));
+
         return wording;
     }
 
@@ -372,7 +380,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5),
+            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5));
+
         return wording;
     }
 
@@ -387,7 +397,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5, value6), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5, value6),
+            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5, call.value6));
+
         return wording;
     }
 
@@ -402,7 +414,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5, value6, value7), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5, value6, value7),
+            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5, call.value6, call.value7));
+
         return wording;
     }
 
@@ -417,7 +431,9 @@ public static class GeneratedCode
     {
         Debug.Assert(selector is not null);
 
-        var wording = Word<TContract, TDefaultSet>(text, count, name, set => selector(set, value1, value2, value3, value4, value5, value6, value7, value8), takesValues: true);
+        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5, value6, value7, value8),
+            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5, call.value6, call.value7, call.value8));
+
         return wording;
     }
 
@@ -425,30 +441,104 @@ public static class GeneratedCode
     /// Words a text of a contract for the reader of this thread, from the sets of the whole app. Every
     /// <c>ResolveWording</c> ends here.
     /// </summary>
-    private static string Word<TContract, TDefaultSet>(int text, int count, string name, Func<TContract, string?> select, bool takesValues)
+    /// <remarks>
+    /// A text with parameters whose set is kept is worded by that set in the scope it needs, without a lookup. That's a
+    /// scope of the language the text falls back to (<see cref="ResolvedSets{TContract}.FallbackSets"/>), or of a
+    /// provider's culture the thread doesn't have. Any other text is looked up in the registry
+    /// (<see cref="LocalizationRegistry.Word"/>), which keeps its set where the same set words it on every call.
+    /// </remarks>
+    /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
+    /// <typeparam name="TDefaultSet">The contract's set of the default language.</typeparam>
+    // A class of its own, so that a call infers the type of the values from the tuple it passes.
+    private static class Wording<TContract, TDefaultSet>
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        Debug.Assert(name is not null);
-        Debug.Assert(select is not null);
+        /// <summary>
+        /// The wording of a text without parameters.
+        /// </summary>
+        // A property is never kept as a fallback, so there's none to look for. LocalizationRegistry.KeepSet says why.
+        public static string Of(int text, int count, string name, Func<TContract, string?> select)
+        {
+            Debug.Assert(name is not null);
 
-        var culture = WordingScope.FindReaderCulture(out var providedCulture, takesKept: true);
-        var resolved = ResolvedSets<TContract>.Find(culture, count);
-        var lookup = resolved.Lookup;
+            var culture = WordingScope.FindReaderCulture(out var providedCulture, takesKept: true);
+            var resolved = ResolvedSets<TContract>.Find(culture, count);
 
-        var wording = lookup.Registry.Word(
-            lookup,
-            culture,
-            valuesCulture: providedCulture,
-            name,
-            select,
-            defaultSetType: typeof(TDefaultSet),
-            getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
-            takesValues,
-            resolved,
-            text);
+            var wording = LookUp(culture, providedCulture, resolved, text, name, select, takesValues: false);
+            return wording;
+        }
 
-        return wording;
+        /// <summary>
+        /// The wording of a text with parameters.
+        /// </summary>
+        /// <typeparam name="TCall">The selector of the text and the values it was called with, as a tuple.</typeparam>
+        /// <param name="text">The position of the text among the texts of its generated class.</param>
+        /// <param name="count">The number of texts the generated class has.</param>
+        /// <param name="name">The name of the text.</param>
+        /// <param name="call">The selector and the values.</param>
+        /// <param name="word">
+        /// Hands a set the values through the selector. A static lambda, so it holds nothing and allocates nothing.
+        /// </param>
+        public static string OfValues<TCall>(int text, int count, string name, TCall call, Func<TContract, TCall, string?> word)
+        {
+            Debug.Assert(name is not null);
+
+            var culture = WordingScope.FindReaderCulture(out var providedCulture, takesKept: true);
+            var resolved = ResolvedSets<TContract>.Find(culture, count);
+            var setsForValues = resolved.SetsForValues;
+
+            // The set kept for the text, which the generated class couldn't call itself, because a provider gives a
+            // culture the thread doesn't have. Its method runs in a scope of that culture.
+            if ((uint)text < (uint)setsForValues.Length && setsForValues[text] is { } kept)
+            {
+                using var scope = new WordingScope(culture, providedCulture);
+
+                if (word(kept, call) is { } keptWording)
+                    return keptWording;
+            }
+            else if (resolved.FindFallback(text) is { } fallback)
+            {
+                // A method formats its values as it runs, so it runs in a scope wherever a text with values does. Where
+                // the language has no culture on this machine, that's the scope of the reader, as in the lookup.
+                using var scope = new WordingScope(fallback.Culture ?? culture, providedCulture);
+
+                if (word(fallback.Set, call) is { } fallbackWording)
+                    return fallbackWording;
+            }
+
+            var wording = LookUpWithValues(culture, providedCulture, resolved, text, name, call, word);
+            return wording;
+        }
+
+        // A method of its own, because C# creates the closure over a method's parameters as that method starts, also
+        // where the lambda is never reached. In OfValues, a text kept as a fallback would allocate it on every call.
+        private static string LookUpWithValues<TCall>(CultureInfo culture, CultureInfo? providedCulture, ResolvedSets<TContract> resolved,
+            int text, string name, TCall call, Func<TContract, TCall, string?> word)
+        {
+            var wording = LookUp(culture, providedCulture, resolved, text, name, set => word(set, call), takesValues: true);
+            return wording;
+        }
+
+        private static string LookUp(CultureInfo culture, CultureInfo? providedCulture, ResolvedSets<TContract> resolved,
+            int text, string name, Func<TContract, string?> select, bool takesValues)
+        {
+            var lookup = resolved.Lookup;
+
+            var wording = lookup.Registry.Word(
+                lookup,
+                culture,
+                valuesCulture: providedCulture,
+                name,
+                select,
+                defaultSetType: typeof(TDefaultSet),
+                getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
+                takesValues,
+                resolved,
+                text);
+
+            return wording;
+        }
     }
 
     /// <summary>

@@ -587,7 +587,7 @@ namespace CodeChops.Idioma.Tests
         [NotInParallel(nameof(LocalizationRegistry))]
         [Arguments("fr-FR", null)]
         [Arguments("en-US", "nl-NL")]
-        public void ShowingATextThatTakesValues_InACultureTheThreadDoesNotHave_ShouldNotCopyTheContextEachTime(string culture, string? provided)
+        public void ShowingATextThatTakesValues_InACultureTheThreadDoesNotHave_ShouldAllocateOnlyItsWording(string culture, string? provided)
         {
             // Arrange: a French reader of an app in English and Dutch gets English, and a provider's Dutch reader on an
             // American thread gets Dutch. Either way the set's method runs in a culture the thread doesn't have, which
@@ -600,16 +600,11 @@ namespace CodeChops.Idioma.Tests
             // Act: per call, the least of a few rounds of ten thousand.
             var shown = Allocated(() => GeneratedLocalization.Welcome(name)) / 10_000;
             var ofWording = Allocated(() => new string(wording.AsSpan())) / 10_000;
-            var ofValue = Allocated(() => HoldValue(static (set, value) => set + value, name)) / 10_000;
 
-            // Assert: the string, and the function that hands the lookup the value. No copy of the context.
-            shown.ShouldBe(ofWording + ofValue);
+            // Assert: the string alone. The set is kept for the text, so the values are handed to it without a function
+            // that holds them, and the context isn't copied.
+            shown.ShouldBe(ofWording);
         }
-
-        /// <summary>
-        /// A function that holds a value, as the generated class hands the lookup one for a text that takes values.
-        /// </summary>
-        private static Func<string, string> HoldValue(Func<string, string, string> selector, string value) => set => selector(set, value);
 
         /// <summary>
         /// The bytes this thread allocates in an action, the least of a few rounds after a warm-up: a round that meets the

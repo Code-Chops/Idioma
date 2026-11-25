@@ -68,6 +68,26 @@ public sealed class GeneratedCodeTests
     }
 
     /// <summary>
+    /// A contract no other test uses, whose texts show the cultures they're worded in. No set of it is registered, so
+    /// the set of the default language words every text. For a reader whose culture English doesn't serve, it's the
+    /// fallback.
+    /// </summary>
+    private interface ICulturesLocalization : ILocalizationSet
+    {
+        string Cultures { get; }
+        string CulturesOf(string name);
+    }
+
+    private sealed class CulturesLocalizationEn : ICulturesLocalization
+    {
+        public string Cultures => $"{CultureInfo.CurrentUICulture.Name}/{CultureInfo.CurrentCulture.Name}";
+        public string CulturesOf(string name) => $"{name}: {this.Cultures}";
+    }
+
+    private static string CulturesOf(string name) =>
+        GeneratedCode.ResolveWording<ICulturesLocalization, CulturesLocalizationEn, string>(1, 2, "CulturesOf", static (set, name) => set.CulturesOf(name), name);
+
+    /// <summary>
     /// A type a string converts to in code, which a value passed by a key doesn't.
     /// </summary>
     private sealed record Label(string Value)
@@ -390,6 +410,74 @@ public sealed class GeneratedCodeTests
         six.ShouldBe("1+2+3+4+5+6");
         seven.ShouldBe("1+2+3+4+5+6+7");
         eight.ShouldBe("1+2+3+4+5+6+7+8");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    [Arguments("fr-FR", null)]
+    [Arguments("en-US", "fr-FR")]
+    public void GetWording_OfTextThatTakesValues_InLanguageItFallsBackTo_ShouldRunItsSetInThatLanguageOnEveryCall(string thread, string? provided)
+    {
+        // Arrange: a French reader of an app in English and Dutch gets English, from the thread or from a provider. The
+        // set is kept as the text's fallback after the first call, and the generated class never calls it without the
+        // scope of English.
+        using var _ = new CulturesScope(thread);
+        using var provider = provided is null ? null : new ProvidedCultureScope(provided);
+
+        // Act: the first call looks the set up, and the next one words the text with the set kept for it.
+        var first = CulturesOf("Ada");
+        var second = CulturesOf("Max");
+        var resolved = ResolvedSets<ICulturesLocalization>.Find(CultureInfo.GetCultureInfo("fr-FR"), count: 2);
+
+        // Assert: in the UI culture of English, with the values formatted for the reader.
+        var valuesCulture = provided ?? thread;
+
+        first.ShouldBe($"Ada: en/{valuesCulture}");
+        second.ShouldBe($"Max: en/{valuesCulture}");
+        resolved.FindFallback(1).ShouldNotBeNull().Culture.ShouldNotBeNull().Name.ShouldBe("en");
+        resolved.SetsForValues[1].ShouldBeNull();
+        CultureInfo.CurrentUICulture.Name.ShouldBe(thread);
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void GetWording_OfTextThatTakesValues_InProvidedCultureTheThreadDoesNotHave_ShouldRunTheKeptSetInThatCulture()
+    {
+        // Arrange: a provider's British reader on a Dutch thread, whom English serves. The set is kept for the text,
+        // but the generated class can't call it, because its method has to run in the provider's culture.
+        using var _ = new CulturesScope("nl-NL");
+        using var provider = new ProvidedCultureScope("en-GB");
+
+        // Act: the first call looks the set up, and the next one words the text with the set kept for it.
+        var first = CulturesOf("Ada");
+        var second = CulturesOf("Max");
+        var kept = ResolvedSets<ICulturesLocalization>.Find(CultureInfo.GetCultureInfo("en-GB"), count: 2).SetsForValues[1];
+
+        // Assert: both in the provider's culture, and the thread's cultures back afterwards.
+        first.ShouldBe("Ada: en-GB/en-GB");
+        second.ShouldBe("Max: en-GB/en-GB");
+        kept.ShouldBeSameAs(GeneratedCode.GetDefaultSet<CulturesLocalizationEn>());
+        CultureInfo.CurrentUICulture.Name.ShouldBe("nl-NL");
+        CultureInfo.CurrentCulture.Name.ShouldBe("nl-NL");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void GetWording_OfTextThatTakesValues_WithFallbackOfLanguageWithoutCulture_ShouldRunInScopeOfTheReader()
+    {
+        // Arrange: a provider's Belgian reader on an American thread, and a fallback whose language has no culture on
+        // this machine, as under invariant globalization. No other test reads for fr-BE, so none finds this fallback.
+        using var _ = new CulturesScope("en-US");
+        using var provider = new ProvidedCultureScope("fr-BE");
+        var resolved = ResolvedSets<ICulturesLocalization>.Find(CultureInfo.GetCultureInfo("fr-BE"), count: 2);
+        resolved.KeepFallback(1, GeneratedCode.GetDefaultSet<CulturesLocalizationEn>(), culture: null);
+
+        // Act
+        var wording = CulturesOf("Max");
+
+        // Assert: no scope of the language, but the values are formatted for the reader, as the lookup formats them.
+        wording.ShouldBe("Max: fr-BE/fr-BE");
+        CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
     }
 
     [Test]

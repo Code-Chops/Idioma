@@ -34,7 +34,7 @@
     <File Path=".github/workflows/ci.yml" />
     <File Path=".github/workflows/publish.yml" />
     <File Path=".gitignore" />
-    <File Path="CLAUDE.md" />
+    <File Path="AGENTS.md" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Build.targets" />
     <File Path="Directory.Packages.props" />

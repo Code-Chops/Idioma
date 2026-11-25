@@ -53,14 +53,6 @@ public sealed partial class LocalizationRegistry
         var appDefaultLanguage = appLanguages.IsDefaultOrEmpty ? null : appLanguages[0];
         var showsCulture = appDefaultLanguage is null || lookup.ShowsCulture;
 
-        // The set kept for a text with parameters, which the generated class couldn't call itself because its method
-        // has to run in this scope. That's every read where a provider gives a culture the thread doesn't have.
-        if (takesValues && resolved is not null && (uint)text < (uint)resolved.SetsForValues.Length
-            && resolved.SetsForValues[text] is { } keptSet && select(keptSet) is { } keptWording)
-        {
-            return keptWording;
-        }
-
         TContract? set = null;
 
         if (showsCulture && this.FindWording(lookup, name, select, out set, out var isToldByRecord) is { } wording)
@@ -85,7 +77,7 @@ public sealed partial class LocalizationRegistry
             && this.WordInLanguage(appDefaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isToldByRecord, out var isServed) is { } appDefaultWording)
         {
             if (isToldByRecord && mayKeep)
-                resolved?.Keep(text, set!, forProperty: !showsCulture || isServed, forValues: isServed);
+                this.KeepSet(resolved, text, set!, appDefaultLanguage, showsCulture, takesValues, isServed);
 
             return appDefaultWording;
         }
@@ -102,7 +94,7 @@ public sealed partial class LocalizationRegistry
         if (this.WordInLanguage(defaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isToldByRecord, out isServed) is { } rewording)
         {
             if (isToldByRecord && mayKeep)
-                resolved?.Keep(text, set!, forProperty: !showsCulture || isServed, forValues: isServed);
+                this.KeepSet(resolved, text, set!, defaultLanguage, showsCulture, takesValues, isServed);
 
             return rewording;
         }
@@ -126,9 +118,36 @@ public sealed partial class LocalizationRegistry
                 + "Return a string, such as an empty one where a value is missing.");
 
         if (mayKeep)
-            resolved?.Keep(text, (TContract)defaultSet, forProperty: !showsCulture || isServed, forValues: isServed);
+            this.KeepSet(resolved, text, (TContract)defaultSet, defaultLanguage, showsCulture, takesValues, isServed);
 
         return defaultWording;
+    }
+
+    /// <summary>
+    /// Keeps the set that words a text on every call, found in a language below the culture's own wording. Where the
+    /// text needs no scope, the generated class calls the set itself. Else a text with parameters keeps the set as its
+    /// fallback, with the culture of its language, so the scope is entered without looking the set up again.
+    /// </summary>
+    /// <param name="resolved">Where the set is kept, or <see langword="null"/>.</param>
+    /// <param name="text">The position of the text in <paramref name="resolved"/>.</param>
+    /// <param name="set">The set that words the text.</param>
+    /// <param name="language">The language the set words the text in.</param>
+    /// <param name="showsCulture">Whether one of the app's languages serves the reader's culture.</param>
+    /// <param name="takesValues">Whether the text takes values, so that a method of the set words it.</param>
+    /// <param name="isServed">Whether <paramref name="language"/> serves the reader's culture.</param>
+    // A property isn't kept as a fallback. It needs a scope only where it falls back alone, in a culture the app
+    // shows, and the contract then lacks a set of one of the app's languages, which is build error LOC700.
+    private void KeepSet<TContract>(ResolvedSets<TContract>? resolved, int text, TContract set, string language,
+        bool showsCulture, bool takesValues, bool isServed)
+        where TContract : class
+    {
+        if (resolved is null)
+            return;
+
+        resolved.Keep(text, set, forProperty: !showsCulture || isServed, forValues: isServed);
+
+        if (takesValues && !isServed)
+            resolved.KeepFallback(text, set, this.ResolveLanguage(language).Culture);
     }
 
     /// <summary>
@@ -185,9 +204,10 @@ public sealed partial class LocalizationRegistry
 /// position, and asks that set for its wording, without a lookup.
 /// </summary>
 /// <remarks>
-/// A set is kept only where it words the text on every call: the build's record told it, without comparing wordings,
-/// and no scope is needed to word the text (<see cref="LocalizationRegistry.Word"/>). Any other text finds its wording
-/// anew on each call.
+/// A set is kept only where it words the text on every call, because the build's record told it, without comparing
+/// wordings (<see cref="LocalizationRegistry.Word"/>). A set that needs no scope to word the text is kept for the
+/// generated class to call. A method that needs a scope of the language its text falls back to is kept with the
+/// culture of that language. Any other text finds its wording anew on each call.
 /// </remarks>
 /// <typeparam name="TContract">The contract.</typeparam>
 internal sealed class ResolvedSets<TContract>
@@ -220,11 +240,20 @@ internal sealed class ResolvedSets<TContract>
     /// </summary>
     public TContract?[] SetsForValues { get; }
 
+    /// <summary>
+    /// Per text with parameters that falls back to a language that doesn't serve the reader's culture, the set that
+    /// words it there, or <see langword="null"/> where none is kept.
+    /// </summary>
+    // Apart from the sets above, because the set's member must run in a scope of that language. So the generated class
+    // can't call it itself, and GeneratedCode enters the scope and calls it, without looking the set up again.
+    public FallbackSet<TContract>?[] FallbackSets { get; }
+
     public ResolvedSets(LocalizationRegistry.CultureLookup lookup, int count)
     {
         this.Lookup = lookup;
         this.Sets = new TContract?[count];
         this.SetsForValues = new TContract?[count];
+        this.FallbackSets = new FallbackSet<TContract>?[count];
     }
 
     /// <summary>
@@ -264,4 +293,46 @@ internal sealed class ResolvedSets<TContract>
         if (forValues)
             this.SetsForValues[text] = set;
     }
+
+    /// <summary>
+    /// Keeps the set that words a text on every call in a language the text falls back to, with the culture of that
+    /// language (<see cref="FallbackSets"/>).
+    /// </summary>
+    public void KeepFallback(int text, TContract set, CultureInfo? culture)
+    {
+        if ((uint)text >= (uint)this.FallbackSets.Length)
+            return;
+
+        this.FallbackSets[text] = new FallbackSet<TContract>(set, culture);
+    }
+
+    /// <summary>
+    /// The set kept as a text's fallback, or <see langword="null"/> where none is kept.
+    /// </summary>
+    /// <param name="text">The position of the text.</param>
+    public FallbackSet<TContract>? FindFallback(int text)
+    {
+        var fallbackSets = this.FallbackSets;
+        var fallback = (uint)text < (uint)fallbackSets.Length ? fallbackSets[text] : null;
+
+        return fallback;
+    }
+}
+
+/// <summary>
+/// A set that words a text on every call in a language the text falls back to, with the culture of that language. The
+/// set's member runs in a scope of that culture.
+/// </summary>
+/// <typeparam name="TContract">The contract.</typeparam>
+// One object, so that a thread reads the set and its culture together.
+internal sealed class FallbackSet<TContract>(TContract set, CultureInfo? culture)
+    where TContract : class
+{
+    public TContract Set { get; } = set;
+
+    /// <summary>
+    /// The culture of the language, or <see langword="null"/> where this machine has none, as under invariant
+    /// globalization. No scope of the language is entered then, as in <see cref="LocalizationRegistry.Word"/>.
+    /// </summary>
+    public CultureInfo? Culture { get; } = culture;
 }

@@ -1,6 +1,8 @@
 # Idioma
 
 [![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)
+[![CI](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/status-preview-orange)](https://www.nuget.org/packages/CodeChops.Idioma)
 
 ## Why use Idioma?
 
@@ -17,7 +19,7 @@ Lightweight and fast translations for any .NET app, written in C# and checked at
   - Every language's wording on hover;
   - Find all references.
 - A wording can use your app's services, where a resx entry is a fixed string. A set is a class, so its constructor can take services from dependency injection ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#dependency-injection)).
-- Idioma shows most texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
+- Idioma shows texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
 - An AI coding assistant translates your texts well:
   - It sees the code that uses them so it knows the context.
   - The build names each missing translation, so the assistant knows when it's done ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md)).

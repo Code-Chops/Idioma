@@ -635,28 +635,6 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     [Test]
-    public void Word_OfTextThatTakesValues_ShouldAskTheSetKeptForItFirst()
-    {
-        // Arrange: a set kept for the text, as after an earlier read. A provider whose culture the thread doesn't
-        // have sends every read here, where the set's method runs in that culture.
-        var dutch = new SetLocalizationNl();
-        var registry = LocalizationRegistry.Create([new SetLocalizationEn(), dutch], "en", "nl");
-        var culture = Culture("nl-NL");
-        var resolved = new ResolvedSets<ISetLocalization>(registry.Resolve(culture), count: 2);
-        var kept = new SetLocalizationNl();
-        resolved.Keep(text: 0, kept, forProperty: false, forValues: true);
-        ISetLocalization? asked = null;
-
-        // Act
-        var wording = Word<ISetLocalization, SetLocalizationEn>(registry, culture, "Greeting", set => (asked ??= set).Greeting,
-            takesValues: true, valuesCulture: culture, resolved: resolved, text: 0);
-
-        // Assert: the kept set words it, without looking the set up again.
-        wording.ShouldBe("Hallo");
-        asked.ShouldBeSameAs(kept);
-    }
-
-    [Test]
     public void Word_WhereSetOfDefaultLanguageGivesNull_ShouldThrow()
     {
         // Arrange: sets that give null, as a value read at run time can be, for a text without values and one with.
@@ -1113,10 +1091,11 @@ public sealed class LocalizationRegistryWordingTests
         // Act
         var resolved = ResolveGreetingAndFarewell(registry, "nl-NL");
 
-        // Assert
+        // Assert: also not as a fallback, which only a text with parameters keeps.
         Greeting(registry, "nl-NL").ShouldBe("Hello");
         resolved.Sets.ShouldBe([null, null]);
         resolved.SetsForValues.ShouldBe([null, null]);
+        resolved.FallbackSets.ShouldBe([null, null]);
     }
 
     [Test]
@@ -1133,6 +1112,46 @@ public sealed class LocalizationRegistryWordingTests
         // Assert
         resolved.Sets.ShouldBe([english, english]);
         resolved.SetsForValues.ShouldBe([null, null]);
+        resolved.FallbackSets.ShouldBe([null, null]);
+    }
+
+    [Test]
+    public void ResolvedSets_OfTextThatTakesValues_ForCultureTheAppDoesNotShow_ShouldKeepSetAsFallback()
+    {
+        // Arrange: a German user of an app in English and Dutch, whose text with a parameter falls back to English.
+        var english = new SetCountedLocalizationEn();
+        var registry = LocalizationRegistry.Create([english, new SetCountedLocalizationNl()], "en", "nl");
+        var german = Culture("de-DE");
+        var resolved = new ResolvedSets<ISetCountedLocalization>(registry.Resolve(german), count: 2);
+
+        // Act
+        var wording = Word<ISetCountedLocalization, SetCountedLocalizationEn>(registry, german, "Items", static set => set.Items(3),
+            takesValues: true, resolved: resolved, text: 0);
+
+        // Assert: kept with the culture of English, and not for the generated class to call without its scope.
+        wording.ShouldBe("3 items");
+        resolved.SetsForValues.ShouldBe([null, null]);
+        resolved.FindFallback(0).ShouldNotBeNull().Set.ShouldBeSameAs(english);
+        resolved.FindFallback(0)!.Culture.ShouldNotBeNull().Name.ShouldBe("en");
+        resolved.FindFallback(1).ShouldBeNull();
+    }
+
+    [Test]
+    public void ResolvedSets_WhereSetOfTheCultureGivesNull_ShouldNotKeepTheFallbackFoundAfterIt()
+    {
+        // Arrange: a Dutch set whose method gives null, as one that hands on a value read at run time can.
+        var registry = LocalizationRegistry.Create([new SetCountedLocalizationEn(), new SetCountedLocalizationNl()], "en", "nl");
+        var dutch = Culture("nl-NL");
+        var resolved = new ResolvedSets<ISetCountedLocalization>(registry.Resolve(dutch), count: 2);
+
+        // Act
+        var wording = Word<ISetCountedLocalization, SetCountedLocalizationEn>(registry, dutch, "Items",
+            static set => set is SetCountedLocalizationNl ? null : set.Items(3), takesValues: true, resolved: resolved, text: 0);
+
+        // Assert: the text falls back to English for this read alone. Kept, English would word it on every later
+        // read, also once the Dutch set gives a wording.
+        wording.ShouldBe("3 items");
+        resolved.FallbackSets.ShouldBe([null, null]);
     }
 
     [Test]
@@ -1151,6 +1170,7 @@ public sealed class LocalizationRegistryWordingTests
         british.SetsForValues.ShouldBe([defaultSet, defaultSet]);
         french.Sets.ShouldBe([null, null]);
         french.SetsForValues.ShouldBe([null, null]);
+        french.FallbackSets.ShouldBe([null, null]);
     }
 
     [Test]
@@ -1165,10 +1185,15 @@ public sealed class LocalizationRegistryWordingTests
         resolved.Keep(text: -1, set, forProperty: true, forValues: true);
         resolved.Keep(text: 1, set, forProperty: true, forValues: true);
         resolved.Keep(text: 0, set, forProperty: true, forValues: false);
+        resolved.KeepFallback(text: -1, set, Culture("en"));
+        resolved.KeepFallback(text: 1, set, Culture("en"));
 
         // Assert
         resolved.Sets.ShouldBe([set]);
         resolved.SetsForValues.ShouldBe([null]);
+        resolved.FallbackSets.ShouldBe([null]);
+        resolved.FindFallback(-1).ShouldBeNull();
+        resolved.FindFallback(1).ShouldBeNull();
     }
 
     [Test]
