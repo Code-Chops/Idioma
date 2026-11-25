@@ -5,20 +5,6 @@ CodeChops.Idioma.ILocalizationSet
 CodeChops.Idioma.ILocalizationSet.GetLanguageCode(System.Type! setType) -> string!
 CodeChops.Idioma.ILocalizationSet.LocalizationLanguageCode.get -> string!
 CodeChops.Idioma.ILocalizationSet<TEnum>
-CodeChops.Idioma.Internals.GeneratedCode
-CodeChops.Idioma.Internals.InlineTextsAttribute
-CodeChops.Idioma.Internals.InlineTextsAttribute.InlineTextsAttribute() -> void
-CodeChops.Idioma.Internals.LocalizationContractAttribute
-CodeChops.Idioma.Internals.LocalizationContractAttribute.LocalizationContractAttribute() -> void
-CodeChops.Idioma.Internals.LocalizationContractAttribute.Enums.get -> System.Collections.Generic.IReadOnlyList<System.Type!>!
-CodeChops.Idioma.Internals.LocalizationContractAttribute.LocalizationContractAttribute(params System.Type![]! enums) -> void
-CodeChops.Idioma.Internals.LocalizationSetAttribute
-CodeChops.Idioma.Internals.LocalizationSetAttribute.Contract.get -> string!
-CodeChops.Idioma.Internals.LocalizationSetAttribute.Language.get -> string!
-CodeChops.Idioma.Internals.LocalizationSetAttribute.LocalizationSetAttribute(string! contract, string! language) -> void
-CodeChops.Idioma.Internals.ShownValueAttribute
-CodeChops.Idioma.Internals.ShownValueAttribute.Parameter.get -> string!
-CodeChops.Idioma.Internals.ShownValueAttribute.ShownValueAttribute(string! parameter) -> void
 CodeChops.Idioma.LocalizableText
 CodeChops.Idioma.LocalizationRegistry
 CodeChops.Idioma.LocalizationRegistry.Find(System.Type! contract, System.Globalization.CultureInfo! culture) -> CodeChops.Idioma.ILocalizationSet?
@@ -29,11 +15,6 @@ CodeChops.Idioma.SupportedLanguagesAttribute
 CodeChops.Idioma.SupportedLanguagesAttribute.DefaultLanguage.get -> string!
 CodeChops.Idioma.SupportedLanguagesAttribute.Languages.get -> System.Collections.Generic.IReadOnlyList<string!>!
 CodeChops.Idioma.SupportedLanguagesAttribute.SupportedLanguagesAttribute(string! defaultLanguage, params string![]! otherLanguages) -> void
-static CodeChops.Idioma.Internals.GeneratedCode.CreateUnknownKeyException<TContract>(string? key, string! className) -> System.Exception!
-static CodeChops.Idioma.Internals.GeneratedCode.GetKeyedValue<TValue>(string! key, System.ReadOnlySpan<object?> values, int index, int count, string! parameterName) -> TValue
-static CodeChops.Idioma.Internals.GeneratedCode.RecordSet<TSet>(string? languageCode, params string![]! ownTexts) -> void
-static CodeChops.Idioma.Internals.GeneratedCode.RegisterLanguages(string! defaultLanguage, params System.ReadOnlySpan<string!> otherLanguages) -> void
-static CodeChops.Idioma.Internals.GeneratedCode.RegisterSets(bool asDefaults, params System.ReadOnlySpan<(System.Type! Type, System.Func<CodeChops.Idioma.ILocalizationSet!>! Create)> sets) -> void
 static CodeChops.Idioma.LocalizationRegistry.Current.get -> CodeChops.Idioma.LocalizationRegistry!
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.get -> System.Func<System.Globalization.CultureInfo?>?
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.set -> void
@@ -42,20 +23,6 @@ static CodeChops.Idioma.LocalizationRegistry.Register(params System.ReadOnlySpan
 static CodeChops.Idioma.LocalizationRegistry.Register<TSet>() -> void
 static CodeChops.Idioma.LocalizationRegistry.RegisterDefaults(params System.ReadOnlySpan<CodeChops.Idioma.ILocalizationSet!> sets) -> void
 static CodeChops.Idioma.LocalizationRegistry.SupportedLanguages.get -> System.Collections.Immutable.ImmutableArray<string!>
-static CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(string![]! languages) -> int
-static CodeChops.Idioma.Internals.GeneratedCode.FindSet<TContract>(int text, int count) -> TContract?
-static CodeChops.Idioma.Internals.GeneratedCode.FindSetForValues<TContract>(int text, int count) -> TContract?
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveKeyedWording<TContract>(string! text, string! key, System.ReadOnlySpan<object?> values) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.RecordMemberTexts(string![]! languages, System.Func<System.Type!, string?, string![]?>! find) -> void
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(int text, int count, string! name, System.Func<TContract!, string?>! selector) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1>(int text, int count, string! name, System.Func<TContract!, TValue1, string?>! selector, TValue1 value1) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, string?>! selector, TValue1 value1, TValue2 value2) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, TValue3, string?>! selector, TValue1 value1, TValue2 value2, TValue3 value3) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, string?>! selector, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, string?>! selector, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, string?>! selector, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, string?>! selector, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7) -> string!
-static CodeChops.Idioma.Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8>(int text, int count, string! name, System.Func<TContract!, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8, string?>! selector, TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7, TValue8 value8) -> string!
 static CodeChops.Idioma.LocalizableText.GetTextByMember(System.Reflection.MemberInfo! member) -> string?
 static CodeChops.Idioma.LocalizableText.GetTextByMember(System.Type! type, string! memberName) -> string?
 static CodeChops.Idioma.LocalizableText.GetTextByMember<T>(string! memberName) -> string?
