@@ -64,16 +64,16 @@ From the English set, the source generator writes the contract `IShopLocalizatio
 
 @* A text of a type, written as an attribute *@
 <label>
-  @(LocalizableText.GetTextOfType<Address>())
+  @(LocalizedText.GetTextOfType<Address>())
 </label>
 @* A text of its member, written as an attribute *@
 <label>
-  @(LocalizableText.GetTextByMember<Address>(nameof(Address.City)))
+  @(LocalizedText.GetTextByMember<Address>(nameof(Address.City)))
 </label>
 
 @* An inline text, written where it shows *@
 <button>
-  @LocalizableText.Inline(en: "Cancel", nl: "Annuleren")
+  @LocalizedText.Inline(en: "Cancel", nl: "Annuleren")
 </button>
 ```
 
@@ -167,12 +167,12 @@ An enum gets a set of its own, which lists `ILocalizationSet<TEnum>` ([Enums](#e
 An inline text is written where you use it, in markup or in C#. It suits a text you use once:
 
 ```csharp
-public string Title => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+public string Title => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
 ```
 
 `Inline` takes one argument per language you declared, so leaving out a translation doesn't compile. It returns the wording for the user's language, so write the property with `=>`. A property with an initializer keeps the wording of the first user.
 
-To include a value, write it into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC402`).
+To include a value, write it into every language: `LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC402`).
 
 #### Write an attribute
 
@@ -212,11 +212,11 @@ To show a text written as an attribute, ask for it by its type and the name of i
 
 ```razor
 <h2>
-  @(LocalizableText.GetTextOfType<Address>())
+  @(LocalizedText.GetTextOfType<Address>())
 </h2>
 
 <label>
-  @(LocalizableText.GetTextByMember<Address>(nameof(Address.City)))
+  @(LocalizedText.GetTextByMember<Address>(nameof(Address.City)))
 </label>
 ```
 

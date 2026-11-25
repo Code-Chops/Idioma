@@ -601,6 +601,29 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    public void DefaultSetNamedAfterTheSuffixAlone_ShouldBeToldToPutANameBeforeIt()
+    {
+        // Arrange & Act: the name ends in the suffix, and is nothing else, so no name is left for the generated class.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class En : ILocalizationSet
+            {
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert: not that the name doesn't end in En, and no fix that renames it to EnEn.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
+        diagnostic.GetMessage().ShouldBe("'En' is the default-language set of a contract, but its name is En alone, the suffix of the default language, so no name is left for the generated class. The generator can't use it, so it writes no texts for it. Put a name before the suffix, as in ShopLocalizationEn.");
+        diagnostic.Properties.ContainsKey(LocalizationSetsPart.SuggestedNameProperty).ShouldBeFalse();
+    }
+
+    [Test]
     public void SetWhoseNameGivesNoLanguage_OfAContractAnotherSetStarts_ShouldNotReportLOC200()
     {
         // Arrange & Act: the English set starts the contract. The second set lists that contract under a name that ends

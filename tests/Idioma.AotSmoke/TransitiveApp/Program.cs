@@ -16,7 +16,7 @@ void Expect(string what, string? actual, string expected)
 Expect("languages", string.Join(",", LocalizationRegistry.SupportedLanguages), "en,nl");
 
 // An inline text takes an argument per language only where the generator wrote Inline for this app's languages.
-static string Orders() => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+static string Orders() => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
 
 using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl")))
 {

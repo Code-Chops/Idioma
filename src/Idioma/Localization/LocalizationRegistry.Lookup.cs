@@ -14,8 +14,8 @@ public sealed partial class LocalizationRegistry
     /// names are kept.
     /// </summary>
     // Every text works this out for the culture of its reader, so without it a render worked it out once per text. Kept
-    // by name, because an app may create a culture of the same name per request. Never dropped: a registry never
-    // changes, and a registration builds a new one.
+    // by name, because an app may create a culture of the same name per request. Dropped only when more names came in
+    // than are kept (see Keep): a registry never changes, and a registration builds a new one.
     private ConcurrentDictionary<string, CultureLookup> ByCulture { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -51,10 +51,10 @@ public sealed partial class LocalizationRegistry
     [ThreadStatic]
     private static CultureLookup? LastLanguage;
 
-    // Set once a dictionary above holds MaxLookupsKept entries, which is for good, as entries are never removed. A lookup
-    // past the limit then skips Count, which takes every lock of the dictionary.
-    private bool _hasKeptMaxCultures;
-    private bool _hasKeptMaxLanguages;
+    // How many lookups each dictionary above was given since it was last emptied. Counted here, because Count takes
+    // every lock of the dictionary.
+    private int _culturesKept;
+    private int _languagesKept;
 
     /// <summary>
     /// How a culture resolves here: the names it falls back through, the sets of each, and whether the
@@ -66,7 +66,7 @@ public sealed partial class LocalizationRegistry
             return last;
 
         if (!this.ByCulture.TryGetValue(culture.Name, out var lookup))
-            lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, new CultureFallback(culture), culture, language: null), ref this._hasKeptMaxCultures);
+            lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, new CultureFallback(culture), culture, language: null), ref this._culturesKept);
 
         // Both written on this thread, one after the other, so the culture asked always belongs to the lookup next to it.
         LastCulture = lookup;
@@ -85,26 +85,34 @@ public sealed partial class LocalizationRegistry
             return last;
 
         if (!this.ByLanguageCode.TryGetValue(language, out var lookup))
-            lookup = Keep(this.ByLanguageCode, language, new CultureLookup(this, CultureFallback.OfLanguage(language), CultureName.FindCulture(language), language), ref this._hasKeptMaxLanguages);
+            lookup = Keep(this.ByLanguageCode, language, new CultureLookup(this, CultureFallback.OfLanguage(language), CultureName.FindCulture(language), language), ref this._languagesKept);
 
         LastLanguage = lookup;
         return lookup;
     }
 
     /// <summary>
-    /// Keeps a lookup under its name, unless <see cref="MaxLookupsKept"/> are kept already. Gives the lookup that is
-    /// kept for the name, also when another thread kept one in the meantime, or else the given one.
+    /// Keeps a lookup under its name, and gives the lookup that is kept for the name, also when another thread kept one
+    /// in the meantime. Once more than <see cref="MaxLookupsKept"/> were given, the lookups kept so far are dropped
+    /// first.
     /// </summary>
-    private static CultureLookup Keep(ConcurrentDictionary<string, CultureLookup> kept, string name, CultureLookup lookup, ref bool hasKeptMax)
+    // Dropped all at once, and not left full: names that don't exist, such as those of a request header, would then
+    // take every place for good, and a culture of a real user that came after them was worked out again for every
+    // text. A lookup that is dropped is worked out once more by its next reader, which the cultures of an app's users
+    // are within a few texts. A thread that holds a dropped lookup keeps reading it, as it's of the same registry.
+    //
+    // Two threads that keep one name both count, so the count may run ahead of the dictionary, which then empties a
+    // little early. A thread that counts while another empties may leave a few lookups more, which the next round
+    // drops.
+    private static CultureLookup Keep(ConcurrentDictionary<string, CultureLookup> kept, string name, CultureLookup lookup, ref int keptCount)
     {
-        if (hasKeptMax)
-            return lookup;
+        if (Interlocked.Increment(ref keptCount) > MaxLookupsKept)
+        {
+            kept.Clear();
+            Volatile.Write(ref keptCount, 1);
+        }
 
-        if (kept.Count < MaxLookupsKept)
-            return kept.GetOrAdd(name, lookup);
-
-        hasKeptMax = true;
-        return lookup;
+        return kept.GetOrAdd(name, lookup);
     }
 
     /// <summary>

@@ -31,6 +31,25 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    public void SetWithoutAContractOrADefaultSet_ShouldBeToldToWriteTheDefaultSet()
+    {
+        // Arrange & Act: a Dutch set that lists only ILocalizationSet, and no English set a contract could come from.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ControlPanelNl : ILocalizationSet
+            {
+                public string Title => "Paneel";
+            }
+            """);
+
+        // Assert: the message doesn't tell to add a contract that isn't generated, and carries no name for a fix.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingContractDiagnosticId);
+        diagnostic.GetMessage().ShouldBe("'ControlPanelNl' is a set for 'nl' but implements no contract, so no text reads it. Its contract would be 'IControlPanel', which the generator writes from a default-language set named 'ControlPanelEn' that it can use. Write that set, or remove ILocalizationSet if 'ControlPanelNl' isn't a set.");
+        diagnostic.Properties.ContainsKey(LocalizationSetsPart.SuggestedNameProperty).ShouldBeFalse();
+    }
+
+    [Test]
     public void DefaultSetWithoutItsContract_ShouldLeaveLOC204TheOnlyErrorOfTheBuild()
     {
         // Arrange & Act: a property and a method, and a text named like a member of a class, which the class that

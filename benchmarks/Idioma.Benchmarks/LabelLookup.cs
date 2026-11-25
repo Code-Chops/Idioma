@@ -46,13 +46,13 @@ public class LabelLookup
     public string? Display_ReadFromProperty() => Checkout.GetCustomAttribute<DisplayAttribute>()!.GetName();
 
     [Benchmark]
-    public string Localized_PropertyByTypeAndName() => LocalizableText.GetTextByMember<LabelledOrder>(nameof(LabelledOrder.Checkout))!;
+    public string Localized_PropertyByTypeAndName() => LocalizedText.GetTextByMember<LabelledOrder>(nameof(LabelledOrder.Checkout))!;
 
     [Benchmark]
-    public string Localized_PropertyByPropertyInfo() => LocalizableText.GetTextByMember(Checkout)!;
+    public string Localized_PropertyByPropertyInfo() => LocalizedText.GetTextByMember(Checkout)!;
 
     [Benchmark]
-    public string Localized_Type() => LocalizableText.GetTextOfType<LabelledOrder>()!;
+    public string Localized_Type() => LocalizedText.GetTextOfType<LabelledOrder>()!;
 
     [Benchmark]
     public string Localized_EnumValue() => this.parcelStatus.GetText();

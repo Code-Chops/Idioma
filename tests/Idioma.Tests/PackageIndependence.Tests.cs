@@ -57,7 +57,7 @@ public sealed class PackageIndependenceTests
     public void Analyzers_ShouldNotNeedANewerCompilerThanTheFirstNet10Sdk(string assemblyName)
     {
         // Arrange: a compiler skips an analyzer built against a newer Roslyn than its own (CS9057), so the generator, and
-        // with it LocalizableText.Inline, would vanish from the build of a project on SDK 10.0.100. The CI builds and runs
+        // with it LocalizedText.Inline, would vanish from the build of a project on SDK 10.0.100. The CI builds and runs
         // these tests with a newer compiler, which accepts any, so only the references of the assembly can tell. The
         // package references of the two projects are pinned for it (VersionOverride), and a bulk package update rewrites
         // them.

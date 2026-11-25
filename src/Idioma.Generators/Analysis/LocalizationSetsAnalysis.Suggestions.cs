@@ -17,6 +17,30 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
+    /// Whether a set's name is the suffix of the default language and nothing else, as a class named <c>En</c> is.
+    /// </summary>
+    private static bool IsSuffixAlone(string name, string suffix)
+    {
+        var isSuffixAlone = String.Equals(name, suffix, StringComparison.OrdinalIgnoreCase);
+        return isSuffixAlone;
+    }
+
+    /// <summary>
+    /// Reports a default-language set whose name is the suffix of its language alone (<c>LOC200</c>).
+    /// </summary>
+    // Its name does end in the suffix, so the message of a name without one would be wrong, and the name that message
+    // suggests, EnEn, is none its author meant. No name is suggested, because only its author knows what the set holds.
+    private static LocalizationSetsFinding SuffixAlone(DiscoveredLocalization set, string suffix)
+    {
+        var finding = new LocalizationSetsFinding(
+            LocalizationSetsRule.CannotExtend,
+            set.Location,
+            new EquatableArray<string>([set.Name, $"its name is {suffix} alone, the suffix of the default language, so no name is left for the generated class", $"Put a name before the suffix, as in ShopLocalization{suffix}."]));
+
+        return finding;
+    }
+
+    /// <summary>
     /// The set to add for a language a contract of this assembly misses: as the diagnostic names it, and as the code fix
     /// writes it (<see cref="NewLocalizationSet"/>). A region of a language that has a set derives from that set, to hold
     /// only the texts that differ: <c>'class ShopLocalizationEnGb : ShopLocalizationEn'</c>. Any other language

@@ -77,7 +77,7 @@ public sealed partial class LocalizationSetsPartTests
 
         public static class InlineTexts
         {
-            public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+            public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
         }
         """);
 
@@ -608,6 +608,6 @@ public sealed partial class LocalizationSetsPartTests
         var usings = text.Split('\n').Where(static line => line.StartsWith("using ", StringComparison.Ordinal)).Select(static line => line.TrimEnd()).ToArray();
 
         // Assert: the namespaces of what the method that gives a text by its key names, and what words a text.
-        usings.ShouldBe(["using System;", "using System.Collections.Generic;", "using static CodeChops.Idioma.Internals.GeneratedCode;"]);
+        usings.ShouldBe(["using System;", "using System.Collections.Generic;", "using System.Collections.Immutable;", "using System.Diagnostics.CodeAnalysis;", "using static CodeChops.Idioma.Internals.GeneratedCode;"]);
     }
 }

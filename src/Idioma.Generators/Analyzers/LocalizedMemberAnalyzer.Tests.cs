@@ -534,14 +534,14 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    [Arguments("LocalizableText.GetTextByMember<Person>(nameof(Person.Name))")]
-    [Arguments("LocalizableText.GetTextByMember(typeof(Person), \"Name\")")]
-    [Arguments("LocalizableText.GetTextByMember<Customer>(nameof(Customer.Name))")] // From the property it overrides
-    [Arguments("LocalizableText.GetTextByMember<Page<int>>(nameof(Page<int>.Items))")]
-    [Arguments("LocalizableText.GetTextByMember(typeof(Page<>), \"Items\")")]
-    [Arguments("LocalizableText.GetTextByMember<Status>(nameof(Status.Open))")]
-    [Arguments("LocalizableText.GetTextOfType<Person>()")]
-    [Arguments("LocalizableText.GetTextOfType(typeof(Person))")]
+    [Arguments("LocalizedText.GetTextByMember<Person>(nameof(Person.Name))")]
+    [Arguments("LocalizedText.GetTextByMember(typeof(Person), \"Name\")")]
+    [Arguments("LocalizedText.GetTextByMember<Customer>(nameof(Customer.Name))")] // From the property it overrides
+    [Arguments("LocalizedText.GetTextByMember<Page<int>>(nameof(Page<int>.Items))")]
+    [Arguments("LocalizedText.GetTextByMember(typeof(Page<>), \"Items\")")]
+    [Arguments("LocalizedText.GetTextByMember<Status>(nameof(Status.Open))")]
+    [Arguments("LocalizedText.GetTextOfType<Person>()")]
+    [Arguments("LocalizedText.GetTextOfType(typeof(Person))")]
     public async Task LookupOfMemberOrTypeWithText_ShouldReportNothing(string call)
     {
         // Arrange & Act
@@ -552,12 +552,12 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    [Arguments("LocalizableText.GetTextByMember(type, member)")]                   // Known at run time alone
-    [Arguments("LocalizableText.GetTextByMember(type, \"Email\")")]
-    [Arguments("LocalizableText.GetTextByMember<Person>(member)")]
-    [Arguments("LocalizableText.GetTextByMember(property)")]
-    [Arguments("LocalizableText.GetTextOfType(type)")]
-    [Arguments("LocalizableText.GetTextByMember<System.Uri>(nameof(System.Uri.Host))")] // System.Private.Uri uses no Idioma, but is in the next test
+    [Arguments("LocalizedText.GetTextByMember(type, member)")]                   // Known at run time alone
+    [Arguments("LocalizedText.GetTextByMember(type, \"Email\")")]
+    [Arguments("LocalizedText.GetTextByMember<Person>(member)")]
+    [Arguments("LocalizedText.GetTextByMember(property)")]
+    [Arguments("LocalizedText.GetTextOfType(type)")]
+    [Arguments("LocalizedText.GetTextByMember<System.Uri>(nameof(System.Uri.Host))")] // System.Private.Uri uses no Idioma, but is in the next test
     public async Task LookupTheBuildCantCheck_ShouldReportNothing(string call)
     {
         // Arrange: what a form does with the property of a field it shows, where null means no label.
@@ -574,13 +574,13 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    [Arguments("LocalizableText.GetTextByMember<Person>(nameof(Person.Email))", "nameof(Person.Email)", "'Person.Email' has no text, so GetTextByMember gives null. Mark 'Email' [Localized(en: \"...\", nl: \"...\")].")]
-    [Arguments("LocalizableText.GetTextByMember(typeof(Person), \"Email\")", "\"Email\"", "'Person.Email' has no text, so GetTextByMember gives null. Mark 'Email' [Localized(en: \"...\", nl: \"...\")].")]
-    [Arguments("LocalizableText.GetTextByMember<Customer>(nameof(Customer.Email))", "nameof(Customer.Email)", "'Customer.Email' has no text, so GetTextByMember gives null. Mark 'Person.Email' [Localized(en: \"...\", nl: \"...\")].")]
-    [Arguments("LocalizableText.GetTextByMember<Customer>(nameof(Customer.Phone))", "nameof(Customer.Phone)", "'Customer.Phone' has no text, so GetTextByMember gives null. Mark 'Phone' [Localized(en: \"...\", nl: \"...\")].")]
-    [Arguments("LocalizableText.GetTextByMember<Person>(\"Nmae\")", "\"Nmae\"", "'Person.Nmae' has no text, so GetTextByMember gives null. 'Person' has no property or field of that name. Name the member with nameof, which the compiler checks.")]
-    [Arguments("LocalizableText.GetTextOfType<Customer>()", "GetTextOfType<Customer>", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
-    [Arguments("LocalizableText.GetTextOfType(typeof(Customer))", "GetTextOfType", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizedText.GetTextByMember<Person>(nameof(Person.Email))", "nameof(Person.Email)", "'Person.Email' has no text, so GetTextByMember gives null. Mark 'Email' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizedText.GetTextByMember(typeof(Person), \"Email\")", "\"Email\"", "'Person.Email' has no text, so GetTextByMember gives null. Mark 'Email' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizedText.GetTextByMember<Customer>(nameof(Customer.Email))", "nameof(Customer.Email)", "'Customer.Email' has no text, so GetTextByMember gives null. Mark 'Person.Email' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizedText.GetTextByMember<Customer>(nameof(Customer.Phone))", "nameof(Customer.Phone)", "'Customer.Phone' has no text, so GetTextByMember gives null. Mark 'Phone' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizedText.GetTextByMember<Person>(\"Nmae\")", "\"Nmae\"", "'Person.Nmae' has no text, so GetTextByMember gives null. 'Person' has no property or field of that name. Name the member with nameof, which the compiler checks.")]
+    [Arguments("LocalizedText.GetTextOfType<Customer>()", "GetTextOfType<Customer>", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
+    [Arguments("LocalizedText.GetTextOfType(typeof(Customer))", "GetTextOfType", "'Customer' has no text, so GetTextOfType gives null. Mark 'Customer' [Localized(en: \"...\", nl: \"...\")].")]
     public async Task LookupOfMemberOrTypeWithoutText_ShouldReportLOC601(string call, string at, string message)
     {
         // Arrange & Act: a type's own text isn't inherited, so Customer has none.
@@ -594,8 +594,8 @@ public sealed class LocalizedMemberAnalyzerTests
     }
 
     [Test]
-    [Arguments("LocalizableText.GetTextOfType<System.DayOfWeek>()", "GetTextOfType<System.DayOfWeek>", "'DayOfWeek' has no text, so GetTextOfType gives null.")]
-    [Arguments("LocalizableText.GetTextByMember<System.DayOfWeek>(nameof(System.DayOfWeek.Monday))", "nameof(System.DayOfWeek.Monday)", "'DayOfWeek.Monday' has no text, so GetTextByMember gives null.")]
+    [Arguments("LocalizedText.GetTextOfType<System.DayOfWeek>()", "GetTextOfType<System.DayOfWeek>", "'DayOfWeek' has no text, so GetTextOfType gives null.")]
+    [Arguments("LocalizedText.GetTextByMember<System.DayOfWeek>(nameof(System.DayOfWeek.Monday))", "nameof(System.DayOfWeek.Monday)", "'DayOfWeek.Monday' has no text, so GetTextByMember gives null.")]
     public async Task LookupOfTypeOfAssemblyWithoutIdioma_ShouldReportLOC601(string call, string at, string start)
     {
         // Arrange & Act: an assembly that doesn't reference the package has no texts on its members.
@@ -617,9 +617,9 @@ public sealed class LocalizedMemberAnalyzerTests
 
             public static class Labels
             {
-                public static string? Of<T>() => LocalizableText.GetTextByMember<T>("Name");
+                public static string? Of<T>() => LocalizedText.GetTextByMember<T>("Name");
 
-                public static string? OfType<T>() => LocalizableText.GetTextOfType<T>();
+                public static string? OfType<T>() => LocalizedText.GetTextOfType<T>();
             }
             """);
 
@@ -655,9 +655,9 @@ public sealed class LocalizedMemberAnalyzerTests
 
             public static class Labels
             {
-                public static string? City => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.City));
-                public static string? Street => LocalizableText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.Street));
-                public static string? Inherited => LocalizableText.GetTextByMember<Delivery>(nameof(Delivery.City));
+                public static string? City => LocalizedText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.City));
+                public static string? Street => LocalizedText.GetTextByMember<LookupLibrary.Address>(nameof(LookupLibrary.Address.Street));
+                public static string? Inherited => LocalizedText.GetTextByMember<Delivery>(nameof(Delivery.City));
             }
             """, [library]);
 
@@ -680,7 +680,7 @@ public sealed class LocalizedMemberAnalyzerTests
             public static class Labels
             {
             #pragma warning disable LOC601 // No label yet
-                public static string? Street => LocalizableText.GetTextByMember<Address>(nameof(Address.Street));
+                public static string? Street => LocalizedText.GetTextByMember<Address>(nameof(Address.Street));
             #pragma warning restore LOC601
             }
             """);

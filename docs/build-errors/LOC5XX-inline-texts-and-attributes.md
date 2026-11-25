@@ -4,7 +4,7 @@ Each code has an example and the fix. The [list of every code](../build-errors.m
 
 ## LOC500
 
-An argument of `LocalizableText.Inline` or of `[Localized]` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or `[Localized(en: "City", nl: "Plaats")]`.
+An argument of `LocalizedText.Inline` or of `[Localized]` has no language name. Every parameter is a string, so two languages could swap unnoticed. Name each one: `LocalizedText.Inline(en: "Orders", nl: "Bestellingen")`, or `[Localized(en: "City", nl: "Plaats")]`.
 
 The IDE fix names each argument after the language of its position.
 
@@ -26,7 +26,7 @@ Where a missing text has to be a build error, write a [set of the enum](../enums
 
 ## LOC502
 
-A member marked `[Localized]` has a text that can't be registered, so `LocalizableText.GetTextByMember` won't find it. This is a warning, with these causes:
+A member marked `[Localized]` has a text that can't be registered, so `LocalizedText.GetTextByMember` won't find it. This is a warning, with these causes:
 
 - Its type is private or protected inside another type, or file-local. The generated code that holds the text can't name such a type. Make the type internal or public.
 - Its type, or a type around it, is marked `[Obsolete]` as an error. Naming such a type is an error that no pragma turns off. Make the `[Obsolete]` a warning, or remove `[Localized]`.

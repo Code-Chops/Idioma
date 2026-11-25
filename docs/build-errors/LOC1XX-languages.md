@@ -8,11 +8,11 @@ A set lists `ILocalizationSet` next to a contract of its own assembly, but the a
 
 A set that rewords a library's set, or adds a language to a library's contract, needs no languages.
 
-A call of `LocalizableText.Inline` in such an assembly is LOC100 too. The generator writes `Inline` with one parameter per language, so without languages the method doesn't exist, and the compiler reports `CS0117` next to it.
+A call of `LocalizedText.Inline` in such an assembly is LOC100 too. The generator writes `Inline` with one parameter per language, so without languages the method doesn't exist, and the compiler reports `CS0117` next to it.
 
 So is a member marked `[Localized]`. The generator writes that attribute with one parameter per language too, so without languages the compiler reports `CS0246` next to it.
 
-The IDE fix declares the languages that an `Inline` call or a `[Localized]` names, in the order it names them. So `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")` adds `[assembly: SupportedLanguages("en", "nl")]` at the top of its file, with English as the default. A call with an argument without a language name gets no fix. Neither does a set, because its name doesn't say which language is the default.
+The IDE fix declares the languages that an `Inline` call or a `[Localized]` names, in the order it names them. So `LocalizedText.Inline(en: "Orders", nl: "Bestellingen")` adds `[assembly: SupportedLanguages("en", "nl")]` at the top of its file, with English as the default. A call with an argument without a language name gets no fix. Neither does a set, because its name doesn't say which language is the default.
 
 ## LOC101
 
@@ -28,7 +28,7 @@ The project declares its languages and compiles with a version of C# older than 
 error LOC102: Idioma needs C# 14 or later, and this project uses C# 13.0. Remove <LangVersion> from the project file, or set it to 14 or later.
 ```
 
-The code generated for your languages uses extension members, which C# 14 brings. So the generators write none of it, and the compiler reports what your code then misses, such as the contract of a set (`CS0246`) or `LocalizableText.Inline` (`CS0117`).
+The code generated for your languages uses extension members, which C# 14 brings. So the generators write none of it, and the compiler reports what your code then misses, such as the contract of a set (`CS0246`) or `LocalizedText.Inline` (`CS0117`).
 
 A library that declares no languages builds with an older version, such as one that only references a library that uses Idioma. An app always declares its languages ([LOC103](#loc103)), so it needs C# 14.
 

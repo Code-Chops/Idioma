@@ -34,7 +34,7 @@ You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and
   British users then see "Basket" and the rest of your English. The build treats British English as a language of its own, so no British wording is forgotten:
 
   - Every contract needs a British set (`LOC201`). One with nothing British about it is a single line: `public class GridLocalizationEnGb : GridLocalizationEn;`.
-  - Every inline text and every attribute takes a British wording, as in `LocalizableText.Inline(en: "Color", nl: "Kleur", enGb: "Colour")`.
+  - Every inline text and every attribute takes a British wording, as in `LocalizedText.Inline(en: "Color", nl: "Kleur", enGb: "Colour")`.
 
 - Leave it out, `("en", "nl")`, and implement `LocalizationLanguageCode` in the set. Your other sets, your inline texts and your attributes then show their English in Britain.
 

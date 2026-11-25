@@ -48,7 +48,7 @@ public sealed class PlaceholderAnalyzerTests
         {
             private const string Wording = "Hallo, {0}!";
 
-            public static string Text(string name, int count) => LocalizableText.Inline({{arguments}});
+            public static string Text(string name, int count) => LocalizedText.Inline({{arguments}});
         }
         """;
 
@@ -353,7 +353,7 @@ public sealed class PlaceholderAnalyzerTests
 
             public static class Index
             {
-                public static string Title => LocalizableText.Inline(en: "Orders of {0}", nl: "Bestellingen", enGb: "Orders");
+                public static string Title => LocalizedText.Inline(en: "Orders of {0}", nl: "Bestellingen", enGb: "Orders");
             }
             """));
 

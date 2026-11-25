@@ -28,12 +28,12 @@ internal sealed class Scenarios(IStringLocalizer<Shop> localizer)
     public string LocalizerCheckout() => localizer["Checkout"].Value;
     public string IdiomaSetCheckout() => ShopLocalization.Checkout;
     public string IdiomaInlineCheckout() => InlineTexts.Checkout;
-    public string IdiomaAttributeCheckout() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))!;
+    public string IdiomaAttributeCheckout() => LocalizedText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Checkout))!;
 
     public string LocalizerCart() => localizer["Cart"].Value;
     public string IdiomaSetCart() => ShopLocalization.Cart;
     public string IdiomaInlineCart() => InlineTexts.Cart;
-    public string IdiomaAttributeCart() => LocalizableText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Cart))!;
+    public string IdiomaAttributeCart() => LocalizedText.GetTextByMember<ShopLabels>(nameof(ShopLabels.Cart))!;
 
     public string LocalizerGreeting() => localizer["Greeting", this.name].Value;
     public string IdiomaSetGreeting() => ShopLocalization.Greeting(this.name);

@@ -4,6 +4,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using static CodeChops.Idioma.Internals.GeneratedCode;
 
 namespace TestApp;
@@ -68,17 +70,42 @@ public static partial class OrderStatusLocalization
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Pending"</c>.
     /// </summary>
+    /// <remarks>
+    /// For a key that may be unknown, such as one from a database, use <see cref="TryGetTextByKey"/>.
+    /// </remarks>
     /// <param name="key">The key of the text: its name, in the same letter case.</param>
     /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
     /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
     /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
+    public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => TryGetTextByKey(key, out var text, values) ? text : throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization");
+
+    /// <summary>
+    /// Gives the text with a key, when a text has that key. The key is the name of the text, such as <c>"Pending"</c>.
+    /// </summary>
+    /// <param name="key">The key of the text: its name, in the same letter case.</param>
+    /// <param name="text">The text, or <see langword="null"/> when no text has the key.</param>
+    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
+    /// <returns><see langword="true"/> when a text has the key.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
+    public static bool TryGetTextByKey(string key, [NotNullWhen(true)] out string? text, params ReadOnlySpan<object?> values)
     {
-        "Pending" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
-        "Shipped" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
-        _ => throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization"),
-    };
+        text = key switch
+        {
+            "Pending" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
+            "Shipped" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
+            null => throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization"),
+            _ => null,
+        };
+
+        return text is not null;
+    }
+
+    /// <summary>
+    /// The key of every text, sorted by name. <see cref="GetTextByKey"/> takes each of them.
+    /// </summary>
+    public static ImmutableArray<string> TextKeys => TextKeysOf<IOrderStatusLocalization>.Keys;
 }
 
 /// <summary>
@@ -104,6 +131,11 @@ file static class TextsByValue<TContract>
         OrderStatus.Shipped => OrderStatusLocalization.Shipped,
         _ => value.ToString(),
     };
+}
+
+file static class TextKeysOf<TContract>
+{
+    internal static readonly ImmutableArray<string> Keys = ["Pending", "Shipped"];
 }
 #pragma warning restore CS0612, CS0618
 #nullable restore

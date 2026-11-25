@@ -5,17 +5,16 @@ CodeChops.Idioma.ILocalizationSet
 CodeChops.Idioma.ILocalizationSet.GetLanguageCode(System.Type! setType) -> string!
 CodeChops.Idioma.ILocalizationSet.LocalizationLanguageCode.get -> string!
 CodeChops.Idioma.ILocalizationSet<TEnum>
-CodeChops.Idioma.LocalizableText
+CodeChops.Idioma.LocalizedText
 CodeChops.Idioma.LocalizationRegistry
-CodeChops.Idioma.LocalizationRegistry.Find(System.Type! contract, System.Globalization.CultureInfo! culture) -> CodeChops.Idioma.ILocalizationSet?
-CodeChops.Idioma.LocalizationRegistry.Find<TContract>(System.Globalization.CultureInfo! culture) -> TContract?
-CodeChops.Idioma.LocalizationRegistry.Languages.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
-CodeChops.Idioma.LocalizationRegistry.Sets.get -> System.Collections.Immutable.ImmutableArray<CodeChops.Idioma.ILocalizationSet!>
+static CodeChops.Idioma.LocalizationRegistry.Find(System.Type! contract, System.Globalization.CultureInfo! culture) -> CodeChops.Idioma.ILocalizationSet?
+static CodeChops.Idioma.LocalizationRegistry.Find<TContract>(System.Globalization.CultureInfo! culture) -> TContract?
+static CodeChops.Idioma.LocalizationRegistry.RegisteredLanguages.get -> System.Collections.Immutable.ImmutableArray<string!>
+static CodeChops.Idioma.LocalizationRegistry.Sets.get -> System.Collections.Immutable.ImmutableArray<CodeChops.Idioma.ILocalizationSet!>
 CodeChops.Idioma.SupportedLanguagesAttribute
 CodeChops.Idioma.SupportedLanguagesAttribute.DefaultLanguage.get -> string!
-CodeChops.Idioma.SupportedLanguagesAttribute.Languages.get -> System.Collections.Generic.IReadOnlyList<string!>!
+CodeChops.Idioma.SupportedLanguagesAttribute.Languages.get -> System.Collections.Immutable.ImmutableArray<string!>
 CodeChops.Idioma.SupportedLanguagesAttribute.SupportedLanguagesAttribute(string! defaultLanguage, params string![]! otherLanguages) -> void
-static CodeChops.Idioma.LocalizationRegistry.Current.get -> CodeChops.Idioma.LocalizationRegistry!
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.get -> System.Func<System.Globalization.CultureInfo?>?
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.set -> void
 static CodeChops.Idioma.LocalizationRegistry.DefaultLanguage.get -> string?
@@ -23,11 +22,11 @@ static CodeChops.Idioma.LocalizationRegistry.Register(params System.ReadOnlySpan
 static CodeChops.Idioma.LocalizationRegistry.Register<TSet>() -> void
 static CodeChops.Idioma.LocalizationRegistry.RegisterDefaults(params System.ReadOnlySpan<CodeChops.Idioma.ILocalizationSet!> sets) -> void
 static CodeChops.Idioma.LocalizationRegistry.SupportedLanguages.get -> System.Collections.Immutable.ImmutableArray<string!>
-static CodeChops.Idioma.LocalizableText.GetTextByMember(System.Reflection.MemberInfo! member) -> string?
-static CodeChops.Idioma.LocalizableText.GetTextByMember(System.Type! type, string! memberName) -> string?
-static CodeChops.Idioma.LocalizableText.GetTextByMember<T>(string! memberName) -> string?
-static CodeChops.Idioma.LocalizableText.GetTextOfType(System.Type! type) -> string?
-static CodeChops.Idioma.LocalizableText.GetTextOfType<T>() -> string?
+static CodeChops.Idioma.LocalizedText.GetTextByMember(System.Reflection.MemberInfo! member) -> string?
+static CodeChops.Idioma.LocalizedText.GetTextByMember(System.Type! type, string! memberName) -> string?
+static CodeChops.Idioma.LocalizedText.GetTextByMember<T>(string! memberName) -> string?
+static CodeChops.Idioma.LocalizedText.GetTextOfType(System.Type! type) -> string?
+static CodeChops.Idioma.LocalizedText.GetTextOfType<T>() -> string?
 CodeChops.Idioma.CultureScope
 CodeChops.Idioma.CultureScope.Dispose() -> void
 static CodeChops.Idioma.LocalizationRegistry.UseCulture(System.Globalization.CultureInfo! culture) -> CodeChops.Idioma.CultureScope!

@@ -12,7 +12,7 @@ namespace CodeChops.Idioma.CodeFixes;
 /// </summary>
 /// <remarks>
 /// Only a member of a set of the enum gets the fix. The text of a member marked <c>[Localized]</c> is found with
-/// <c>LocalizableText.GetTextByMember</c>, which gives a <c>string?</c>, so code that took a <c>string</c> might no
+/// <c>LocalizedText.GetTextByMember</c>, which gives a <c>string?</c>, so code that took a <c>string</c> might no
 /// longer compile.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(SharedEnumValueCodeFixProvider))]

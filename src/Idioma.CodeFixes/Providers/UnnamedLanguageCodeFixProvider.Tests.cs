@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="UnnamedLanguageCodeFixProvider"/>: a call of <c>LocalizableText.Inline</c> with a language
+/// Tests for <see cref="UnnamedLanguageCodeFixProvider"/>: a call of <c>LocalizedText.Inline</c> with a language
 /// argument without its name (<c>LOC500</c>) gets each such argument named after its language, and so does
 /// <c>[Localized]</c> on a member.
 /// </summary>
@@ -37,11 +37,11 @@ public sealed class UnnamedLanguageCodeFixProviderTests
     #endregion
 
     [Test]
-    [Arguments("\"en\", \"nl\"", """LocalizableText.Inline("Orders", "Bestellingen")""", """LocalizableText.Inline(en: "Orders", nl: "Bestellingen")""")]
-    [Arguments("\"en\", \"nl\"", """LocalizableText.Inline("Orders", nl: "Bestellingen")""", """LocalizableText.Inline(en: "Orders", nl: "Bestellingen")""")]
-    [Arguments("\"en\", \"nl\"", """LocalizableText.Inline(en: "Orders", "Bestellingen")""", """LocalizableText.Inline(en: "Orders", nl: "Bestellingen")""")]
-    [Arguments("\"en\", \"nl\", \"en-GB\"", """LocalizableText.Inline("Color", "Kleur", "Colour")""", """LocalizableText.Inline(en: "Color", nl: "Kleur", enGb: "Colour")""")]
-    [Arguments("\"en\", \"is\"", """LocalizableText.Inline("Orders", "Pantanir")""", """LocalizableText.Inline(en: "Orders", @is: "Pantanir")""")]
+    [Arguments("\"en\", \"nl\"", """LocalizedText.Inline("Orders", "Bestellingen")""", """LocalizedText.Inline(en: "Orders", nl: "Bestellingen")""")]
+    [Arguments("\"en\", \"nl\"", """LocalizedText.Inline("Orders", nl: "Bestellingen")""", """LocalizedText.Inline(en: "Orders", nl: "Bestellingen")""")]
+    [Arguments("\"en\", \"nl\"", """LocalizedText.Inline(en: "Orders", "Bestellingen")""", """LocalizedText.Inline(en: "Orders", nl: "Bestellingen")""")]
+    [Arguments("\"en\", \"nl\", \"en-GB\"", """LocalizedText.Inline("Color", "Kleur", "Colour")""", """LocalizedText.Inline(en: "Color", nl: "Kleur", enGb: "Colour")""")]
+    [Arguments("\"en\", \"is\"", """LocalizedText.Inline("Orders", "Pantanir")""", """LocalizedText.Inline(en: "Orders", @is: "Pantanir")""")]
     public async Task UnnamedLanguage_ShouldGetTheNameOfItsLanguage(string languages, string text, string expectedText)
     {
         // Arrange & Act
@@ -96,12 +96,12 @@ public sealed class UnnamedLanguageCodeFixProviderTests
     {
         // Arrange
         const string text = """
-            LocalizableText.Inline(
+            LocalizedText.Inline(
                     "Orders",
                     "Bestellingen")
             """;
         const string expectedText = """
-            LocalizableText.Inline(
+            LocalizedText.Inline(
                     en: "Orders",
                     nl: "Bestellingen")
             """;
@@ -117,7 +117,7 @@ public sealed class UnnamedLanguageCodeFixProviderTests
     public async Task FixAll_InDocument_ShouldNameEveryCallOfThatFileOnly()
     {
         // Arrange: a file with two calls, and another file with one.
-        var first = Source("\"en\", \"nl\"", """LocalizableText.Inline("Orders", "Bestellingen") + LocalizableText.Inline("Total", "Totaal")""");
+        var first = Source("\"en\", \"nl\"", """LocalizedText.Inline("Orders", "Bestellingen") + LocalizedText.Inline("Total", "Totaal")""");
         const string Second = """
             using CodeChops.Idioma;
 
@@ -125,7 +125,7 @@ public sealed class UnnamedLanguageCodeFixProviderTests
 
             public static class MoreTexts
             {
-                public static string Cart => LocalizableText.Inline("Cart", "Winkelwagen");
+                public static string Cart => LocalizedText.Inline("Cart", "Winkelwagen");
             }
             """;
 
@@ -133,7 +133,7 @@ public sealed class UnnamedLanguageCodeFixProviderTests
         var sources = await CodeFixTestHelper.FixAllAfterGeneratorsAsync(Provider, Analyzer, FixAllScope.Document, fromFile: 0, first, Second);
 
         // Assert
-        sources[0].ShouldBe(Source("\"en\", \"nl\"", """LocalizableText.Inline(en: "Orders", nl: "Bestellingen") + LocalizableText.Inline(en: "Total", nl: "Totaal")"""));
+        sources[0].ShouldBe(Source("\"en\", \"nl\"", """LocalizedText.Inline(en: "Orders", nl: "Bestellingen") + LocalizedText.Inline(en: "Total", nl: "Totaal")"""));
         sources[1].ShouldBe(Second);
     }
 
@@ -143,8 +143,8 @@ public sealed class UnnamedLanguageCodeFixProviderTests
     public async Task FixAll_InAppThatReferencesLibrary_ShouldChangeTheLibraryOnlyInSolution(FixAllScope scope, bool libraryChanges)
     {
         // Arrange: a library and an app that references it, each with a call that names no language.
-        var library = Source("\"en\", \"nl\"", """LocalizableText.Inline("Orders", "Bestellingen")""").Replace("TestApp", "ShopLibrary", StringComparison.Ordinal);
-        var app = Source("\"en\", \"nl\"", """LocalizableText.Inline("Cart", "Winkelwagen") + ShopLibrary.Texts.Orders""");
+        var library = Source("\"en\", \"nl\"", """LocalizedText.Inline("Orders", "Bestellingen")""").Replace("TestApp", "ShopLibrary", StringComparison.Ordinal);
+        var app = Source("\"en\", \"nl\"", """LocalizedText.Inline("Cart", "Winkelwagen") + ShopLibrary.Texts.Orders""");
 
         // Act: "Fix all" is chosen in the file of the app.
         var projects = await CodeFixTestHelper.FixAllAfterGeneratorsAsync(Provider, Analyzer, scope, from: (Project: 1, File: 0),
@@ -153,6 +153,6 @@ public sealed class UnnamedLanguageCodeFixProviderTests
 
         // Assert: a fix of the project leaves the other project as it is.
         projects[0].ShouldHaveSingleItem().ShouldBe(libraryChanges ? library.Replace("(\"Orders\", \"Bestellingen\")", "(en: \"Orders\", nl: \"Bestellingen\")", StringComparison.Ordinal) : library);
-        projects[1].ShouldHaveSingleItem().ShouldBe(Source("\"en\", \"nl\"", """LocalizableText.Inline(en: "Cart", nl: "Winkelwagen") + ShopLibrary.Texts.Orders"""));
+        projects[1].ShouldHaveSingleItem().ShouldBe(Source("\"en\", \"nl\"", """LocalizedText.Inline(en: "Cart", nl: "Winkelwagen") + ShopLibrary.Texts.Orders"""));
     }
 }

@@ -34,7 +34,7 @@ namespace CodeChops.Idioma;
 ///
 /// // The Dutch wording of one text, whatever the current UI culture:
 /// var dutch = CultureInfo.GetCultureInfo("nl");
-/// string? checkout = LocalizationRegistry.Current.Find&lt;IShopLocalization&gt;(dutch)?.Checkout;
+/// string? checkout = LocalizationRegistry.Find&lt;IShopLocalization&gt;(dutch)?.Checkout;
 /// </code>
 /// </example>
 public sealed partial class LocalizationRegistry
@@ -43,7 +43,7 @@ public sealed partial class LocalizationRegistry
     /// The sets of your whole app: every set that registered itself, and every set you registered. A text looks up its
     /// wording here. So this is what <c>@ShopLocalization.Checkout</c> in markup shows.
     /// </summary>
-    public static LocalizationRegistry Current => Volatile.Read(ref Registered).Registry;
+    internal static LocalizationRegistry Current => Volatile.Read(ref Registered).Registry;
 
     /// <summary>
     /// Your app's languages, its default language first, as its
@@ -53,7 +53,7 @@ public sealed partial class LocalizationRegistry
     /// <remarks>
     /// A culture none of these languages serves gets the wording in <see cref="DefaultLanguage"/>, for every text. For
     /// example, in an app that declares <c>("en", "fr")</c>, a Dutch user sees a library's texts in English, like the
-    /// app's own, even though the library has Dutch. See <see cref="LocalizableText"/>.
+    /// app's own, even though the library has Dutch. See <see cref="LocalizedText"/>.
     /// </remarks>
     public static ImmutableArray<string> SupportedLanguages => Volatile.Read(ref Registered).Languages;
 
@@ -64,7 +64,7 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <remarks>
     /// Every text falls back to this language, including the texts of the libraries your app uses. See
-    /// <see cref="LocalizableText"/>. Where it's <see langword="null"/>, each text falls back to its own default
+    /// <see cref="LocalizedText"/>. Where it's <see langword="null"/>, each text falls back to its own default
     /// language instead.
     /// </remarks>
     public static string? DefaultLanguage => SupportedLanguages is [var defaultLanguage, ..] ? defaultLanguage : null;
@@ -126,6 +126,96 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
+    /// The sets of your whole app, in the order they apply: every set that registered itself, and every set you
+    /// registered. For one contract and language, a later set wins for every text it changes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The sets declared next to their contract come first. The sets that reword another assembly's texts and the sets
+    /// you registered come after them.
+    /// </para>
+    /// <para>
+    /// A set that registered itself is created when a text of its contract is first shown. Reading this property
+    /// creates every set that isn't created yet.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// When the constructor of a set that registered itself throws, with that exception inside.
+    /// </exception>
+    public static ImmutableArray<ILocalizationSet> Sets => Current.AllSets;
+
+    /// <summary>
+    /// The languages your app has at least one set for, such as <c>en</c> and <c>nl</c>, as each set's
+    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/> gives them. That includes the languages of the libraries
+    /// your app uses. So it can list more languages than <see cref="SupportedLanguages"/>, which are the ones your users
+    /// see.
+    /// </summary>
+    /// <remarks>
+    /// Each language is written as culture names are, whatever letter case its sets use. For example, <c>en-GB</c> for
+    /// a set whose code is <c>EN-gb</c>.
+    /// </remarks>
+    public static ImmutableArray<string> RegisteredLanguages => Current.SetLanguages;
+
+    /// <summary>
+    /// The set implementing <typeparamref name="TContract"/> for a culture, or else for its parent culture
+    /// (<c>en-GB</c> falls back to <c>en</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read a text from it to get that set's wording, whatever the current UI culture. For example:
+    /// <c>LocalizationRegistry.Find&lt;IShopLocalization&gt;(culture)?.Checkout</c>. Unlike a text, this
+    /// doesn't fall back to a default language. A culture without a set gives <see langword="null"/>. Among several
+    /// sets for one language, this returns the last one in <see cref="Sets"/>.
+    /// </para>
+    /// <para>
+    /// The set's wording isn't always what a user sees, because a text can take its wording from another set. For
+    /// example, a rewording registered for <c>en</c> also shows for <c>en-GB</c>, for the texts the <c>en-GB</c> set
+    /// doesn't change. This method still returns the <c>en-GB</c> set. For the wording a user of the culture sees, read
+    /// the text of the generated class inside <see cref="UseCulture"/>.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TContract">The contract the set implements, such as <c>IShopLocalization</c>.</typeparam>
+    /// <param name="culture">The culture to find a set for.</param>
+    /// <returns>
+    /// The set, or <see langword="null"/> when no set of the contract serves the culture.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// When the constructor of a set that registered itself throws, with that exception inside.
+    /// </exception>
+    public static TContract? Find<TContract>(CultureInfo culture)
+        where TContract : class
+    {
+        return Current.FindSet<TContract>(culture);
+    }
+
+    /// <summary>
+    /// The set implementing a contract for a culture, or else for its parent culture (<c>en-GB</c> falls back to
+    /// <c>en</c>). Use it for a contract you have as a <see cref="Type"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This works as <see cref="Find{TContract}(CultureInfo)"/> does. That one is simpler when you know the contract
+    /// at compile time.
+    /// </para>
+    /// </remarks>
+    /// <param name="contract">The contract the set implements, such as <c>typeof(IShopLocalization)</c>.</param>
+    /// <param name="culture">The culture to find a set for.</param>
+    /// <returns>
+    /// The set, or <see langword="null"/> when no set of the contract serves the culture.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="contract"/> or <paramref name="culture"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// When the constructor of a set that registered itself throws, with that exception inside.
+    /// </exception>
+    public static ILocalizationSet? Find(Type contract, CultureInfo culture)
+    {
+        return Current.FindSet(contract, culture);
+    }
+
+    /// <summary>
     /// The culture a provider gives for the code that runs now: that of the <see cref="CultureScope"/> it's in, or
     /// else what the provider answers.
     /// </summary>
@@ -136,18 +226,10 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// The sets of this registry, in the order they apply. For one contract and language, a later set wins for every
-    /// text it changes. In <see cref="Current"/>, the sets declared next to their contract come first. The sets that
-    /// reword another assembly's texts and the sets you registered come after them.
+    /// The sets of this registry, in the order they apply. <see cref="Sets"/> gives those of <see cref="Current"/>.
+    /// Reading this property creates every set that isn't created yet.
     /// </summary>
-    /// <remarks>
-    /// The registry creates a set that registered itself when a text of its contract is first shown. Reading this
-    /// property creates every set it hasn't created yet.
-    /// </remarks>
-    /// <exception cref="InvalidOperationException">
-    /// When the constructor of a set that registered itself throws, with that exception inside.
-    /// </exception>
-    public ImmutableArray<ILocalizationSet> Sets
+    internal ImmutableArray<ILocalizationSet> AllSets
     {
         get
         {
@@ -168,15 +250,10 @@ public sealed partial class LocalizationRegistry
     private ImmutableArray<Registration> SetRegistrations { get; }
 
     /// <summary>
-    /// The languages this registry has at least one set for, such as <c>en</c> and <c>nl</c>, as each set's
-    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/> gives them. In <see cref="Current"/>, that includes the languages of
-    /// the libraries your app uses. So it can list more languages than your app declares.
+    /// The languages this registry has at least one set for, each written as culture names are.
+    /// <see cref="RegisteredLanguages"/> gives those of <see cref="Current"/>.
     /// </summary>
-    /// <remarks>
-    /// Each language is written as culture names are, whatever letter case its sets use. For example, <c>en-GB</c> for
-    /// a set whose code is <c>EN-gb</c>.
-    /// </remarks>
-    public IReadOnlyCollection<string> Languages { get; }
+    internal ImmutableArray<string> SetLanguages { get; }
 
     /// <summary>
     /// The languages a text read from this registry shows, the default language first. In <see cref="Current"/>, these
@@ -192,7 +269,7 @@ public sealed partial class LocalizationRegistry
     internal ImmutableArray<string> AppLanguages { get; }
 
     /// <summary>
-    /// The registered sets of each language in <see cref="Languages"/>, matched in any letter case.
+    /// The registered sets of each language in <see cref="SetLanguages"/>, matched in any letter case.
     /// </summary>
     private FrozenDictionary<string, LanguageSets> SetsByLanguage { get; }
 
@@ -204,7 +281,7 @@ public sealed partial class LocalizationRegistry
         this.SetRegistrations = registrations;
         this.AppLanguages = appLanguages;
         this.SetsByLanguage = setsByLanguage;
-        this.Languages = setsByLanguage.Keys;
+        this.SetLanguages = setsByLanguage.Keys;
     }
 
     /// <summary>
@@ -438,57 +515,27 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// The set implementing <typeparamref name="TContract"/> for a culture, or else for its parent culture
-    /// (<c>en-GB</c> falls back to <c>en</c>).
+    /// The set of this registry implementing <typeparamref name="TContract"/> for a culture, or else for its parent
+    /// culture. <see cref="Find{TContract}(CultureInfo)"/> reads <see cref="Current"/> through it.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Read a text from it to get that set's wording, whatever the current UI culture. For example:
-    /// <c>LocalizationRegistry.Current.Find&lt;IShopLocalization&gt;(culture)?.Checkout</c>. Unlike a text, this
-    /// doesn't fall back to a default language. A culture without a set gives <see langword="null"/>. Among several
-    /// sets for one language, this returns the last one in <see cref="Sets"/>.
-    /// </para>
-    /// <para>
-    /// The set's wording isn't always what a user sees, because a text can take its wording from another set. For
-    /// example, a rewording registered for <c>en</c> also shows for <c>en-GB</c>, for the texts the <c>en-GB</c> set
-    /// doesn't change. This method still returns the <c>en-GB</c> set. For the wording a user of the culture sees, read
-    /// the text of the generated class inside <see cref="UseCulture"/>.
-    /// </para>
-    /// </remarks>
-    /// <typeparam name="TContract">The contract the set implements, such as <c>IShopLocalization</c>.</typeparam>
-    /// <param name="culture">The culture to find a set for.</param>
-    /// <returns>
-    /// The set, or <see langword="null"/> when no set of the contract serves the culture.
-    /// </returns>
     /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    public TContract? Find<TContract>(CultureInfo culture)
+    internal TContract? FindSet<TContract>(CultureInfo culture)
         where TContract : class
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        var contract = (TContract?)this.Find(typeof(TContract), culture);
+        var contract = (TContract?)this.FindSet(typeof(TContract), culture);
         return contract;
     }
 
     /// <summary>
-    /// The set implementing a contract for a culture, or else for its parent culture (<c>en-GB</c> falls back to
-    /// <c>en</c>). Use it for a contract you have as a <see cref="Type"/>.
+    /// The set of this registry implementing a contract for a culture, or else for its parent culture.
+    /// <see cref="Find(Type, CultureInfo)"/> reads <see cref="Current"/> through it.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// This works as <see cref="Find{TContract}(CultureInfo)"/> does. That one is simpler when you know the contract
-    /// at compile time.
-    /// </para>
-    /// </remarks>
-    /// <param name="contract">The contract the set implements, such as <c>typeof(IShopLocalization)</c>.</param>
-    /// <param name="culture">The culture to find a set for.</param>
-    /// <returns>
-    /// The set, or <see langword="null"/> when no set of the contract serves the culture.
-    /// </returns>
     /// <exception cref="ArgumentNullException">
     /// When <paramref name="contract"/> or <paramref name="culture"/> is <see langword="null"/>.
     /// </exception>
-    public ILocalizationSet? Find(Type contract, CultureInfo culture)
+    internal ILocalizationSet? FindSet(Type contract, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(culture);

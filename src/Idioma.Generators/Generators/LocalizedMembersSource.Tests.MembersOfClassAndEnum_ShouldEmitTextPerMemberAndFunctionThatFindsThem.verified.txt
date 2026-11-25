@@ -8,7 +8,7 @@
 namespace CodeChops.Idioma.Generated
 {
     /// <summary>
-    /// Records the texts of this assembly's members marked <c>[Localized]</c>, so that <c>LocalizableText.GetTextByMember</c> finds them.
+    /// Records the texts of this assembly's members marked <c>[Localized]</c>, so that <c>LocalizedText.GetTextByMember</c> finds them.
     /// The assembly's registrar calls it.
     /// </summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]

@@ -118,6 +118,11 @@ internal static class CodeFixSupport
     /// Replaces nodes, each with what <paramref name="replace"/> makes of it, in every document they lie in. A node of
     /// a file that is no document of the solution, such as generated code, is left as it is.
     /// </summary>
+    /// <remarks>
+    /// A node may lie inside another node that is replaced too, as a named argument does inside a method that a
+    /// "Fix all" renames the parameters of. Its replacement is then written into that of the node around it
+    /// (<see cref="Nest"/>).
+    /// </remarks>
     public static async Task<Solution> ReplaceNodesAsync<TNode>(Solution solution, IEnumerable<TNode> nodes, Func<TNode, SyntaxNode> replace, CancellationToken cancellationToken)
         where TNode : SyntaxNode
     {
@@ -127,11 +132,80 @@ internal static class CodeFixSupport
                 continue;
 
             var root = await tree.Key.GetRootAsync(cancellationToken).ConfigureAwait(false);
+            var replacements = Nest(tree.Distinct().ToDictionary(static SyntaxNode (node) => node, node => replace(node)));
 
-            solution = solution.WithDocumentSyntaxRoot(document.Id, root.ReplaceNodes(tree, (original, _) => replace(original)));
+            solution = solution.WithDocumentSyntaxRoot(document.Id, root.ReplaceNodes(replacements.Keys, (original, _) => replacements[original]));
         }
 
         return solution;
+    }
+
+    /// <summary>
+    /// The replacements of the nodes of one file, with each node that lies inside another one written into the
+    /// replacement of that other node, and left out itself.
+    /// </summary>
+    // ReplaceNodes replaces the inner node first and then the outer one with what it was given, which was made from the
+    // outer node as it was. So the change of the inner node would be lost. The inner node is found in the outer node's
+    // replacement by the way down to it, child by child. A replacement that has another node there, or that changed
+    // the node itself, keeps what it has.
+    private static Dictionary<SyntaxNode, SyntaxNode> Nest(Dictionary<SyntaxNode, SyntaxNode> replacements)
+    {
+        // The smallest first, so that a node is written into the one around it after the nodes inside it were written
+        // into it.
+        foreach (var inner in replacements.Keys.OrderBy(static node => node.Span.Length).ToArray())
+        {
+            var outer = inner.Ancestors().FirstOrDefault(replacements.ContainsKey);
+
+            if (outer is null)
+                continue;
+
+            if (FindIn(replacements[outer], outer, inner) is { } found)
+                replacements[outer] = replacements[outer].ReplaceNode(found, replacements[inner]);
+
+            replacements.Remove(inner);
+        }
+
+        return replacements;
+    }
+
+    /// <summary>
+    /// The node of a replacement that stands where <paramref name="inner"/> stands in <paramref name="outer"/>, or
+    /// <see langword="null"/> when the replacement has another node there.
+    /// </summary>
+    private static SyntaxNode? FindIn(SyntaxNode replacement, SyntaxNode outer, SyntaxNode inner)
+    {
+        var way = new Stack<int>();
+
+        for (var current = inner; current != outer; current = current.Parent!)
+        {
+            var index = 0;
+
+            foreach (var child in current.Parent!.ChildNodesAndTokens())
+            {
+                if (child.AsNode() == current)
+                    break;
+
+                index++;
+            }
+
+            way.Push(index);
+        }
+
+        var found = replacement;
+
+        while (way.Count > 0)
+        {
+            var children = found.ChildNodesAndTokens();
+            var index = way.Pop();
+
+            if (index >= children.Count || children[index].AsNode() is not { } child)
+                return null;
+
+            found = child;
+        }
+
+        // Only a node the replacement left as it was: one it changed holds a change that writing over it would lose.
+        return found.IsEquivalentTo(inner) ? found : null;
     }
 
     /// <summary>

@@ -114,7 +114,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
     /// <summary>
     /// The property or method of a set that a diagnostic sits in, or <see langword="null"/> for an inline text, whose
-    /// diagnostic sits on the argument of a language: of <c>LocalizableText.Inline</c>, or of <c>[Localized]</c> on a
+    /// diagnostic sits on the argument of a language: of <c>LocalizedText.Inline</c>, or of <c>[Localized]</c> on a
     /// member, which is no text of a set either.
     /// </summary>
     private static MemberDeclarationSyntax? FindText(SyntaxNode root, Diagnostic diagnostic)

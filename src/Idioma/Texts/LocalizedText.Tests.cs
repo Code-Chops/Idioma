@@ -108,12 +108,12 @@ namespace CodeChops.Idioma.Tests
     using CodeChops.Idioma.Tests.Members;
 
     /// <summary>
-    /// Tests for the texts of members marked <c>[Localized]</c>: <c>LocalizableText.GetTextByMember</c> gives the
+    /// Tests for the texts of members marked <c>[Localized]</c>: <c>LocalizedText.GetTextByMember</c> gives the
     /// wording the source generator wrote for a member, by its type and name or by the member itself, and
     /// <c>GetText()</c> gives a value of an enum the wording of its member. Each is a string: the wording for the
     /// current UI culture at the call. This project's own build generates the texts of the fixture above.
     /// </summary>
-    public sealed class LocalizableTextTests
+    public sealed class LocalizedTextTests
     {
         #region Fixture
         /// <summary>
@@ -138,13 +138,13 @@ namespace CodeChops.Idioma.Tests
             // Arrange & Act & Assert: the user's language, a region of another, and the app's default language for a
             // culture the app lacks.
             using (new CulturesScope("nl-NL"))
-                LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
 
             using (new CulturesScope("en-GB"))
-                LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
 
             using (new CulturesScope("de-DE"))
-                LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
         }
 
         [Test]
@@ -154,13 +154,13 @@ namespace CodeChops.Idioma.Tests
             string? text;
 
             using (new CulturesScope("nl-NL"))
-                text = LocalizableText.GetTextByMember<Address>(nameof(Address.City));
+                text = LocalizedText.GetTextByMember<Address>(nameof(Address.City));
 
             // Act & Assert: the string stays Dutch, and reading the text again gives the English user English.
             using (new CulturesScope("en-US"))
             {
                 text.ShouldBe("Plaats");
-                LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
             }
         }
 
@@ -172,10 +172,10 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: by a type the code only has at run time, and by the property itself, also as a class that
             // derives from its type gives it.
-            LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
-            LocalizableText.GetTextByMember(typeof(Address), "City").ShouldBe("Plaats");
-            LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!).ShouldBe("Plaats");
-            LocalizableText.GetTextByMember(typeof(BusinessAddress).GetProperty(nameof(Address.City))!).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember(typeof(Address), "City").ShouldBe("Plaats");
+            LocalizedText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember(typeof(BusinessAddress).GetProperty(nameof(Address.City))!).ShouldBe("Plaats");
         }
 
         [Test]
@@ -189,10 +189,10 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope(culture);
 
             // Act & Assert: a property, a type, a member of an enum, and a property of a type with type parameters.
-            LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe(property);
-            LocalizableText.GetTextOfType<Address>().ShouldBe(type);
-            LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked)).ShouldBe(enumMember);
-            LocalizableText.GetTextByMember<Page<int>>(nameof(Page<>.Items)).ShouldBe(generic);
+            LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe(property);
+            LocalizedText.GetTextOfType<Address>().ShouldBe(type);
+            LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked)).ShouldBe(enumMember);
+            LocalizedText.GetTextByMember<Page<int>>(nameof(Page<>.Items)).ShouldBe(generic);
         }
 
         [Test]
@@ -204,9 +204,9 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: a name is compared as an object first, and by its characters then.
             ReferenceEquals(built, nameof(Address.City)).ShouldBeFalse();
-            LocalizableText.GetTextByMember<Address>(built).ShouldBe("Plaats");
-            LocalizableText.GetTextByMember(typeof(Address), built).ShouldBe("Plaats");
-            LocalizableText.GetTextByMember<Address>("").ShouldBeNull();
+            LocalizedText.GetTextByMember<Address>(built).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember(typeof(Address), built).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember<Address>("").ShouldBeNull();
         }
 
         [Test]
@@ -222,8 +222,8 @@ namespace CodeChops.Idioma.Tests
                 foreach (var property in typeof(ManyLabels).GetProperties())
                 {
                     // Assert
-                    LocalizableText.GetTextByMember(property).ShouldBe($"{property.Name} (nl)");
-                    LocalizableText.GetTextByMember<ManyLabels>(property.Name).ShouldBe($"{property.Name} (nl)");
+                    LocalizedText.GetTextByMember(property).ShouldBe($"{property.Name} (nl)");
+                    LocalizedText.GetTextByMember<ManyLabels>(property.Name).ShouldBe($"{property.Name} (nl)");
                 }
             }
 
@@ -237,12 +237,12 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope("nl-NL");
 
             for (var i = 0; i < 600; i++)
-                LocalizableText.GetTextByMember<Line>($"Made up {i}").ShouldBeNull();
+                LocalizedText.GetTextByMember<Line>($"Made up {i}").ShouldBeNull();
 
             // Act & Assert: a member's text is found all the same, kept or not.
-            LocalizableText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Aantal");
-            LocalizableText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Aantal");
-            LocalizableText.GetTextByMember<Line>("Made up 599").ShouldBeNull();
+            LocalizedText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Aantal");
+            LocalizedText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Aantal");
+            LocalizedText.GetTextByMember<Line>("Made up 599").ShouldBeNull();
         }
 
         [Test]
@@ -254,11 +254,11 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert: by types the code holds, asked in turn, as a page with two forms asks.
             for (var round = 0; round < 3; round++)
             {
-                LocalizableText.GetTextByMember(typeof(Address), nameof(Address.City)).ShouldBe("City");
-                LocalizableText.GetTextByMember(typeof(Line), nameof(Line.Quantity)).ShouldBe("Quantity");
-                LocalizableText.GetTextByMember(typeof(Line), nameof(Address.City)).ShouldBeNull();
-                LocalizableText.GetTextOfType(typeof(Address)).ShouldBe("Address");
-                LocalizableText.GetTextOfType(typeof(Line)).ShouldBeNull();
+                LocalizedText.GetTextByMember(typeof(Address), nameof(Address.City)).ShouldBe("City");
+                LocalizedText.GetTextByMember(typeof(Line), nameof(Line.Quantity)).ShouldBe("Quantity");
+                LocalizedText.GetTextByMember(typeof(Line), nameof(Address.City)).ShouldBeNull();
+                LocalizedText.GetTextOfType(typeof(Address)).ShouldBe("Address");
+                LocalizedText.GetTextOfType(typeof(Line)).ShouldBeNull();
             }
         }
 
@@ -267,12 +267,12 @@ namespace CodeChops.Idioma.Tests
         {
             // Arrange & Act & Assert: a property that isn't marked, a name no member has, a name in another letter
             // case, and a type no assembly marks.
-            LocalizableText.GetTextByMember<Address>(nameof(Address.Unmarked)).ShouldBeNull();
-            LocalizableText.GetTextByMember<Address>("Street").ShouldBeNull();
-            LocalizableText.GetTextByMember<Address>("city").ShouldBeNull();
-            LocalizableText.GetTextByMember<string>(nameof(String.Length)).ShouldBeNull();
-            LocalizableText.GetTextOfType(typeof(string)).ShouldBeNull();
-            LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.Unmarked))!).ShouldBeNull();
+            LocalizedText.GetTextByMember<Address>(nameof(Address.Unmarked)).ShouldBeNull();
+            LocalizedText.GetTextByMember<Address>("Street").ShouldBeNull();
+            LocalizedText.GetTextByMember<Address>("city").ShouldBeNull();
+            LocalizedText.GetTextByMember<string>(nameof(String.Length)).ShouldBeNull();
+            LocalizedText.GetTextOfType(typeof(string)).ShouldBeNull();
+            LocalizedText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.Unmarked))!).ShouldBeNull();
         }
 
         [Test]
@@ -282,9 +282,9 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope("nl-NL");
 
             // Act & Assert
-            LocalizableText.GetTextByMember<Address>(nameof(Address.Note)).ShouldBe("Notitie");
-            LocalizableText.GetTextByMember(typeof(Address).GetField(nameof(Address.Note))!).ShouldBe("Notitie");
-            LocalizableText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Aantal");
+            LocalizedText.GetTextByMember<Address>(nameof(Address.Note)).ShouldBe("Notitie");
+            LocalizedText.GetTextByMember(typeof(Address).GetField(nameof(Address.Note))!).ShouldBe("Notitie");
+            LocalizedText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Aantal");
         }
 
         [Test]
@@ -295,14 +295,14 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: an override without a text keeps that of the property it overrides. An override with a
             // text of its own shows its own. A class two levels down gets the nearest.
-            LocalizableText.GetTextByMember<Entity>(nameof(Entity.Id)).ShouldBe("Nummer");
-            LocalizableText.GetTextByMember<Address>(nameof(Address.Id)).ShouldBe("Nummer");
-            LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.Id))!).ShouldBe("Nummer");
+            LocalizedText.GetTextByMember<Entity>(nameof(Entity.Id)).ShouldBe("Nummer");
+            LocalizedText.GetTextByMember<Address>(nameof(Address.Id)).ShouldBe("Nummer");
+            LocalizedText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.Id))!).ShouldBe("Nummer");
 
-            LocalizableText.GetTextByMember<Entity>(nameof(Entity.Created)).ShouldBe("Aangemaakt");
-            LocalizableText.GetTextByMember<Address>(nameof(Address.Created)).ShouldBe("Geregistreerd");
-            LocalizableText.GetTextByMember<BusinessAddress>(nameof(Address.Created)).ShouldBe("Geregistreerd");
-            LocalizableText.GetTextByMember<BusinessAddress>(nameof(Address.Id)).ShouldBe("Nummer");
+            LocalizedText.GetTextByMember<Entity>(nameof(Entity.Created)).ShouldBe("Aangemaakt");
+            LocalizedText.GetTextByMember<Address>(nameof(Address.Created)).ShouldBe("Geregistreerd");
+            LocalizedText.GetTextByMember<BusinessAddress>(nameof(Address.Created)).ShouldBe("Geregistreerd");
+            LocalizedText.GetTextByMember<BusinessAddress>(nameof(Address.Id)).ShouldBe("Nummer");
         }
 
         [Test]
@@ -312,10 +312,10 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope("nl-NL");
 
             // Act & Assert
-            LocalizableText.GetTextByMember(typeof(Page<>), "Items").ShouldBe("Regels");
-            LocalizableText.GetTextByMember<Page<int>>("Items").ShouldBe("Regels");
-            LocalizableText.GetTextByMember<Page<string>>("Items").ShouldBe("Regels");
-            LocalizableText.GetTextByMember(typeof(Page<Address>).GetProperty("Items")!).ShouldBe("Regels");
+            LocalizedText.GetTextByMember(typeof(Page<>), "Items").ShouldBe("Regels");
+            LocalizedText.GetTextByMember<Page<int>>("Items").ShouldBe("Regels");
+            LocalizedText.GetTextByMember<Page<string>>("Items").ShouldBe("Regels");
+            LocalizedText.GetTextByMember(typeof(Page<Address>).GetProperty("Items")!).ShouldBe("Regels");
         }
 
         [Test]
@@ -325,11 +325,11 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope("nl-NL");
 
             // Act & Assert: a class and an enum. A class that derives from one with a text has none itself.
-            LocalizableText.GetTextOfType<Address>().ShouldBe("Adres");
-            LocalizableText.GetTextOfType<ParcelStatus>().ShouldBe("Pakketstatus");
-            LocalizableText.GetTextOfType<BusinessAddress>().ShouldBeNull();
-            LocalizableText.GetTextOfType<Entity>().ShouldBeNull();
-            LocalizableText.GetTextOfType<string>().ShouldBeNull();
+            LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
+            LocalizedText.GetTextOfType<ParcelStatus>().ShouldBe("Pakketstatus");
+            LocalizedText.GetTextOfType<BusinessAddress>().ShouldBeNull();
+            LocalizedText.GetTextOfType<Entity>().ShouldBeNull();
+            LocalizedText.GetTextOfType<string>().ShouldBeNull();
         }
 
         [Test]
@@ -339,10 +339,10 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope("nl-NL");
 
             // Act & Assert: by a type the code only has at run time, and by the type as a member, which a Type is.
-            LocalizableText.GetTextOfType<Address>().ShouldBe("Adres");
-            LocalizableText.GetTextOfType(typeof(Address)).ShouldBe("Adres");
-            LocalizableText.GetTextByMember(typeof(Address)).ShouldBe("Adres");
-            LocalizableText.GetTextOfType<Page<int>>().ShouldBeNull();
+            LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
+            LocalizedText.GetTextOfType(typeof(Address)).ShouldBe("Adres");
+            LocalizedText.GetTextByMember(typeof(Address)).ShouldBe("Adres");
+            LocalizedText.GetTextOfType<Page<int>>().ShouldBeNull();
         }
 
         [Test]
@@ -352,10 +352,10 @@ namespace CodeChops.Idioma.Tests
             using var _ = new CulturesScope("nl-NL");
 
             // Act & Assert: also for the member whose value another has, which a name tells apart.
-            LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked)).ShouldBe("Gepickt");
-            LocalizableText.GetTextByMember(typeof(ParcelStatus).GetField(nameof(ParcelStatus.Picked))!).ShouldBe("Gepickt");
-            LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Collected)).ShouldBe("Opgehaald");
-            LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Lost)).ShouldBeNull();
+            LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked)).ShouldBe("Gepickt");
+            LocalizedText.GetTextByMember(typeof(ParcelStatus).GetField(nameof(ParcelStatus.Picked))!).ShouldBe("Gepickt");
+            LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Collected)).ShouldBe("Opgehaald");
+            LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Lost)).ShouldBeNull();
         }
 
         [Test]
@@ -365,7 +365,7 @@ namespace CodeChops.Idioma.Tests
             using (new CulturesScope("nl-NL"))
             {
                 ParcelStatus.Picked.GetText().ShouldBe("Gepickt");
-                ParcelStatus.Picked.GetText().ShouldBe(LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked)));
+                ParcelStatus.Picked.GetText().ShouldBe(LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked)));
                 ParcelStatus.Assigned.GetText().ShouldBe("Toegewezen");
             }
 
@@ -406,13 +406,13 @@ namespace CodeChops.Idioma.Tests
             // count.
             using var _ = new CulturesScope("nl-NL");
             var property = typeof(Address).GetProperty(nameof(Address.City))!;
-            LocalizableText.GetTextByMember(property).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember(property).ShouldBe("Plaats");
 
             // Act: per 10,000 calls.
             var ofValue = GeneratedSetsTests.Allocated(static () => ParcelStatus.Picked.GetText()) / 10_000;
-            var byName = GeneratedSetsTests.Allocated(static () => LocalizableText.GetTextByMember<Address>(nameof(Address.City))) / 10_000;
-            var byMember = GeneratedSetsTests.Allocated(() => LocalizableText.GetTextByMember(property)) / 10_000;
-            var withoutText = GeneratedSetsTests.Allocated(static () => LocalizableText.GetTextByMember<Address>(nameof(Address.Unmarked))) / 10_000;
+            var byName = GeneratedSetsTests.Allocated(static () => LocalizedText.GetTextByMember<Address>(nameof(Address.City))) / 10_000;
+            var byMember = GeneratedSetsTests.Allocated(() => LocalizedText.GetTextByMember(property)) / 10_000;
+            var withoutText = GeneratedSetsTests.Allocated(static () => LocalizedText.GetTextByMember<Address>(nameof(Address.Unmarked))) / 10_000;
 
             // Assert
             ofValue.ShouldBe(0);
@@ -431,25 +431,25 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert
             using (new ProvidedCultureScope("nl-NL"))
             {
-                LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
-                LocalizableText.GetTextOfType<Address>().ShouldBe("Adres");
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
+                LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
                 ParcelStatus.Picked.GetText().ShouldBe("Gepickt");
             }
 
             // A provider that gives no culture leaves the text on the current UI culture.
             using (new ProvidedCultureScope(name: null))
-                LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
         }
 
         [Test]
         public void GetTextByMember_WithNull_ShouldThrowArgumentNullException()
         {
             // Arrange & Act & Assert
-            Should.Throw<ArgumentNullException>(() => LocalizableText.GetTextByMember<Address>(null!)).ParamName.ShouldBe("memberName");
-            Should.Throw<ArgumentNullException>(() => LocalizableText.GetTextByMember(null!, "City")).ParamName.ShouldBe("type");
-            Should.Throw<ArgumentNullException>(() => LocalizableText.GetTextByMember(typeof(Address), null!)).ParamName.ShouldBe("memberName");
-            Should.Throw<ArgumentNullException>(() => LocalizableText.GetTextByMember((MemberInfo)null!)).ParamName.ShouldBe("member");
-            Should.Throw<ArgumentNullException>(() => LocalizableText.GetTextOfType(null!)).ParamName.ShouldBe("type");
+            Should.Throw<ArgumentNullException>(() => LocalizedText.GetTextByMember<Address>(null!)).ParamName.ShouldBe("memberName");
+            Should.Throw<ArgumentNullException>(() => LocalizedText.GetTextByMember(null!, "City")).ParamName.ShouldBe("type");
+            Should.Throw<ArgumentNullException>(() => LocalizedText.GetTextByMember(typeof(Address), null!)).ParamName.ShouldBe("memberName");
+            Should.Throw<ArgumentNullException>(() => LocalizedText.GetTextByMember((MemberInfo)null!)).ParamName.ShouldBe("member");
+            Should.Throw<ArgumentNullException>(() => LocalizedText.GetTextOfType(null!)).ParamName.ShouldBe("type");
         }
 
         [Test]
@@ -457,17 +457,17 @@ namespace CodeChops.Idioma.Tests
         {
             // Arrange: asked for before its assembly registered, as a type of an assembly that loads later is.
             using var _ = new CulturesScope("nl-NL");
-            LocalizableText.GetTextByMember<RecordedLater>("Name").ShouldBeNull();
-            LocalizableText.GetTextOfType<RecordedLater>().ShouldBeNull();
+            LocalizedText.GetTextByMember<RecordedLater>("Name").ShouldBeNull();
+            LocalizedText.GetTextOfType<RecordedLater>().ShouldBeNull();
 
             // Act: as an assembly's generated registrar does.
             Record(typeof(RecordedLater), languages: ["en", "nl"], own: ["Later", "Later (nl)"], name: ["Name", "Naam"]);
 
             // Assert: the member isn't kept as one without a text.
-            LocalizableText.GetTextByMember<RecordedLater>("Name").ShouldBe("Naam");
-            LocalizableText.GetTextOfType<RecordedLater>().ShouldBe("Later (nl)");
-            LocalizableText.GetTextByMember<RecordedLater>("Other").ShouldBeNull();
-            LocalizableText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember<RecordedLater>("Name").ShouldBe("Naam");
+            LocalizedText.GetTextOfType<RecordedLater>().ShouldBe("Later (nl)");
+            LocalizedText.GetTextByMember<RecordedLater>("Other").ShouldBeNull();
+            LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
         }
 
         [Test]
@@ -478,12 +478,12 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: each wording by the place of its language, not by the place of the app's.
             using (new CulturesScope("nl-NL"))
-                LocalizableText.GetTextByMember<RecordedDutchFirst>("Name").ShouldBe("Naam");
+                LocalizedText.GetTextByMember<RecordedDutchFirst>("Name").ShouldBe("Naam");
 
             using (new CulturesScope("en-US"))
             {
-                LocalizableText.GetTextByMember<RecordedDutchFirst>("Name").ShouldBe("Name");
-                LocalizableText.GetTextOfType<RecordedDutchFirst>().ShouldBe("First");
+                LocalizedText.GetTextByMember<RecordedDutchFirst>("Name").ShouldBe("Name");
+                LocalizedText.GetTextOfType<RecordedDutchFirst>().ShouldBe("First");
             }
         }
 
@@ -500,16 +500,16 @@ namespace CodeChops.Idioma.Tests
             // its first wording.
             using (new CulturesScope("de-DE"))
             {
-                LocalizableText.GetTextByMember<RecordedDutchGermanEnglish>("Name").ShouldBe("Name");
-                LocalizableText.GetTextOfType<RecordedDutchGermanEnglish>().ShouldBe("First");
-                LocalizableText.GetTextByMember<RecordedFrenchGerman>("Name").ShouldBe("Nom");
+                LocalizedText.GetTextByMember<RecordedDutchGermanEnglish>("Name").ShouldBe("Name");
+                LocalizedText.GetTextOfType<RecordedDutchGermanEnglish>().ShouldBe("First");
+                LocalizedText.GetTextByMember<RecordedFrenchGerman>("Name").ShouldBe("Nom");
             }
 
             // A Dutch user, whose culture the app shows, falls back the same way where the assembly lacks Dutch.
             using (new CulturesScope("nl-NL"))
             {
-                LocalizableText.GetTextByMember<RecordedDutchGermanEnglish>("Name").ShouldBe("Naam");
-                LocalizableText.GetTextByMember<RecordedFrenchGerman>("Name").ShouldBe("Nom");
+                LocalizedText.GetTextByMember<RecordedDutchGermanEnglish>("Name").ShouldBe("Naam");
+                LocalizedText.GetTextByMember<RecordedFrenchGerman>("Name").ShouldBe("Nom");
             }
         }
 
@@ -521,13 +521,13 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert
             using (new CulturesScope("en-GB"))
-                LocalizableText.GetTextOfType<RecordedWithRegion>().ShouldBe("Colour");
+                LocalizedText.GetTextOfType<RecordedWithRegion>().ShouldBe("Colour");
 
             using (new CulturesScope("en-US"))
-                LocalizableText.GetTextOfType<RecordedWithRegion>().ShouldBe("Color");
+                LocalizedText.GetTextOfType<RecordedWithRegion>().ShouldBe("Color");
 
             using (new CulturesScope("nl-BE"))
-                LocalizableText.GetTextOfType<RecordedWithRegion>().ShouldBe("Kleur");
+                LocalizedText.GetTextOfType<RecordedWithRegion>().ShouldBe("Kleur");
         }
 
         [Test]
@@ -538,8 +538,8 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: no wording at the place of Dutch, so the first one.
             using var _ = new CulturesScope("nl-NL");
-            LocalizableText.GetTextByMember<RecordedShort>("Name").ShouldBe("Name");
-            LocalizableText.GetTextOfType<RecordedShort>().ShouldBe("Short");
+            LocalizedText.GetTextByMember<RecordedShort>("Name").ShouldBe("Name");
+            LocalizedText.GetTextOfType<RecordedShort>().ShouldBe("Short");
         }
 
         [Test]
@@ -551,22 +551,22 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        public void LocalizableText_ShouldBeATypeNoCodeCanCreate()
+        public void LocalizedText_ShouldBeATypeNoCodeCanCreate()
         {
             // Arrange & Act
-            var constructors = typeof(LocalizableText).GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var constructors = typeof(LocalizedText).GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 
             // Assert: it only hosts the texts that carry their own wording. A text itself is a string.
-            typeof(LocalizableText).IsSealed.ShouldBeTrue();
+            typeof(LocalizedText).IsSealed.ShouldBeTrue();
             constructors.ShouldHaveSingleItem().IsPrivate.ShouldBeTrue();
         }
 
         [Test]
         public void MetadataName_ShouldMatchSourceGeneratorReferences()
         {
-            // Assert: the source generator writes LocalizableText.Inline as an extension on this type by name, so a
+            // Assert: the source generator writes LocalizedText.Inline as an extension on this type by name, so a
             // rename or namespace change must update the generator's emission in the same commit.
-            typeof(LocalizableText).FullName.ShouldBe("CodeChops.Idioma.LocalizableText");
+            typeof(LocalizedText).FullName.ShouldBe("CodeChops.Idioma.LocalizedText");
         }
     }
 }

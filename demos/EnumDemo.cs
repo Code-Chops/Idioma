@@ -10,7 +10,7 @@ foreach (var culture in LocalizationRegistry.SupportedLanguages)
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
     // The text of ParcelStatus itself, from the attribute on the enum. It's read where it's shown.
-    var parcelStatus = LocalizableText.GetTextOfType<ParcelStatus>();
+    var parcelStatus = LocalizedText.GetTextOfType<ParcelStatus>();
 
     // Either way, a value of the enum gives its text with GetText().
     Console.WriteLine($"{culture}: {OrderStatus.Shipped.GetText()}, {parcelStatus}: {ParcelStatus.Delivered.GetText()}");

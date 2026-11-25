@@ -42,7 +42,7 @@ public sealed class InlineTextValuesAnalyzerTests
             public string Text(string name, int count, User user, string[] items)
             {
                 {{statements}}
-                return LocalizableText.Inline({{arguments}});
+                return LocalizedText.Inline({{arguments}});
             }
 
             private string DescribeShop() => shop;
@@ -178,7 +178,7 @@ public sealed class InlineTextValuesAnalyzerTests
 
             public static class Hints
             {
-                public static string Pay => LocalizableText.Inline(en: $"Press {ShopLocalization.Checkout}", nl: "Klik op afrekenen", enGb: $"Press {ShopLocalization.Checkout}");
+                public static string Pay => LocalizedText.Inline(en: $"Press {ShopLocalization.Checkout}", nl: "Klik op afrekenen", enGb: $"Press {ShopLocalization.Checkout}");
             }
             """);
 
@@ -230,7 +230,7 @@ public sealed class InlineTextValuesAnalyzerTests
 
             public sealed class Greeter(string name)
             {
-                public string Text => LocalizableText.Inline(en: $"Hello, {name}!", {{dutch}}, enGb: $"Hello, {name}!");
+                public string Text => LocalizedText.Inline(en: $"Hello, {name}!", {{dutch}}, enGb: $"Hello, {name}!");
 
                 private string Who() => name;
                 private string WhoInCapitals => name.ToUpperInvariant();
@@ -306,15 +306,15 @@ public sealed class InlineTextValuesAnalyzerTests
         {
             0 => $$"""
                 string copy{{index}}, held{{index}}; copy{{index}} = name.Trim(); held{{index}} = copy{{index}};
-                Show(LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {held{{index}}}!", enGb: $"Hello, {name}!"));
+                Show(LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {held{{index}}}!", enGb: $"Hello, {name}!"));
                 """,
             1 => $$"""
                 var other{{index}} = "gast"; other{{index}} = count.ToString();
-                Show(LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {other{{index}}}!", enGb: $"Hello, {name}!"));
+                Show(LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {other{{index}}}!", enGb: $"Hello, {name}!"));
                 """,
             _ => $$"""
                 var parsed{{index}} = 0; int.TryParse(name, out parsed{{index}});
-                Show(LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {parsed{{index}}}!", enGb: $"Hello, {name}!"));
+                Show(LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {parsed{{index}}}!", enGb: $"Hello, {name}!"));
                 """,
         };
 
@@ -357,7 +357,7 @@ public sealed class InlineTextValuesAnalyzerTests
 
             public static class Texts
             {
-                public static string Greeting(string name) => LocalizableText.Inline(en: $"Hello, {name}!");
+                public static string Greeting(string name) => LocalizedText.Inline(en: $"Hello, {name}!");
             }
             """);
 
@@ -377,10 +377,10 @@ public sealed class InlineTextValuesAnalyzerTests
             [assembly: SupportedLanguages("en", "nl")]
 
             var name = Console.ReadLine();
-            var greeting = LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!");
+            var greeting = LocalizedText.Inline(en: $"Hello, {name}!", nl: "Hallo!");
 
-            Func<int, string> items = count => LocalizableText.Inline(en: $"{count} items", nl: "Artikelen");
-            Func<int, string> stock = count => LocalizableText.Inline(en: $"{count} in stock", nl: $"{count} op voorraad");
+            Func<int, string> items = count => LocalizedText.Inline(en: $"{count} items", nl: "Artikelen");
+            Func<int, string> stock = count => LocalizedText.Inline(en: $"{count} in stock", nl: $"{count} op voorraad");
             """);
 
         // Assert
@@ -405,7 +405,7 @@ public sealed class InlineTextValuesAnalyzerTests
 
             internal static class PageRender
             {
-                public static string Render(string name) => CodeChops.Idioma.LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!", enGb: $"Hello, {name}!");
+                public static string Render(string name) => CodeChops.Idioma.LocalizedText.Inline(en: $"Hello, {name}!", nl: "Hallo!", enGb: $"Hello, {name}!");
             }
             """;
 

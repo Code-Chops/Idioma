@@ -49,7 +49,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert: the contract is still written, from the set that starts it, and LOC101 stays the only error.
         DiagnosticIds(result).ShouldBeEmpty();
         ContractText(result).ShouldContain("interface IShopLocalization");
-        errors.ShouldHaveSingleItem().Id.ShouldBe(LocalizableTextFactoryGenerator.InvalidLanguagesDiagnosticId);
+        errors.ShouldHaveSingleItem().Id.ShouldBe(LocalizedTextFactoryGenerator.InvalidLanguagesDiagnosticId);
     }
 
     [Test]

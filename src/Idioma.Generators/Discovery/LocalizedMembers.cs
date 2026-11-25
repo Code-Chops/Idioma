@@ -9,7 +9,7 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The attribute is generated per assembly, from its languages (<see cref="LocalizableTextFactoryGenerator"/>), so it
+/// The attribute is generated per assembly, from its languages (<see cref="LocalizedTextFactoryGenerator"/>), so it
 /// doesn't exist in the compilation a generator sees. An attribute named <c>Localized</c> is taken for it when the
 /// build will bind it to the generated one (<see cref="WillBindToGenerated"/>): it binds to nothing here, or to an
 /// attribute of that name that only a <see langword="using"/> of the file brings in reach, which the generated one

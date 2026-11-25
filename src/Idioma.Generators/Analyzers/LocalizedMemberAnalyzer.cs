@@ -45,7 +45,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizableText.GetTextByMember would silently give nothing for the member.",
+        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmarkedEnumMemberRule = new(
@@ -65,7 +65,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "LocalizableText.GetTextByMember and GetTextOfType give the text that [Localized] writes on a member or a type, or null where there's none. A call that names its type and its member in the code asks for a text the build can look for, so a member or a type without [Localized] is a mistake it can see. A type of another assembly is checked only when that assembly doesn't use Idioma, because the attribute isn't kept in a compiled assembly.",
+        description: "LocalizedText.GetTextByMember and GetTextOfType give the text that [Localized] writes on a member or a type, or null where there's none. A call that names its type and its member in the code asks for a text the build can look for, so a member or a type without [Localized] is a mistake it can see. A type of another assembly is checked only when that assembly doesn't use Idioma, because the attribute isn't kept in a compiled assembly.",
         helpLinkUri: PackageNames.HelpLink(NoTextToFindDiagnosticId));
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [CannotRegisterRule, UnmarkedEnumMemberRule, NoTextToFindRule];
@@ -93,7 +93,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, codes), SyntaxKind.Attribute);
         context.RegisterSyntaxNodeAction(c => AnalyzeEnum(c, sample), SyntaxKind.EnumDeclaration);
 
-        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText) is not { } text)
+        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText) is not { } text)
             return;
 
         // Per assembly the calls name a type of, whether it uses Idioma.
@@ -158,7 +158,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     /// type's own text when <paramref name="member"/> is <see langword="null"/>: the member as a message names it, and
     /// what to do. It's <see langword="null"/> where there's a text, or may be one the build can't see.
     /// </summary>
-    // As LocalizableText finds one: a member's text also on a base class, and a type's own text on the type alone.
+    // As LocalizedText finds one: a member's text also on a base class, and a type's own text on the type alone.
     private static (string Subject, string Advice)? FindMissingText(
         INamedTypeSymbol type,
         string? member,

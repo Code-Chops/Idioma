@@ -28,11 +28,23 @@ internal sealed partial record LocalizationSetsAnalysis(
     public const string GetName = "GetTextByKey";
 
     /// <summary>
+    /// The name of the method every generated class gets, which gives a text by its key when a text has that key:
+    /// <c>ShopLocalization.TryGetTextByKey(key, out var text)</c>.
+    /// </summary>
+    public const string TryGetName = "TryGetTextByKey";
+
+    /// <summary>
+    /// The name of the property every generated class gets, which lists the key of every text:
+    /// <c>ShopLocalization.TextKeys</c>.
+    /// </summary>
+    public const string KeysName = "TextKeys";
+
+    /// <summary>
     /// Whether a text can't become a member of the generated texts class (<c>LOC300</c>). It carries the class's own
-    /// name, which C# allows no member, the name of the method that gives a text by its key
-    /// (<see cref="GetName"/>), or the name of a method that gives the text of an enum value
-    /// (<see cref="LookupName"/>, and <see cref="ExtensionName"/> on the value itself). The class declares no other
-    /// member of its own, so that no other name is taken.
+    /// name, which C# allows no member, the name of a member that gives a text by its key or lists the keys
+    /// (<see cref="GetName"/>, <see cref="TryGetName"/>, <see cref="KeysName"/>), or the name of a method that gives
+    /// the text of an enum value (<see cref="LookupName"/>, and <see cref="ExtensionName"/> on the value itself). The
+    /// class declares no other member of its own, so that no other name is taken.
     /// </summary>
     /// <param name="name">The name of the text.</param>
     /// <param name="textsName">The name of the generated class.</param>
@@ -41,6 +53,8 @@ internal sealed partial record LocalizationSetsAnalysis(
     {
         var isReserved = String.Equals(name, textsName, StringComparison.Ordinal)
                          || String.Equals(name, GetName, StringComparison.Ordinal)
+                         || String.Equals(name, TryGetName, StringComparison.Ordinal)
+                         || String.Equals(name, KeysName, StringComparison.Ordinal)
                          || (hasLookup && String.Equals(name, LookupName, StringComparison.Ordinal))
                          || (hasLookup && String.Equals(name, ExtensionName, StringComparison.Ordinal));
 

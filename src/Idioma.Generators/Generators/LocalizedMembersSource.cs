@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 /// wording of each member per language, as its attribute gives it, and one function that finds
 /// a member's wording by its type and name. The assembly's registrar records that function
 /// (<see cref="LocalizationRegistrationPart"/>, which also writes this file), so
-/// <c>LocalizableText.GetTextByMember</c> finds the text without reading an attribute at run time. For an enum with a
+/// <c>LocalizedText.GetTextByMember</c> finds the text without reading an attribute at run time. For an enum with a
 /// marked member it also writes the extension method that gives a value its text: <c>status.GetText()</c>.
 /// </summary>
 /// <remarks>
@@ -56,7 +56,7 @@ internal static class LocalizedMembersSource
             namespace {{LocalizedMembers.RecorderNamespace}}
             {
                 /// <summary>
-                /// Records the texts of this assembly's members marked <c>[Localized]</c>, so that <c>LocalizableText.GetTextByMember</c> finds them.
+                /// Records the texts of this assembly's members marked <c>[Localized]</c>, so that <c>LocalizedText.GetTextByMember</c> finds them.
                 /// The assembly's registrar calls it.
                 /// </summary>
                 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]

@@ -98,6 +98,6 @@ A library allows this by leaving its sets unsealed and its texts `virtual`, as i
 
 ## An assembly without languages
 
-A library without `[assembly: SupportedLanguages]` has no texts of its own to translate. It has no `LocalizableText.Inline`, no `[Localized]` and no contract of its own. It can still reword a library's set, or give a library's contract another language.
+A library without `[assembly: SupportedLanguages]` has no texts of its own to translate. It has no `LocalizedText.Inline`, no `[Localized]` and no contract of its own. It can still reword a library's set, or give a library's contract another language.
 
 An app always declares its languages ([The app's languages](#the-apps-languages)).

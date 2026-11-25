@@ -316,4 +316,29 @@ public sealed class ParameterNamesCodeFixProviderTests
         fixedSource.ShouldBe(expected);
         await ShouldReportNothingAsync(expected);
     }
+
+    [Test]
+    public async Task FixAll_ShouldRenameANamedArgumentInsideAMethodItRenamesToo()
+    {
+        // Arrange: a text that calls another text by the Dutch name of its parameter, while its own parameters get new
+        // names as well. The named argument lies inside a method that is replaced as a whole.
+        var source = Sets(
+            """
+            public string Invited(string gastheer, string gast) => $"{gastheer} heeft {gast} uitgenodigd: {ItemsInCart(aantal: 2, shop: gast)}";
+            public string ItemsInCart(int aantal, string shop) => $"{aantal} artikelen in je winkelwagen bij {shop}";
+            """);
+
+        // Act
+        var fixedSource = (await CodeFixTestHelper.FixAllAfterGeneratorsAsync(Provider, Analyzer, source)).ShouldHaveSingleItem();
+
+        // Assert
+        var expected = Sets(
+            $$"""
+            public string Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd: {ItemsInCart(count: 2, shop: guest)}";
+            {{DutchItemsInCart}}
+            """);
+
+        fixedSource.ShouldBe(expected);
+        await ShouldReportNothingAsync(expected);
+    }
 }

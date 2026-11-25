@@ -5,13 +5,13 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Holds every language of <c>LocalizableText.Inline</c> to the values its default wording shows (<c>LOC402</c>), as
+/// Holds every language of <c>LocalizedText.Inline</c> to the values its default wording shows (<c>LOC402</c>), as
 /// <see cref="TextParametersAnalyzer"/> holds a text of a set.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Every parameter of <c>Inline</c> is a string, so the compiler doesn't mind a wording that leaves a value out:
-/// <c>LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!")</c> compiles, and Dutch users don't see the name.
+/// <c>LocalizedText.Inline(en: $"Hello, {name}!", nl: "Hallo!")</c> compiles, and Dutch users don't see the name.
 /// </para>
 /// <para>
 /// The default wording is the argument of the first language. It shows a value where an interpolated string it writes
@@ -50,7 +50,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Every parameter of LocalizableText.Inline is a string, so wording that leaves a value out compiles. Every language must use a value that the wording of the default language shows in an interpolated string. A value the default wording only uses to choose between wordings may go unused.",
+        description: "Every parameter of LocalizedText.Inline is a string, so wording that leaves a value out compiles. Every language must use a value that the wording of the default language shows in an interpolated string. A value the default wording only uses to choose between wordings may go unused.",
         helpLinkUri: PackageNames.HelpLink(ValueLeftOutDiagnosticId));
 #pragma warning restore RS1019
 
@@ -83,7 +83,7 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Holds each language of a call of <c>LocalizableText.Inline</c> to the values the first language shows.
+    /// Holds each language of a call of <c>LocalizedText.Inline</c> to the values the first language shows.
     /// </summary>
     /// <param name="context">The invocation.</param>
     /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>

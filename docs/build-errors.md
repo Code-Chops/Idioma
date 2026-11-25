@@ -67,9 +67,9 @@ First, wording written as a plain string compiles, and every user sees it in tha
 Title = "Orders"; // English, for every user
 ```
 
-Write it as `LocalizableText.Inline(en: "Orders", nl: "Bestellingen")`, or in a set.
+Write it as `LocalizedText.Inline(en: "Orders", nl: "Bestellingen")`, or in a set.
 
-Second, plain text in Razor markup, such as `<h1>Orders</h1>`, isn't a text either. Write `<h1>@LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
+Second, plain text in Razor markup, such as `<h1>Orders</h1>`, isn't a text either. Write `<h1>@LocalizedText.Inline(en: "Orders", nl: "Bestellingen")</h1>`.
 
 Third, a text that's kept outside a static initializer holds the wording of the moment it was read. The build reports a static field or property ([LOC602](build-errors/LOC6XX-reading-a-text.md#loc602)), and nothing else:
 

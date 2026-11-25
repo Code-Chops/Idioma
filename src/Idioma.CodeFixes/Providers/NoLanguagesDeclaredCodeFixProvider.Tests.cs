@@ -6,7 +6,7 @@ using CodeChops.Idioma.Tests.TestHelpers;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="NoLanguagesDeclaredCodeFixProvider"/>: a call of <c>LocalizableText.Inline</c> or a
+/// Tests for <see cref="NoLanguagesDeclaredCodeFixProvider"/>: a call of <c>LocalizedText.Inline</c> or a
 /// <c>[Localized]</c> in an assembly without languages (<c>LOC100</c>) declares the languages its arguments name, the
 /// first as the default.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
         /// </summary>
         public static class Texts
         {
-            public static string Orders => CodeChops.Idioma.LocalizableText.Inline({{arguments}});
+            public static string Orders => CodeChops.Idioma.LocalizedText.Inline({{arguments}});
         }
         """;
 
@@ -140,7 +140,7 @@ public sealed class NoLanguagesDeclaredCodeFixProviderTests
     {
         // Arrange & Act: the generator reports the attribute, which binds to nothing.
         const string arguments = "en: \"City\", nl: \"Plaats\"";
-        var fixes = await CodeFixTestHelper.FixAsync(new NoLanguagesDeclaredCodeFixProvider(), new LocalizableTextFactoryGenerator(), Localized(arguments));
+        var fixes = await CodeFixTestHelper.FixAsync(new NoLanguagesDeclaredCodeFixProvider(), new LocalizedTextFactoryGenerator(), Localized(arguments));
 
         // Assert
         var fix = fixes.ShouldHaveSingleItem();

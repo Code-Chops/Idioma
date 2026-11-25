@@ -5,7 +5,7 @@ namespace CodeChops.Idioma;
 /// <summary>
 /// Finds the texts of members marked <c>[Localized]</c>: a property, a field, an enum member, or a type. Each assembly
 /// records one function that gives a member's wording per language, and this class keeps what those functions find.
-/// <see cref="LocalizableText.GetTextByMember{T}(string)"/> and <see cref="LocalizableText.GetTextOfType{T}()"/> read
+/// <see cref="LocalizedText.GetTextByMember{T}(string)"/> and <see cref="LocalizedText.GetTextOfType{T}()"/> read
 /// from it.
 /// </summary>
 internal static class MemberTexts

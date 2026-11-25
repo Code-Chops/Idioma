@@ -5,10 +5,10 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Closes what the generated factory can't in an assembly that declares <c>[assembly: SupportedLanguages(...)]</c>:
-/// <c>LOC500</c> for a language argument without its name, of <c>LocalizableText.Inline</c> or of <c>[Localized]</c>.
-/// In an assembly without the attribute, it reports a call of <c>LocalizableText.Inline</c> (<c>LOC100</c>), which the
+/// <c>LOC500</c> for a language argument without its name, of <c>LocalizedText.Inline</c> or of <c>[Localized]</c>.
+/// In an assembly without the attribute, it reports a call of <c>LocalizedText.Inline</c> (<c>LOC100</c>), which the
 /// compiler alone reports as a method that doesn't exist. The generator reports a member marked <c>[Localized]</c>
-/// there (<see cref="LocalizableTextFactoryGenerator"/>), because the compiler stops at an attribute that doesn't exist
+/// there (<see cref="LocalizedTextFactoryGenerator"/>), because the compiler stops at an attribute that doesn't exist
 /// before any analyzer runs.
 /// </summary>
 /// <remarks>
@@ -30,7 +30,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// The property of <c>LOC500</c> that holds the language of each argument of the call or the attribute, in the
     /// order they're written, separated by commas: <c>en,nl</c>. Its code fix names the arguments from it, also in a
-    /// workspace that hasn't run the generator that writes <c>LocalizableText.Inline</c> and <c>[Localized]</c>.
+    /// workspace that hasn't run the generator that writes <c>LocalizedText.Inline</c> and <c>[Localized]</c>.
     /// </summary>
     public const string ParameterNamesProperty = "ParameterNames";
 
@@ -41,7 +41,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Every parameter of LocalizableText.Inline and of [Localized] is a string, so wording in the wrong position compiles and shows in the wrong language.",
+        description: "Every parameter of LocalizedText.Inline and of [Localized] is a string, so wording in the wrong position compiles and shows in the wrong language.",
         helpLinkUri: PackageNames.HelpLink(UnnamedLanguageDiagnosticId));
 
     // The code of a set in an assembly without languages, which the generator reports: both say that the attribute is
@@ -54,7 +54,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The source generator writes LocalizableText.Inline with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such method (CS0117).",
+        description: "The source generator writes LocalizedText.Inline with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such method (CS0117).",
         helpLinkUri: PackageNames.HelpLink(NoLanguagesDeclaredDiagnosticId));
 #pragma warning restore RS1019
 
@@ -73,14 +73,14 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     private static void Start(CompilationStartAnalysisContext context)
     {
         var codes = SupportedLanguages.ReadCodes(context.Compilation.Assembly);
-        var text = context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText);
+        var text = context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText);
 
         if (text is null)
             return;
 
         if (codes.Length is 0)
         {
-            // Without languages there is no factory, and the compiler only says that LocalizableText has no Inline.
+            // Without languages there is no factory, and the compiler only says that LocalizedText has no Inline.
             context.RegisterSyntaxNodeAction(c => AnalyzeInlineWithoutLanguages(c, text), SyntaxKind.InvocationExpression);
             return;
         }
@@ -92,13 +92,13 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports a call of <c>LocalizableText.Inline</c> that binds to nothing, in an assembly that declares no languages.
+    /// Reports a call of <c>LocalizedText.Inline</c> that binds to nothing, in an assembly that declares no languages.
     /// </summary>
     private static void AnalyzeInlineWithoutLanguages(SyntaxNodeAnalysisContext context, INamedTypeSymbol text)
     {
         // By its shape first, which binds nothing: nearly every call is another one.
         if (context.Node is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } invocation
-            || !String.Equals(access.Name.Identifier.ValueText, LocalizableTextFactoryGenerator.FactoryName, StringComparison.Ordinal)
+            || !String.Equals(access.Name.Identifier.ValueText, LocalizedTextFactoryGenerator.FactoryName, StringComparison.Ordinal)
             || !IsHandWritten(context.IsGeneratedCode, invocation.SyntaxTree))
         {
             return;
@@ -109,7 +109,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
             && SymbolEqualityComparer.Default.Equals(receiver, text)
             && context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken) is { Symbol: null, CandidateSymbols.IsEmpty: true })
         {
-            context.ReportDiagnostic(Diagnostic.Create(InlineWithoutLanguagesRule, access.Name.GetLocation(), $"{PackageNames.LocalizableTextName}.{LocalizableTextFactoryGenerator.FactoryName}"));
+            context.ReportDiagnostic(Diagnostic.Create(InlineWithoutLanguagesRule, access.Name.GetLocation(), $"{PackageNames.LocalizedTextName}.{LocalizedTextFactoryGenerator.FactoryName}"));
         }
     }
 
@@ -186,7 +186,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
                     : null;
 
                 context.ReportDiagnostic(Diagnostic.Create(UnnamedLanguageRule, argument.Syntax.GetLocation(), properties,
-                    $"{PackageNames.LocalizableTextName}.{LocalizableTextFactoryGenerator.FactoryName}({sample})"));
+                    $"{PackageNames.LocalizedTextName}.{LocalizedTextFactoryGenerator.FactoryName}({sample})"));
 
                 return;
             }
@@ -223,11 +223,11 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     /// </summary>
     internal static bool IsFactory(IMethodSymbol method)
     {
-        if (!String.Equals(method.Name, LocalizableTextFactoryGenerator.FactoryName, StringComparison.Ordinal))
+        if (!String.Equals(method.Name, LocalizedTextFactoryGenerator.FactoryName, StringComparison.Ordinal))
             return false;
 
         for (var type = method.ContainingType; type is not null; type = type.ContainingType)
-            if (String.Equals(type.Name, LocalizableTextFactoryGenerator.ClassName, StringComparison.Ordinal))
+            if (String.Equals(type.Name, LocalizedTextFactoryGenerator.ClassName, StringComparison.Ordinal))
                 return true;
 
         return false;

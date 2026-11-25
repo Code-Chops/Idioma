@@ -14,7 +14,7 @@ public sealed class InlineTextsAttributeTests
         // Arrange & Act
         var usage = typeof(InlineTextsAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
 
-        // Assert: two generated files apply it, one for LocalizableText.Inline and one for [Localized].
+        // Assert: two generated files apply it, one for LocalizedText.Inline and one for [Localized].
         usage.ValidOn.ShouldBe(AttributeTargets.Assembly);
         usage.AllowMultiple.ShouldBeTrue();
     }

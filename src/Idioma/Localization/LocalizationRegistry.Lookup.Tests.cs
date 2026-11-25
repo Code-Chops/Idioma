@@ -25,6 +25,27 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
+    public void Resolve_AfterMoreNamesThanAreKept_ShouldKeepTheLookupOfACultureThatComesNext()
+    {
+        // Arrange: names that no user has, as a request header may bring them, more of them than a registry keeps.
+        var registry = LocalizationRegistry.Create([new RegistryLocalizationEn(), new RegistryLocalizationNl()], "en", "nl");
+
+        for (var i = 0; i < 600; i++)
+            registry.Resolve(new CultureInfo($"q{(char)('a' + (i / 26))}{(char)('a' + (i % 26))}-ZZ"));
+
+        // Act: a Dutch user comes after them, and another thread reads a text for one, which holds no lookup of its own.
+        var lookup = registry.Resolve(new CultureInfo("nl-NL"));
+        LocalizationRegistry.CultureLookup? other = null;
+        var thread = new Thread(() => other = registry.Resolve(new CultureInfo("nl-NL")));
+        thread.Start();
+        thread.Join();
+
+        // Assert: the lookup is kept, where a registry that stays full would work it out again for every reader.
+        other.ShouldBeSameAs(lookup);
+        lookup.Names.ShouldBe(["nl-NL", "nl"]);
+    }
+
+    [Test]
     public void Resolve_ForTwoCulturesOfSameNameInTurn_ShouldLookUpEachByNameOnce()
     {
         // Arrange: the lookup holds the culture object that asked first. A second object of the same name asks next, as

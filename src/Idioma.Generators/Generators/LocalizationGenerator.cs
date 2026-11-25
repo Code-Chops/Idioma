@@ -10,8 +10,8 @@ namespace CodeChops.Idioma.Generators;
 /// <remarks>
 /// <para>
 /// Each part reads only what it uses of a set (<see cref="DiscoveredTexts"/>), so an edit that changes only what one
-/// part uses leaves the other's pipeline as it was. <c>LocalizableText.Inline</c> and <c>[Localized]</c> come from a
-/// generator of their own (<see cref="LocalizableTextFactoryGenerator"/>).
+/// part uses leaves the other's pipeline as it was. <c>LocalizedText.Inline</c> and <c>[Localized]</c> come from a
+/// generator of their own (<see cref="LocalizedTextFactoryGenerator"/>).
 /// </para>
 /// <para>
 /// An edit of a wording changes the share the contracts are written from, which holds the wordings and every source

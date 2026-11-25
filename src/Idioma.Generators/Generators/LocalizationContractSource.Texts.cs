@@ -168,14 +168,19 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// Writes the method that gives a text by its key, which is its name:
+    /// Writes the members that give a text by its key, which is its name:
     /// <c>ShopLocalization.GetTextByKey("Checkout")</c>, or
     /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c> for a text that takes values. A key no text has
-    /// throws, and so do values that aren't those the text takes.
+    /// throws there, and gives <see langword="false"/> from <c>TryGetTextByKey</c>. Values that aren't those the text
+    /// takes throw from both. <c>TextKeys</c> lists every key.
     /// </summary>
     // Each text by the name of its class in front, because the parameters of the method stand before a text named
-    // key or values. What checks the values is called with a type argument, which no text has. The framework's types
-    // stand by their name alone, as the file imports their namespaces.
+    // key, text or values. What checks the values is called with a type argument, which no text has. The framework's
+    // types stand by their name alone, as the file imports their namespaces.
+    //
+    // One switch, in TryGetTextByKey, which GetTextByKey calls: two would double what a contract of many texts adds to
+    // its assembly. The keys stand in a class outside the generated one (TextKeysOf). A static field of the generated
+    // class itself would give that class an initializer, which every read of a text would have to check for.
     private static void AppendGet(StringBuilder sb, ContractFile file)
     {
         var contract = file.Contract;
@@ -184,19 +189,36 @@ internal static partial class LocalizationContractSource
         var texts = file.Texts;
 
         var example = texts.Length > 0 ? $", such as <c>{CodeEscaping.EscapeXml(SymbolDisplay.FormatLiteral(texts[0].Name, quote: true))}</c>" : "";
+        var unknownKey = $"CreateUnknownKeyException<{name}>(key, {SymbolDisplay.FormatLiteral(contract.TextsName, quote: true)})";
 
         sb.AppendLine();
         sb.AppendLine($$"""
                 /// <summary>
                 /// The text with a key. The key is the name of the text{{example}}.
                 /// </summary>
+                /// <remarks>
+                /// For a key that may be unknown, such as one from a database, use <see cref="{{LocalizationSetsAnalysis.TryGetName}}"/>.
+                /// </remarks>
                 /// <param name="key">The key of the text: its name, in the same letter case.</param>
                 /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
                 /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
                 /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
                 /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-                public static string {{LocalizationSetsAnalysis.GetName}}(string key, params ReadOnlySpan<object?> values) => key switch
+                public static string {{LocalizationSetsAnalysis.GetName}}(string key, params ReadOnlySpan<object?> values) => {{LocalizationSetsAnalysis.TryGetName}}(key, out var text, values) ? text : throw {{unknownKey}};
+
+                /// <summary>
+                /// Gives the text with a key, when a text has that key. The key is the name of the text{{example}}.
+                /// </summary>
+                /// <param name="key">The key of the text: its name, in the same letter case.</param>
+                /// <param name="text">The text, or <see langword="null"/> when no text has the key.</param>
+                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
+                /// <returns><see langword="true"/> when a text has the key.</returns>
+                /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
+                /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
+                public static bool {{LocalizationSetsAnalysis.TryGetName}}(string key, [NotNullWhen(true)] out string? text, params ReadOnlySpan<object?> values)
                 {
+                    text = key switch
+                    {
             """);
 
         foreach (var member in texts)
@@ -206,7 +228,7 @@ internal static partial class LocalizationContractSource
 
             if (!member.IsMethod)
             {
-                sb.AppendLine($"        {keyLiteral} => ResolveKeyedWording<{name}>({text}, key, values),");
+                sb.AppendLine($"            {keyLiteral} => ResolveKeyedWording<{name}>({text}, key, values),");
                 continue;
             }
 
@@ -214,12 +236,45 @@ internal static partial class LocalizationContractSource
             var arguments = String.Join(", ", member.Parameters.Select((parameter, index)
                 => $"GetKeyedValue<{ContractTypeNames.RenderType(parameter.Type, contract.Namespace)}>(key, values, {index}, {count}, {SymbolDisplay.FormatLiteral(parameter.Name, quote: true)})"));
 
-            sb.AppendLine($"        {keyLiteral} => {text}({arguments}),");
+            sb.AppendLine($"            {keyLiteral} => {text}({arguments}),");
         }
 
+        // A key that is null throws from both methods, as a key that isn't one.
         sb.AppendLine($$"""
-                    _ => throw CreateUnknownKeyException<{{name}}>(key, {{SymbolDisplay.FormatLiteral(contract.TextsName, quote: true)}}),
-                };
+                        null => throw {{unknownKey}},
+                        _ => null,
+                    };
+
+                    return text is not null;
+                }
+
+                /// <summary>
+                /// The key of every text, sorted by name. <see cref="{{LocalizationSetsAnalysis.GetName}}"/> takes each of them.
+                /// </summary>
+                public static ImmutableArray<string> {{LocalizationSetsAnalysis.KeysName}} => {{TextKeysName}}<{{name}}>.Keys;
+            """);
+    }
+
+    /// <summary>
+    /// The class that holds the keys of the texts.
+    /// </summary>
+    private const string TextKeysName = "TextKeysOf";
+
+    /// <summary>
+    /// Writes the class that holds the key of every text, which <c>TextKeys</c> of the generated class gives. File-local,
+    /// so that it's no type of the assembly. Generic, so that no text can stand before it: a name with a type argument
+    /// is not looked for among the texts.
+    /// </summary>
+    private static void AppendTextKeys(StringBuilder sb, ContractFile file)
+    {
+        var keys = String.Join(", ", file.Texts.Select(static text => SymbolDisplay.FormatLiteral(text.Name, quote: true)));
+
+        sb.AppendLine($$"""
+
+            file static class {{TextKeysName}}<TContract>
+            {
+                internal static readonly ImmutableArray<string> Keys = [{{keys}}];
+            }
             """);
     }
 

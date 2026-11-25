@@ -2,23 +2,23 @@
 #nullable enable
 #pragma warning disable CS0612, CS0618 // Only generated code calls GeneratedCode.
 
-// In the global namespace, which every file reaches: LocalizableText.Inline then binds however a call names
+// In the global namespace, which every file reaches: LocalizedText.Inline then binds however a call names
 // the type, also by its full name in a file without a using for its namespace.
 
 /// <summary>
 /// Writes texts in every language of this assembly's <see cref="CodeChops.Idioma.SupportedLanguagesAttribute"/>.
 /// </summary>
 [Microsoft.CodeAnalysis.EmbeddedAttribute]
-internal static class GeneratedLocalizableText
+internal static class GeneratedLocalizedText
 {
     // The languages, the default first, as the package picks one of them by its position. One array for
     // every call, which the package tells apart by reference.
     private static readonly string[] Languages = ["en", "nl", "de"];
 
-    extension(CodeChops.Idioma.LocalizableText)
+    extension(CodeChops.Idioma.LocalizedText)
     {
         /// <summary>
-        /// A text in every language this assembly supports: <c>LocalizableText.Inline(en: "...", nl: "...", de: "...")</c>.
+        /// A text in every language this assembly supports: <c>LocalizedText.Inline(en: "...", nl: "...", de: "...")</c>.
         /// It gives the wording for the current UI culture. A culture that none of them serves gets the wording in the app's
         /// default language, else the <c>en</c> wording.
         /// </summary>

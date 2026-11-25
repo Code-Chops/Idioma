@@ -63,7 +63,7 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
     private static void Start(CompilationStartAnalysisContext context)
     {
         // Null in a project that doesn't reference the package, which has no texts.
-        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText) is null)
+        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText) is null)
             return;
 
         context.RegisterOperationAction(Analyze, OperationKind.Invocation);
@@ -133,7 +133,7 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Reports a call of the generated <c>GetText()</c> of an enum with <c>[Localized]</c> members that names a marked
-    /// member whose value an earlier marked member has. <c>LocalizableText.GetTextByMember</c> finds the member's own
+    /// member whose value an earlier marked member has. <c>LocalizedText.GetTextByMember</c> finds the member's own
     /// text.
     /// </summary>
     private static void AnalyzeLocalizedLookup(OperationAnalysisContext context, IInvocationOperation invocation, IOperation value,
@@ -149,7 +149,7 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
         }
 
         var enumName = @enum.ToMinimalDisplayString(invocation.SemanticModel!, invocation.Syntax.SpanStart);
-        var ownText = $"LocalizableText.GetTextByMember<{enumName}>(nameof({enumName}.{CodeEscaping.EscapeIdentifier(member.Name)}))";
+        var ownText = $"LocalizedText.GetTextByMember<{enumName}>(nameof({enumName}.{CodeEscaping.EscapeIdentifier(member.Name)}))";
 
         Report(context, invocation, value, @enum, first, member, ownText, ImmutableDictionary<string, string?>.Empty);
 

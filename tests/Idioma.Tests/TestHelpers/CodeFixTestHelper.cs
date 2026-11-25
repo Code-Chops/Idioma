@@ -93,7 +93,7 @@ internal static class CodeFixTestHelper
     /// <summary>
     /// Runs every generator as a build does, then <paramref name="analyzer"/>, over <paramref name="sources"/>, each a
     /// file of one project, and offers the analyzer's diagnostics to <paramref name="provider"/>. For an analyzer that
-    /// reads generated code, such as the factory <c>LocalizableText.Inline</c>. The workspace the fix sees has no
+    /// reads generated code, such as the factory <c>LocalizedText.Inline</c>. The workspace the fix sees has no
     /// generated code. Returns every suggested fix by its title, with the files as the fix leaves them, in the order
     /// given.
     /// </summary>

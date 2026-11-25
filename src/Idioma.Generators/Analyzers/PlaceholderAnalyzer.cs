@@ -5,7 +5,7 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reports a wording that holds a placeholder of a format string, such as <c>{0}</c> (<c>LOC403</c>): in a text of a
-/// set, in any language, in a language of <c>LocalizableText.Inline</c>, and in a language of <c>[Localized]</c> on a
+/// set, in any language, in a language of <c>LocalizedText.Inline</c>, and in a language of <c>[Localized]</c> on a
 /// member.
 /// </summary>
 /// <remarks>
@@ -121,7 +121,7 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reads the wording of each language of <c>LocalizableText.Inline</c>.
+    /// Reads the wording of each language of <c>LocalizedText.Inline</c>.
     /// </summary>
     /// <param name="context">The invocation.</param>
     /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>

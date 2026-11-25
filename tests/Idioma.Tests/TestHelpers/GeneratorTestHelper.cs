@@ -379,7 +379,7 @@ internal static class GeneratorTestHelper
         return CSharpGeneratorDriver.Create(
             generators:
             [
-                new LocalizableTextFactoryGenerator().AsSourceGenerator(),
+                new LocalizedTextFactoryGenerator().AsSourceGenerator(),
                 new LocalizationGenerator().AsSourceGenerator(),
             ],
             parseOptions: parseOptions);

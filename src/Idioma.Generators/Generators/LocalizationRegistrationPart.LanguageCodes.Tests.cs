@@ -206,7 +206,7 @@ public sealed partial class LocalizationRegistrationPartTests
         // Assert: a warning at the property that holds the code.
         var run = result.Results.ShouldHaveSingleItem();
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizableTextFactoryGenerator.UnknownLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizedTextFactoryGenerator.UnknownLanguageCodeDiagnosticId);
         diagnostic.Id.ShouldBe("LOC104");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe(expectedMessage);

@@ -79,7 +79,7 @@ For a library's enum, a set has two more advantages over attributes. An app can 
 
 ## An attribute on each member
 
-To keep the wording next to each member, mark each one `[Localized]`. The attribute on the enum itself gives the enum a text of its own, which `LocalizableText.GetTextOfType<ParcelStatus>()` shows:
+To keep the wording next to each member, mark each one `[Localized]`. The attribute on the enum itself gives the enum a text of its own, which `LocalizedText.GetTextOfType<ParcelStatus>()` shows:
 
 ```csharp
 [Localized(en: "Parcel status", nl: "Pakketstatus")]
@@ -110,7 +110,7 @@ public static class ParcelStatusLocalizedExtensions
 }
 ```
 
-`LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked))` finds the same text, as it does for any member marked `[Localized]` ([Attributes](attributes.md)).
+`LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked))` finds the same text, as it does for any member marked `[Localized]` ([Attributes](attributes.md)).
 
 What else to know:
 

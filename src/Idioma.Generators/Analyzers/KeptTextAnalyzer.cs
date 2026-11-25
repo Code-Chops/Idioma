@@ -19,8 +19,8 @@ namespace CodeChops.Idioma.Generators;
 /// <list type="bullet">
 /// <item>A member of a generated class, such as <c>ShopLocalization.Checkout</c> or
 /// <c>ShopLocalization.GetTextByKey("Checkout")</c>.</item>
-/// <item>A call of <c>LocalizableText.Inline</c>, <c>LocalizableText.GetTextByMember</c> or
-/// <c>LocalizableText.GetTextOfType</c>.</item>
+/// <item>A call of <c>LocalizedText.Inline</c>, <c>LocalizedText.GetTextByMember</c> or
+/// <c>LocalizedText.GetTextOfType</c>.</item>
 /// <item>A call of the generated <c>GetText()</c> on a value of an enum.</item>
 /// </list>
 /// <para>
@@ -62,7 +62,7 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     private static void Start(CompilationStartAnalysisContext context)
     {
         // Null in a project that doesn't reference the package, which has no texts.
-        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizableText) is not { } text)
+        if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText) is not { } text)
             return;
 
         context.RegisterOperationAction(c => AnalyzeInitializer(c, text), OperationKind.FieldInitializer, OperationKind.PropertyInitializer);
@@ -97,7 +97,7 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     /// function reads is read when that runs, so it isn't looked into, unless the lambda runs as the initializer does.
     /// </summary>
     /// <param name="operation">The expression, or a part of it.</param>
-    /// <param name="text">The class <c>LocalizableText</c>.</param>
+    /// <param name="text">The class <c>LocalizedText</c>.</param>
     /// <param name="isEnumerated">
     /// Whether the initializer enumerates what the expression gives, as <c>ToList()</c> or <c>[.. query]</c> does. A
     /// query of LINQ that it stores as it is runs its lambdas only when it's enumerated, later.

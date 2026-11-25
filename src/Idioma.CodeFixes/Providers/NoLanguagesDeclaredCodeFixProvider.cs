@@ -6,9 +6,9 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a call of <c>LocalizableText.Inline</c> or a <c>[Localized]</c> in an assembly that declares no languages
+/// Fixes a call of <c>LocalizedText.Inline</c> or a <c>[Localized]</c> in an assembly that declares no languages
 /// (<c>LOC100</c>). It declares the languages the call names, in the order it names them, so the first is the default:
-/// <c>LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</c> adds
+/// <c>LocalizedText.Inline(en: "Orders", nl: "Bestellingen")</c> adds
 /// <c>[assembly: SupportedLanguages("en", "nl")]</c>.
 /// </summary>
 /// <remarks>

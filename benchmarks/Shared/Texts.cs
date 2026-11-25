@@ -43,7 +43,7 @@ public class ShopLabels
 // Inline picks one.
 public static class InlineTexts
 {
-    public static string Checkout => LocalizableText.Inline(en: "Checkout", nl: "Afrekenen", enGb: "Checkout");
-    public static string Cart => LocalizableText.Inline(en: "Cart", nl: "Winkelwagen", enGb: "Basket");
-    public static string Greeting(string name) => LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!", enGb: $"Hello, {name}!");
+    public static string Checkout => LocalizedText.Inline(en: "Checkout", nl: "Afrekenen", enGb: "Checkout");
+    public static string Cart => LocalizedText.Inline(en: "Cart", nl: "Winkelwagen", enGb: "Basket");
+    public static string Greeting(string name) => LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!", enGb: $"Hello, {name}!");
 }

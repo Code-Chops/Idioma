@@ -21,6 +21,13 @@ internal sealed partial record LocalizationSetsAnalysis
                 continue;
 
             var suffix = SupportedLanguages.ToTypeSuffix(defaultLanguage);
+
+            if (IsSuffixAlone(set.Name, suffix))
+            {
+                findings.Add(SuffixAlone(set, suffix));
+                continue;
+            }
+
             var suggestedName = SuggestNameEndingIn(set.Name, suffix);
 
             // Its name gives no language, so it may be meant for another one, as ShopLocalizationDutch is. The

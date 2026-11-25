@@ -6,13 +6,13 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 ## Finding a text by its member
 
-`LocalizableText.GetTextByMember` gives the text of a member:
+`LocalizedText.GetTextByMember` gives the text of a member:
 
 - `GetTextByMember<Address>(nameof(Address.City))` is for a type your code knows.
 - `GetTextByMember(type, "City")` is for a type your code only has at run time.
-- `GetTextByMember(property)` is for a member your code holds, such as the `PropertyInfo` of a form field. Only its name and the type that declares it are read. A form can fall back to the property's name: `string label = LocalizableText.GetTextByMember(property) ?? property.Name;`.
+- `GetTextByMember(property)` is for a member your code holds, such as the `PropertyInfo` of a form field. Only its name and the type that declares it are read. A form can fall back to the property's name: `string label = LocalizedText.GetTextByMember(property) ?? property.Name;`.
 
-`LocalizableText.GetTextOfType` gives the text of a type itself, the same way: `GetTextOfType<Address>()`, or `GetTextOfType(type)` for a type your code only has at run time.
+`LocalizedText.GetTextOfType` gives the text of a type itself, the same way: `GetTextOfType<Address>()`, or `GetTextOfType(type)` for a type your code only has at run time.
 
 Each gives `null` where there's no text. The `string` is the wording for the user's language at the call, so read it where you show it. A call that names its type and its member in the code, such as `GetTextByMember<Address>(nameof(Address.City))`, is build error `LOC601` when the member has no text ([details](build-errors/LOC6XX-reading-a-text.md#loc601)).
 

@@ -36,8 +36,8 @@ public static partial class LocalizationSetsPart
     /// </summary>
     public const string SuggestedDeclarationProperty = "SuggestedDeclaration";
 
-    // Shared with LocalizableTextFactoryGenerator and UnnamedLanguageAnalyzer, which report [Localized] and
-    // LocalizableText.Inline in an assembly without languages: all say that the attribute is missing.
+    // Shared with LocalizedTextFactoryGenerator and UnnamedLanguageAnalyzer, which report [Localized] and
+    // LocalizedText.Inline in an assembly without languages: all say that the attribute is missing.
 #pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
     private static readonly DiagnosticDescriptor NoLanguagesDeclaredRule = Error(
         NoLanguagesDeclaredDiagnosticId,
@@ -73,7 +73,7 @@ public static partial class LocalizationSetsPart
     private static readonly DiagnosticDescriptor MissingContractRule = Error(
         MissingContractDiagnosticId,
         "Localization set doesn't implement its contract",
-        "'{0}' is a set for '{1}' but doesn't implement '{2}', so no text reads it. Add '{2}', the contract generated from '{3}', next to ILocalizationSet.",
+        "'{0}' is a set for '{1}' but {2}, so no text reads it. {3}",
         "Every set lists ILocalizationSet and its contract, the default-language set included. The contract is what requires every text in every language, and what a text reads its wording through.");
 
     private static readonly DiagnosticDescriptor RepeatedLanguageRule = Error(
@@ -95,14 +95,14 @@ public static partial class LocalizationSetsPart
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Nothing outside a library can add a language to its inline texts, which are those it writes with LocalizableText.Inline and with [Localized] on a member. A library that wants to be translatable writes its texts in sets.",
+        description: "Nothing outside a library can add a language to its inline texts, which are those it writes with LocalizedText.Inline and with [Localized] on a member. A library that wants to be translatable writes its texts in sets.",
         helpLinkUri: PackageNames.HelpLink(LibraryCannotBeTranslatedDiagnosticId));
 
     private static readonly DiagnosticDescriptor ReservedTextNameRule = Error(
         ReservedTextNameDiagnosticId,
         "Text named like the generated class or its method",
         "'{0}' has a text named '{1}', like {2}. Rename the text.",
-        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey either, because the generated class gets a method of that name, which gives a text by its key. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value, and for GetText, the extension method that gives a value its text.");
+        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey or TryGetTextByKey either, because the generated class gets a method of each name, which gives a text by its key. The same holds for TextKeys, the property that lists the key of every text. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value, and for GetText, the extension method that gives a value its text.");
 
     private static readonly DiagnosticDescriptor UndeclaredTextRule = Error(
         UndeclaredTextDiagnosticId,

@@ -2,7 +2,7 @@ namespace CodeChops.Idioma;
 
 /// <summary>
 /// Picks the language a text that carries its own wording shows for the reader: one written with
-/// <c>LocalizableText.Inline</c>, or with <c>[Localized]</c> on a member.
+/// <c>LocalizedText.Inline</c>, or with <c>[Localized]</c> on a member.
 /// </summary>
 /// <remarks>
 /// Such a text has a wording for each language of its assembly, the default language first. It shows the first of

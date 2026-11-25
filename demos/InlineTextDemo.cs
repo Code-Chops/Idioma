@@ -16,7 +16,7 @@ foreach (var culture in LocalizationRegistry.SupportedLanguages)
 
     // The text gives the wording for the language of the moment it's read, so it's read where it's shown.
     // Leave out nl:, or the {day} in it, and it doesn't build.
-    var greeting = LocalizableText.Inline(
+    var greeting = LocalizedText.Inline(
         en: $"Welcome {name}! Today is {day}.",
         nl: $"Welkom {name}! Vandaag is het {day}.");
 

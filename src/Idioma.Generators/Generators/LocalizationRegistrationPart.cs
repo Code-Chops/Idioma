@@ -324,12 +324,12 @@ public static class LocalizationRegistrationPart
                 context.ReportDiagnostic(Diagnostic.Create(InvalidLanguageCodeRule, code.Location.ToLocation(), code.DeclaringType, code.Code));
         });
 
-        // The descriptor of LocalizableTextFactoryGenerator, which reports the same for a language of the attribute.
+        // The descriptor of LocalizedTextFactoryGenerator, which reports the same for a language of the attribute.
         context.RegisterSourceOutput(unknownLanguageCodes, static (context, codes) =>
         {
             foreach (var code in codes.AsImmutableArray())
                 if (SupportedLanguages.FindUnknownPart(code.Code) is { } unknown)
-                    context.ReportDiagnostic(LocalizableTextFactoryGenerator.CreateUnknownLanguageCode(unknown, code.Location.ToLocation()));
+                    context.ReportDiagnostic(LocalizedTextFactoryGenerator.CreateUnknownLanguageCode(unknown, code.Location.ToLocation()));
         });
 
         context.RegisterSourceOutput(registrar.WhereItCompiles(compiles), static (context, registrar) =>

@@ -35,15 +35,39 @@ internal sealed partial record LocalizationSetsAnalysis
             {
                 var baseName = LocalizationDiscovery.DeriveBaseName(set.Name, language) ?? set.Name;
                 var defaultSet = $"{baseName}{SupportedLanguages.ToTypeSuffix(defaultLanguage)}";
+                var contract = $"I{baseName}";
+                var isGenerated = generatedContracts.Contains(LocalizationDiscovery.GetContractFullName(set.Namespace, baseName));
+
+                // Without a default-language set the generator can use, there's no contract to add. Naming one, or the
+                // set it would come from, would send the reader after types that don't exist.
+                var (problem, advice) = isGenerated
+                    ? (MissesContract(contract), AddContract(contract, defaultSet))
+                    : ("implements no contract", $"Its contract would be '{contract}', which the generator writes from a default-language set named '{defaultSet}' that it can use. Write that set, or remove ILocalizationSet if '{set.Name}' isn't a set.");
 
                 findings.Add(new LocalizationSetsFinding(
                     LocalizationSetsRule.MissingContract,
                     set.Location,
-                    new EquatableArray<string>([set.Name, language, $"I{baseName}", defaultSet]),
+                    new EquatableArray<string>([set.Name, language, problem, advice]),
                     // Only a contract this build generates: a fix naming one that does not exist would not compile.
-                    SuggestedName: generatedContracts.Contains(LocalizationDiscovery.GetContractFullName(set.Namespace, baseName)) ? $"I{baseName}" : null));
+                    SuggestedName: isGenerated ? contract : null));
             }
         }
+    }
+
+    /// <summary>
+    /// What a set lacks, as the clause of the <c>LOC204</c> message, for a contract this build generates.
+    /// </summary>
+    private static string MissesContract(string contract)
+    {
+        return $"doesn't implement '{contract}'";
+    }
+
+    /// <summary>
+    /// What to add, as the advice of the <c>LOC204</c> message, for a contract this build generates from a set.
+    /// </summary>
+    private static string AddContract(string contract, string defaultSet)
+    {
+        return $"Add '{contract}', the contract generated from '{defaultSet}', next to ILocalizationSet.";
     }
 
     /// <summary>

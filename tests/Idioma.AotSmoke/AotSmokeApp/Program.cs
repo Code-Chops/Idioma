@@ -17,13 +17,13 @@ Expect("languages", string.Join(",", LocalizationRegistry.SupportedLanguages), "
 
 // The language of a set comes from the end of its name, which the published app must still know, and a regional set from
 // the code its assembly declares.
-var british = LocalizationRegistry.Current.Find<IShopLocalization>(CultureInfo.GetCultureInfo("en-GB"));
+var british = LocalizationRegistry.Find<IShopLocalization>(CultureInfo.GetCultureInfo("en-GB"));
 Expect("set for en-GB", british?.GetType().Name, nameof(ShopLocalizationEnGb));
 Expect("language code of the set for en-GB", (british as ILocalizationSet)?.LocalizationLanguageCode, "en-GB");
-Expect("language code of the set for nl", (LocalizationRegistry.Current.Find<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
+Expect("language code of the set for nl", (LocalizationRegistry.Find<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
 
 // An inline text gives the wording of the moment it's read, so it's read in each culture below.
-static string Orders() => LocalizableText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
+static string Orders() => LocalizedText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
 
 // The wording for each culture, a culture of a language the app declares or not (de-DE gets the default language).
 (string Culture, string Cart, string Greeting, string Orders, string Grid, string Items, string Rows)[] cases =
@@ -80,18 +80,18 @@ foreach (var (culture, city, picked, status, surname, shipped) in memberCases)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
-    Expect($"{culture}: text of a property of the library", LocalizableText.GetTextByMember<Address>(nameof(Address.City)), city);
-    Expect($"{culture}: text of a property by a type held at run time", LocalizableText.GetTextByMember(typeof(Address), "City"), city);
-    Expect($"{culture}: text of a property the app holds", LocalizableText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!), city);
-    Expect($"{culture}: text of an override without one of its own", LocalizableText.GetTextByMember<BusinessAddress>(nameof(Address.City)), city);
+    Expect($"{culture}: text of a property of the library", LocalizedText.GetTextByMember<Address>(nameof(Address.City)), city);
+    Expect($"{culture}: text of a property by a type held at run time", LocalizedText.GetTextByMember(typeof(Address), "City"), city);
+    Expect($"{culture}: text of a property the app holds", LocalizedText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!), city);
+    Expect($"{culture}: text of an override without one of its own", LocalizedText.GetTextByMember<BusinessAddress>(nameof(Address.City)), city);
     Expect($"{culture}: text of an enum's value", ParcelStatus.Picked.GetText(), picked);
-    Expect($"{culture}: text of an enum's member by its name", LocalizableText.GetTextByMember(typeof(ParcelStatus), ParcelStatus.Picked.ToString()), picked);
-    Expect($"{culture}: text of an enum itself", LocalizableText.GetTextOfType<ParcelStatus>(), status);
-    Expect($"{culture}: text of a property of the app", LocalizableText.GetTextByMember<Customer>(nameof(Customer.Surname)), surname);
+    Expect($"{culture}: text of an enum's member by its name", LocalizedText.GetTextByMember(typeof(ParcelStatus), ParcelStatus.Picked.ToString()), picked);
+    Expect($"{culture}: text of an enum itself", LocalizedText.GetTextOfType<ParcelStatus>(), status);
+    Expect($"{culture}: text of a property of the app", LocalizedText.GetTextByMember<Customer>(nameof(Customer.Surname)), surname);
     Expect($"{culture}: text of a value of an enum with a set", OrderStatus.Shipped.GetText(), shipped);
 }
 
-Expect("text of a member that isn't marked", LocalizableText.GetTextByMember<Address>(nameof(Address.Unmarked)) ?? "none", "none");
+Expect("text of a member that isn't marked", LocalizedText.GetTextByMember<Address>(nameof(Address.Unmarked)) ?? "none", "none");
 Expect("text of an enum's value that isn't marked", ParcelStatus.Lost.GetText(), "Lost");
 
 if (failures.Count > 0)

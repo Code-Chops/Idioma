@@ -9,12 +9,12 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="LocalizableTextFactoryGenerator"/>: <c>LocalizableText.Inline</c> gets one required parameter
+/// Tests for <see cref="LocalizedTextFactoryGenerator"/>: <c>LocalizedText.Inline</c> gets one required parameter
 /// per language of <c>[assembly: SupportedLanguages]</c>, so leaving one out does not compile, and an invalid language
 /// gets <c>LOC101</c>; an assembly calling it is marked <c>[assembly: InlineTexts]</c>. The attribute
 /// <c>[Localized]</c> gets the same parameters.
 /// </summary>
-public sealed class LocalizableTextFactoryGeneratorTests
+public sealed class LocalizedTextFactoryGeneratorTests
 {
     #region Fixture
     private static string Source(string languages, string body = "") => $$"""
@@ -30,7 +30,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
         }
         """;
 
-    private static GeneratorDriverRunResult Run(string source) => GeneratorTestHelper.Run(new LocalizableTextFactoryGenerator(), source);
+    private static GeneratorDriverRunResult Run(string source) => GeneratorTestHelper.Run(new LocalizedTextFactoryGenerator(), source);
 
     /// <summary>
     /// The marker for texts written inline, or <see langword="null"/> when none is emitted.
@@ -56,7 +56,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
         var run = result.Results.ShouldHaveSingleItem();
         run.Exception.ShouldBeNull();
 
-        return run.GeneratedSources.SingleOrDefault(source => source.HintName is "LocalizableText.Factory.g.cs").SourceText?.ToString();
+        return run.GeneratedSources.SingleOrDefault(source => source.HintName is "LocalizedText.Factory.g.cs").SourceText?.ToString();
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
                 [Localized(en: "City", nl: "Plaats")]
                 public string City { get; } = "";
 
-                public string Title => LocalizableText.Inline(en: "Address", nl: "Adres");
+                public string Title => LocalizedText.Inline(en: "Address", nl: "Adres");
             }
             """);
 
@@ -217,7 +217,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // Assert
         text.ShouldContain("[Microsoft.CodeAnalysis.EmbeddedAttribute]");
-        text.ShouldContain("internal static class GeneratedLocalizableText");
+        text.ShouldContain("internal static class GeneratedLocalizedText");
     }
 
     [Test]
@@ -302,7 +302,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static string Greeting => LocalizableText.Inline(en: "Hello, {0}!", nl: "Hallo, {0}!", nlBe: "Dag, {0}!");
+                public static string Greeting => LocalizedText.Inline(en: "Hello, {0}!", nl: "Hallo, {0}!", nlBe: "Dag, {0}!");
             }
             """);
 
@@ -323,7 +323,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static string Colour => LocalizableText.Inline(enGb: "Colour", en: "Color");
+                public static string Colour => LocalizedText.Inline(enGb: "Colour", en: "Color");
             }
             """));
 
@@ -360,7 +360,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static string Orders => CodeChops.Idioma.LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                public static string Orders => CodeChops.Idioma.LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 
@@ -393,7 +393,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
     public void EveryLanguage_ShouldCompile()
     {
         // Arrange & Act
-        var errors = GeneratorTestHelper.CompileWithGenerators(Source("\"en\", \"nl\"", """public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");"""));
+        var errors = GeneratorTestHelper.CompileWithGenerators(Source("\"en\", \"nl\"", """public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");"""));
 
         // Assert
         errors.ShouldBeEmpty();
@@ -403,7 +403,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
     public void LanguageLeftOut_ShouldNotCompile()
     {
         // Arrange & Act
-        var errors = GeneratorTestHelper.CompileWithGenerators(Source("\"en\", \"nl\"", """public static string Orders => LocalizableText.Inline(en: "Orders");"""));
+        var errors = GeneratorTestHelper.CompileWithGenerators(Source("\"en\", \"nl\"", """public static string Orders => LocalizedText.Inline(en: "Orders");"""));
 
         // Assert: the error names the language.
         var error = errors.ShouldHaveSingleItem();
@@ -432,7 +432,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 
@@ -454,13 +454,13 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class LibraryTexts
             {
-                public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 
         // Act
         var errors = GeneratorTestHelper.CompileWithGenerators(
-            Source("\"en\", \"nl\"", """public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");"""),
+            Source("\"en\", \"nl\"", """public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");"""),
             library);
 
         // Assert
@@ -551,7 +551,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // Assert: the factory still comes, so this stays the only error.
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizableTextFactoryGenerator.InvalidLanguagesDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizedTextFactoryGenerator.InvalidLanguagesDiagnosticId);
         diagnostic.Id.ShouldBe("LOC101");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain(expected);
@@ -576,7 +576,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // Assert: a warning at the attribute, which a pragma there turns off.
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(LocalizableTextFactoryGenerator.UnknownLanguageCodeDiagnosticId);
+        diagnostic.Id.ShouldBe(LocalizedTextFactoryGenerator.UnknownLanguageCodeDiagnosticId);
         diagnostic.Id.ShouldBe("LOC104");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe(expected);
@@ -641,7 +641,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static string Orders => LocalizableText.Inline(en: "Orders");
+                public static string Orders => LocalizedText.Inline(en: "Orders");
                 public static string Checkout => ShopLocalization.Checkout;
             }
             """;
@@ -654,9 +654,9 @@ public sealed class LocalizableTextFactoryGeneratorTests
     }
 
     [Test]
-    [Arguments("public static string Orders => LocalizableText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
-    [Arguments("public static string Orders => CodeChops.Idioma.LocalizableText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
-    [Arguments("public static string Orders => CodeChops.Idioma.LocalizableText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
+    [Arguments("public static string Orders => LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
+    [Arguments("public static string Orders => CodeChops.Idioma.LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
+    [Arguments("public static string Orders => CodeChops.Idioma.LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
     public void FactoryCalledInCode_ShouldMarkAssemblyAsWritingInlineTexts(string body)
     {
         // Arrange & Act
@@ -671,7 +671,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
     {
         // Arrange: InlineTextsAttribute is marked [Obsolete] for consumers. A warning about it in generated code is one
         // the author can't act on, and it stops a build that treats warnings as errors.
-        var source = Source("\"en\", \"nl\"", "public static string Orders => LocalizableText.Inline(en: \"Orders\", nl: \"Bestellingen\");");
+        var source = Source("\"en\", \"nl\"", "public static string Orders => LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");");
 
         // Act
         var marker = InlineTextsMarker(Run(source));
@@ -683,8 +683,8 @@ public sealed class LocalizableTextFactoryGeneratorTests
     }
 
     [Test]
-    [Arguments("using Text = CodeChops.Idioma.LocalizableText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
-    [Arguments("using Text = global::CodeChops.Idioma.LocalizableText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
+    [Arguments("using Text = CodeChops.Idioma.LocalizedText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
+    [Arguments("using Text = global::CodeChops.Idioma.LocalizedText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
     public void FactoryCalledThroughAlias_ShouldMarkAssemblyAsWritingInlineTexts(string alias, string call)
     {
         // Arrange: the name at the call says nothing, so the receiver has to be bound to be known for the text type.
@@ -741,9 +741,9 @@ public sealed class LocalizableTextFactoryGeneratorTests
     {
         // Arrange & Act: Razor's own generator writes the C# for markup, which no other generator sees.
         var result = GeneratorTestHelper.RunWithAdditionalFiles(
-            new LocalizableTextFactoryGenerator(),
+            new LocalizedTextFactoryGenerator(),
             Source("\"en\", \"nl\""),
-            (path, """<h1>@(LocalizableText.Inline(en: "Orders", nl: "Bestellingen"))</h1>"""));
+            (path, """<h1>@(LocalizedText.Inline(en: "Orders", nl: "Bestellingen"))</h1>"""));
 
         // Assert
         InlineTextsMarker(result).ShouldNotBeNull();
@@ -754,7 +754,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
     {
         // Arrange & Act: languages alone, a method of another name, and markup without a call write no inline text.
         var result = GeneratorTestHelper.RunWithAdditionalFiles(
-            new LocalizableTextFactoryGenerator(),
+            new LocalizedTextFactoryGenerator(),
             Source("\"en\", \"nl\"", "public static string Orders { get; } = Other.Inline(); private static class Other { public static string Inline() => \"\"; }"),
             ("Pages/Orders.razor", "<h1>@ShopLocalization.Checkout</h1>"));
 
@@ -773,7 +773,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
             public static class Texts
             {
-                public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 
@@ -929,7 +929,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
     [Test]
     public void MemberMarkedLocalized_ShouldLeaveTheMarkToTheFileOfItsText()
     {
-        // Arrange & Act: this generator marks an assembly for LocalizableText.Inline alone. The file that holds the
+        // Arrange & Act: this generator marks an assembly for LocalizedText.Inline alone. The file that holds the
         // texts of members marks it for those, so that this generator need not look for them.
         var marker = InlineTextsMarker(Run(Member("\"en\", \"nl\"", """[Localized(en: "City", nl: "Plaats")]""")));
 
@@ -941,7 +941,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
     public void UnrelatedEdit_ShouldLeaveGeneratorFullyCached()
     {
         // Arrange & Act
-        var reasons = GeneratorTestHelper.GetOutputReasonsAfterUnrelatedEdit(new LocalizableTextFactoryGenerator(), Source("\"en\", \"nl\""));
+        var reasons = GeneratorTestHelper.GetOutputReasonsAfterUnrelatedEdit(new LocalizedTextFactoryGenerator(), Source("\"en\", \"nl\""));
 
         // Assert
         reasons.ShouldNotBeEmpty();
@@ -954,8 +954,8 @@ public sealed class LocalizableTextFactoryGeneratorTests
         // Arrange & Act: a language listed twice, reported at the attribute, an inline text, and an edit in their file
         // which moves nothing. The attribute may well sit in a file edited all day, such as Program.cs.
         var (run, edited) = GeneratorTestHelper.RunAcrossEditInSameFile(
-            new LocalizableTextFactoryGenerator(),
-            Source("\"en\", \"nl\", \"en\"", "public static string Orders => LocalizableText.Inline(en: \"Orders\", nl: \"Bestellingen\");"));
+            new LocalizedTextFactoryGenerator(),
+            Source("\"en\", \"nl\", \"en\"", "public static string Orders => LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");"));
 
         // Assert: the diagnostic lies in the tree the file has now, where a pragma of that file applies to it, and
         // neither the factory nor the marker for inline texts is written again.

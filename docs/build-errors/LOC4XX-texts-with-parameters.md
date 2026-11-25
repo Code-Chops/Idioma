@@ -49,7 +49,7 @@ Use the value in every language. Any use counts, in a condition or in the wordin
 An inline text is held to the same rule. The wording of the default language shows a value where it holds one in an interpolated string:
 
 ```csharp
-LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!") // LOC402: the 'nl' wording doesn't use 'name'
+LocalizedText.Inline(en: $"Hello, {name}!", nl: "Hallo!") // LOC402: the 'nl' wording doesn't use 'name'
 ```
 
 A value is a local variable, a parameter, or a field or property of your own assembly. A constant is wording, so it isn't a value. Neither is a text, such as `ShopLocalization.Checkout`, which another language may word its own way. The build reports only what it can read, so these get no error:
@@ -64,7 +64,7 @@ A value is a local variable, a parameter, or a field or property of your own ass
 A wording holds a placeholder of a format string, such as `{0}`. This is a warning. Nothing fills the placeholder in, so users would see `{0}` as written.
 
 - In a set, write the text as a method that takes the value: `public string Greeting(string name) => $"Hello, {name}!";`.
-- In an inline text, write the value into every language: `LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`.
+- In an inline text, write the value into every language: `LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`.
 - On a member, `[Localized]` takes constants, so its wording can't show a value. Write the text as a method of a set.
 
 The build reads only the strings a text returns:

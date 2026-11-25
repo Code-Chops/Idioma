@@ -7,13 +7,13 @@ namespace CodeChops.Idioma.Internals;
 /// Don't use this type directly! This code is called by source-generated code.
 /// </para>
 /// <para>
-/// Write a text as <c>LocalizableText.Inline</c>, or in a set per language (see <see cref="ILocalizationSet"/>).
+/// Write a text as <c>LocalizedText.Inline</c>, or in a set per language (see <see cref="ILocalizationSet"/>).
 /// </para>
 /// </summary>
 // Public, because generated code lies in the consumer's assembly and can only call what is public. A class of its own,
-// so these entry points don't show among the members of LocalizableText and LocalizationRegistry.
+// so these entry points don't show among the members of LocalizedText and LocalizationRegistry.
 // Obsolete, so a call by hand warns (CS0618). Not as an error, because generated code can only suppress a warning.
-[Obsolete("Don't use this class directly. Only generated code should call this. Write a text as LocalizableText.Inline, or in a set per language.")]
+[Obsolete("Don't use this class directly. Only generated code should call this. Write a text as LocalizedText.Inline, or in a set per language.")]
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class GeneratedCode
 {
@@ -23,7 +23,7 @@ public static class GeneratedCode
     /// </para>
     /// <para>
     /// The position, among the languages of the assembly, of the language whose wording a generated text shows for
-    /// the current UI culture. The generated code of <c>LocalizableText.Inline</c> and of <c>[Localized]</c> members
+    /// the current UI culture. The generated code of <c>LocalizedText.Inline</c> and of <c>[Localized]</c> members
     /// has a wording for every language of <see cref="SupportedLanguagesAttribute">[SupportedLanguages]</see>, and
     /// picks the one at that position.
     /// </para>
@@ -547,7 +547,7 @@ public static class GeneratedCode
     /// </para>
     /// <para>
     /// Records the function that finds the texts of an assembly's members marked <c>[Localized]</c>, so that
-    /// <c>LocalizableText.GetTextByMember</c> finds them. The assembly's generated registrar calls this once.
+    /// <c>LocalizedText.GetTextByMember</c> finds them. The assembly's generated registrar calls this once.
     /// </para>
     /// </summary>
     /// <param name="languages">

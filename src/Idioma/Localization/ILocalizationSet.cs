@@ -8,7 +8,7 @@ namespace CodeChops.Idioma;
 /// <remarks>
 /// <para>
 /// Use a set per language for a library or a larger group of texts. A single text is simpler inline, as in
-/// <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. Either way, first declare your languages, the
+/// <c>LocalizedText.Inline(en: "Checkout", nl: "Afrekenen")</c>. Either way, first declare your languages, the
 /// default one first: <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>.
 /// Then:
 /// </para>
@@ -35,7 +35,7 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// A set takes its language from the end of its name. See <see cref="LocalizationLanguageCode"/>. A user sees the set for their UI
-/// culture, or else a fallback. See <see cref="LocalizableText"/>.
+/// culture, or else a fallback. See <see cref="LocalizedText"/>.
 /// </para>
 /// <para>
 /// There's nothing to register, because every set is registered automatically. For that, a set must be a class that:
@@ -99,7 +99,10 @@ namespace CodeChops.Idioma;
 /// name at run time: <c>ShopLocalization.GetTextByKey("Checkout")</c>. The key is the text's name, in the same letter
 /// case. <c>GetTextByKey</c> returns what <c>ShopLocalization.Checkout</c> returns. A text with parameters takes its values after the key, as in
 /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c>. A key no text has throws
-/// <see cref="KeyNotFoundException"/>. No text can be named <c>GetTextByKey</c> (<c>LOC300</c>).
+/// <see cref="KeyNotFoundException"/>. For a key that may be unknown, such as one from a database,
+/// <c>ShopLocalization.TryGetTextByKey(key, out var text)</c> gives <see langword="false"/> instead.
+/// <c>ShopLocalization.TextKeys</c> lists every key. No text can be named <c>GetTextByKey</c>, <c>TryGetTextByKey</c> or
+/// <c>TextKeys</c> (<c>LOC300</c>).
 /// </para>
 /// <para>
 /// <b>Enums.</b> To translate an enum, list <see cref="ILocalizationSet{TEnum}"/> in place of this interface. Every

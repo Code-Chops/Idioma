@@ -3,7 +3,7 @@ using System.Reflection;
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Where you write and read the texts that carry their own wording: <c>LocalizableText.Inline</c> for a text written
+/// Where you write and read the texts that carry their own wording: <c>LocalizedText.Inline</c> for a text written
 /// where it's used, and <see cref="GetTextByMember{T}(string)"/> for a text written on a member. Each gives a
 /// <see cref="string"/>: the wording for <see cref="CultureInfo.CurrentUICulture"/> at the call.
 /// </summary>
@@ -14,7 +14,7 @@ namespace CodeChops.Idioma;
 /// them doesn't build. Write each text in one of three ways:
 /// </para>
 /// <list type="bullet">
-/// <item>Inline: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
+/// <item>Inline: <c>LocalizedText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
 /// <item>In one class per language, for a library or a larger group of texts (see <see cref="ILocalizationSet"/>).</item>
 /// <item>As an attribute on the type or the member it names, for the label of a type, a property or an enum member:
 /// <c>[Localized(en: "City", nl: "Plaats")]</c>. <see cref="GetTextByMember{T}(string)"/> gives the text of a
@@ -46,7 +46,7 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <para>
 /// To put a value in the wording, write it into every language:
-/// <c>LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a class per language, such a text
+/// <c>LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a class per language, such a text
 /// is a method that takes the value, such as <c>ShopLocalization.Greeting(customer.Name)</c>. Every language
 /// implements it with the same parameters (see <see cref="ILocalizationSet"/>).
 /// </para>
@@ -57,8 +57,8 @@ namespace CodeChops.Idioma;
 ///
 /// public static class ShopTexts
 /// {
-///     public static string Checkout => LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
-///     public static string Greeting(string name) => LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!");
+///     public static string Checkout => LocalizedText.Inline(en: "Checkout", nl: "Afrekenen");
+///     public static string Greeting(string name) => LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!");
 /// }
 ///
 /// // For a user whose UI culture is nl-NL: "Afrekenen" and "Hallo, Anna!".
@@ -68,16 +68,16 @@ namespace CodeChops.Idioma;
 /// </example>
 // Not a static class, because the source generator writes Inline as a static extension member on this type, and C#
 // doesn't take a static class there. No code can create one.
-public sealed class LocalizableText
+public sealed class LocalizedText
 {
-    private LocalizableText()
+    private LocalizedText()
     {
     }
 
     /// <summary>
     /// The text of a member marked <c>[Localized]</c>, by the type that declares it and its name, or
     /// <see langword="null"/> for a member without one.
-    /// <c>LocalizableText.GetTextByMember&lt;Address&gt;(nameof(Address.City))</c> gives the text of
+    /// <c>LocalizedText.GetTextByMember&lt;Address&gt;(nameof(Address.City))</c> gives the text of
     /// <c>Address.City</c>.
     /// </summary>
     /// <remarks>
@@ -157,7 +157,7 @@ public sealed class LocalizableText
 
     /// <summary>
     /// The text of a type marked <c>[Localized]</c> itself, such as the name of an enum, or <see langword="null"/>
-    /// for a type without one. <c>LocalizableText.GetTextOfType&lt;OrderStatus&gt;()</c> gives the text of
+    /// for a type without one. <c>LocalizedText.GetTextOfType&lt;OrderStatus&gt;()</c> gives the text of
     /// <c>OrderStatus</c>.
     /// </summary>
     /// <remarks>

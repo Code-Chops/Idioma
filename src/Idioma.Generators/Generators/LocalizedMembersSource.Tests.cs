@@ -192,10 +192,10 @@ public sealed class LocalizedMembersSourceTests
                     public static string Small => Size.Small.GetText();
                     public static string Open => Order.Status.Open.GetText();
                     internal static string Fast => Speed.Quick.GetText();
-                    public static string? City => LocalizableText.GetTextByMember<Address>(nameof(Address.City));
+                    public static string? City => LocalizedText.GetTextByMember<Address>(nameof(Address.City));
 
                     // As docs/attributes.md shows it: the label of a property, or else its name.
-                    public static string Label(System.Reflection.PropertyInfo property) => LocalizableText.GetTextByMember(property) ?? property.Name;
+                    public static string Label(System.Reflection.PropertyInfo property) => LocalizedText.GetTextByMember(property) ?? property.Name;
                 }
             }
             """;
@@ -618,7 +618,7 @@ public sealed class LocalizedMembersSourceTests
     public void AssemblyWithMarkedMember_ShouldBeMarkedAsWritingInlineTexts()
     {
         // Arrange: a text on a member carries its wording itself, as an inline text does, so no app can add a language
-        // to it. An assembly that also calls LocalizableText.Inline is marked twice, by two generated files.
+        // to it. An assembly that also calls LocalizedText.Inline is marked twice, by two generated files.
         var source = $$"""
             {{Header}}
 
@@ -627,7 +627,7 @@ public sealed class LocalizedMembersSourceTests
                 [Localized(en: "City", nl: "Plaats")]
                 public string City { get; } = "";
 
-                public static string Title => LocalizableText.Inline(en: "Address", nl: "Adres");
+                public static string Title => LocalizedText.Inline(en: "Address", nl: "Adres");
             }
             """;
 
@@ -728,7 +728,7 @@ public sealed class LocalizedMembersSourceTests
 
         // Assert
         using var _ = new CulturesScope("nl-NL");
-        LocalizableText.GetTextByMember(address.GetProperty("City")!).ShouldBe("Plaats");
+        LocalizedText.GetTextByMember(address.GetProperty("City")!).ShouldBe("Plaats");
     }
 
     [Test]

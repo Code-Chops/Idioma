@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Generators;
 internal static partial class LocalizationContractSource
 {
     // The namespaces the file of a contract imports, for what the method that gives a text by its key names (AppendGet).
-    private static readonly string[] ImportedNamespaces = ["System", "System.Collections.Generic"];
+    private static readonly string[] ImportedNamespaces = ["System", "System.Collections.Generic", "System.Collections.Immutable", "System.Diagnostics.CodeAnalysis"];
 
     /// <summary>
     /// What the parts of a contract's file are written from: the contract, the sets it links to, and the names the
@@ -88,6 +88,9 @@ internal static partial class LocalizationContractSource
             sb.Append(lookups);
             sb.AppendLine("}");
         }
+
+        if (contract.HasTexts)
+            AppendTextKeys(sb, file);
 
         if (contract.HasTexts && !contract.DefaultSetListsContract)
             AppendDefaultSetAsContract(sb, file);

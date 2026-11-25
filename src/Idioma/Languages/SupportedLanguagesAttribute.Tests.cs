@@ -78,7 +78,7 @@ public sealed class SupportedLanguagesAttributeTests
         // Assert: a set, an inline text, and an attribute on a member, each of which the attribute's languages hold.
         remarks.ShouldContain("three ways");
         remarks.ShouldContain("T:CodeChops.Idioma.ILocalizationSet");
-        remarks.ShouldContain("LocalizableText.Inline(");
+        remarks.ShouldContain("LocalizedText.Inline(");
         remarks.ShouldContain("[Localized(");
     }
 }

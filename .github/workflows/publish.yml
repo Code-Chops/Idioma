@@ -23,6 +23,7 @@ jobs:
   aot-smoke:
     name: NativeAOT smoke test of the package
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -52,6 +53,8 @@ jobs:
   pack:
     name: Test and pack
     runs-on: ubuntu-latest
+    # A test that hangs stops here and not after six hours, as in CI.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -96,12 +99,42 @@ jobs:
             artifacts/*.nupkg
             artifacts/*.snupkg
 
+  # The tests on Windows and macOS too, as in CI: a tag on a commit that fails there publishes nothing. A job of its
+  # own, which can't sign in to nuget.org, as the pack job is.
+  test-other-platforms:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+
+      - name: Build
+        run: dotnet build Idioma.slnx -c Release -warnaserror
+
+      - name: Tests (net10.0)
+        run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net10.0 --no-build
+
+      - name: Tests (net11.0)
+        run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net11.0 --no-build
+
   # Pushes the package the pack job made, and does nothing else: no checkout, no restore, and no code of the
   # repository or of a package runs in the job that can get an API key.
   publish:
     name: Publish
-    needs: [aot-smoke, pack]
+    needs: [aot-smoke, pack, test-other-platforms]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       id-token: write # lets GitHub issue the token that nuget.org exchanges for a short-lived API key
     steps:
@@ -132,6 +165,7 @@ jobs:
     name: Publish to GitHub Packages
     needs: publish
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       packages: write # lets GITHUB_TOKEN push to GitHub Packages
     steps:

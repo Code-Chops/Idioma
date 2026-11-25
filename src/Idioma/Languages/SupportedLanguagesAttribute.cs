@@ -13,11 +13,11 @@ namespace CodeChops.Idioma;
 /// <list type="bullet">
 /// <item>A set: one class per language, for a library or a larger group of texts. See
 /// <see cref="ILocalizationSet"/>.</item>
-/// <item>An inline text: <c>LocalizableText.Inline(en: "Checkout", nl: "Afrekenen")</c>. The source generator
+/// <item>An inline text: <c>LocalizedText.Inline(en: "Checkout", nl: "Afrekenen")</c>. The source generator
 /// writes this method with one required argument per language, so leaving a language out doesn't compile.</item>
 /// <item>An attribute on the type or the member it names, for the label of a type, a property or an enum member:
 /// <c>[Localized(en: "City", nl: "Plaats")]</c>. The source generator writes the attribute with the same arguments
-/// as <c>Inline</c>. <see cref="LocalizableText.GetTextByMember{T}(string)"/> gives the text of a member.</item>
+/// as <c>Inline</c>. <see cref="LocalizedText.GetTextByMember{T}(string)"/> gives the text of a member.</item>
 /// </list>
 /// <para>
 /// Every text is a <see cref="string"/>: the wording for the user's language at the moment you read it. Read a text
@@ -26,7 +26,7 @@ namespace CodeChops.Idioma;
 /// <para>
 /// An application always declares its languages, even without texts of its own (<c>LOC103</c>), because they're the
 /// languages its users get. Its first language is the fallback for every text, including the texts of the libraries
-/// it uses. See <see cref="LocalizableText"/>. A library's languages only describe the library's own texts.
+/// it uses. See <see cref="LocalizedText"/>. A library's languages only describe the library's own texts.
 /// </para>
 /// <para>
 /// The build takes a project for an application when it builds an executable or an Android app. A project that a host
@@ -45,7 +45,7 @@ namespace CodeChops.Idioma;
 /// your English.
 /// </para>
 /// <para>
-/// A library without this attribute has no texts of its own to translate. Neither <c>LocalizableText.Inline</c> nor
+/// A library without this attribute has no texts of its own to translate. Neither <c>LocalizedText.Inline</c> nor
 /// <c>[Localized]</c> exists there. It can still reword a library's set, or give a library's contract another
 /// language.
 /// </para>
@@ -62,7 +62,7 @@ namespace CodeChops.Idioma;
 ///
 /// public static class ShopTexts
 /// {
-///     public static string Checkout => LocalizableText.Inline(en: "Checkout", nl: "Afrekenen");
+///     public static string Checkout => LocalizedText.Inline(en: "Checkout", nl: "Afrekenen");
 /// }
 /// </code>
 /// </example>
@@ -75,7 +75,7 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// The default language, the first one listed, such as <c>en</c>.
     /// </summary>
     /// <remarks>
-    /// In an application, every text falls back to it. See <see cref="LocalizableText"/>.
+    /// In an application, every text falls back to it. See <see cref="LocalizedText"/>.
     /// </remarks>
     public string DefaultLanguage { get; }
 
@@ -83,7 +83,7 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// Every language listed, the default language first. To let the user choose one of your app's languages,
     /// read <see cref="LocalizationRegistry.SupportedLanguages"/> instead.
     /// </summary>
-    public IReadOnlyList<string> Languages { get; }
+    public ImmutableArray<string> Languages { get; }
 
     /// <summary>
     /// Declares the languages of this assembly, the default language first.

@@ -132,7 +132,7 @@ internal sealed partial record LocalizationSetsAnalysis
             pass.Findings?.Add(new LocalizationSetsFinding(
                 LocalizationSetsRule.MissingContract,
                 set.Location,
-                new EquatableArray<string>([set.Name, set.Language!, contractName, set.Name]),
+                new EquatableArray<string>([set.Name, set.Language!, MissesContract(contractName), AddContract(contractName, set.Name)]),
                 SuggestedName: contractName));
         }
 
@@ -190,6 +190,13 @@ internal sealed partial record LocalizationSetsAnalysis
     private static void ReportNameWithoutLanguageSuffix(DiscoveredLocalization set, ContractsPass pass)
     {
         var suffix = SupportedLanguages.ToTypeSuffix(pass.DefaultLanguage ?? set.Language!);
+
+        if (IsSuffixAlone(set.Name, suffix))
+        {
+            pass.Findings?.Add(SuffixAlone(set, suffix));
+            return;
+        }
+
         var suggestedName = SuggestNameEndingIn(set.Name, suffix);
 
         pass.Findings?.Add(new LocalizationSetsFinding(
@@ -300,7 +307,8 @@ internal sealed partial record LocalizationSetsAnalysis
             {
                 _ when String.Equals(member.Name, baseName, StringComparison.Ordinal)
                     => $"the generated class '{baseName}', which can't hold a member of its own name. '{baseName}.{member.Name}' isn't generated",
-                GetName => $"the generated method '{baseName}.{GetName}', which gives a text by its key. The text '{baseName}.{member.Name}' isn't generated",
+                GetName or TryGetName => $"the generated method '{baseName}.{member.Name}', which gives a text by its key. The text '{baseName}.{member.Name}' isn't generated",
+                KeysName => $"the generated property '{baseName}.{KeysName}', which lists the key of every text. The text '{baseName}.{member.Name}' isn't generated",
                 ExtensionName => $"the generated extension method '{ExtensionName}', which gives an enum value its text. The text '{baseName}.{member.Name}' isn't generated",
                 _ => $"the generated method '{baseName}.{LookupName}', which gives the text of an enum value. The text '{baseName}.{member.Name}' isn't generated",
             };

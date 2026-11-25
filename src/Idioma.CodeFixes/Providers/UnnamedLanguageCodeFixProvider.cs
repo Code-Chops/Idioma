@@ -6,9 +6,9 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a call of <c>LocalizableText.Inline</c> with an argument that has no language name (<c>LOC500</c>). It names
-/// every such argument after the language it stands for: <c>LocalizableText.Inline("Orders", "Bestellingen")</c>
-/// becomes <c>LocalizableText.Inline(en: "Orders", nl: "Bestellingen")</c>. It does the same for
+/// Fixes a call of <c>LocalizedText.Inline</c> with an argument that has no language name (<c>LOC500</c>). It names
+/// every such argument after the language it stands for: <c>LocalizedText.Inline("Orders", "Bestellingen")</c>
+/// becomes <c>LocalizedText.Inline(en: "Orders", nl: "Bestellingen")</c>. It does the same for
 /// <c>[Localized("City", "Plaats")]</c>.
 /// </summary>
 /// <remarks>

@@ -176,7 +176,7 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     /// </summary>
     public static class InlineTexts
     {
-        public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+        public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
     }
 }
 #endregion
@@ -420,7 +420,7 @@ namespace CodeChops.Idioma.Tests
         public void ExcludedSet_ShouldNotRegisterItself()
         {
             // Arrange
-            var sets = LocalizationRegistry.Current.Sets;
+            var sets = LocalizationRegistry.Sets;
 
             // Act & Assert: the other sets did, and Dutch keeps their wording.
             sets.ShouldContain(set => set is GeneratedLocalizationNl);
@@ -434,7 +434,7 @@ namespace CodeChops.Idioma.Tests
         public void SetDerivedFromSetOfItsAssembly_ShouldRegisterAfterIt()
         {
             // Arrange & Act
-            var sets = LocalizationRegistry.Current.Sets;
+            var sets = LocalizationRegistry.Sets;
             var english = sets.IndexOf(sets.Single(set => set.GetType() == typeof(GeneratedLocalizationEn)));
             var reworded = sets.IndexOf(sets.Single(set => set is RewordedGeneratedLocalizationEn));
 
@@ -472,14 +472,14 @@ namespace CodeChops.Idioma.Tests
             // Arrange & Act & Assert: the wording of the user's language is checked, and the others aren't read.
             using (new UICultureScope("nl-NL"))
             {
-                Should.Throw<ArgumentNullException>(() => LocalizableText.Inline(en: "Orders", nl: null!)).ParamName.ShouldBe("nl");
-                LocalizableText.Inline(en: null!, nl: "Bestellingen").ShouldBe("Bestellingen");
+                Should.Throw<ArgumentNullException>(() => LocalizedText.Inline(en: "Orders", nl: null!)).ParamName.ShouldBe("nl");
+                LocalizedText.Inline(en: null!, nl: "Bestellingen").ShouldBe("Bestellingen");
             }
 
             using (new UICultureScope("en-US"))
             {
-                Should.Throw<ArgumentNullException>(() => LocalizableText.Inline(en: null!, nl: "Bestellingen")).ParamName.ShouldBe("en");
-                LocalizableText.Inline(en: "Orders", nl: null!).ShouldBe("Orders");
+                Should.Throw<ArgumentNullException>(() => LocalizedText.Inline(en: null!, nl: "Bestellingen")).ParamName.ShouldBe("en");
+                LocalizedText.Inline(en: "Orders", nl: null!).ShouldBe("Orders");
             }
         }
 
@@ -491,10 +491,10 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert
             using (new UICultureScope("nl-NL"))
-                LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!").ShouldBe("Hallo, Max!");
+                LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!").ShouldBe("Hallo, Max!");
 
             using (new UICultureScope("en-US"))
-                LocalizableText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!").ShouldBe("Hello, Max!");
+                LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!").ShouldBe("Hello, Max!");
         }
 
         [Test]
@@ -569,7 +569,7 @@ namespace CodeChops.Idioma.Tests
             // that the text is a call of that set's method.
             using var _ = new CulturesScope(culture);
             const string name = "Max";
-            var set = LocalizationRegistry.Current.Find<IGeneratedLocalization>(CultureInfo.CurrentUICulture).ShouldNotBeNull();
+            var set = LocalizationRegistry.Find<IGeneratedLocalization>(CultureInfo.CurrentUICulture).ShouldNotBeNull();
 
             // Act: per call, the least of a few rounds of ten thousand. The wording itself is measured, not written
             // down, because the runtime decides what an interpolated string allocates.
@@ -696,6 +696,39 @@ namespace CodeChops.Idioma.Tests
             Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("Welcome")).Message.ShouldContain("takes 1 value, but 0 were passed");
             Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("ItemsInCart", 1, "Idioma", 2)).Message.ShouldContain("takes 2 values, but 3 were passed");
             Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("ItemsInCart", 1L, "Idioma")).Message.ShouldContain("takes a value of type 'System.Int32' for 'count', but a value of type 'System.Int64' was passed");
+        }
+
+        [Test]
+        public void GeneratedTryGetTextByKey_ShouldGiveTextWithThatKeyAndFalseForKeyNoTextHas()
+        {
+            // Arrange
+            using var _ = new UICultureScope("nl-NL");
+
+            // Act & Assert: a text, a text that takes a value, and a key no text has, as one from a database may be.
+            GeneratedLocalization.TryGetTextByKey("Greeting", out var greeting).ShouldBeTrue();
+            greeting.ShouldBe("Hallo!");
+            GeneratedLocalization.TryGetTextByKey("Welcome", out var welcome, "Max").ShouldBeTrue();
+            welcome.ShouldBe("Welkom, Max!");
+            GeneratedLocalization.TryGetTextByKey("Chekout", out var unknown).ShouldBeFalse();
+            unknown.ShouldBeNull();
+
+            // A key that is null and values the text doesn't take are mistakes of the caller, so they throw as before.
+            Should.Throw<ArgumentNullException>(() => GeneratedLocalization.TryGetTextByKey(null!, out var ignored));
+            Should.Throw<ArgumentException>(() => GeneratedLocalization.TryGetTextByKey("Welcome", out var ignored)).Message.ShouldContain("takes 1 value, but 0 were passed");
+        }
+
+        [Test]
+        public void GeneratedTextKeys_ShouldListKeyOfEveryText()
+        {
+            // Arrange & Act
+            var keys = GeneratedLocalization.TextKeys;
+
+            // Assert: every key gives a text or asks for its values, and the keys of a set of an enum are its members.
+            keys.Contains("Greeting", StringComparer.Ordinal).ShouldBeTrue();
+            keys.Contains("ItemsInCart", StringComparer.Ordinal).ShouldBeTrue();
+            keys.ShouldAllBe(static key => typeof(IGeneratedLocalization).GetMember(key).Length == 1);
+            keys.Length.ShouldBe(typeof(IGeneratedLocalization).GetMembers().Count(static member => member is not System.Reflection.MethodInfo { IsSpecialName: true }));
+            OrderStatusLocalization.TextKeys.Contains(nameof(OrderStatus.Shipped), StringComparer.Ordinal).ShouldBeTrue();
         }
 
         [Test]

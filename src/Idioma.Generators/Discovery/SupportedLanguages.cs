@@ -480,7 +480,7 @@ internal static class SupportedLanguages
         static string Advise(string[] parts, int index, (string Name, string Code)? meant)
         {
             if (meant is not { } known)
-                return $"Check the code. If it's right, turn {LocalizableTextFactoryGenerator.UnknownLanguageCodeDiagnosticId} off where it's reported";
+                return $"Check the code. If it's right, turn {LocalizedTextFactoryGenerator.UnknownLanguageCodeDiagnosticId} off where it's reported";
 
             var corrected = String.Join("-", parts.Select((part, i) => i == index ? known.Code : part));
             return $"{known.Name} is '{known.Code}', so write '{corrected}'";

@@ -12,9 +12,9 @@ foreach (var culture in LocalizationRegistry.SupportedLanguages)
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
 
     // Each text is read where it's shown, so it gives the wording for the language of that moment.
-    var title = LocalizableText.GetTextOfType<Parcel>();
-    var recipient = LocalizableText.GetTextByMember<Parcel>(nameof(Parcel.Recipient));
-    var postalCode = LocalizableText.GetTextByMember<Parcel>(nameof(Parcel.PostalCode));
+    var title = LocalizedText.GetTextOfType<Parcel>();
+    var recipient = LocalizedText.GetTextByMember<Parcel>(nameof(Parcel.Recipient));
+    var postalCode = LocalizedText.GetTextByMember<Parcel>(nameof(Parcel.PostalCode));
 
     Console.WriteLine($"{culture}: {title} - {recipient}: {parcel.Recipient}, {postalCode}: {parcel.PostalCode}");
 }

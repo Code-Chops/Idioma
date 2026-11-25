@@ -61,7 +61,7 @@ public sealed partial class LocalizationRegistrationPartTests
         // own app languages would send de-DE to English.
         context.Assemblies.ShouldContain(assembly => String.Equals(assembly.GetName().Name, "UnusedAddOn", StringComparison.Ordinal));
         var contract = context.LoadFromAssemblyName(new AssemblyName("UnusedAddOnLibrary")).GetType("UnusedAddOnLibrary.IAddOnShopLocalization")!;
-        var german = LocalizationRegistry.Current.Find(contract, CultureInfo.GetCultureInfo("de-DE")).ShouldNotBeNull();
+        var german = LocalizationRegistry.Find(contract, CultureInfo.GetCultureInfo("de-DE")).ShouldNotBeNull();
         contract.GetProperty("Checkout")!.GetValue(german).ShouldBe("Zur Kasse");
     }
 

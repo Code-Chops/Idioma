@@ -285,7 +285,7 @@ public sealed partial class LocalizationSetsPartTests
 
             public static class MixedTexts
             {
-                public static string Orders => LocalizableText.Inline(en: "Orders", nl: "Bestellingen");
+                public static string Orders => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
             }
             """);
 

@@ -394,7 +394,7 @@ public sealed class LocalizationRegistryWordingTests
         string Summary { get; }
     }
 
-    private static string Cart => LocalizableText.Inline(en: "Cart", nl: "Winkelwagen");
+    private static string Cart => LocalizedText.Inline(en: "Cart", nl: "Winkelwagen");
 
     private sealed class SetShowingLocalizationEn : ISetShowingLocalization
     {

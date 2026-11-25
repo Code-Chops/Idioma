@@ -47,7 +47,7 @@ The attribute reads the property each time it needs the wording, so the label an
 
 A message can show the field's label as `{0}`, as in `"Enter {0}"`, because the attribute fills it in. In a set, that wording gets warning `LOC403`. Turn it off around the text with `#pragma warning disable LOC403`.
 
-Code of your own that shows a property's label can keep the label on the property. Mark the property `[Localized(en: "Name", nl: "Naam")]`, and read the label with `LocalizableText.GetTextByMember` ([Write an attribute](../README.md#write-an-attribute)). `[Display]` and the validation attributes don't read that label.
+Code of your own that shows a property's label can keep the label on the property. Mark the property `[Localized(en: "Name", nl: "Naam")]`, and read the label with `LocalizedText.GetTextByMember` ([Write an attribute](../README.md#write-an-attribute)). `[Display]` and the validation attributes don't read that label.
 
 ## Keeping a resource file as an override
 

@@ -112,7 +112,7 @@ public sealed class SharedEnumValueAnalyzerTests
         diagnostic.Id.ShouldBe("LOC600");
         diagnostic.GetMessage().ShouldBe(
             "GetText() gives the text of 'ParcelStatus.Picked' for 'ParcelStatus.Collected', because the two have the same value. "
-            + "Use 'LocalizableText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Collected))' for the text of 'Collected'.");
+            + "Use 'LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Collected))' for the text of 'Collected'.");
         diagnostic.Properties.ContainsKey(SharedEnumValueAnalyzer.OwnTextProperty).ShouldBeFalse();
     }
 
