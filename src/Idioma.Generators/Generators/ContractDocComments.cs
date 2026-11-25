@@ -110,8 +110,9 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// What follows the link to the wording a set gives a text: the wording, when it is a constant, as one line of at
-    /// most <see cref="MaxWordingLength"/> characters, then, in parentheses, the set when another set has the same
+    /// What follows the link to the wording a set gives a text: the wording, when the build can read it
+    /// (<see cref="ConstantWording"/>, <see cref="MethodWording"/>), as one line of at most
+    /// <see cref="MaxWordingLength"/> characters, then, in parentheses, the set when another set has the same
     /// language, as a set rewording its own language has, whether it is marked <c>[ExcludeFromLocalizationDiscovery]</c>,
     /// and the class the wording comes from when the set inherits it (<c>: Checkout (inherited from
     /// ShopLocalizationEn)</c> for a British set that leaves <c>Checkout</c> as it is).

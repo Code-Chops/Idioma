@@ -234,6 +234,12 @@ internal readonly record struct UndeclaredText(
 /// so it turns off what that reports besides <c>CS0612</c> and <c>CS0618</c> (<see cref="SuppressedDiagnostics"/>),
 /// such as the id of a member marked <c>[Experimental]</c>.
 /// </summary>
+/// <remarks>
+/// An enum of another assembly whose members are marked <c>[Localized]</c> gets its <c>GetText()</c> from that
+/// assembly (<see cref="HasTextsOfItsAssembly"/>). The set registers its texts, which that <c>GetText()</c> then gives.
+/// Where code of the set's assembly can call that <c>GetText()</c> (<see cref="ReachesGetTextOfItsAssembly"/>), the set
+/// writes none of its own, which would make every call ambiguous (<c>CS0121</c>).
+/// </remarks>
 internal readonly record struct LocalizedEnum(
     EquatableArray<TypeNamePart> Type,
     string FullyQualifiedName,
@@ -241,7 +247,9 @@ internal readonly record struct LocalizedEnum(
     string Namespace,
     bool IsPublic,
     EquatableArray<LocalizedEnumMember> Members,
-    EquatableArray<string> SuppressedDiagnostics);
+    EquatableArray<string> SuppressedDiagnostics,
+    bool HasTextsOfItsAssembly = false,
+    bool ReachesGetTextOfItsAssembly = false);
 
 /// <summary>
 /// A member of an enum a set has a text for: its name, which is the name of its text, and whether it's the first

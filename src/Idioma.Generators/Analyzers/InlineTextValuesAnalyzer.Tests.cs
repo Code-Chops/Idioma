@@ -394,6 +394,7 @@ public sealed class InlineTextValuesAnalyzerTests
     [Test]
     [Arguments("Page_razor.g.cs", 1)]
     [Arguments("Pages/Index_cshtml.g.cs", 1)]
+    [Arguments("Page_razor.decl.g.cs", 1)]
     [Arguments("Other.g.cs", 0)]
     public async Task InlineTextInGeneratedCode_ShouldBeReportedOnlyInRazorOutput(string outputPath, int expected)
     {

@@ -575,6 +575,63 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
+    /// Gives the values of an enum the texts of a set of it, in place of the texts its members are marked
+    /// <c>[Localized]</c> with in the enum's own assembly. That assembly's <c>GetText()</c> then gives the set's
+    /// wording, in the languages of the set. A set of a library's enum registers this when the assembly that holds
+    /// the set starts. Where two do, the one registered last gives the texts.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TEnum">The enum.</typeparam>
+    /// <param name="getText">Gives a value of the enum its text, as <c>GetTextByValue</c> of the set's generated class does.</param>
+    /// <exception cref="ArgumentNullException">When <paramref name="getText"/> is <see langword="null"/>.</exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void RegisterEnumTexts<TEnum>(Func<TEnum, string> getText)
+        where TEnum : struct, Enum
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+
+        EnumTexts<TEnum>.GetText = getText;
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
+    /// The text a set gives a value of an enum, where one registered its texts (<see cref="RegisterEnumTexts{TEnum}"/>), or
+    /// <see langword="null"/>. <c>GetText()</c> of an enum whose members are marked <c>[Localized]</c> asks this
+    /// first.
+    /// </para>
+    /// </summary>
+    /// <typeparam name="TEnum">The enum.</typeparam>
+    /// <param name="value">The value to give the text of.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static string? FindEnumText<TEnum>(TEnum value)
+        where TEnum : struct, Enum
+    {
+        var getText = EnumTexts<TEnum>.GetText;
+
+        var text = getText?.Invoke(value);
+        return text;
+    }
+
+    /// <summary>
+    /// Per enum, what gives its values the texts of a set of it (<see cref="RegisterEnumTexts{TEnum}"/>), or
+    /// <see langword="null"/> where no set did.
+    /// </summary>
+    // A field per enum, which a text reads without a lookup: the enum's own GetText() asks on every call. Written once
+    // as the app starts, and a reference is read whole, so a reader sees the delegate or null.
+    private static class EnumTexts<TEnum>
+        where TEnum : struct, Enum
+    {
+        public static Func<TEnum, string>? GetText { get; set; }
+    }
+
+    /// <summary>
+    /// <para>
+    /// Don't use this method directly! This code is called by source-generated code.
+    /// </para>
+    /// <para>
     /// Checks that no values were passed for a text without parameters, and returns its wording. The method <c>GetTextByKey</c> of
     /// a generated class calls this for such a text: <c>ShopLocalization.GetTextByKey("Checkout")</c>.
     /// </para>

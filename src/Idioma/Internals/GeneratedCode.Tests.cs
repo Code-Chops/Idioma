@@ -122,8 +122,43 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["FindLanguageIndex", "FindSet", "FindSetForValues", "ResolveWording", "RecordMemberTexts", "ResolveKeyedWording", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
+            ["FindLanguageIndex", "FindSet", "FindSetForValues", "ResolveWording", "RecordMemberTexts", "RegisterEnumTexts", "FindEnumText", "ResolveKeyedWording", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
             ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// An enum that only the tests of <see cref="GeneratedCode.RegisterEnumTexts{TEnum}"/> register texts for, because
+    /// what they register stays for the process.
+    /// </summary>
+    private enum RegisteredStatus
+    {
+        Open,
+        Closed,
+    }
+
+    /// <summary>
+    /// An enum that nothing registers texts for.
+    /// </summary>
+    private enum UnregisteredStatus
+    {
+        Open,
+    }
+
+    [Test]
+    public void FindEnumText_ShouldGiveTheTextOfTheSetRegisteredLastAndNullForAnEnumWithoutOne()
+    {
+        // Arrange: two sets of one enum, as a library and the app that uses it may both have.
+        GeneratedCode.RegisterEnumTexts<RegisteredStatus>(static value => $"first {value}");
+        GeneratedCode.RegisterEnumTexts<RegisteredStatus>(static value => value is RegisteredStatus.Open ? "Open" : "Gesloten");
+
+        // Act
+        var closed = GeneratedCode.FindEnumText(RegisteredStatus.Closed);
+        var unregistered = GeneratedCode.FindEnumText(UnregisteredStatus.Open);
+
+        // Assert
+        closed.ShouldBe("Gesloten");
+        unregistered.ShouldBeNull();
+        Should.Throw<ArgumentNullException>(static () => GeneratedCode.RegisterEnumTexts<RegisteredStatus>(null!));
     }
 
     [Test]

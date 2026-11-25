@@ -11,9 +11,8 @@ namespace CodeChops.Idioma.Generators;
 /// <para>
 /// The attribute is generated per assembly, from its languages (<see cref="LocalizedTextFactoryGenerator"/>), so it
 /// doesn't exist in the compilation a generator sees. An attribute named <c>Localized</c> is taken for it when the
-/// build will bind it to the generated one (<see cref="WillBindToGenerated"/>): it binds to nothing here, or to an
-/// attribute of that name that only a <see langword="using"/> of the file brings in reach, which the generated one
-/// stands before.
+/// build will bind it to the generated one (<see cref="WillBindToGenerated"/>). That's so when it binds to nothing
+/// here, or when the namespace <c>CodeChops.Idioma</c> is in reach before the namespace of the attribute it binds to.
 /// </para>
 /// <para>
 /// The wording is read here, as the build runs, and written into the assembly as code
@@ -123,19 +122,29 @@ internal static class LocalizedMembers
 
     /// <summary>
     /// Whether a type is the generated attribute, as an analyzer sees it in the compilation that holds the generated
-    /// code: a class of that name in the global namespace, declared in this assembly.
+    /// code: a class of that name in the namespace <c>CodeChops.Idioma</c>, declared in this assembly.
     /// </summary>
     public static bool IsGeneratedAttribute(INamedTypeSymbol? type, IAssemblySymbol assembly)
     {
-        var isGeneratedAttribute = type is { Name: AttributeTypeName, Arity: 0, ContainingType: null, ContainingNamespace.IsGlobalNamespace: true }
+        var isGeneratedAttribute = type is { Name: AttributeTypeName, Arity: 0, ContainingType: null }
+                                   && IsPackageNamespace(type.ContainingNamespace)
                                    && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, assembly);
 
         return isGeneratedAttribute;
     }
 
     /// <summary>
-    /// Whether a node is an attribute written as <c>Localized</c> or <c>LocalizedAttribute</c>, also behind
-    /// <c>global::</c>. All the syntax can tell.
+    /// Whether a namespace is <c>CodeChops.Idioma</c>, which holds the generated attribute.
+    /// </summary>
+    private static bool IsPackageNamespace(INamespaceSymbol? @namespace)
+    {
+        var isPackageNamespace = @namespace is { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } };
+        return isPackageNamespace;
+    }
+
+    /// <summary>
+    /// Whether a node is an attribute written as <c>Localized</c> or <c>LocalizedAttribute</c>, by its name alone or
+    /// behind its namespace: <c>CodeChops.Idioma.Localized</c>, also with <c>global::</c>. All the syntax can tell.
     /// </summary>
     public static bool IsNamedLocalized(SyntaxNode node)
     {
@@ -145,12 +154,14 @@ internal static class LocalizedMembers
         var name = attribute.Name switch
         {
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            AliasQualifiedNameSyntax { Alias.Identifier.ValueText: "global" } alias => alias.Name.Identifier.ValueText,
+            QualifiedNameSyntax { Right: IdentifierNameSyntax right } qualified when IsPackageNamespaceName(qualified.Left) => right.Identifier.ValueText,
             _ => null,
         };
 
         var isNamedLocalized = name is AttributeName or AttributeTypeName;
         return isNamedLocalized;
+
+        static bool IsPackageNamespaceName(NameSyntax name) => name.ToString() is "CodeChops.Idioma" or "global::CodeChops.Idioma";
     }
 
     /// <summary>
@@ -169,11 +180,17 @@ internal static class LocalizedMembers
     /// compilation a generator sees, which doesn't hold it yet.
     /// </summary>
     /// <remarks>
-    /// The generated attribute lies in the global namespace. C# looks for a name in the namespaces and types around
-    /// it first, each with the usings written inside it, then in the global namespace, and only then in the usings at
-    /// the top of the file. So the generated attribute wins over an attribute of that name that only a using of the
-    /// file, or a global using, brings in reach. It loses to one in a namespace or type around the member, and to one
-    /// behind a using written inside a namespace. That one is the code's own, and its members are left alone.
+    /// <para>
+    /// The generated attribute lies in the namespace <c>CodeChops.Idioma</c>, as the package's own types do. An
+    /// attribute that binds to nothing here is taken for it. In the build it binds to the generated one, or to nothing
+    /// in a file without a using of that namespace, which the compiler reports (<c>CS0246</c>).
+    /// </para>
+    /// <para>
+    /// An attribute that binds to one of another namespace here is the code's own, unless the generated one is in
+    /// reach before it. C# looks for a name from the inside out: in each namespace around the attribute, then in the
+    /// usings written inside its declaration, and at last in the usings at the top of the file. Where both are in reach
+    /// at the same place, the compiler reports the name as ambiguous (<c>CS0104</c>), and the attribute is left alone.
+    /// </para>
     /// </remarks>
     public static bool WillBindToGenerated(AttributeSyntax attribute, SemanticModel model, CancellationToken cancellationToken)
     {
@@ -182,34 +199,69 @@ internal static class LocalizedMembers
         if (symbol.Symbol is null && symbol.CandidateSymbols.IsEmpty)
             return true;
 
-        if ((symbol.Symbol ?? symbol.CandidateSymbols[0]).ContainingType is not { ContainingType: null, ContainingNamespace: { IsGlobalNamespace: false } otherNamespace })
+        // A name written with its namespace names a type that exists already, which the generated one isn't.
+        if (attribute.Name is not IdentifierNameSyntax
+            || (symbol.Symbol ?? symbol.CandidateSymbols[0]).ContainingType is not { ContainingType: null, ContainingNamespace: { IsGlobalNamespace: false } otherNamespace })
+        {
             return false;
+        }
+
+        INamespaceSymbol? declared = null;
 
         for (var node = attribute.Parent; node is not null; node = node.Parent)
         {
             if (node is not BaseNamespaceDeclarationSyntax declaration)
                 continue;
 
-            // The namespace itself and those it lies in: namespace Shop.Domain looks in Shop.Domain and in Shop.
-            for (var around = model.GetDeclaredSymbol(declaration, cancellationToken) as INamespaceSymbol; around is { IsGlobalNamespace: false }; around = around.ContainingNamespace)
-                if (SymbolEqualityComparer.Default.Equals(around, otherNamespace))
-                    return false;
+            // The innermost declaration first: namespace Shop.Domain looks in Shop.Domain, then in the usings written
+            // inside it, then in Shop.
+            declared ??= model.GetDeclaredSymbol(declaration, cancellationToken) as INamespaceSymbol;
+            var outer = node.Parent?.AncestorsAndSelf().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault() is { } outerDeclaration
+                ? model.GetDeclaredSymbol(outerDeclaration, cancellationToken) as INamespaceSymbol
+                : null;
+
+            if (Finds(declared) is { } found)
+                return found;
 
             foreach (var directive in declaration.Usings)
             {
+                // An alias of that name wins over both.
                 if (directive.Alias is { Name.Identifier.ValueText: AttributeName or AttributeTypeName })
                     return false;
-
-                if (directive.Alias is null
-                    && directive.Name is { } name
-                    && SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(name, cancellationToken).Symbol, otherNamespace))
-                {
-                    return false;
-                }
             }
+
+            var importsGenerated = false;
+            var importsOther = false;
+
+            foreach (var directive in declaration.Usings)
+            {
+                if (directive.Alias is not null || !directive.StaticKeyword.IsKind(SyntaxKind.None) || directive.Name is not { } name)
+                    continue;
+
+                var imported = model.GetSymbolInfo(name, cancellationToken).Symbol as INamespaceSymbol;
+                importsGenerated |= IsPackageNamespace(imported);
+                importsOther |= SymbolEqualityComparer.Default.Equals(imported, otherNamespace);
+            }
+
+            if (importsGenerated || importsOther)
+                return importsGenerated && !importsOther;
+
+            // The namespaces the declaration's dotted name holds besides its last part, up to the next declaration.
+            for (var around = declared?.ContainingNamespace; around is { IsGlobalNamespace: false } && !SymbolEqualityComparer.Default.Equals(around, outer); around = around.ContainingNamespace)
+                if (Finds(around) is { } foundAround)
+                    return foundAround;
+
+            declared = outer;
         }
 
-        return true;
+        // At the top of the file the other one is in reach, as it binds, and the generated one at most beside it.
+        return false;
+
+        // Whether a namespace holds the generated attribute (true) or the other one (false), or neither (null).
+        bool? Finds(INamespaceSymbol? @namespace) =>
+            IsPackageNamespace(@namespace) ? true
+            : SymbolEqualityComparer.Default.Equals(@namespace, otherNamespace) ? false
+            : null;
     }
 
     /// <summary>

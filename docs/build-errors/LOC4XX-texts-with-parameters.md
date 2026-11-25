@@ -75,6 +75,8 @@ The build reads only the strings a text returns:
 
 It doesn't read a string passed to a method, because the method may fill the placeholder in. So `string.Format("{0} items", count)` gets no warning. A string kept in a local variable isn't read either.
 
+A text that an attribute names as its error message gets no warning either, because the attribute fills the placeholder in. That's a validation attribute with `ErrorMessageResourceName` and `ErrorMessageResourceType`, as in `[Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]`. Its `{0}` shows the name of the field. A display name, as `[Display]` reads it with `Name` and `ResourceType`, is shown as written, so its placeholder is still reported.
+
 A placeholder is a number in braces, as `string.Format` reads it. An alignment or a format may follow the number:
 
 - `{0}`, `{1,8}`, `{1, -8}` and `{0:N2}` are placeholders.
@@ -97,6 +99,7 @@ The fix changes every language or none. There's no fix when:
 
 - a language's text can't become a method, such as one with a setter or one the constructor assigns
 - code of your project uses the text as a property of a set, such as another text that shows it, because that code would no longer compile. The override of the text in a regional set is the exception: its `base.Greeting` becomes `base.Greeting(arg0)`
+- code of your project names the text of the generated class: in `nameof(ShopLocalization.Greeting)`, or as the resource of an attribute such as `[Display(Name = nameof(ShopLocalization.Greeting), ResourceType = typeof(ShopLocalization))]`. That code would go on compiling, and the attribute would throw at run time, because it reads a property by its name
 - it's the text of an enum member, in a [set of the enum](../enums.md#a-set-of-the-enum), because the contract takes that text from the enum
 - the contract's text takes no values and the contract is another assembly's or one you wrote by hand, because the fix doesn't change a contract
 - the text overrides a text of another assembly's set

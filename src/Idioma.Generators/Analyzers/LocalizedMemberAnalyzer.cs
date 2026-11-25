@@ -19,7 +19,8 @@ namespace CodeChops.Idioma.Generators;
 /// it.</item>
 /// <item>A wording is <see langword="null"/>.</item>
 /// <item>It's written in markup. The generator can't read what Razor generates from a <c>.razor</c> or
-/// <c>.cshtml</c> file, because no source generator sees what another writes.</item>
+/// <c>.cshtml</c> file, because no source generator sees what another writes. The exception is the file of
+/// declarations that Razor writes from SDK 11 on, which other generators do see.</item>
 /// <item>The attribute is on something a text isn't found by, such as an indexer, or the field behind a
 /// property.</item>
 /// </list>
@@ -45,7 +46,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
+        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either, except the @code of a component on SDK 11 or later. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmarkedEnumMemberRule = new(
@@ -283,8 +284,9 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         var type = member as INamedTypeSymbol ?? member.ContainingType;
         var name = member is INamedTypeSymbol || type is null ? member.Name : $"{type.Name}.{member.Name}";
 
-        // In what Razor generated from the user's markup: the attribute compiles, and the generator never saw it.
-        if (context.IsGeneratedCode)
+        // In what Razor generated from the user's markup: the attribute compiles, and the generator never saw it. It does
+        // see a file of declarations, which Razor writes from SDK 11 on.
+        if (context.IsGeneratedCode && !UnnamedLanguageAnalyzer.IsRazorDeclaration(attribute.SyntaxTree))
         {
             Report("it's written in markup, which the source generator can't read", $"Move '{type?.Name ?? member.Name}' to a C# file");
             return;
@@ -363,7 +365,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Whether an attribute is the generated <c>[Localized]</c> under another name, as after
-    /// <c>using L = LocalizedAttribute;</c>. The source generator finds the attribute by its name, so such a member
+    /// <c>using L = CodeChops.Idioma.LocalizedAttribute;</c>. The source generator finds the attribute by its name, so such a member
     /// compiles and gets no text.
     /// </summary>
     // By the using directives of its file first, which binds nothing: nearly no attribute is written through an alias.

@@ -155,13 +155,11 @@ Add this to the `Program.cs` of the WebAssembly project, with usings for `System
 ```csharp
 // The stored language, else the browser's. Where none of the app's languages serves it, texts show the default
 // language, so make that the UI culture too.
-if (!IsServed(CultureInfo.CurrentUICulture))
+if (!LocalizationRegistry.IsServed(CultureInfo.CurrentUICulture))
     CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo(LocalizationRegistry.DefaultLanguage!);
-
-// Whether one of the app's languages is the culture, or a culture it falls back to, as en-GB falls back to en.
-static bool IsServed(CultureInfo culture) => culture.Name.Length > 0 &&
-    (LocalizationRegistry.SupportedLanguages.Contains(culture.Name, StringComparer.OrdinalIgnoreCase) || IsServed(culture.Parent));
 ```
+
+`IsServed` follows the same fallback order as a text. So `en` serves `en-GB`, and `zh-TW` serves `zh-Hant-TW` ([details](advanced-topics.md#fallback-order)).
 
 What changes for such a user:
 

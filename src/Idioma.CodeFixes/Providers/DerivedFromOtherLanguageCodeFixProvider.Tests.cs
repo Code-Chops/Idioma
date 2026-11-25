@@ -114,6 +114,25 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
     }
 
     [Test]
+    public async Task PartialSetWhoseOtherPartListsTheInterfaces_ShouldLoseTheBaseList()
+    {
+        // Arrange: one part derives from the English set, and another lists the interfaces already, as after a merge.
+        const string first = "namespace TestApp;\n\npublic partial class ShopLocalizationNl : ShopLocalizationEn\n{\n    public override string Checkout => \"Afrekenen\";\n}\n";
+        const string second = "using CodeChops.Idioma;\n\nnamespace TestApp;\n\npublic partial class ShopLocalizationNl : ILocalizationSet, IShopLocalization\n{\n    public override string Cart => \"Winkelwagen\";\n}\n";
+
+        // Act
+        var fixes = await FixAsync(Header, first, second);
+
+        // Assert: the part that listed only the English set loses its colon too, and keeps the line break before its
+        // body. Both parts then compile.
+        var fix = fixes.ShouldHaveSingleItem();
+        fix.Sources[1].ShouldBe("namespace TestApp;\n\npublic partial class ShopLocalizationNl\n{\n    public virtual string Checkout => \"Afrekenen\";\n}\n");
+        fix.Sources[2].ShouldBe(second.Replace("public override", "public virtual", StringComparison.Ordinal));
+
+        GeneratorTestHelper.CompileFilesWithGenerators(fix.Sources).ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task SetThatAnotherSetDerivesFrom_ShouldKeepItsTextsVirtual()
     {
         // Arrange: a kiosk rewords the Dutch set, which derives from English.

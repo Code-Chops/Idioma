@@ -141,6 +141,7 @@ public sealed class SharedEnumValueAnalyzerTests
     [Test]
     [Arguments("Page_razor.g.cs", 2)]
     [Arguments("Pages/Index_cshtml.g.cs", 2)]
+    [Arguments("Page_razor.decl.g.cs", 2)]
     [Arguments("Other.g.cs", 0)]
     public async Task LaterMemberInGeneratedCode_ShouldBeReportedOnlyInRazorOutput(string outputPath, int expected)
     {

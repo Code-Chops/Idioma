@@ -147,7 +147,12 @@ public sealed class DerivedFromOtherLanguageCodeFixProvider : CodeFixProvider
             if (ListsBaseSet(part, partModel, baseSet, cancellationToken))
             {
                 var names = added.Select(@interface => @interface.ToMinimalDisplayString(partModel, part.BaseList!.SpanStart)).ToArray();
-                changed = changed.WithBaseList(ReplaceFirst(changed.BaseList!, names));
+
+                // Another part may list every interface already. Then a part that listed only the set loses its base
+                // list, colon and all.
+                changed = names.Length is 0 && changed.BaseList!.Types.Count is 1
+                    ? CodeFixSupport.RemoveBaseList(changed)
+                    : changed.WithBaseList(ReplaceFirst(changed.BaseList!, names));
             }
 
             if (changed != part)

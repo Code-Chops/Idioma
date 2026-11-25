@@ -6,7 +6,7 @@ Each code has an example and the fix. The [list of every code](../build-errors.m
 
 The generator can't use the default-language set, so it writes no texts for it. A default-language set it can use:
 
-- is named after its language, such as `ShopLocalizationEn`
+- is named after its language, such as `ShopLocalizationEn`, and a regional default language in full, such as `ShopLocalizationEnUs` for `en-US`
 - has no `LocalizationLanguageCode` that gives it another language, or one the build can't read because it isn't a constant
 - is top-level, so not nested
 - isn't file-local, generic, or abstract
@@ -34,6 +34,12 @@ The generated class is named after the set without its language, so `OrderStatus
 An enum in another namespace counts when the set names it by its name alone, as `ILocalizationSet<OrderStatus>` does behind `using Domain;`. Inside the set's namespace, the generated class would stand before the enum, so that name would mean the generated class.
 
 The contract is named after the set too, so an interface `IShopLocalization` of your own next to `ShopLocalizationEn` would give a second `IShopLocalization`. Rename the set or your interface.
+
+With a regional default language, the set is named after that region, not after its language. With `[assembly: SupportedLanguages("en-US", "nl")]`, `ShopLocalizationEn` serves `en-US`, but it isn't the default-language set, so it starts no contract:
+
+```text
+error LOC200: 'ShopLocalizationEn' is the default-language set of a contract, but its name gives 'en', and the default language is 'en-US'. The generator can't use it, so it writes no texts for it. Rename it to ShopLocalizationEnUs, or make 'en' the default language in [assembly: SupportedLanguages].
+```
 
 A set that implements another contract, such as `Shop.IShopLocalization` of a library, translates or rewords that contract, and starts none of its own:
 

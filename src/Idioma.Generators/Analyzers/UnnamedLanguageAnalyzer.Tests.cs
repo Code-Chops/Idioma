@@ -163,6 +163,7 @@ public sealed class UnnamedLanguageAnalyzerTests
     [Test]
     [Arguments("Page_razor.g.cs")]
     [Arguments("Pages/Index_cshtml.g.cs")]
+    [Arguments("Page_razor.decl.g.cs")]
     public async Task UnnamedLanguageInRazorOutput_ShouldReportLOC500(string outputPath)
     {
         // Arrange: what Razor writes for <Comp Caption="@LocalizedText.Inline("Orders", "Bestellingen")" /> in a

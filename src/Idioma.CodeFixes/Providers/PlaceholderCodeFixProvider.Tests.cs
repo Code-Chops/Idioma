@@ -315,6 +315,32 @@ public sealed class PlaceholderCodeFixProviderTests
     }
 
     [Test]
+    [Arguments("[System.ComponentModel.DataAnnotations.Display(Name = nameof(ShopLocalization.Greeting), ResourceType = typeof(ShopLocalization))]")]
+    [Arguments("[System.ComponentModel.DataAnnotations.Display(Name = \"Greeting\", ResourceType = typeof(ShopLocalization))]")]
+    [Arguments("[System.ComponentModel.DataAnnotations.MaxLength(20, ErrorMessage = nameof(ShopLocalization.Greeting))]")]
+    public async Task TextThatCodeNamesAsPropertyOfGeneratedClass_ShouldGetNoFix(string attribute)
+    {
+        // Arrange: an attribute that reads the text as a resource, which finds a static property by its name at run
+        // time, or code that names it with nameof. Both go on compiling where the text is a method, and stop working.
+        var source = $$"""
+            {{Sets(EnglishGreetingWithPlaceholder, DutchGreeting)}}
+
+            public class Customer
+            {
+                {{attribute}}
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert: a display name shows as it's written, so the placeholder is still reported.
+        (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC403");
+        fixes.ShouldBeEmpty();
+    }
+
+    [Test]
     [Arguments("""public string Greeting => "Hallo!"; public string Welcome => $"{Greeting} Welkom!";""", """public virtual string Welcome => "Welcome!";""")]
     [Arguments("""public string Greeting => "Hallo!"; public string Welcome => this.Greeting + " Welkom!";""", """public virtual string Welcome => "Welcome!";""")]
     [Arguments("""public string Greeting => "Hallo!"; public string Welcome => "Welkom!";""", """public virtual string Welcome => "Welcome!"; public static string Read() => new ShopLocalizationNl().Greeting;""")]

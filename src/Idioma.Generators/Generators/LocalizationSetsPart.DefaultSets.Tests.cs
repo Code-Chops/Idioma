@@ -117,6 +117,42 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    [Arguments("en-US", "ShopLocalizationEn", "en", "ShopLocalizationEnUs")]
+    [Arguments("de-CH", "ShopLocalizationDe", "de", "ShopLocalizationDeCh")]
+    public void SetNamedAfterLanguageOfRegionalDefaultLanguage_ShouldReportLOC200WithTheNameToGiveIt(string defaultLanguage, string name, string language, string suggestedName)
+    {
+        // Arrange: the name gives a language that serves the default language, so it's listed, but it isn't the default
+        // language itself. No set starts IShopLocalization then, so every set that lists it fails to compile.
+        var source = $$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("{{defaultLanguage}}", "nl")]
+
+            namespace TestApp;
+
+            public sealed class {{name}} : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+
+        // Assert: with the name the code fix renames the set to.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
+        diagnostic.GetMessage().ShouldBe($"'{name}' is the default-language set of a contract, but its name gives '{language}', and the default language is '{defaultLanguage}'. The generator can't use it, so it writes no texts for it. Rename it to {suggestedName}, or make '{language}' the default language in [assembly: SupportedLanguages].");
+        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe(suggestedName);
+
+        GeneratorTestHelper.CompileWithGenerators(source.Replace(name, suggestedName, StringComparison.Ordinal)).ShouldBeEmpty();
+    }
+
+    [Test]
     public void DefaultSetListingContractOfAnotherSetNextToItsOwn_ShouldStillStartItsContract()
     {
         // Arrange: a set that starts IOrderLocalization and words IShopLocalization in the same class, next to

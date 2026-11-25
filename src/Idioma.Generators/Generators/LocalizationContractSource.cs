@@ -98,6 +98,9 @@ internal static partial class LocalizationContractSource
         if (contract.HasTexts && texts.Any(static text => text.IsObsoleteAsError))
             AppendObsoleteTexts(sb, file);
 
+        if (contract.HasTexts && contract.Enums.Any(static @enum => @enum.HasTextsOfItsAssembly))
+            AppendEnumTextsRegistration(sb, file);
+
         GeneratedFile.AppendFooter(sb, warnings);
 
         return sb.ToString();

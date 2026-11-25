@@ -219,16 +219,7 @@ public sealed class SetOfEnumCodeFixProvider : CodeFixProvider
         var types = baseList.Types;
 
         if (types.Count is 1)
-        {
-            // What stood after the base list, such as the line break before the body, goes to the token before it,
-            // in place of the space that stood between the two.
-            var before = baseList.GetFirstToken().GetPreviousToken();
-            var kept = before.TrailingTrivia.Reverse().SkipWhile(static trivia => trivia.IsKind(SyntaxKind.WhitespaceTrivia)).Reverse();
-
-            return part
-                .ReplaceToken(before, before.WithTrailingTrivia(kept.Concat(baseList.GetTrailingTrivia())))
-                .WithBaseList(null);
-        }
+            return CodeFixSupport.RemoveBaseList(part);
 
         var removed = types[index];
         var remaining = types.RemoveAt(index);

@@ -499,6 +499,8 @@ internal static partial class LocalizationDiscovery
                 suppressed.AddRange(GetSuppressedDiagnostics(member));
             }
 
+            var holder = FindGetTextOfItsAssembly(@enum, type.ContainingAssembly);
+
             enums.Add(new LocalizedEnum(
                 Type: TextParameters.ReadType(@enum),
                 FullyQualifiedName: fullyQualifiedName,
@@ -506,11 +508,38 @@ internal static partial class LocalizationDiscovery
                 Namespace: GetNamespaceName(@enum.ContainingNamespace),
                 IsPublic: IsPublic(@enum),
                 Members: new EquatableArray<LocalizedEnumMember>(members.ToImmutable()),
-                SuppressedDiagnostics: new EquatableArray<string>([.. suppressed.Distinct(StringComparer.Ordinal)])));
+                SuppressedDiagnostics: new EquatableArray<string>([.. suppressed.Distinct(StringComparer.Ordinal)]),
+                HasTextsOfItsAssembly: holder is not null,
+                ReachesGetTextOfItsAssembly: holder is not null
+                                             && (holder.DeclaredAccessibility is Accessibility.Public || holder.ContainingAssembly.GivesAccessTo(type.ContainingAssembly))));
         }
 
         var ordered = enums.OrderBy(static @enum => @enum.FullyQualifiedName, StringComparer.Ordinal).ToImmutableArray();
         return ordered;
+
+        // The class of another assembly that gives the enum its GetText() from the [Localized] of its members, by the
+        // name its generator gives it (LocalizedMembers), or null. Only an assembly that uses Idioma writes one.
+        static INamedTypeSymbol? FindGetTextOfItsAssembly(INamedTypeSymbol @enum, IAssemblySymbol setAssembly)
+        {
+            if (SymbolEqualityComparer.Default.Equals(@enum.ContainingAssembly, setAssembly))
+                return null;
+
+            var chain = new List<string>();
+
+            for (var current = @enum; current is not null; current = current.ContainingType)
+            {
+                // An enum inside a type with type parameters gets no GetText().
+                if (current.Arity > 0)
+                    return null;
+
+                chain.Insert(0, current.Name);
+            }
+
+            var namespaceName = @enum.ContainingNamespace is { IsGlobalNamespace: false } containing ? containing.ToDisplayString() + "." : "";
+            var holder = @enum.ContainingAssembly.GetTypeByMetadataName(namespaceName + String.Join("_", chain) + LocalizedMembers.ExtensionHolderSuffix);
+
+            return holder is { IsStatic: true, ContainingType: null } ? holder : null;
+        }
 
         // Whether code outside the assembly can name the enum: it's public, and so is every type that holds it.
         static bool IsPublic(INamedTypeSymbol @enum)

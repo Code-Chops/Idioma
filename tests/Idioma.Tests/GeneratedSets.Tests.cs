@@ -870,6 +870,25 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        [Arguments("en", true)]
+        [Arguments("en-GB", true)]
+        [Arguments("nl-BE", true)]
+        [Arguments("de-DE", false)]
+        [Arguments("", false)]
+        public void IsServed_ShouldTellWhetherOneOfTheAppLanguagesServesTheCulture(string name, bool expected)
+        {
+            // Arrange: this test project is an application declaring ("en", "nl"). A region falls back to its language,
+            // and the invariant culture falls back to none.
+            var culture = CultureInfo.GetCultureInfo(name);
+
+            // Act
+            var isServed = LocalizationRegistry.IsServed(culture);
+
+            // Assert
+            isServed.ShouldBe(expected);
+        }
+
+        [Test]
         public void AssemblyAttributes_ShouldBeInTheAssembly()
         {
             // Arrange

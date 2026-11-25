@@ -1,4 +1,5 @@
 using CodeChops.Idioma.Generators;
+using CodeChops.Idioma.Tests.TestHelpers;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -170,6 +171,42 @@ public sealed class SupportedLanguagesTests
 
         // Assert
         unknown.ShouldBeNull();
+    }
+
+    [Test]
+    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl\", \"de\")]", "en,nl,de", "en")]
+    [Arguments("[assembly: SupportedLanguages(otherLanguages: [\"nl\"], defaultLanguage: \"en\")]", "en,nl", "en")]
+    [Arguments("[assembly: SupportedLanguages(\"en\", new[] { \"nl\" })]", "en,nl", "en")]
+    [Arguments("[assembly: CodeChops.Idioma.SupportedLanguagesAttribute(\"en-GB\")]", "en-GB", "en-GB")]
+    [Arguments("[assembly: SupportedLanguages(\"en\", null)]", "en", "en")]
+    [Arguments("[assembly: SupportedLanguages(\"en_GB\", \"nl\")]", "en_GB,nl", null)]
+    [Arguments("[assembly: Languages(\"nl\", \"en\")]", "nl,en", "nl")]
+    [Arguments("[assembly: SupportedLanguages(\"en\")]\n[assembly: SupportedLanguages(\"nl\")]", "en", null)]
+    [Arguments("[assembly: System.Reflection.AssemblyTitle(\"Shop\")]", "", null)]
+    public void LanguagesOfCompilation_ShouldBeReadFromTheAttributeHoweverItIsWritten(string attributes, string codes, string? defaultLanguage)
+    {
+        // Arrange: by name or by position, an array written out or as a collection expression, with its full name, and
+        // through an alias, which the syntax doesn't show. Two attributes, which don't compile, give no default language.
+        var source = $"""
+            using CodeChops.Idioma;
+            using Languages = CodeChops.Idioma.SupportedLanguagesAttribute;
+
+            {attributes}
+            """;
+
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+            "Languages",
+            [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(source, GeneratorTestHelper.ParseOptions)],
+            GeneratorTestHelper.References,
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
+
+        // Act
+        var read = SupportedLanguages.ReadCodes(compilation.Assembly);
+        var readDefault = SupportedLanguages.ReadDefaultLanguage(compilation.Assembly);
+
+        // Assert
+        String.Join(",", read).ShouldBe(codes);
+        readDefault.ShouldBe(defaultLanguage);
     }
 
     [Test]

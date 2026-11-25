@@ -31,10 +31,10 @@ A member marked `[Localized]` has a text that can't be registered, so `Localized
 - Its type is private or protected inside another type, or file-local. The generated code that holds the text can't name such a type. Make the type internal or public.
 - Its type, or a type around it, is marked `[Obsolete]` as an error. Naming such a type is an error that no pragma turns off. Make the `[Obsolete]` a warning, or remove `[Localized]`.
 - A wording is `null`. Write a wording for that language.
-- It's written in the `@code` of a `.razor` file. The source generator can't read what Razor generates, so write the type in a C# file.
+- It's written in the `@code` of a `.razor` file, and the project builds with SDK 10. The source generator can't read what Razor generates there, so write the type in a C# file. From SDK 11 on, Razor writes the `@code` to a file that the source generator reads, so the text is found.
 - The attribute is on an indexer, which has no name to find a text by. Remove it.
 - The attribute is on the field behind a property, as in `[field: Localized(...)]`. Write it without `field:`.
-- The attribute is written through an alias, as after `using Label = LocalizedAttribute;`. The source generator finds the attribute by its name, so write it as `[Localized]`.
+- The attribute is written through an alias, as after `using Label = CodeChops.Idioma.LocalizedAttribute;`. The source generator finds the attribute by its name, so write it as `[Localized]`.
 
 ```text
 warning LOC502: The text of 'Line.Article' can't be registered because generated code can't name 'Line', which is private, so it won't be found. Make 'Line' internal or public.

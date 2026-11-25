@@ -179,6 +179,8 @@ To include a value, write it into every language: `LocalizedText.Inline(en: $"He
 An attribute puts a text on the member it names: a property, a field, an enum member, or a type. It suits a label, such as the name of a property of a model, which a form, a table or an export shows:
 
 ```csharp
+using CodeChops.Idioma;
+
 [Localized(en: "Address", nl: "Adres")]
 public class Address
 {

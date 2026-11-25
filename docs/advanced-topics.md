@@ -149,7 +149,7 @@ What else to know:
 - **A text as a value.** A text is a `string`, so pass it like any other value: `ShopLocalization.Removed(ShopLocalization.Cart)`. Both are worded at the call, for the same user, so they read in one language.
 - **A text inside a wording.** A set can read another text in its wording, as in `$"Press {ShopLocalization.Checkout} to pay"`. That text follows the language of the set. So when a text falls back to English for a Dutch user, the text inside it is English too.
 - **Inline texts.** An inline text takes a value as you write it: `LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC402`). C# builds the wording of every language before `Inline` picks one. So write a text with a costly value as a method of a set, which builds one wording.
-- **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC403`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in.
+- **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC403`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in. Neither does a text that a validation attribute names as its error message, which it fills in ([details](coming-from-resx.md#validation-and-display-attributes)).
 
 ## What the source generator writes
 
@@ -206,7 +206,7 @@ string cart = ShopLocalization.GetTextByKey("Cart"); // What ShopLocalization.Ca
 
 - **The key.** It's the name of the text, in the same letter case. A key no text has throws `KeyNotFoundException`.
 - **A key that may be unknown.** `TryGetTextByKey` gives `false` for it, where `GetTextByKey` throws: `ShopLocalization.TryGetTextByKey(key, out var text)`. Use it for a key from a database, which a text may have lost since it was stored.
-- **Every key.** `ShopLocalization.TextKeys` lists them, sorted by name. An app can check its stored keys against it at startup.
+- **Every key.** `ShopLocalization.TextKeys` lists them, sorted by name in ordinal order, as `StringComparer.Ordinal` sorts them. An app can check its stored keys against it at startup.
 - **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many. `TryGetTextByKey` throws for them too, because wrong values are a mistake in the call and not in the key.
 - **The result.** It's the wording for the user's language, a `string`, as the text itself gives it.
 

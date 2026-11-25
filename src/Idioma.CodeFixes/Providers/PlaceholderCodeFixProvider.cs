@@ -40,6 +40,7 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <item>A wording in a raw string, unless the fix of another language makes its property a method.</item>
 /// <item>A text that a language can't write as a method, such as one with a setter or one the constructor assigns.</item>
 /// <item>A text that other code of the project uses as a property of a set, such as another text that shows it. That code would no longer compile.</item>
+/// <item>A text that code names as a property of the generated class: in <c>nameof</c>, or as a resource of an attribute, as <c>[Display(Name = nameof(ShopLocalization.Name), ResourceType = typeof(ShopLocalization))]</c> does. That code would go on compiling, and fail at run time.</item>
 /// <item>A text of a member of an enum, because the contract takes it from the enum.</item>
 /// <item>A text that takes no values, of another assembly's contract or one written by hand, because the fix doesn't change a contract.</item>
 /// <item>A property that overrides one of another assembly, because that property doesn't change with it.</item>
@@ -387,10 +388,22 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     /// is gone, and that code would no longer compile.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Code that reads the text through the contract or the generated class, as in <c>ShopLocalization.Greeting</c>,
     /// doesn't count. It reads another member, which becomes a method that takes the value, and the compiler then
     /// points at each place that has to pass it. Neither does a reference in a doc comment, nor a read of
     /// <c>base.Greeting</c> in the text itself, which passes the values on once both are methods.
+    /// </para>
+    /// <para>
+    /// Code that names the text of the generated class does count, because it goes on compiling while it no longer
+    /// works:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><c>nameof(ShopLocalization.NameRequired)</c>, which names a method as well as a property.</item>
+    /// <item>An attribute that reads the text as a resource, as <c>[Required]</c> with <c>ErrorMessageResourceName</c>
+    /// and <c>[Display]</c> with <c>Name</c> do (<see cref="ResourceNamedTexts"/>). It finds the property by its name
+    /// at run time, and throws where there's a method.</item>
+    /// </list>
     /// </remarks>
     // By name first, which binds nothing, and then by the compiler for a name that matches: one of a few in a project.
     private static bool IsUsedAsProperty(ImmutableHashSet<IPropertySymbol> properties, ImmutableArray<PropertyDeclarationSyntax> languages,
@@ -398,8 +411,20 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     {
         var models = new Dictionary<SyntaxTree, SemanticModel> { [semanticModel.SyntaxTree] = semanticModel };
 
+        // The generated class of each contract whose text the properties implement.
+        var generatedClasses = properties
+            .SelectMany(FindImplementedMembers)
+            .Select(ResourceNamedTexts.FindGeneratedClass)
+            .OfType<INamedTypeSymbol>()
+            .ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        var resourceNamed = ResourceNamedTexts.Of(projectTexts.Compilation);
+
         foreach (var name in properties.Select(GetTextName).Distinct(StringComparer.Ordinal))
         {
+            if (generatedClasses.Any(generatedClass => resourceNamed.IsNamed(generatedClass, name, cancellationToken)))
+                return true;
+
             foreach (var identifier in projectTexts.FindUsesOf(name, cancellationToken))
             {
                 if (IsReadOfBaseInLanguage(identifier, languages))
@@ -408,10 +433,28 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
                 if (!models.TryGetValue(identifier.SyntaxTree, out var model))
                     models.Add(identifier.SyntaxTree, model = projectTexts.Compilation.GetSemanticModel(identifier.SyntaxTree));
 
-                if (model.GetSymbolInfo(identifier, cancellationToken).Symbol is IPropertySymbol used && properties.Contains(used.OriginalDefinition))
+                if (model.GetSymbolInfo(identifier, cancellationToken).Symbol is not IPropertySymbol used)
+                    continue;
+
+                if (properties.Contains(used.OriginalDefinition)
+                    || (used.IsStatic && generatedClasses.Contains(used.ContainingType) && IsInNameof(identifier)))
+                {
                     return true;
+                }
             }
         }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a name stands inside <c>nameof(...)</c> in the expression around it.
+    /// </summary>
+    private static bool IsInNameof(IdentifierNameSyntax identifier)
+    {
+        for (var node = identifier.Parent; node is ExpressionSyntax or ArgumentSyntax or ArgumentListSyntax; node = node.Parent)
+            if (node is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" } })
+                return true;
 
         return false;
     }

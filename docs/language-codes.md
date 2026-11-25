@@ -54,4 +54,4 @@ Separate `en-US` and `en-GB` sets without an `en` set work too, with two drawbac
 - Each set has every text, because one region can't derive from another (`LOC203`). Texts it doesn't override would stay American.
 - A user whose culture is plain `en`, or `en-AU`, gets your default language.
 
-A regional default language works the same way. With `[assembly: SupportedLanguages("en-GB", "nl")]`, `public class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization` gives the contract `IShopLocalization`.
+A regional default language works the same way. With `[assembly: SupportedLanguages("en-GB", "nl")]`, `public class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization` gives the contract `IShopLocalization`. A set named `ShopLocalizationEn` gives none, because its language isn't the default language itself ([LOC200](build-errors/LOC2XX-sets.md#loc200)).

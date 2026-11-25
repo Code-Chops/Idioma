@@ -540,28 +540,34 @@ public sealed class LocalizedMembersSourceTests
         text.ShouldBeNull();
     }
 
+    /// <summary>
+    /// An attribute named <c>Localized</c> in the namespace <c>Tooling</c>, as an app has that moves from one of its
+    /// own.
+    /// </summary>
+    private const string ToolingAttribute = """
+        namespace Tooling
+        {
+            public sealed class LocalizedAttribute(string en, string nl) : System.Attribute
+            {
+                public string En { get; } = en;
+                public string Nl { get; } = nl;
+            }
+        }
+        """;
+
     [Test]
     [Arguments("using Tooling;")]
     [Arguments("global using Tooling;")]
-    public void AttributeOfThatNameBehindAUsingOfTheFile_ShouldGetItsTextBecauseTheGeneratedOneWins(string usingAtTop)
+    public void AttributeOfThatNameBehindAUsingNextToThatOfThePackage_ShouldBeLeftAloneBecauseTheNameIsAmbiguous(string usingAtTop)
     {
-        // Arrange: the code has an attribute of that name in another namespace, as an app has that moves from one of
-        // its own. C# looks in the global namespace, where the generated attribute lies, before it looks in the usings
-        // of the file. So the build binds the member's attribute to the generated one.
+        // Arrange: both namespaces are in reach at the top of the file, so the compiler reports the name as ambiguous.
         var source = $$"""
             {{usingAtTop}}
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en", "nl")]
 
-            namespace Tooling
-            {
-                public sealed class LocalizedAttribute(string en, string nl) : System.Attribute
-                {
-                    public string En { get; } = en;
-                    public string Nl { get; } = nl;
-                }
-            }
+            {{ToolingAttribute}}
 
             namespace Shop.Domain
             {
@@ -577,6 +583,56 @@ public sealed class LocalizedMembersSourceTests
         var text = Texts(Run(source));
 
         // Assert
+        text.ShouldBeNull();
+        GeneratorTestHelper.CompileWithGenerators(source).ShouldContain(error => error.Id == "CS0104");
+    }
+
+    [Test]
+    [Arguments("namespace Shop.Domain { using CodeChops.Idioma; public class Address { [Localized(en: \"City\", nl: \"Plaats\")] public string City { get; } = \"\"; } }")]
+    [Arguments("namespace CodeChops.Idioma.Shop { public class Address { [Localized(en: \"City\", nl: \"Plaats\")] public string City { get; } = \"\"; } }")]
+    [Arguments("namespace Shop { using CodeChops.Idioma; namespace Domain { public class Address { [Localized(en: \"City\", nl: \"Plaats\")] public string City { get; } = \"\"; } } }")]
+    public void AttributeOfThePackageInReachBeforeOneOfThatName_ShouldGetItsText(string usage)
+    {
+        // Arrange: a using of another attribute of that name at the top of the file, and the package's namespace in
+        // reach before it: behind a using inside a namespace around the member, or as a namespace around it.
+        var source = $$"""
+            using Tooling;
+
+            [assembly: CodeChops.Idioma.SupportedLanguages("en", "nl")]
+
+            {{ToolingAttribute}}
+
+            {{usage}}
+            """;
+
+        // Act
+        var text = Texts(Run(source));
+
+        // Assert
+        text.ShouldNotBeNull().ShouldContain("internal static readonly string[] Text0 = [\"City\", \"Plaats\"];");
+        GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void AttributeWrittenWithTheNamespaceOfThePackage_ShouldGetItsText()
+    {
+        // Arrange: a file without a using of the package.
+        const string source = """
+            [assembly: CodeChops.Idioma.SupportedLanguages("en", "nl")]
+
+            namespace Shop.Domain;
+
+            public class Address
+            {
+                [CodeChops.Idioma.Localized(en: "City", nl: "Plaats")]
+                public string City { get; } = "";
+            }
+            """;
+
+        // Act
+        var text = Texts(Run(source));
+
+        // Assert
         text.ShouldNotBeNull().ShouldContain("internal static readonly string[] Text0 = [\"City\", \"Plaats\"];");
         GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
     }
@@ -585,10 +641,11 @@ public sealed class LocalizedMembersSourceTests
     [Arguments("namespace Shop.Domain { using Tooling; public class Address { [Localized(en: \"City\", nl: \"Plaats\")] public string City { get; } = \"\"; } }")]
     [Arguments("namespace Tooling.Domain { public class Address { [Localized(en: \"City\", nl: \"Plaats\")] public string City { get; } = \"\"; } }")]
     [Arguments("namespace Shop.Domain { using LocalizedAttribute = Tooling.LocalizedAttribute; public class Address { [Localized(en: \"City\", nl: \"Plaats\")] public string City { get; } = \"\"; } }")]
-    public void AttributeOfThatNameInReachBeforeTheGlobalNamespace_ShouldBeLeftAlone(string usage)
+    public void AttributeOfThatNameInReachBeforeThatOfThePackage_ShouldBeLeftAlone(string usage)
     {
         // Arrange: behind a using written inside the namespace, in a namespace around the member, or behind an alias
-        // there. C# finds each before the global namespace, so the build binds the member's attribute to the code's own.
+        // there. C# finds each before the usings at the top of the file, so the build binds the member's attribute to
+        // the code's own.
         var source = $$"""
             using CodeChops.Idioma;
 

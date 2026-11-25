@@ -91,6 +91,49 @@ public sealed class PlaceholderAnalyzerTests
     #endregion
 
     [Test]
+    [Arguments("nameof(ShopLocalization.NameRequired)")]
+    [Arguments("\"NameRequired\"")]
+    public async Task TextThatAnAttributeNamesAsItsErrorMessage_ShouldReportNothingButADisplayNameStillShould(string name)
+    {
+        // Arrange: [Required] formats its error message, filling in {0} with the name of the field. [Display] shows its
+        // name as it's written, so {0} would reach the user.
+        var source = $$"""
+            using System.ComponentModel.DataAnnotations;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string NameRequired => "Enter {0}";
+                public string NameLabel => "Name {0}";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string NameRequired => "Vul {0} in";
+                public string NameLabel => "Naam {0}";
+            }
+
+            public class Customer
+            {
+                [Display(Name = nameof(ShopLocalization.NameLabel), ResourceType = typeof(ShopLocalization))]
+                [Required(ErrorMessageResourceName = {{name}}, ErrorMessageResourceType = typeof(ShopLocalization))]
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: the error message in neither language, the display name in both.
+        diagnostics.Length.ShouldBe(2);
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.GetMessage().Contains(".NameLabel'", StringComparison.Ordinal));
+    }
+
+    [Test]
     [Arguments("""en: "Hello!", nl: "Hallo, {0}!", enGb: "Hello!" """, "\"Hallo, {0}!\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
     [Arguments("""en: "Total", nl: "Totaal", enGb: "Total: {0:N2}" """, "\"Total: {0:N2}\"", "The 'en-GB' wording holds the placeholder {0:N2}. Nothing fills it in")]
     [Arguments("""nl: "{1,8} van {0}", en: "Some", enGb: "Some" """, "\"{1,8} van {0}\"", "The 'nl' wording holds the placeholder {1,8}. Nothing fills it in")]

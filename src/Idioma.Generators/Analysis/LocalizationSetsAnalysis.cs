@@ -115,6 +115,7 @@ internal sealed partial record LocalizationSetsAnalysis(
             ReportExcludedSetsOfUnlistedLanguages(excluded, declared.Codes, findings);
             ReportDefaultSetsWithoutLanguage(sets, declared, defaultLanguage, generatedContracts, findings);
             ReportDefaultSetsOfAnotherLanguage(sets, defaultLanguage, generatedContracts, findings);
+            ReportDefaultSetsOfParentLanguage(sets, defaultLanguage, generatedContracts, findings);
             ReportDefaultSetsOfAnotherContract(sets, defaultLanguage, generatedContracts, findings);
             ReportUnextendableDefaultSets(unextendable, defaultLanguage, generatedContracts, findings);
         }

@@ -286,4 +286,98 @@ public sealed partial class LocalizationRegistrationPartTests
         ReadText(texts, "Checkout", "nl-BE").ShouldBe("Betalen");
         ReadText(texts, "Total", "nl-BE").ShouldBe("Totaal");
     }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void SetOfLibraryEnumWithLocalizedMembers_ShouldGiveItsTextsThroughTheGetTextOfTheLibrary()
+    {
+        // Arrange: a library whose enum carries its texts as [Localized], in English and Dutch, and an app that adds
+        // German with a set of the enum. The app's code sees the namespaces of both, where two GetText() would be
+        // ambiguous (CS0121).
+        var library = GeneratorTestHelper.EmitLibraryWithGenerators("EnumTextsLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace EnumTextsLibrary;
+
+            public enum ParcelStatus
+            {
+                [Localized(en: "Picked", nl: "Gepickt")]
+                Picked,
+
+                [Localized(en: "Delivered", nl: "Bezorgd")]
+                Delivered,
+            }
+
+            public static class LibraryReader
+            {
+                public static string Read(ParcelStatus status) => status.GetText();
+            }
+            """);
+        var app = GeneratorTestHelper.EmitLibraryWithGenerators("EnumTextsApp", """
+            using CodeChops.Idioma;
+            using EnumTextsApp.Texts;
+            using EnumTextsLibrary;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace EnumTextsApp.Texts
+            {
+                public class ParcelStatusLocalizationEn : ILocalizationSet<ParcelStatus>, IParcelStatusLocalization
+                {
+                    public string Picked => "Being picked";
+                    public string Delivered => "Delivered";
+                }
+
+                public class ParcelStatusLocalizationNl : ILocalizationSet<ParcelStatus>, IParcelStatusLocalization
+                {
+                    public string Picked => "Wordt gepickt";
+                    public string Delivered => "Bezorgd";
+                }
+
+                public class ParcelStatusLocalizationDe : ILocalizationSet<ParcelStatus>, IParcelStatusLocalization
+                {
+                    public string Picked => "Wird kommissioniert";
+                    public string Delivered => "Zugestellt";
+                }
+            }
+
+            namespace EnumTextsApp.Pages
+            {
+                public static class AppReader
+                {
+                    public static string Read(ParcelStatus status) => status.GetText();
+                }
+            }
+            """, MetadataReference.CreateFromImage(library));
+        var context = new InMemoryLoadContext(new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["EnumTextsLibrary"] = library,
+            ["EnumTextsApp"] = app,
+        });
+
+        // Act: the app's module initializers, as at its start.
+        var appAssembly = context.LoadFromAssemblyName(new AssemblyName("EnumTextsApp"));
+        RuntimeHelpers.RunModuleConstructor(appAssembly.ManifestModule.ModuleHandle);
+
+        var libraryAssembly = context.LoadFromAssemblyName(new AssemblyName("EnumTextsLibrary"));
+        var picked = Enum.ToObject(libraryAssembly.GetType("EnumTextsLibrary.ParcelStatus")!, 0);
+
+        string Read(string reader, string culture)
+        {
+            var type = reader is "app" ? appAssembly.GetType("EnumTextsApp.Pages.AppReader")! : libraryAssembly.GetType("EnumTextsLibrary.LibraryReader")!;
+
+            using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo(culture)))
+                return (string)type.GetMethod("Read")!.Invoke(obj: null, [picked])!;
+        }
+
+        // Assert: the set's wording, also in Dutch, which the library has its own wording for, and also where the
+        // library's own code asks for the text. Read in the languages of this test process (en, nl): the app is
+        // compiled as a library here, so its languages don't become the process's.
+        Read("app", "nl-NL").ShouldBe("Wordt gepickt");
+        Read("app", "en-US").ShouldBe("Being picked");
+        Read("library", "nl-NL").ShouldBe("Wordt gepickt");
+        Read("library", "en-US").ShouldBe("Being picked");
+    }
 }

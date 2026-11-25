@@ -108,14 +108,17 @@ public sealed class MethodWordingTests
     [Arguments("decimal amount", "$\"Total: {amount:N2}\"", "Total: {amount:N2}")]
     [Arguments("string name", "$\"Hello, {name.Trim()}!\"", "Hello, {name.Trim()}!")]
     [Arguments("string name", "$\"Hello, {(name)}!\"", "Hello, {(name)}!")]
-    [Arguments("int count", "count is 1 ? \"1 item\" : $\"{count} items\"", null)]
-    [Arguments("int count", "count > 1 ? \"Several\" : \"One\"", null)]
-    [Arguments("int count", "count switch { 1 => \"One\", _ => \"Many\" }", null)]
+    [Arguments("int count", "count is 1 ? \"1 item\" : $\"{count} items\"", "1 item / {count} items")]
+    [Arguments("int count", "count > 1 ? \"Several\" : \"One\"", "Several / One")]
+    [Arguments("int count", "count switch { 1 => \"One\", _ => \"Many\" }", "One / Many")]
+    [Arguments("int count", "count switch { 0 => \"None\", 1 => \"One\", < 0 => throw new System.ArgumentOutOfRangeException(nameof(count)), _ => $\"{count}\" }", "None / One / {count}")]
+    [Arguments("int count", "count is 0 ? \"None\" : (count is 1 ? \"One\" : \"None\")", "None / One")]
+    [Arguments("int count", "count is 1 ? \"One\" : count.ToString()", null)]
     [Arguments("string name", "\"Hello, \" + name", null)]
     [Arguments("string? name", "name ?? \"you\"", null)]
     [Arguments("string name", "name", null)]
     [Arguments("string name", "name.ToUpperInvariant()", null)]
-    [Arguments("bool formal", "!formal ? \"Hi\" : \"Good day\"", null)]
+    [Arguments("bool formal", "!formal ? \"Hi\" : \"Good day\"", "Hi / Good day")]
     public void WordingThatTakesValue_ShouldBeKnownForNoConstantFromItsSyntax(string parameter, string expression, string? expected)
     {
         // Arrange

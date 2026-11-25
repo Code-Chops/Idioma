@@ -24,6 +24,12 @@ namespace CodeChops.Idioma.Generators;
 /// property, after the default language made the text a method.
 /// </para>
 /// <para>
+/// A text that an attribute names as its error message isn't reported, as with
+/// <c>[Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]</c>.
+/// The attribute fills in its placeholders, so <c>"Enter {0}"</c> shows the name of the field
+/// (<see cref="ResourceNamedTexts"/>).
+/// </para>
+/// <para>
 /// The IDE fix writes a parameter in place of each placeholder (<c>PlaceholderCodeFixProvider</c> in the code fixes).
 /// </para>
 /// </remarks>
@@ -172,26 +178,47 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // The name of the text, without the contract an explicit implementation carries in front of it.
-        var subject = $"'{set.Name}.{member.Name.Substring(member.Name.LastIndexOf('.') + 1)}'";
-        var reported = false;
-
         // Where the wording is written: what the member returns, and not its attributes or its parameters, which may
-        // hold a string too.
-        foreach (var (location, placeholder) in FindWrittenPlaceholders(WrittenWording.FindStrings(declaration)))
-        {
-            reported = true;
-            context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, SetAdvice));
-        }
+        // hold a string too. Else a constant the property returns, which is written elsewhere.
+        var found = FindWrittenPlaceholders(WrittenWording.FindStrings(declaration)).ToList();
 
-        // A constant the property returns, which is written elsewhere.
-        if (!reported
+        if (found.Count is 0
             && declaration is PropertyDeclarationSyntax { Identifier: var identifier } constantProperty
             && ConstantWording.Read(constantProperty, context.SemanticModel, context.CancellationToken) is { } constant
-            && Placeholder.Find(constant) is { } found)
+            && Placeholder.Find(constant) is { } placeholderOfConstant)
         {
-            context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, identifier.GetLocation(), subject, found, SetAdvice));
+            found.Add((identifier.GetLocation(), placeholderOfConstant));
         }
+
+        // A text an attribute names as its error message, which it formats: the attribute fills in {0}. Asked last,
+        // because it reads the attributes of the whole compilation.
+        if (found.Count is 0
+            || (declaration is PropertyDeclarationSyntax && IsNamedAsErrorMessage(member, set, context.Compilation, context.CancellationToken)))
+        {
+            return;
+        }
+
+        // The name of the text, without the contract an explicit implementation carries in front of it.
+        var subject = $"'{set.Name}.{member.Name.Substring(member.Name.LastIndexOf('.') + 1)}'";
+
+        foreach (var (location, placeholder) in found)
+            context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, SetAdvice));
+    }
+
+    /// <summary>
+    /// Whether an attribute names the text a property implements as its error message, as in
+    /// <c>[Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]</c>.
+    /// The attribute fills in its placeholders (<see cref="ResourceNamedTexts"/>).
+    /// </summary>
+    private static bool IsNamedAsErrorMessage(ISymbol member, INamedTypeSymbol set, Compilation compilation, CancellationToken cancellationToken)
+    {
+        var named = ResourceNamedTexts.Of(compilation);
+
+        foreach (var text in ContractTexts.FindImplementedTexts(member, set))
+            if (ResourceNamedTexts.FindGeneratedClass(text) is { } generatedClass && named.IsErrorMessage(generatedClass, text.Name, cancellationToken))
+                return true;
+
+        return false;
     }
 
     /// <summary>

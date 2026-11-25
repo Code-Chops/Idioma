@@ -8,9 +8,15 @@ namespace CodeChops.Idioma.Generators;
 internal static class MethodWording
 {
     /// <summary>
+    /// The separator between the wordings a method chooses between, as in <c>1 item / {count} items</c>.
+    /// </summary>
+    internal const string ChoiceSeparator = " / ";
+
+    /// <summary>
     /// The wording a method returns when it returns one expression that is a constant or an interpolated string, each
-    /// value of which is shown as it is written, in braces. <see langword="null"/> for any other method, such as one
-    /// that chooses between wordings.
+    /// value of which is shown as it is written, in braces. A method that chooses between such wordings, with
+    /// <c>? :</c> or a <c>switch</c>, gives each of them in the order written, apart by <see cref="ChoiceSeparator"/>:
+    /// <c>1 item / {count} items</c>. <see langword="null"/> for any other method.
     /// </summary>
     /// <param name="declaration">The method.</param>
     /// <param name="semanticModel">The semantic model of the tree the method lies in.</param>
@@ -20,11 +26,20 @@ internal static class MethodWording
         var expression = declaration.ExpressionBody?.Expression
                          ?? (declaration.Body is { Statements: [ReturnStatementSyntax { Expression: { } returned }] } ? returned : null);
 
-        if (expression is null)
-            return null;
+        var wording = expression is null ? null : Read(expression, declaration, semanticModel, cancellationToken);
+        return wording;
+    }
 
+    /// <summary>
+    /// The wording of an expression a method returns (<see cref="Read(MethodDeclarationSyntax, SemanticModel, CancellationToken)"/>).
+    /// </summary>
+    private static string? Read(ExpressionSyntax expression, MethodDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
         if (ConstantWording.ReadString(expression) is { } written)
             return written;
+
+        if (expression is ParenthesizedExpressionSyntax parenthesized)
+            return Read(parenthesized.Expression, declaration, semanticModel, cancellationToken);
 
         // Asked of the compiler only where the syntax doesn't say it already: a wording that shows a value of the
         // method is no constant.
@@ -34,9 +49,22 @@ internal static class MethodWording
             return constant;
         }
 
-        if (expression is not InterpolatedStringExpressionSyntax interpolated)
-            return null;
+        // A plural chooses its wording by a value, so the hover shows each wording it chooses between.
+        if (FindChoices(expression) is { } choices)
+        {
+            var wordings = new List<string>();
+            return AddChoices(choices, wordings, declaration, semanticModel, cancellationToken) ? String.Join(ChoiceSeparator, wordings) : null;
+        }
 
+        var wording = expression is InterpolatedStringExpressionSyntax interpolated ? ReadInterpolated(interpolated) : null;
+        return wording;
+    }
+
+    /// <summary>
+    /// An interpolated string as it reads, each value in braces as it is written.
+    /// </summary>
+    private static string ReadInterpolated(InterpolatedStringExpressionSyntax interpolated)
+    {
         var wording = new StringBuilder();
 
         foreach (var content in interpolated.Contents)
@@ -50,6 +78,62 @@ internal static class MethodWording
         }
 
         return wording.ToString();
+    }
+
+    /// <summary>
+    /// The expressions a choice gives: both branches of <c>? :</c>, or the arm of each case of a <c>switch</c>, leaving
+    /// out an arm that throws. <see langword="null"/> for an expression that isn't a choice.
+    /// </summary>
+    private static IEnumerable<ExpressionSyntax>? FindChoices(ExpressionSyntax expression)
+    {
+        var choices = expression switch
+        {
+            ConditionalExpressionSyntax conditional => [conditional.WhenTrue, conditional.WhenFalse],
+            SwitchExpressionSyntax @switch => @switch.Arms.Select(static arm => arm.Expression).Where(static arm => arm is not ThrowExpressionSyntax),
+            _ => (IEnumerable<ExpressionSyntax>?)null,
+        };
+
+        return choices;
+    }
+
+    /// <summary>
+    /// Adds the wordings a choice gives to <paramref name="wordings"/>, each once, in the order written. A choice
+    /// inside a choice adds its own. <see langword="false"/> when one of them is no wording this can read, so that the
+    /// hover never shows part of a text as if it were all of it.
+    /// </summary>
+    // A literal or an interpolated string is read as it is written, without asking whether it's a constant: a wording a
+    // plural chooses nearly always shows a value. Discovery reads every text of every set on every edit, and asking
+    // that of each wording a choice gives took a tenth of the generator's time per edit.
+    private static bool AddChoices(IEnumerable<ExpressionSyntax> choices, List<string> wordings, MethodDeclarationSyntax declaration, SemanticModel semanticModel,
+        CancellationToken cancellationToken)
+    {
+        foreach (var choice in choices)
+        {
+            var branch = choice;
+            while (branch is ParenthesizedExpressionSyntax parenthesized)
+                branch = parenthesized.Expression;
+
+            if (FindChoices(branch) is { } inner)
+            {
+                if (!AddChoices(inner, wordings, declaration, semanticModel, cancellationToken))
+                    return false;
+
+                continue;
+            }
+
+            var wording = ConstantWording.ReadString(branch)
+                          ?? (branch is InterpolatedStringExpressionSyntax interpolated
+                              ? ReadInterpolated(interpolated)
+                              : Read(branch, declaration, semanticModel, cancellationToken));
+
+            if (wording is null)
+                return false;
+
+            if (!wordings.Contains(wording))
+                wordings.Add(wording);
+        }
+
+        return wordings.Count > 0;
     }
 
     /// <summary>

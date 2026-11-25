@@ -143,13 +143,13 @@ public sealed partial class LocalizationSetsPartTests
         var text = ContractText(Run(GreetingSets));
 
         // Assert: the text inherits the doc comment of the method, parameters included, and the wording of each language
-        // stands next to its link with each value in braces. A method that chooses between wordings shows none. The
-        // contract member inherits the text's.
+        // stands next to its link with each value in braces. A method that chooses between wordings shows each of them,
+        // cut where a line grows too long. The contract member inherits the text's.
         text.Split('\n').Count(line => line.Contains("/// <inheritdoc cref=\"ShopLocalizationEn.Greeting\"/>", StringComparison.Ordinal)).ShouldBe(1);
         text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationEn.Greeting\">en</see>: Hello, {name}!</description>", StringComparison.Ordinal)).ShouldBe(1);
         text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.Greeting\">nl</see>: Hallo, {name}!</description>", StringComparison.Ordinal)).ShouldBe(1);
-        text.Split('\n').Count(line => line.Contains("/// The <c>ItemsInCart</c> text of <see cref=\"ShopLocalizationEn\"/>.", StringComparison.Ordinal)).ShouldBe(1);
-        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.ItemsInCart\">nl</see></description>", StringComparison.Ordinal)).ShouldBe(1);
+        text.Split('\n').Count(line => line.Contains("/// 1 item in your cart at {shop} / {count} items in your cart at {shop}", StringComparison.Ordinal)).ShouldBe(1);
+        text.Split('\n').Count(line => line.Contains("<see cref=\"ShopLocalizationNl.ItemsInCart\">nl</see>: 1 artikel in je winkelwagen bij {shop} / {count} artikelen in je winkelwagen bij…</description>", StringComparison.Ordinal)).ShouldBe(1);
         text.ShouldContain("/// <inheritdoc cref=\"ShopLocalization.Greeting\"/>");
         text.ShouldContain("/// <inheritdoc cref=\"ShopLocalization.ItemsInCart\"/>");
     }
@@ -300,7 +300,8 @@ public sealed partial class LocalizationSetsPartTests
     public void WordingOfTextThatTakesValues_ShouldShowEachValueInBracesAsItIsWritten()
     {
         // Arrange: a value with a format, a method with a body, a raw string that writes a value between two braces,
-        // a brace that is text, a constant, and a method that chooses between wordings, which has no one wording.
+        // a brace that is text, a constant, a method that chooses between wordings, which shows each, and a method of
+        // statements, which shows none.
         const string source = """"
             using CodeChops.Idioma;
 
@@ -331,7 +332,7 @@ public sealed partial class LocalizationSetsPartTests
         text.ShouldContain("<see cref=\"ShopLocalizationEn.Raw\">en</see>: Hello, {name}, and {braces}!</description>");
         text.ShouldContain("<see cref=\"ShopLocalizationEn.Braces\">en</see>: {{name}} &amp; &lt;b&gt;</description>");
         text.ShouldContain("<see cref=\"ShopLocalizationEn.Constant\">en</see>: Hello</description>");
-        text.ShouldContain("<see cref=\"ShopLocalizationEn.Chosen\">en</see></description>");
+        text.ShouldContain("<see cref=\"ShopLocalizationEn.Chosen\">en</see>: One / Many</description>");
         text.ShouldContain("<see cref=\"ShopLocalizationEn.Statements\">en</see></description>");
     }
 

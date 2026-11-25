@@ -83,7 +83,7 @@ public static partial class ShopLocalization
     }
 
     /// <summary>
-    /// The key of every text, sorted by name. <see cref="GetTextByKey"/> takes each of them.
+    /// The key of every text, sorted by name in ordinal order. <see cref="GetTextByKey"/> takes each of them.
     /// </summary>
     public static ImmutableArray<string> TextKeys => TextKeysOf<IShopLocalization>.Keys;
 }

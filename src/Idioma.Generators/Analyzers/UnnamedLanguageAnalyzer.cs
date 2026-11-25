@@ -249,8 +249,24 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
 
         var isHandWritten = !isGeneratedCode
                             || path.EndsWith("_razor.g.cs", StringComparison.Ordinal)
-                            || path.EndsWith("_cshtml.g.cs", StringComparison.Ordinal);
+                            || path.EndsWith("_cshtml.g.cs", StringComparison.Ordinal)
+                            || IsRazorDeclaration(tree);
 
         return isHandWritten;
+    }
+
+    /// <summary>
+    /// Whether Razor wrote a file of declarations from the user's markup. From SDK 11 on, Razor writes the members of
+    /// a component's <c>@code</c> block to a file of their own, such as <c>Pages/Index_razor.decl.g.cs</c>. Other
+    /// source generators see that file, so the generator that writes the texts reads a <c>[Localized]</c> in it.
+    /// </summary>
+    internal static bool IsRazorDeclaration(SyntaxTree tree)
+    {
+        var path = tree.FilePath;
+
+        var isRazorDeclaration = path.EndsWith("_razor.decl.g.cs", StringComparison.Ordinal)
+                                 || path.EndsWith("_cshtml.decl.g.cs", StringComparison.Ordinal);
+
+        return isRazorDeclaration;
     }
 }

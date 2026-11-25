@@ -202,6 +202,19 @@ internal static class GeneratorTestHelper
     }
 
     /// <summary>
+    /// Runs the generators as a build does on a source per file, and returns every error of the resulting compilation.
+    /// </summary>
+    internal static ImmutableArray<Diagnostic> CompileFilesWithGenerators(IEnumerable<string> sources)
+    {
+        CreateFullDriver(ParseOptions).RunGeneratorsAndUpdateCompilation(CreateCompilation([], [.. sources]), out var updated, out var diagnostics);
+
+        return
+        [
+            .. diagnostics.Concat(updated.GetDiagnostics()).Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Error),
+        ];
+    }
+
+    /// <summary>
     /// Runs the generators as a build does, next to another source generator that writes
     /// <paramref name="writtenByOtherGenerator"/>, and returns every error of the resulting compilation. No generator
     /// sees what another writes, so a type of that source binds to nothing while this package's generators run.

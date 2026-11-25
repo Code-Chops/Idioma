@@ -48,13 +48,13 @@ public static partial class ShopLocalization
     public static string Greeting(string name) => FindSetForValues<IShopLocalization>(1, 3)?.Greeting(name) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);
 
     /// <summary>
-    /// The <c>ItemsInCart</c> text of <see cref="ShopLocalizationEn"/>.
+    /// 1 item in your cart at {shop} / {count} items in your cart at {shop}
     /// </summary>
     /// <remarks>
     /// Wording:
     /// <list type="bullet">
-    /// <item><description><see cref="ShopLocalizationEn.ItemsInCart">en</see></description></item>
-    /// <item><description><see cref="ShopLocalizationNl.ItemsInCart">nl</see></description></item>
+    /// <item><description><see cref="ShopLocalizationEn.ItemsInCart">en</see>: 1 item in your cart at {shop} / {count} items in your cart at {shop}</description></item>
+    /// <item><description><see cref="ShopLocalizationNl.ItemsInCart">nl</see>: 1 artikel in je winkelwagen bij {shop} / {count} artikelen in je winkelwagen bij…</description></item>
     /// </list>
     /// </remarks>
     public static string ItemsInCart(int count, string shop) => FindSetForValues<IShopLocalization>(2, 3)?.ItemsInCart(count, shop) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, int, string>(2, 3, "ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), count, shop);
@@ -96,7 +96,7 @@ public static partial class ShopLocalization
     }
 
     /// <summary>
-    /// The key of every text, sorted by name. <see cref="GetTextByKey"/> takes each of them.
+    /// The key of every text, sorted by name in ordinal order. <see cref="GetTextByKey"/> takes each of them.
     /// </summary>
     public static ImmutableArray<string> TextKeys => TextKeysOf<IShopLocalization>.Keys;
 }

@@ -23,6 +23,36 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    public void TextKeys_ShouldBeSortedByNameInOrdinalOrder()
+    {
+        // Arrange: texts declared out of order, and one with a lower-case name, which ordinal order puts after the
+        // capitals.
+        const string source = $$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+                public string about => "About";
+                public string Cart => "Cart";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+                public string about => "Over";
+                public string Cart => "Winkelwagen";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+
+        // Assert: so that a binary search with StringComparer.Ordinal finds each key.
+        text.ShouldContain("    internal static readonly ImmutableArray<string> Keys = [\"Cart\", \"Checkout\", \"about\"];");
+    }
+
+    [Test]
     public void MethodThatGivesTextByKey_ShouldCompileWhateverTheTextsAreNamedOrTake()
     {
         // Arrange: texts named like the parameters of the method, like what it declares and calls, and like a

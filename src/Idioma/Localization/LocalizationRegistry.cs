@@ -70,6 +70,31 @@ public sealed partial class LocalizationRegistry
     public static string? DefaultLanguage => SupportedLanguages is [var defaultLanguage, ..] ? defaultLanguage : null;
 
     /// <summary>
+    /// Whether one of your app's languages serves a culture. That's so when the culture, or a culture it falls back to,
+    /// is that language or a region of it. For example, <c>en</c> serves <c>en-GB</c>, and <c>zh-TW</c> serves
+    /// <c>zh-Hant-TW</c>. A culture that no language serves gets the wording in <see cref="DefaultLanguage"/>, for every
+    /// text.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It follows the same fallback order as a text, so it agrees with the wording a user sees. A Blazor WebAssembly app
+    /// can use it to make its default language the UI culture of a user whose language it doesn't have.
+    /// </para>
+    /// <para>
+    /// It's <see langword="true"/> for every culture where <see cref="SupportedLanguages"/> is empty, because each text
+    /// then shows the wording of the culture itself.
+    /// </para>
+    /// </remarks>
+    /// <param name="culture">The culture, such as the user's.</param>
+    public static bool IsServed(CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var isServed = Current.Resolve(culture).ShowsCulture;
+        return isServed;
+    }
+
+    /// <summary>
     /// A function that gives the user's culture, for an app that keeps it somewhere other than
     /// <see cref="CultureInfo.CurrentUICulture"/>. Every text then shows the wording for the culture it returns.
     /// <see langword="null"/> by default, which leaves texts on <see cref="CultureInfo.CurrentUICulture"/>.

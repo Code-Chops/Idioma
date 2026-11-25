@@ -73,7 +73,7 @@ public class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization
 
 A library's set covers the regions of its language. An app that lists `en-GB` doesn't need to add a British set to a library that has an English one.
 
-Nothing outside a library can add a language to its inline texts. For those, the app gets a warning instead (`LOC701`), which is why a library should write its texts in sets. The same goes for a text a library writes as an attribute, with `[Localized]`, because it carries its wording itself too.
+Nothing outside a library can add a language to its inline texts. For those, the app gets a warning instead (`LOC701`), which is why a library should write its texts in sets. The same goes for a text a library writes as an attribute, with `[Localized]`, because it carries its wording itself too. An enum whose members a library marks so is the exception: write a set of the enum in the app, and the library's `GetText()` gives its wording ([Enums](enums.md#a-set-of-the-enum)).
 
 ## Changing a text of a library
 

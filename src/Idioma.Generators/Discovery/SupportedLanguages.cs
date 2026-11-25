@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace CodeChops.Idioma.Generators;
 
@@ -55,34 +56,95 @@ internal static class SupportedLanguages
     /// Reads the attribute of an assembly for <see cref="ReadCodes"/> and <see cref="ReadDefaultLanguage"/>.
     /// </summary>
     // It builds no string to tell the attribute by: an assembly has many attributes.
+    //
+    // The attribute of an assembly that is being compiled is found by its syntax, and bound alone. GetAttributes binds
+    // every attribute of the assembly, and each analyzer asks for the languages on every edit, of a compilation that
+    // holds a generated [assembly: LocalizationSet] for every set: with 900 sets, that took 8.6 ms an edit. Where the
+    // syntax shows no such attribute, as when it's written through an alias, GetAttributes decides.
     private static AssemblyLanguages ReadAssembly(IAssemblySymbol assembly)
     {
+        if (assembly is ISourceAssemblySymbol { Compilation: { } compilation } && ReadFromSyntax(compilation) is { } read)
+            return read;
+
         AttributeData? first = null;
         var count = 0;
 
         foreach (var attribute in assembly.GetAttributes())
         {
-            if (attribute.AttributeClass is not { Name: "SupportedLanguagesAttribute", Arity: 0, ContainingType: null, ContainingNamespace: { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } } })
+            if (!IsPackageAttribute(attribute.AttributeClass))
                 continue;
 
             first ??= attribute;
             count++;
         }
 
-        if (first is null)
-            return AssemblyLanguages.None;
+        return first is null ? AssemblyLanguages.None : ToLanguages([.. ReadArguments(first)], count);
+    }
 
-        var codes = ReadArguments(first).Select(static argument => argument.Code).OfType<string>().ToImmutableArray();
-        string? defaultLanguage = null;
+    /// <summary>
+    /// What the attribute of a compilation's own assembly declares, read from the attribute's syntax, or
+    /// <see langword="null"/> when no attribute of the assembly is written by that name.
+    /// </summary>
+    private static AssemblyLanguages? ReadFromSyntax(Compilation compilation)
+    {
+        ImmutableArray<(string? Code, bool IsDefault)>? first = null;
+        var count = 0;
 
-        if (count is 1)
+        foreach (var tree in compilation.SyntaxTrees)
         {
-            foreach (var (code, isDefault) in ReadArguments(first))
+            if (tree.GetRoot() is not CompilationUnitSyntax { AttributeLists.Count: > 0 } root)
+                continue;
+
+            SemanticModel? model = null;
+
+            foreach (var list in root.AttributeLists)
             {
-                defaultLanguage = isDefault && code is not null && IsCultureName(code) ? code : null;
-                break;
+                if (list.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) is not true)
+                    continue;
+
+                foreach (var attribute in list.Attributes)
+                {
+                    // By its name first, which binds nothing: nearly every attribute of an assembly is another one.
+                    if (MethodWording.GetRightmostName(attribute.Name) is not ("SupportedLanguages" or "SupportedLanguagesAttribute"))
+                        continue;
+
+                    model ??= compilation.GetSemanticModel(tree);
+
+                    if (model.GetOperation(attribute) is not IAttributeOperation { Operation: IObjectCreationOperation { Constructor: { } constructor } creation }
+                        || !IsPackageAttribute(constructor.ContainingType))
+                    {
+                        continue;
+                    }
+
+                    first ??= ReadArguments(creation).ToImmutableArray();
+                    count++;
+                }
             }
         }
+
+        return first is { } arguments ? ToLanguages(arguments, count) : null;
+    }
+
+    /// <summary>
+    /// Whether a type is the package's <c>SupportedLanguagesAttribute</c>.
+    /// </summary>
+    private static bool IsPackageAttribute(INamedTypeSymbol? type)
+    {
+        var isPackageAttribute = type is { Name: "SupportedLanguagesAttribute", Arity: 0, ContainingType: null, ContainingNamespace: { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } } };
+        return isPackageAttribute;
+    }
+
+    /// <summary>
+    /// What the first attribute of an assembly declares, given its arguments and how many such attributes the assembly
+    /// has.
+    /// </summary>
+    private static AssemblyLanguages ToLanguages(ImmutableArray<(string? Code, bool IsDefault)> arguments, int count)
+    {
+        var codes = arguments.Select(static argument => argument.Code).OfType<string>().ToImmutableArray();
+        string? defaultLanguage = null;
+
+        if (count is 1 && arguments is [var (code, isDefault), ..])
+            defaultLanguage = isDefault && code is not null && IsCultureName(code) ? code : null;
 
         return new AssemblyLanguages(codes, defaultLanguage);
     }
@@ -343,6 +405,62 @@ internal static class SupportedLanguages
             language = constant.Value as string;
 
             return constant.Kind is not TypedConstantKind.Error && (language is not null || constant.IsNull);
+        }
+    }
+
+    /// <summary>
+    /// The languages of the attribute as its syntax binds them (<see cref="ReadFromSyntax"/>), as
+    /// <see cref="ReadArguments(AttributeData)"/> reads them: a language that isn't a constant is left out, and
+    /// <see langword="null"/> stands for one that is <see langword="null"/>.
+    /// </summary>
+    private static IEnumerable<(string? Code, bool IsDefault)> ReadArguments(IObjectCreationOperation creation)
+    {
+        // By the parameter each argument goes to, which a named argument may write in another order:
+        // (string defaultLanguage, params string[] otherLanguages).
+        if (creation.Arguments.FirstOrDefault(static argument => argument.Parameter?.Ordinal is 0) is not { } first)
+            yield break;
+
+        if (TryReadLanguage(first.Value, out var defaultLanguage))
+            yield return (defaultLanguage, IsDefault: true);
+
+        var others = creation.Arguments.FirstOrDefault(static argument => argument.Parameter?.Ordinal is 1)?.Value;
+
+        while (others is IConversionOperation { ConstantValue.HasValue: false } conversion)
+            others = conversion.Operand;
+
+        IEnumerable<IOperation> elements;
+
+        switch (others)
+        {
+            case null:
+                yield break;
+
+            // SupportedLanguages("en", null) passes no array at all.
+            case { ConstantValue: { HasValue: true, Value: null } }:
+                yield return (null, IsDefault: false);
+                yield break;
+
+            case IArrayCreationOperation { Initializer: { } initializer }:
+                elements = initializer.ElementValues;
+                break;
+
+            case ICollectionExpressionOperation collection:
+                elements = collection.Elements;
+                break;
+
+            default:
+                yield break;
+        }
+
+        foreach (var element in elements)
+            if (TryReadLanguage(element, out var language))
+                yield return (language, IsDefault: false);
+
+        static bool TryReadLanguage(IOperation value, out string? language)
+        {
+            language = value.ConstantValue.HasValue ? value.ConstantValue.Value as string : null;
+
+            return value.ConstantValue.HasValue && (language is not null || value.ConstantValue.Value is null);
         }
     }
 

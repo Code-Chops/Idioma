@@ -45,7 +45,9 @@ public class Customer
 
 The attribute reads the property each time it needs the wording, so the label and the message follow the user's language. The set has to be public, because these attributes read only a public class.
 
-A message can show the field's label as `{0}`, as in `"Enter {0}"`, because the attribute fills it in. In a set, that wording gets warning `LOC403`. Turn it off around the text with `#pragma warning disable LOC403`.
+A message can show the field's label as `{0}`, as in `"Enter {0}"`, because the attribute fills it in. The build sees that the attribute names the text as its error message, so the placeholder gets no warning (`LOC403`). A display name is shown as written, so a `{0}` there is still reported.
+
+Keep such a text a property. The attribute finds it by its name at run time, and a method of that name would make it throw. The IDE fix for `LOC403` leaves a text alone that an attribute or a `nameof` names.
 
 Code of your own that shows a property's label can keep the label on the property. Mark the property `[Localized(en: "Name", nl: "Naam")]`, and read the label with `LocalizedText.GetTextByMember` ([Write an attribute](../README.md#write-an-attribute)). `[Display]` and the validation attributes don't read that label.
 

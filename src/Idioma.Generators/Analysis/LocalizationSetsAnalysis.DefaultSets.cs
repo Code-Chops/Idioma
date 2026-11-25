@@ -90,6 +90,49 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
+    /// Reports a set named after the language of a regional default language, such as <c>ShopLocalizationEn</c> with
+    /// <c>("en-US", "nl")</c> (<c>LOC200</c>). It lists the contract named after it, which no set then starts.
+    /// </summary>
+    // Its language serves the default language, so it's listed (no LOC202), and it isn't the default-language set,
+    // which has the default language itself. Without this, every set that lists the contract fails to compile
+    // (CS0246), and nothing says why.
+    private static void ReportDefaultSetsOfParentLanguage(
+        ImmutableArray<DiscoveredLocalization> sets,
+        string defaultLanguage,
+        GeneratedContracts generatedContracts,
+        ImmutableArray<LocalizationSetsFinding>.Builder findings)
+    {
+        foreach (var set in sets)
+        {
+            if (set is not { ListsLocalizationSet: true, NameGivesNoLanguage: false, Language: { } language }
+                || String.Equals(language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
+                || !SupportedLanguages.Serves(language, defaultLanguage)
+                || LocalizationDiscovery.ImplementsContract(set)
+                || LocalizationDiscovery.RewordsSet(set)
+                || LocalizationDiscovery.DeriveBaseName(set.Name, language) is not { } baseName)
+            {
+                continue;
+            }
+
+            var ownContract = $"I{baseName}";
+
+            if (!set.UnresolvedBaseTypes.Any(baseType => String.Equals(baseType.Name, ownContract, StringComparison.Ordinal)
+                                                         && LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is null))
+            {
+                continue;
+            }
+
+            var suggestedName = baseName + SupportedLanguages.ToTypeSuffix(defaultLanguage);
+
+            findings.Add(new LocalizationSetsFinding(
+                LocalizationSetsRule.CannotExtend,
+                set.Location,
+                new EquatableArray<string>([set.Name, $"its name gives '{language}', and the default language is '{defaultLanguage}'", $"Rename it to {suggestedName}, or make '{language}' the default language in [assembly: SupportedLanguages]."]),
+                SuggestedName: suggestedName));
+        }
+    }
+
+    /// <summary>
     /// Reports a default-language set that implements another contract and also lists the contract named after it,
     /// which it can't start (<c>LOC200</c>).
     /// </summary>

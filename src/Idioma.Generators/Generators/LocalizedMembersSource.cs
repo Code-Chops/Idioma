@@ -167,9 +167,11 @@ internal static class LocalizedMembersSource
 
         if (type.Extension is not null)
         {
+            // The texts of a set of the enum first, which an app that references this assembly may have registered, so
+            // that it can give the enum its own languages.
             sb.AppendLine($$"""
 
-                    internal static string Get({{type.Reference}} value) => value switch
+                    internal static string Get({{type.Reference}} value) => CodeChops.Idioma.Internals.GeneratedCode.FindEnumText(value) ?? value switch
                     {
                 """);
 

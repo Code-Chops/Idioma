@@ -115,6 +115,24 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
+    /// The declaration without its base list. What stood after the base list, such as the line break before the body,
+    /// goes to the token before it, in place of the space that stood between the two: <c>class X : Y</c> becomes
+    /// <c>class X</c>, and not <c>class X :</c>.
+    /// </summary>
+    public static TypeDeclarationSyntax RemoveBaseList(TypeDeclarationSyntax declaration)
+    {
+        var baseList = declaration.BaseList!;
+        var before = baseList.GetFirstToken().GetPreviousToken();
+        var kept = before.TrailingTrivia.Reverse().SkipWhile(static trivia => trivia.IsKind(SyntaxKind.WhitespaceTrivia)).Reverse();
+
+        var result = declaration
+            .ReplaceToken(before, before.WithTrailingTrivia(kept.Concat(baseList.GetTrailingTrivia())))
+            .WithBaseList(null);
+
+        return result;
+    }
+
+    /// <summary>
     /// Replaces nodes, each with what <paramref name="replace"/> makes of it, in every document they lie in. A node of
     /// a file that is no document of the solution, such as generated code, is left as it is.
     /// </summary>

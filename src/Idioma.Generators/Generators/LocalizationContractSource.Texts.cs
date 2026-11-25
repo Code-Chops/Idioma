@@ -131,19 +131,28 @@ internal static partial class LocalizationContractSource
                 /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                 /// </remarks>
                 {{(@enum.IsPublic ? "public" : "internal")}} static string {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
-
-                /// <param name="value">The value to give the text of.</param>
-                extension({{type}} value)
-                {
-                    /// <summary>
-                    /// The text of this value of {{enumLink}}, as in <c>status.{{LocalizationSetsAnalysis.ExtensionName}}()</c>. It's the text {{lookupLink}} gives.
-                    /// </summary>
-                    /// <remarks>
-                    /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
-                    /// </remarks>
-                    {{(@enum.IsPublic ? "public" : "internal")}} string {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
-                }
             """);
+
+        // An enum of another assembly that gets GetText() from the [Localized] of its members there: that GetText()
+        // gives this set's texts once they're registered (AppendEnumTextsRegistration), and a second one here would make
+        // every call that reaches both ambiguous (CS0121).
+        if (!@enum.ReachesGetTextOfItsAssembly)
+        {
+            sb.AppendLine($$"""
+
+                    /// <param name="value">The value to give the text of.</param>
+                    extension({{type}} value)
+                    {
+                        /// <summary>
+                        /// The text of this value of {{enumLink}}, as in <c>status.{{LocalizationSetsAnalysis.ExtensionName}}()</c>. It's the text {{lookupLink}} gives.
+                        /// </summary>
+                        /// <remarks>
+                        /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
+                        /// </remarks>
+                        {{(@enum.IsPublic ? "public" : "internal")}} string {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
+                    }
+                """);
+        }
 
         if (lookups.Length > 0)
             lookups.AppendLine();
@@ -249,9 +258,43 @@ internal static partial class LocalizationContractSource
                 }
 
                 /// <summary>
-                /// The key of every text, sorted by name. <see cref="{{LocalizationSetsAnalysis.GetName}}"/> takes each of them.
+                /// The key of every text, sorted by name in ordinal order. <see cref="{{LocalizationSetsAnalysis.GetName}}"/> takes each of them.
                 /// </summary>
                 public static ImmutableArray<string> {{LocalizationSetsAnalysis.KeysName}} => {{TextKeysName}}<{{name}}>.Keys;
+            """);
+    }
+
+    /// <summary>
+    /// Writes what gives the values of an enum of another assembly the texts of this set, where that assembly gives the
+    /// enum its <c>GetText()</c> from the <c>[Localized]</c> of its members. That <c>GetText()</c> then gives this set's
+    /// wording, in this app's languages.
+    /// </summary>
+    // A module initializer, which runs before any code of this assembly does: also when an app calls this assembly's
+    // registrar as it starts, as it does for every assembly it references. File-local, so that it's no type of the
+    // assembly, and not generic, which a module initializer can't be. Nothing names it, so no text can stand before it.
+    private static void AppendEnumTextsRegistration(StringBuilder sb, ContractFile file)
+    {
+        var contract = file.Contract;
+
+        sb.AppendLine("""
+
+            /// <summary>
+            /// Gives the values of each enum of another assembly whose members are marked <c>[Localized]</c> there the texts of this set.
+            /// The <c>GetText()</c> of that assembly then gives them.
+            /// </summary>
+            file static class EnumTextsOfOtherAssemblies
+            {
+                [System.Runtime.CompilerServices.ModuleInitializer]
+                internal static void Register()
+                {
+            """);
+
+        foreach (var @enum in contract.Enums.Where(static @enum => @enum.HasTextsOfItsAssembly))
+            sb.AppendLine($"        RegisterEnumTexts<{ContractTypeNames.RenderType(@enum.Type, contract.Namespace)}>({file.TextsName}.{LocalizationSetsAnalysis.LookupName});");
+
+        sb.AppendLine("""
+                }
+            }
             """);
     }
 
@@ -267,7 +310,11 @@ internal static partial class LocalizationContractSource
     /// </summary>
     private static void AppendTextKeys(StringBuilder sb, ContractFile file)
     {
-        var keys = String.Join(", ", file.Texts.Select(static text => SymbolDisplay.FormatLiteral(text.Name, quote: true)));
+        // Sorted as StringComparer.Ordinal sorts them, so that a search such as ImmutableArray.BinarySearch finds a key.
+        var keys = String.Join(", ", file.Texts
+            .Select(static text => text.Name)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .Select(static name => SymbolDisplay.FormatLiteral(name, quote: true)));
 
         sb.AppendLine($$"""
 

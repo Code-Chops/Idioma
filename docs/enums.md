@@ -73,9 +73,10 @@ What else to know:
 - **Accessibility.** `GetTextByValue` and `GetText` are public for a public enum, and internal for an internal one.
 - **More than one enum.** A set that lists `ILocalizationSet<TEnum>` for two enums holds the texts of both, and gets a `GetTextByValue` and a `GetText` for each. Two members with the same name share a text.
 - **Two sets of one enum.** Each set gives the enum a `GetText`. Where the namespaces of both are in reach, the call is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
+- **A set of a library's enum with `[Localized]` members.** Your set's texts win over the library's attributes, in every language. The library already gives the enum a `GetText`, and that `GetText` gives your set's wording, also where the library's own code calls it. So your set writes no `GetText` of its own, which would make the call ambiguous (`CS0121`). This is how an app adds a language to such an enum. `GetTextByMember` still finds the texts of the library's attributes.
 - **A set and `[Localized]` members.** An enum that has a set in its own assembly gets its `GetText` from the set alone, also while its members are still marked. `GetTextByMember` still finds the texts of the marked members.
 
-For a library's enum, a set has two more advantages over attributes. An app can add a language to it, and reword a text the library made `virtual`. Neither is possible for a text written as an attribute.
+For a library's enum, a set has two more advantages over attributes. An app can add a language to it, and reword a text the library made `virtual`. An app can't add a language to the attributes, but it can replace them with a set of the enum, which then words every member in every language.
 
 ## An attribute on each member
 

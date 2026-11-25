@@ -18,6 +18,7 @@ CodeChops.Idioma.SupportedLanguagesAttribute.SupportedLanguagesAttribute(string!
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.get -> System.Func<System.Globalization.CultureInfo?>?
 static CodeChops.Idioma.LocalizationRegistry.CurrentUICultureProvider.set -> void
 static CodeChops.Idioma.LocalizationRegistry.DefaultLanguage.get -> string?
+static CodeChops.Idioma.LocalizationRegistry.IsServed(System.Globalization.CultureInfo! culture) -> bool
 static CodeChops.Idioma.LocalizationRegistry.Register(params System.ReadOnlySpan<CodeChops.Idioma.ILocalizationSet!> sets) -> void
 static CodeChops.Idioma.LocalizationRegistry.Register<TSet>() -> void
 static CodeChops.Idioma.LocalizationRegistry.RegisterDefaults(params System.ReadOnlySpan<CodeChops.Idioma.ILocalizationSet!> sets) -> void

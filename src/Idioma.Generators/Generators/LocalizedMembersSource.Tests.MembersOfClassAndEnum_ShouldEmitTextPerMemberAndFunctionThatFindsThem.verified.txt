@@ -86,7 +86,7 @@ file static class LocalizedTexts1
     internal static readonly string[] Text0 = ["Assigned", "Toegewezen"];
     internal static readonly string[] Text1 = ["Picked", "Gepickt"];
 
-    internal static string Get(Shop.Domain.PackageStatus value) => value switch
+    internal static string Get(Shop.Domain.PackageStatus value) => CodeChops.Idioma.Internals.GeneratedCode.FindEnumText(value) ?? value switch
     {
         Shop.Domain.PackageStatus.Assigned => OwnLocalizedMembers.Word(Text0),
         Shop.Domain.PackageStatus.Picked => OwnLocalizedMembers.Word(Text1),
