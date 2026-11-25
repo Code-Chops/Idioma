@@ -148,9 +148,13 @@ public sealed partial class LocalizationRegistry
         /// </summary>
         public bool ShowsCulture { get; }
 
+        // Per contract, the sets found so far for its texts (ResolvedSets<TContract>). An object, because the
+        // contract is a type argument only where it's asked for.
+        private ConcurrentDictionary<Type, object> ResolvedByContract { get; } = new();
+
         public CultureLookup(LocalizationRegistry registry, CultureFallback fallback, CultureInfo? culture, string? language)
         {
-            var byLanguage = registry.ByLanguage;
+            var setsByLanguage = registry.SetsByLanguage;
             var names = new List<string>(capacity: 4);
             var levels = new List<LanguageSets>(capacity: 4);
 
@@ -158,7 +162,7 @@ public sealed partial class LocalizationRegistry
             {
                 names.Add(name);
 
-                if (byLanguage.TryGetValue(name, out var sets))
+                if (setsByLanguage.TryGetValue(name, out var sets))
                     levels.Add(sets);
             }
 
@@ -187,10 +191,6 @@ public sealed partial class LocalizationRegistry
 
             return false;
         }
-
-        // Per contract, the sets found so far for its texts (ResolvedSets<TContract>). An object, because the
-        // contract is a type argument only where it's asked for.
-        private ConcurrentDictionary<Type, object> ResolvedByContract { get; } = new();
 
         /// <summary>
         /// The sets found so far for the texts of a contract, for a reader of this culture. See

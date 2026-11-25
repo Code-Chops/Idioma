@@ -5,8 +5,8 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// Emits a module initializer that adds the assembly's localization sets to <c>LocalizationRegistry</c> when the
 /// assembly's code first runs, so a text finds its languages without any registration call, and without a scan of the
-/// assembly by reflection. A set in the same assembly as its contract goes to <c>RegisterDefaults</c>, and a set
-/// rewording something of another assembly goes to <c>Register</c>, because load order is not registration order. An
+/// assembly by reflection. A set in the same assembly as its contract is registered as a default, and a set
+/// rewording something of another assembly wins over the defaults, because load order is not registration order. An
 /// app's override must win over the library it rewords even when the library loads later. Within a tier a set comes
 /// after the sets it derives from, so it wins over them. Before that it records what the build read about each set
 /// (<c>GeneratedCode.RecordSet</c>). That's the language of each set that doesn't implement <c>LocalizationLanguageCode</c>, so that

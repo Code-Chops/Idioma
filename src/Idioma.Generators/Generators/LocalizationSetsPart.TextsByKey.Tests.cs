@@ -13,7 +13,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert: an arm per text, by its name. A text that takes values takes each from the values passed.
         text.ShouldContain("public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch");
-        text.ShouldContain("        \"Checkout\" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),");
+        text.ShouldContain("        \"Checkout\" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Checkout, key, values),");
         text.ShouldContain("        \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\"), GetKeyedValue<string>(key, values, 1, 2, \"shop\")),");
         text.ShouldContain("        _ => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");
     }
@@ -44,7 +44,7 @@ public sealed partial class LocalizationSetsPartTests
                                         public string values => "Values";
                     public string text => "Text";
                     public string @event => "Event";
-                    public string GetKeyedText => "Keyed text";
+                    public string ResolveKeyedWording => "Keyed text";
                     public string GetKeyedValue => "Keyed value";
                     public string CreateUnknownKeyException => "Unknown";
                     public string Status(OrderStatus status, string? note) => $"{status}: {note}";

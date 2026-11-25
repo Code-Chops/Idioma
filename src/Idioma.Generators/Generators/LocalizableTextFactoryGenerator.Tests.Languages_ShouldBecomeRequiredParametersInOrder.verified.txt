@@ -32,7 +32,7 @@ internal static class GeneratedLocalizableText
         /// <param name="de">The wording in <c>de</c>.</param>
         public static string Inline(string en, string nl, string de)
         {
-            return CodeChops.Idioma.Internals.GeneratedCode.FindLanguage(Languages) switch
+            return CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(Languages) switch
             {
                 1 => nl ?? throw new System.ArgumentNullException(nameof(nl)),
                 2 => de ?? throw new System.ArgumentNullException(nameof(de)),

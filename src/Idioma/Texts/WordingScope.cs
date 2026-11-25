@@ -30,19 +30,14 @@ namespace CodeChops.Idioma;
 internal readonly ref struct WordingScope
 {
     /// <summary>
-    /// The culture of the text being worded on this thread, or <see langword="null"/> on a thread that words none in
-    /// a scope.
-    /// </summary>
-    // Per thread, which is enough: a set words a text in one call, and the scope ends before that call returns.
-    [ThreadStatic]
-    private static CultureInfo? Entered;
-
-    /// <summary>
     /// The culture of the scope this thread is in, or <see langword="null"/> outside one. Inside one, a text follows
     /// it rather than <see cref="LocalizationRegistry.CurrentUICultureProvider"/>, and the thread's cultures are set
     /// for it.
     /// </summary>
-    public static CultureInfo? Current => Entered;
+    // Per thread, which is enough, because a set words a text in one call and the scope ends before that call returns.
+    // So a scope never spans an await, and AsyncLocal would only cost more.
+    [field: ThreadStatic]
+    public static CultureInfo? Current { get; private set; }
 
     private bool IsEntered { get; }
 
@@ -110,8 +105,8 @@ internal readonly ref struct WordingScope
             }
         }
 
-        this.PreviousEntered = Entered;
-        Entered = culture;
+        this.PreviousEntered = Current;
+        Current = culture;
         this.IsEntered = true;
     }
 
@@ -146,10 +141,10 @@ internal readonly ref struct WordingScope
         if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
             return CultureInfo.CurrentUICulture;
 
-        if (Entered is { } entered)
+        if (Current is { } entered)
             return entered;
 
-        providedCulture = hasKept ? kept : LocalizationRegistry.AskProvider(provider);
+        providedCulture = hasKept ? kept : LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
 
         var culture = providedCulture ?? CultureInfo.CurrentUICulture;
         return culture;
@@ -180,7 +175,7 @@ internal readonly ref struct WordingScope
         if (!this.IsEntered)
             return;
 
-        Entered = this.PreviousEntered;
+        Current = this.PreviousEntered;
 
         // Also undoes an AsyncLocal the member of the set changed, which ends with the scope like the cultures. That
         // holds only for a scope that changed a culture. A scope that changed none captured no context, so such a
@@ -203,11 +198,11 @@ internal readonly ref struct WordingScope
     /// </summary>
     private sealed class SwitchedContext(CultureInfo uiCulture, CultureInfo culture, ExecutionContext context)
     {
+        public ExecutionContext Context { get; } = context;
+
         // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
         private CultureInfo UICulture { get; } = uiCulture;
         private CultureInfo Culture { get; } = culture;
-
-        public ExecutionContext Context { get; } = context;
 
         /// <summary>
         /// Whether the context holds these cultures. They're compared as objects, because a scope switches to the

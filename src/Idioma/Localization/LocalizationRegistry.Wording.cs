@@ -62,9 +62,8 @@ public sealed partial class LocalizationRegistry
         }
 
         TContract? set = null;
-        var isToldByRecord = false;
 
-        if (showsCulture && this.FindWording(lookup, name, select, out set, out isToldByRecord) is { } wording)
+        if (showsCulture && this.FindWording(lookup, name, select, out set, out var isToldByRecord) is { } wording)
         {
             if (isToldByRecord)
                 resolved?.Keep(text, set!, forProperty: true, forValues: true);
@@ -173,7 +172,10 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     private static WordingScope EnterLanguage(CultureInfo? culture, CultureInfo? valuesCulture)
     {
-        var scope = culture is null ? default : new WordingScope(culture, valuesCulture);
+        var scope = culture is null
+            ? default
+            : new WordingScope(culture, valuesCulture);
+
         return scope;
     }
 }

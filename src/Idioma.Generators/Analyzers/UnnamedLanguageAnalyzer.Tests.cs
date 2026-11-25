@@ -141,7 +141,7 @@ public sealed class UnnamedLanguageAnalyzerTests
     [Test]
     public async Task SetsAndGeneratedContract_ShouldReportNothing()
     {
-        // Arrange & Act: the generated class calls GeneratedCode.WordSetText, which is what that is for.
+        // Arrange & Act: the generated class calls GeneratedCode.ResolveWording, which is what that is for.
         var diagnostics = await GeneratorTestHelper.AnalyzeAsync($$"""
             {{Header}}
 

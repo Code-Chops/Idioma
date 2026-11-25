@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace CodeChops.Idioma.Internals;
 
 /// <summary>
@@ -42,8 +44,8 @@ public sealed class LocalizationSetAttribute : Attribute
     [EditorBrowsable(EditorBrowsableState.Never)]
     public LocalizationSetAttribute(string contract, string language)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(contract);
-        ArgumentException.ThrowIfNullOrWhiteSpace(language);
+        Debug.Assert(!String.IsNullOrWhiteSpace(contract));
+        Debug.Assert(!String.IsNullOrWhiteSpace(language));
 
         this.Contract = contract;
         this.Language = language;

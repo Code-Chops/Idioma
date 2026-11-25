@@ -31,7 +31,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    public static string Checkout => FindSet<IShopLocalization>(0, 2)?.Checkout ?? WordSetText<IShopLocalization, ShopLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
+    public static string Checkout => FindSet<IShopLocalization>(0, 2)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
 
     /// <summary>
     /// Total
@@ -43,7 +43,7 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
-    public static string Total => FindSet<IShopLocalization>(1, 2)?.Total ?? WordSetText<IShopLocalization, ShopLocalizationEn>(1, 2, "Total", static set => set.Total);
+    public static string Total => FindSet<IShopLocalization>(1, 2)?.Total ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(1, 2, "Total", static set => set.Total);
 
     /// <summary>
     /// The text with a key. The key is the name of the text, such as <c>"Checkout"</c>.
@@ -55,8 +55,8 @@ public static partial class ShopLocalization
     /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
     public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
     {
-        "Checkout" => GetKeyedText<IShopLocalization>(ShopLocalization.Checkout, key, values),
-        "Total" => GetKeyedText<IShopLocalization>(ShopLocalization.Total, key, values),
+        "Checkout" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Checkout, key, values),
+        "Total" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Total, key, values),
         _ => throw CreateUnknownKeyException<IShopLocalization>(key, "ShopLocalization"),
     };
 }

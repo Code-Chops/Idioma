@@ -100,7 +100,7 @@ public sealed partial class LocalizationRegistryTests
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
         var brand = Internals.GeneratedCode.FindSet<TContract>(0, 1)?.Brand
-            ?? Internals.GeneratedCode.WordSetText<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
+            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
 
         return brand;
     }
@@ -510,6 +510,5 @@ public sealed partial class LocalizationRegistryTests
         // generator's emission in the same commit.
         typeof(LocalizationRegistry).FullName.ShouldBe("CodeChops.Idioma.LocalizationRegistry");
         typeof(LocalizationRegistry).GetMember(nameof(LocalizationRegistry.Register)).ShouldNotBeEmpty();
-        typeof(LocalizationRegistry).GetMember(nameof(LocalizationRegistry.RegisterDefaults)).ShouldNotBeEmpty();
     }
 }

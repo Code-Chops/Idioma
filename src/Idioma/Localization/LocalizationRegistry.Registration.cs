@@ -90,13 +90,13 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// Adds a library's own sets to the sets of your whole app. They give the wording its texts show until an app rewords
-    /// them. The source generator calls this for every set in the same assembly as its contract. So you need it only for
-    /// a library's set that isn't registered automatically.
+    /// Adds a library's own sets that aren't registered automatically, such as a set that needs constructor arguments.
+    /// They give the wording its texts show until an app rewords them. The generated code registers every other set of
+    /// a library this way itself.
     /// </summary>
     /// <remarks>
-    /// A set from <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> wins over these for every text it changes.
-    /// Registering a set of the same type and language again replaces the earlier one.
+    /// A set from <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> wins over these for every text it changes,
+    /// whichever registers first. Registering a set of the same type and language again replaces the earlier one.
     /// </remarks>
     /// <param name="sets">
     /// The sets, in the order they apply. For one contract and language, a later set wins for every text it changes.
@@ -107,7 +107,6 @@ public sealed partial class LocalizationRegistry
     /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
     /// as <c>en-GB</c>.
     /// </exception>
-    [EditorBrowsable(EditorBrowsableState.Never)]
     public static void RegisterDefaults(params ReadOnlySpan<ILocalizationSet> sets)
     {
         Add(sets, asDefaults: true);
@@ -253,6 +252,12 @@ public sealed partial class LocalizationRegistry
         }
     }
 
+    /// <summary>
+    /// Adds sets that were created already, for <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> and
+    /// <see cref="RegisterDefaults"/>. With <paramref name="asDefaults"/>, they give a library's own wording, as the
+    /// sets the generated code registers through <see cref="Internals.GeneratedCode.RegisterSets"/> do. Every other set
+    /// wins over those.
+    /// </summary>
     private static void Add(ReadOnlySpan<ILocalizationSet> sets, bool asDefaults)
     {
         // Read here so that a set without a language code fails at its registration, not at the first text rendered
@@ -408,7 +413,7 @@ public sealed partial class LocalizationRegistry
                 ThrownForSetNeedingItself = null;
         }
 
-        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract - What creates it is the consumer's.
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract - The consumer creates the set.
         return set ?? throw new InvalidOperationException($"What creates '{type}' gave null instead of a set.");
     }
 

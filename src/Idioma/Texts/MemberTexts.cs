@@ -158,7 +158,7 @@ internal static class MemberTexts
         /// </summary>
         public string Word()
         {
-            var index = InlineLanguage.Find(languages);
+            var index = InlineLanguage.IndexOfShownLanguage(languages);
 
             // A wording per language, as the generator writes them. Fewer would be code written by hand.
             var wording = wordings[index < wordings.Length ? index : 0];

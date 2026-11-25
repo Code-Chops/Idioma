@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace CodeChops.Idioma.Internals;
 
 /// <summary>
@@ -32,7 +34,7 @@ public sealed class ShownValueAttribute : Attribute
     [EditorBrowsable(EditorBrowsableState.Never)]
     public ShownValueAttribute(string parameter)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(parameter);
+        Debug.Assert(!String.IsNullOrWhiteSpace(parameter));
 
         this.Parameter = parameter;
     }

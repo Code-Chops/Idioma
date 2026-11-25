@@ -8,7 +8,7 @@ namespace CodeChops.Idioma.Generators;
 internal static class TextParameters
 {
     /// <summary>
-    /// The most values a text takes, as the overloads of <c>GeneratedCode.WordSetText</c> take them.
+    /// The most values a text takes, as the overloads of <c>GeneratedCode.ResolveWording</c> take them.
     /// </summary>
     public const int MaxValues = 8;
 

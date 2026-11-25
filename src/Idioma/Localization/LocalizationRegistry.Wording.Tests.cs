@@ -278,7 +278,7 @@ public sealed class LocalizationRegistryWordingTests
     /// The text of <see cref="ISetRegisteredLocalization"/>, read as a property of a generated class reads it.
     /// </summary>
     private static string RegisteredGreeting => GeneratedCode.FindSet<ISetRegisteredLocalization>(0, 1)?.Greeting
-        ?? GeneratedCode.WordSetText<ISetRegisteredLocalization, SetRegisteredLocalizationEn>(0, 1, "Greeting", static set => set.Greeting);
+        ?? GeneratedCode.ResolveWording<ISetRegisteredLocalization, SetRegisteredLocalizationEn>(0, 1, "Greeting", static set => set.Greeting);
 
     /// <summary>
     /// A contract no other test uses, for the test that registers a rewording of its default language with the sets of
@@ -306,7 +306,7 @@ public sealed class LocalizationRegistryWordingTests
     /// The text of <see cref="ISetStaleLocalization"/>, read as a property of a generated class reads it.
     /// </summary>
     private static string StaleGreeting => GeneratedCode.FindSet<ISetStaleLocalization>(0, 1)?.Greeting
-        ?? GeneratedCode.WordSetText<ISetStaleLocalization, SetStaleLocalizationEn>(0, 1, "Greeting", static set => set.Greeting);
+        ?? GeneratedCode.ResolveWording<ISetStaleLocalization, SetStaleLocalizationEn>(0, 1, "Greeting", static set => set.Greeting);
 
     /// <summary>
     /// A contract no other test uses, for the tests of the sets a reader's culture keeps in the sets of the whole app.
@@ -341,9 +341,9 @@ public sealed class LocalizationRegistryWordingTests
         public static string Total(decimal amount) => GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2)?.Total(amount)
             ?? WordTotal(amount);
 
-        public static string WordCheckout() => GeneratedCode.WordSetText<ISetKeptLocalization, SetKeptLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
+        public static string WordCheckout() => GeneratedCode.ResolveWording<ISetKeptLocalization, SetKeptLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
 
-        public static string WordTotal(decimal amount) => GeneratedCode.WordSetText<ISetKeptLocalization, SetKeptLocalizationEn, decimal>(1, 2, "Total", static (set, amount) => set.Total(amount), amount);
+        public static string WordTotal(decimal amount) => GeneratedCode.ResolveWording<ISetKeptLocalization, SetKeptLocalizationEn, decimal>(1, 2, "Total", static (set, amount) => set.Total(amount), amount);
     }
 
     /// <summary>
@@ -379,9 +379,9 @@ public sealed class LocalizationRegistryWordingTests
         public static string Summary(decimal amount) => GeneratedCode.FindSetForValues<ISetProvidedLocalization>(1, 2)?.Summary(amount)
             ?? WordSummary(amount);
 
-        public static string WordTotal(decimal amount) => GeneratedCode.WordSetText<ISetProvidedLocalization, SetProvidedLocalizationEn, decimal>(0, 2, "Total", static (set, amount) => set.Total(amount), amount);
+        public static string WordTotal(decimal amount) => GeneratedCode.ResolveWording<ISetProvidedLocalization, SetProvidedLocalizationEn, decimal>(0, 2, "Total", static (set, amount) => set.Total(amount), amount);
 
-        public static string WordSummary(decimal amount) => GeneratedCode.WordSetText<ISetProvidedLocalization, SetProvidedLocalizationEn, decimal>(1, 2, "Summary", static (set, amount) => set.Summary(amount), amount);
+        public static string WordSummary(decimal amount) => GeneratedCode.ResolveWording<ISetProvidedLocalization, SetProvidedLocalizationEn, decimal>(1, 2, "Summary", static (set, amount) => set.Summary(amount), amount);
     }
 
     /// <summary>
@@ -414,10 +414,10 @@ public sealed class LocalizationRegistryWordingTests
     private static class ShowingTexts
     {
         public static string Hint => GeneratedCode.FindSet<ISetShowingLocalization>(0, 2)?.Hint
-            ?? GeneratedCode.WordSetText<ISetShowingLocalization, SetShowingLocalizationEn>(0, 2, "Hint", static set => set.Hint);
+            ?? GeneratedCode.ResolveWording<ISetShowingLocalization, SetShowingLocalizationEn>(0, 2, "Hint", static set => set.Hint);
 
         public static string Summary => GeneratedCode.FindSet<ISetShowingLocalization>(1, 2)?.Summary
-            ?? GeneratedCode.WordSetText<ISetShowingLocalization, SetShowingLocalizationEn>(1, 2, "Summary", static set => set.Summary);
+            ?? GeneratedCode.ResolveWording<ISetShowingLocalization, SetShowingLocalizationEn>(1, 2, "Summary", static set => set.Summary);
     }
 
     private interface ISetFlagLocalization : ILocalizationSet
@@ -1465,7 +1465,7 @@ public sealed class LocalizationRegistryWordingTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void WordSetText_WithCurrentUICultureProvider_ShouldAskItOncePerText()
+    public void GetWording_WithCurrentUICultureProvider_ShouldAskItOncePerText()
     {
         // Arrange: the provider gives the UI culture the thread has.
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
@@ -1481,7 +1481,7 @@ public sealed class LocalizationRegistryWordingTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void WordSetText_WithCurrentUICultureProviderGivingNone_ShouldAskItOncePerText()
+    public void GetWording_WithCurrentUICultureProviderGivingNone_ShouldAskItOncePerText()
     {
         // Arrange: no set of the whole app words this text in English, so it falls back step by step to its default
         // wording, where each step asked the provider again.
@@ -1517,7 +1517,7 @@ public sealed class LocalizationRegistryWordingTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void WordSetText_WithCurrentUICultureProvider_ShouldCopyExecutionContextOnlyToChangeCultures()
+    public void GetWording_WithCurrentUICultureProvider_ShouldCopyExecutionContextOnlyToChangeCultures()
     {
         // Arrange: an American thread, and a British user whose culture the provider gives. A culture is an AsyncLocal,
         // so each time one is set, the runtime copies the execution context. Setting both cultures back copied it twice

@@ -76,8 +76,8 @@ public sealed partial class LocalizationSetsPartTests
         ShownValues(text, "Greeting").ShouldBe(["name"]);
         ShownValues(text, "ItemsInCart").ShouldBe(["count", "shop"]);
         text.ShouldContain("string Greeting(string name) =>");
-        text.ShouldContain("""public static string Greeting(string name) => FindSetForValues<IShopLocalization>(1, 3)?.Greeting(name) ?? WordSetText<IShopLocalization, ShopLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);""");
-        text.ShouldContain("""public static string ItemsInCart(int count, string shop) => FindSetForValues<IShopLocalization>(2, 3)?.ItemsInCart(count, shop) ?? WordSetText<IShopLocalization, ShopLocalizationEn, int, string>(2, 3, "ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), count, shop);""");
+        text.ShouldContain("""public static string Greeting(string name) => FindSetForValues<IShopLocalization>(1, 3)?.Greeting(name) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);""");
+        text.ShouldContain("""public static string ItemsInCart(int count, string shop) => FindSetForValues<IShopLocalization>(2, 3)?.ItemsInCart(count, shop) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, int, string>(2, 3, "ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), count, shop);""");
     }
 
     [Test]

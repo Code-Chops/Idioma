@@ -33,7 +33,7 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Pending">nl</see>: In behandeling</description></item>
     /// </list>
     /// </remarks>
-    public static string Pending => FindSet<IOrderStatusLocalization>(0, 2)?.Pending ?? WordSetText<IOrderStatusLocalization, OrderStatusLocalizationEn>(0, 2, "Pending", static set => set.Pending);
+    public static string Pending => FindSet<IOrderStatusLocalization>(0, 2)?.Pending ?? ResolveWording<IOrderStatusLocalization, OrderStatusLocalizationEn>(0, 2, "Pending", static set => set.Pending);
 
     /// <inheritdoc cref="OrderStatusLocalizationEn.Shipped"/>
     /// <remarks>
@@ -43,7 +43,7 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Shipped">nl</see>: Verzonden</description></item>
     /// </list>
     /// </remarks>
-    public static string Shipped => FindSet<IOrderStatusLocalization>(1, 2)?.Shipped ?? WordSetText<IOrderStatusLocalization, OrderStatusLocalizationEn>(1, 2, "Shipped", static set => set.Shipped);
+    public static string Shipped => FindSet<IOrderStatusLocalization>(1, 2)?.Shipped ?? ResolveWording<IOrderStatusLocalization, OrderStatusLocalizationEn>(1, 2, "Shipped", static set => set.Shipped);
 
     /// <summary>
     /// The text of a value of <see cref="OrderStatus"/>, such as <see cref="Pending"/> for <c>OrderStatus.Pending</c>.
@@ -75,8 +75,8 @@ public static partial class OrderStatusLocalization
     /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
     public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
     {
-        "Pending" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
-        "Shipped" => GetKeyedText<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
+        "Pending" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
+        "Shipped" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
         _ => throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization"),
     };
 }

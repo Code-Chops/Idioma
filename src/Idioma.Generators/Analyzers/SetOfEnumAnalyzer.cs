@@ -21,8 +21,7 @@ namespace CodeChops.Idioma.Generators;
 /// <item>An enum missing from a set that lists no such contract itself, as a regional set that only derives from the
 /// set of its language. It lists what that set lists, which is reported there.</item>
 /// <item>An enum the set's assembly can't name, as an internal enum of a library, which no set there can list.</item>
-/// <item>A contract written by hand. A contract another assembly generated without naming an enum isn't checked
-/// either, because a version of this package before the enums were named wrote it so.</item>
+/// <item>A contract written by hand.</item>
 /// </list>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -156,33 +155,28 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
         if (!set.AllInterfaces.Any(PackageNames.IsLocalizationSet))
             return null;
 
-        // The contracts whose enums are known: each one generated here, and one of another assembly that names an
-        // enum. One that names none may be of an enum, written by a version before the enums were named.
+        // The generated contracts, which name their enums. A contract written by hand names none, and isn't checked.
         var contracts = set.AllInterfaces
             .Where(PackageNames.IsGeneratedContract)
-            .Select(contract => new KnownContract(contract, PackageNames.GetContractEnums(contract), SymbolEqualityComparer.Default.Equals(contract.ContainingAssembly, compilation.Assembly)))
+            .Select(contract => new GeneratedContract(contract, PackageNames.GetContractEnums(contract), SymbolEqualityComparer.Default.Equals(contract.ContainingAssembly, compilation.Assembly)))
             .ToArray();
 
-        var known = contracts.Where(static contract => contract.IsOwn || contract.Enums.Length > 0).ToArray();
-
-        if (known.Length is 0)
+        if (contracts.Length is 0)
             return null;
 
         // An enum is missing only where the set lists the contract itself: a set deriving from another lists its enums.
-        var missing = known
+        var missing = contracts
             .Where(contract => set.Interfaces.Contains(contract.Contract, SymbolEqualityComparer.Default))
             .SelectMany(static contract => contract.Enums)
             .Where(@enum => compilation.IsSymbolAccessibleWithin(@enum, compilation.Assembly) && !ListsSetOfEnum(set, @enum))
             .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
             .ToImmutableArray();
 
-        // An enum is wrong only where every contract of the set is known, as its enums are then all known.
-        var extras = known.Length == contracts.Length
-            ? set.Interfaces
-                .Where(static @interface => PackageNames.IsLocalizationSetOfEnum(@interface) && @interface.TypeArguments[0].TypeKind is TypeKind.Enum)
-                .Where(setOfEnum => !known.Any(contract => contract.Enums.Any(@enum => SymbolEqualityComparer.Default.Equals(@enum, setOfEnum.TypeArguments[0]))))
-                .ToImmutableArray()
-            : [];
+        // An enum is wrong where none of the set's contracts names it.
+        var extras = set.Interfaces
+            .Where(static @interface => PackageNames.IsLocalizationSetOfEnum(@interface) && @interface.TypeArguments[0].TypeKind is TypeKind.Enum)
+            .Where(setOfEnum => !contracts.Any(contract => contract.Enums.Any(@enum => SymbolEqualityComparer.Default.Equals(@enum, setOfEnum.TypeArguments[0]))))
+            .ToImmutableArray();
 
         if (missing.IsEmpty && extras.IsEmpty)
             return null;
@@ -198,7 +192,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
                                 || set.Interfaces.Any(@interface => !extras.Contains(@interface, SymbolEqualityComparer.Default)
                                                                     && (PackageNames.IsLocalizationSet(@interface) || @interface.AllInterfaces.Any(PackageNames.IsLocalizationSet)));
 
-        var named = known.FirstOrDefault(contract => set.Interfaces.Contains(contract.Contract, SymbolEqualityComparer.Default)) ?? known[0];
+        var named = contracts.FirstOrDefault(contract => set.Interfaces.Contains(contract.Contract, SymbolEqualityComparer.Default)) ?? contracts[0];
 
         return new SetOfEnumPlan(named.Contract, missing, extras, replaced, keepsSetInterface, named.IsOwn);
     }
@@ -238,14 +232,14 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
         return joined;
     }
 
-    private sealed record KnownContract(INamedTypeSymbol Contract, ImmutableArray<INamedTypeSymbol> Enums, bool IsOwn);
+    private sealed record GeneratedContract(INamedTypeSymbol Contract, ImmutableArray<INamedTypeSymbol> Enums, bool IsOwn);
 }
 
 /// <summary>
 /// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists (<c>LOC205</c>), as
 /// <see cref="SetOfEnumAnalyzer.Plan"/> finds it.
 /// </summary>
-/// <param name="Contract">The contract a message names: the first the set lists itself whose enums are known.</param>
+/// <param name="Contract">The contract a message names: the first the set lists itself.</param>
 /// <param name="Missing">The enums of the contracts the set lists itself, which it doesn't list.</param>
 /// <param name="Extras">Each <c>ILocalizationSet&lt;TEnum&gt;</c> the set lists for an enum its contracts don't
 /// have.</param>

@@ -229,7 +229,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
         // Assert
         text.ShouldContain("public static string Inline(string en)");
         text.ShouldContain("private static readonly string[] Languages = [\"en\"];");
-        text.ShouldContain("return CodeChops.Idioma.Internals.GeneratedCode.FindLanguage(Languages) switch");
+        text.ShouldContain("return CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(Languages) switch");
         text.ShouldContain("_ => en ?? throw new System.ArgumentNullException(nameof(en)),");
         text.ShouldNotContain("1 =>");
     }
@@ -345,7 +345,7 @@ public sealed class LocalizableTextFactoryGeneratorTests
 
         // In an app without a default language of its own, it gets the default wording, which is the first.
         var french = LocalizationRegistry.Create([]).Resolve(CultureInfo.GetCultureInfo("fr-FR"));
-        InlineLanguage.Find(["en-GB", "en"], french).ShouldBe(0);
+        InlineLanguage.IndexOfShownLanguage(["en-GB", "en"], french).ShouldBe(0);
     }
 
     [Test]

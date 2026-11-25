@@ -83,7 +83,7 @@ internal static class LocalizedMembersSource
                 /// <summary>
                 /// The wording of a text for the current UI culture.
                 /// </summary>
-                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.FindLanguage(Languages)];
+                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.FindLanguageIndex(Languages)];
 
                 /// <summary>
                 /// The wording of a member of a type per language, in the order of <see cref="Languages"/>, or the type's own for a member that is

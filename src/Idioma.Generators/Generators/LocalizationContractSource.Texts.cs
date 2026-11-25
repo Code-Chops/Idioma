@@ -56,12 +56,12 @@ internal static partial class LocalizationContractSource
             // A text is worded on every read, by the set of the user's language. The package keeps that set per
             // culture and per position (FindSet), so a read is a call of the set's own member. Where no set is kept
             // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
-            // comment gives (WordSetText), which also creates the set of the default language when a text first needs
-            // it. Both are called with a type argument, so that no text can stand before them: a name with a type
+            // comment gives (ResolveWording), which also creates the set of the default language when a text first
+            // needs it. Both are called with a type argument, so that no text can stand before them: a name with a type
             // argument is not looked for among the texts.
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => FindSet<{name}>({i}, {texts.Length})?.{memberName} ?? WordSetText<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => FindSet<{name}>({i}, {texts.Length})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
@@ -73,7 +73,7 @@ internal static partial class LocalizationContractSource
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => FindSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? WordSetText<{name}, {file.DefaultSet}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => FindSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
@@ -206,7 +206,7 @@ internal static partial class LocalizationContractSource
 
             if (!member.IsMethod)
             {
-                sb.AppendLine($"        {keyLiteral} => GetKeyedText<{name}>({text}, key, values),");
+                sb.AppendLine($"        {keyLiteral} => ResolveKeyedWording<{name}>({text}, key, values),");
                 continue;
             }
 

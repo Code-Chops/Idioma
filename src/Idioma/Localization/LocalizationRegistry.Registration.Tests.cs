@@ -174,7 +174,7 @@ public sealed partial class LocalizationRegistryTests
         var dutch = Culture("nl");
 
         // Act: the language an inline text shows, a set of another contract, and the set itself, twice.
-        var inlineLanguage = InlineLanguage.Find(["en", "nl"], LocalizationRegistry.Current.Resolve(dutch));
+        var inlineLanguage = InlineLanguage.IndexOfShownLanguage(["en", "nl"], LocalizationRegistry.Current.Resolve(dutch));
         var other = LocalizationRegistry.Current.Find<IRegistrySteadyLocalization>(dutch);
         var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Current.Find<IRegistryFlakyLocalization>(dutch));
         var retried = LocalizationRegistry.Current.Find<IRegistryFlakyLocalization>(dutch);
@@ -397,7 +397,7 @@ public sealed partial class LocalizationRegistryTests
         // writer registers one after the other, so that either may be the last.
         // The text is read as a property of a generated class reads it, which keeps the set it found per registry.
         static string Read() => GeneratedCode.FindSet<IRegistryConcurrentLocalization>(0, 1)?.Name
-            ?? GeneratedCode.WordSetText<IRegistryConcurrentLocalization, RegistryConcurrentLocalizationEn>(0, 1, "Name", static set => set.Name);
+            ?? GeneratedCode.ResolveWording<IRegistryConcurrentLocalization, RegistryConcurrentLocalizationEn>(0, 1, "Name", static set => set.Name);
 
         var first = new RegistryConcurrentFirstLocalizationNl();
         var second = new RegistryConcurrentSecondLocalizationNl();

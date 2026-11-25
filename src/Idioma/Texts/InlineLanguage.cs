@@ -31,7 +31,7 @@ internal static class InlineLanguage
     /// The position, among an assembly's languages, of the one a text shows for the current UI culture.
     /// </summary>
     /// <param name="languages">The languages of the assembly, each a culture name, the default first.</param>
-    public static int Find(string[] languages)
+    public static int IndexOfShownLanguage(string[] languages)
     {
         var culture = WordingScope.FindReaderCulture(out _);
         var lookup = LocalizationRegistry.Current.Resolve(culture);
@@ -39,7 +39,7 @@ internal static class InlineLanguage
         if (ReferenceEquals(lookup, LastLookup) && ReferenceEquals(languages, LastLanguages))
             return LastIndex;
 
-        var index = Find(languages, lookup);
+        var index = IndexOfShownLanguage(languages, lookup);
 
         LastLookup = lookup;
         LastLanguages = languages;
@@ -51,23 +51,19 @@ internal static class InlineLanguage
     /// <summary>
     /// The position of the language a text shows for a culture, as a registry resolves it.
     /// </summary>
-    internal static int Find(string[] languages, LocalizationRegistry.CultureLookup lookup)
+    internal static int IndexOfShownLanguage(string[] languages, LocalizationRegistry.CultureLookup lookup)
     {
         if (lookup.ShowsCulture)
-        {
             foreach (var name in lookup.Names)
                 if (IndexOf(languages, name) is var index and >= 0)
                     return index;
-        }
 
         var registry = lookup.Registry;
 
         if (registry.AppLanguages is [var appDefaultLanguage, ..])
-        {
             foreach (var name in registry.ResolveLanguage(appDefaultLanguage).Names)
                 if (IndexOf(languages, name) is var index and >= 0)
                     return index;
-        }
 
         return 0;
     }

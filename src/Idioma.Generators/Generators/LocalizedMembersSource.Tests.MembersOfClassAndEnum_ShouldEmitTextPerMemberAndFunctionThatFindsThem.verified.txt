@@ -35,7 +35,7 @@ file static class OwnLocalizedMembers
     /// <summary>
     /// The wording of a text for the current UI culture.
     /// </summary>
-    internal static string Word(string[] wordings) => wordings[CodeChops.Idioma.Internals.GeneratedCode.FindLanguage(Languages)];
+    internal static string Word(string[] wordings) => wordings[CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(Languages)];
 
     /// <summary>
     /// The wording of a member of a type per language, in the order of <see cref="Languages"/>, or the type's own for a member that is

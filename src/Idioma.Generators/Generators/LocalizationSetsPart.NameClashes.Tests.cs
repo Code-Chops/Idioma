@@ -45,11 +45,11 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     [Arguments("namespace Checkout;", "Checkout")]
     [Arguments("namespace Orders.Texts;", "Orders")]
-    [Arguments("", "WordSetText")]
+    [Arguments("", "ResolveWording")]
     [Arguments("namespace TestApp;", "CodeChops")]
     [Arguments("namespace TestApp;", "FindSet")]
-    [Arguments("namespace TestApp;", "WordSetText")]
-    [Arguments("namespace TestApp;", "GetKeyedText")]
+    [Arguments("namespace TestApp;", "ResolveWording")]
+    [Arguments("namespace TestApp;", "ResolveKeyedWording")]
     public void TextNamedLikeNameGeneratedClassWrites_ShouldCompileWithResolvedCrefs(string @namespace, string text)
     {
         // Arrange: inside the generated class a text stands before every namespace and type of its name. So the class

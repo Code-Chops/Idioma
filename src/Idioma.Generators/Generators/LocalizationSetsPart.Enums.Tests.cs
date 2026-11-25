@@ -326,7 +326,7 @@ public sealed partial class LocalizationSetsPartTests
             #pragma warning disable LOC305 // Texts that aren't members, kept on purpose
                     public string OrderStatus => "Order status";
                     public string value => "Value";
-                    public string WordSetText => "Unknown";
+                    public string ResolveWording => "Unknown";
                     public string TextsByValue => "Texts by value";
                     public string System => "System";
             #pragma warning restore LOC305

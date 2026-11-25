@@ -374,7 +374,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
         sb.AppendLine($$"""
                     public static string Inline({{parameters}})
                     {
-                        return {{PackageNames.GeneratedCode}}.FindLanguage(Languages) switch
+                        return {{PackageNames.GeneratedCode}}.FindLanguageIndex(Languages) switch
                         {
             """);
 

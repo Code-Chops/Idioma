@@ -129,7 +129,7 @@ public sealed partial class LocalizationRegistry
     /// The culture a provider gives for the code that runs now: that of the <see cref="CultureScope"/> it's in, or
     /// else what the provider answers.
     /// </summary>
-    internal static CultureInfo? AskProvider(Func<CultureInfo?> provider)
+    internal static CultureInfo? GetCultureFromScopeOrProvider(Func<CultureInfo?> provider)
     {
         var culture = CultureScope.Current ?? provider();
         return culture;
@@ -152,17 +152,15 @@ public sealed partial class LocalizationRegistry
         get
         {
             // Built once all could be created. A constructor that throws runs again at the next read.
-            if (this._sets is { IsDefault: false } sets)
+            if (field is { IsDefault: false } sets)
                 return sets;
 
             sets = [.. this.SetRegistrations.Select(static registration => registration.Set)];
-            this._sets = sets;
+            field = sets;
 
             return sets;
         }
     }
-
-    private ImmutableArray<ILocalizationSet> _sets;
 
     /// <summary>
     /// The registered sets, in the order they apply, each created when a text of its contract is first shown.
@@ -193,17 +191,20 @@ public sealed partial class LocalizationRegistry
     // Internal: for Current it repeats SupportedLanguages, and only a test creates a registry with other languages.
     internal ImmutableArray<string> AppLanguages { get; }
 
-    private FrozenDictionary<string, LanguageSets> ByLanguage { get; }
+    /// <summary>
+    /// The registered sets of each language in <see cref="Languages"/>, matched in any letter case.
+    /// </summary>
+    private FrozenDictionary<string, LanguageSets> SetsByLanguage { get; }
 
     private LocalizationRegistry(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages,
-        FrozenDictionary<string, LanguageSets> byLanguage)
+        FrozenDictionary<string, LanguageSets> setsByLanguage)
     {
-        ArgumentNullException.ThrowIfNull(byLanguage);
+        ArgumentNullException.ThrowIfNull(setsByLanguage);
 
         this.SetRegistrations = registrations;
         this.AppLanguages = appLanguages;
-        this.ByLanguage = byLanguage;
-        this.Languages = byLanguage.Keys;
+        this.SetsByLanguage = setsByLanguage;
+        this.Languages = setsByLanguage.Keys;
     }
 
     /// <summary>
@@ -431,7 +432,7 @@ public sealed partial class LocalizationRegistry
         var registry = new LocalizationRegistry(
             registrations: registrations,
             appLanguages: appLanguages,
-            byLanguage: languageSets.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
+            setsByLanguage: languageSets.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
 
         return registry;
     }
@@ -506,7 +507,7 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     internal ILocalizationSet? FindByLanguage(Type contract, string language)
     {
-        var set = this.ByLanguage.TryGetValue(language, out var sets) && sets.Of(contract) is [.., var last]
+        var set = this.SetsByLanguage.TryGetValue(language, out var sets) && sets.Of(contract) is [.., var last]
             ? last.Set
             : null;
 

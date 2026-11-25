@@ -114,7 +114,8 @@ public sealed class CultureScope : IDisposable
     // Never changed, because a flow started inside a scope shares what it found. A scope disposed out of order gives
     // the scopes inside it a new list without it. A class rather than a record, so that the package carries no
     // equality and printing it never uses.
-    private sealed class OpenScope(CultureScope scope, OpenScope? around, CultureInfo uiCultureBefore, CultureInfo cultureBefore, bool isOnWhatItFound)
+    private sealed class OpenScope(CultureScope scope, OpenScope? around, CultureInfo uiCultureBefore,
+        CultureInfo cultureBefore, bool isOnWhatItFound)
     {
         /// <summary>
         /// The scope.
@@ -167,7 +168,8 @@ public sealed class CultureScope : IDisposable
             var around = this.Around!.Without(scope);
             var stoodOnIt = ReferenceEquals(this.Around.Scope, scope);
 
-            return new OpenScope(this.Scope, around, this.UICultureBefore, this.CultureBefore, this.IsOnWhatItFound && !stoodOnIt);
+            var result = new OpenScope(this.Scope, around, this.UICultureBefore, this.CultureBefore, this.IsOnWhatItFound && !stoodOnIt);
+            return result;
         }
     }
 }

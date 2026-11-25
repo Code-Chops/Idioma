@@ -155,7 +155,10 @@ A set can't be registered automatically, so its texts won't be found. This is a 
 - a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
 - no `[Obsolete]` marked as an error, because generated code can't name such a class
 
-Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an instance to `LocalizationRegistry.Register`.
+Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and register an instance yourself:
+
+- In an app, pass it to `LocalizationRegistry.Register`.
+- In a library, pass it to `LocalizationRegistry.RegisterDefaults`, so an app's set still rewords its texts.
 
 A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
 

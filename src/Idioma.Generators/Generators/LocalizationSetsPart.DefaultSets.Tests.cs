@@ -274,7 +274,7 @@ public sealed partial class LocalizationSetsPartTests
     [Arguments("public ShopLocalizationEn(string shop) { } public string Checkout => \"Checkout\";", "it has no parameterless constructor")]
     public void DefaultSetGeneratedCodeCannotCreate_ShouldReportLOC200AsItsOnlyError(string members, string expectedReason)
     {
-        // Arrange & Act: the generated texts name the set as a type argument of GeneratedCode.WordSetText, which takes
+        // Arrange & Act: the generated texts name the set as a type argument of GeneratedCode.ResolveWording, which takes
         // a public parameterless constructor (CS0310) and no member left to set (CS9040). With every generator at work.
         var errors = GeneratorTestHelper.CompileWithGenerators($$"""
             using CodeChops.Idioma;
@@ -500,7 +500,7 @@ public sealed partial class LocalizationSetsPartTests
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("ShopLocalizationEn");
         diagnostic.Properties.ShouldNotContainKey(LocalizationSetsPart.SuggestedNameProperty);
         DiagnosticIds(result).ShouldBe(["LOC200"]);
-        ContractText(result).ShouldContain("WordSetText<IShopLocalization, ShopLocalizationEN>(");
+        ContractText(result).ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEN>(");
         errors.Select(static error => error.Id).ShouldBe(["LOC200"]);
     }
 

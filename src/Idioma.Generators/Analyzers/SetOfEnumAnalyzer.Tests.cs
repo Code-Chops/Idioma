@@ -262,10 +262,9 @@ public sealed class SetOfEnumAnalyzerTests
     }
 
     [Test]
-    public async Task AppSetOfLibraryContractNamingNoEnum_ShouldReportNothing()
+    public async Task AppSetOfLibraryContractNamingNoEnum_ShouldReportLOC205ForEnumItLists()
     {
-        // Arrange & Act: a contract of a library that names no enum may be of one, generated before the enums were
-        // named.
+        // Arrange & Act
         var diagnostics = await AnalyzeAsync("""
             using CodeChops.Idioma;
 
@@ -282,7 +281,7 @@ public sealed class SetOfEnumAnalyzerTests
             """, StatusLibrary);
 
         // Assert
-        diagnostics.ShouldBeEmpty();
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'ShopLocalizationDe' lists 'ILocalizationSet<PaymentStatus>', but 'IShopLocalization' has no texts of 'PaymentStatus'. Replace it with 'ILocalizationSet'.");
     }
 
     [Test]
