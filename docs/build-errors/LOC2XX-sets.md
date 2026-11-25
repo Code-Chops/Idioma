@@ -7,6 +7,7 @@ Each code has an example and the fix. The [list of every code](../build-errors.m
 The generator can't use the default-language set, so it writes no texts for it. A default-language set it can use:
 
 - is named after its language, such as `ShopLocalizationEn`
+- has no `LocalizationLanguageCode` that gives it another language, or one the build can't read because it isn't a constant
 - is top-level, so not nested
 - isn't file-local, generic, or abstract
 - has a public parameterless constructor
@@ -52,7 +53,7 @@ A contract has no set for one of your languages. The message names the class to 
 
 ```text
 error LOC201: 'ShopLocalization' has no set for 'de', which [assembly: SupportedLanguages] requires.
-Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.
+Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.
 ```
 
 The IDE fix adds that class in a file of its own, without texts. The compiler then names each text the set lacks (`CS0535`), and your IDE can add them for you to translate. "Fix all" adds the set of every missing language at once.
@@ -123,7 +124,7 @@ List the enums the default-language set lists, in every language, and no other. 
 
 ## LOC206
 
-A set derives from another set and declares a `LocalizationLanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LocalizationLanguageCode` then implements nothing, and the set serves the language of its name instead:
+A set derives from another set and declares a `LocalizationLanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LocalizationLanguageCode` then implements nothing, so the set doesn't serve the language it returns:
 
 ```csharp
 public class ShopLocalizationBritish : ShopLocalizationEn // LOC206: LocalizationLanguageCode is never read
@@ -133,6 +134,8 @@ public class ShopLocalizationBritish : ShopLocalizationEn // LOC206: Localizatio
 ```
 
 List the interface again: `class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet`. The IDE fix does this for you.
+
+Without the fix, the set serves the language of its name. A name that gives none, as `ShopLocalizationBritish` doesn't, leaves the set without a language, so it isn't registered. LOC206 is then the only code reported, because its fix gives the set its language.
 
 ## LOC207
 
@@ -157,3 +160,24 @@ Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and pass an 
 A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
 
 A member marked `[Localized]` whose text can't be registered gets [LOC502](LOC5XX-inline-texts-and-attributes.md#loc502).
+
+## LOC209
+
+A contract has two sets for one language, and neither derives from the other. Users see only one of them, so the wording of the other is lost:
+
+```csharp
+public class ShopLocalizationNl : ILocalizationSet, IShopLocalization { ... }
+public class BasketNl : ILocalizationSet, IShopLocalization { ... } // LOC209
+```
+
+```text
+error LOC209: 'BasketNl' is a second set of 'MyApp.IShopLocalization' for 'nl', next to 'ShopLocalizationNl'. Users of 'nl' see only one of them. Remove one of the two, or derive 'BasketNl' from 'ShopLocalizationNl' to reword some of its texts.
+```
+
+Keep one set per language. Two sets aren't reported in these cases:
+
+- A set that derives from another set of its language rewords that set, and always wins over it.
+- A set marked `[ExcludeFromLocalizationDiscovery]` is one you register yourself, and wins because you register it.
+- A set of another assembly, such as a library's, is one an app may reword ([details](../libraries-and-apps.md#changing-a-text-of-a-library)).
+
+A test double that lists `ILocalizationSet` is a set too, so it's registered next to the real one. Let it list only the contract.

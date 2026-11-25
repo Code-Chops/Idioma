@@ -32,6 +32,7 @@ The first digit of a code names its subject.
 | [`LOC206`](build-errors/LOC2XX-sets.md#loc206) (code fix)                                 | A `LocalizationLanguageCode` that implements nothing    |
 | [`LOC207`](build-errors/LOC2XX-sets.md#loc207)                                            | A `LocalizationLanguageCode` that isn't a culture name  |
 | [`LOC208`](build-errors/LOC2XX-sets.md#loc208) (warning)                                  | A set that can't be registered automatically            |
+| [`LOC209`](build-errors/LOC2XX-sets.md#loc209)                                            | Two sets of one contract for one language               |
 | **[Texts of a set](build-errors/LOC3XX-texts-of-a-set.md)**                               |                                                         |
 | [`LOC300`](build-errors/LOC3XX-texts-of-a-set.md#loc300)                                  | A text with a name the generated class can't give it    |
 | [`LOC301`](build-errors/LOC3XX-texts-of-a-set.md#loc301) (code fix)                       | A text with a setter                                    |

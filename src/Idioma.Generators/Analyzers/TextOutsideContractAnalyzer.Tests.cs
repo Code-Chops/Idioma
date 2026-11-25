@@ -130,9 +130,16 @@ public sealed class TextOutsideContractAnalyzerTests
         }
         """;
 
-    private static Task<ImmutableArray<Diagnostic>> AnalyzeAsync(string source, params MetadataReference[] references)
+    /// <summary>
+    /// What a build reports: this analyzer's diagnostics, and the <c>LOC305</c> the generator reports in the
+    /// default-language set in its place.
+    /// </summary>
+    private static async Task<ImmutableArray<Diagnostic>> AnalyzeAsync(string source, params MetadataReference[] references)
     {
-        return GeneratorTestHelper.AnalyzeAsync(new TextOutsideContractAnalyzer(), source, references);
+        var fromGenerator = GeneratorTestHelper.GetGeneratorDiagnostics(source, references)
+            .Where(static diagnostic => String.Equals(diagnostic.Id, TextOutsideContractAnalyzer.TextOutsideEnumDiagnosticId, StringComparison.Ordinal));
+
+        return [.. fromGenerator, .. await GeneratorTestHelper.AnalyzeAsync(new TextOutsideContractAnalyzer(), source, references)];
     }
 
     private static string At(Diagnostic diagnostic)
@@ -185,6 +192,22 @@ public sealed class TextOutsideContractAnalyzerTests
             $"'OrderStatusLocalizationNl.{text}' isn't a member of 'OrderStatus', so GetText() never gives it. Add '{text}' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.",
         ]);
         diagnostics.ShouldAllBe(diagnostic => At(diagnostic).StartsWith(text, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task TextThatIsNoMemberInDefaultSetOfEnum_ShouldBeLeftToTheGenerator()
+    {
+        // Arrange: the generator reports it, because the Dutch set that lacks it doesn't compile, and a build drops an
+        // analyzer's diagnostics next to that error.
+        var source = EnumSets("""public string Shipped => "Shipped"; public string Lost => "Lost";""", """public string Lost => "Kwijt";""");
+
+        // Act
+        var fromAnalyzer = await GeneratorTestHelper.AnalyzeAsync(new TextOutsideContractAnalyzer(), source, []);
+        var fromGenerator = GeneratorTestHelper.GetGeneratorDiagnostics(source);
+
+        // Assert: once each, at the text of its own set.
+        fromAnalyzer.ShouldHaveSingleItem().GetMessage().ShouldStartWith("'OrderStatusLocalizationNl.Lost' isn't a member of 'OrderStatus'");
+        fromGenerator.ShouldHaveSingleItem().GetMessage().ShouldStartWith("'OrderStatusLocalizationEn.Lost' isn't a member of 'OrderStatus'");
     }
 
     [Test]

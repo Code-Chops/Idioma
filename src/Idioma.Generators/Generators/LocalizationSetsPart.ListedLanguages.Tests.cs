@@ -447,6 +447,6 @@ public sealed partial class LocalizationSetsPartTests
         // Assert: only the contract without a British set is reported, with the set that derives from its English one.
         var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("'GridLocalization' has no set for 'en-GB'");
-        message.ShouldEndWith("Add 'class GridLocalizationEnGb : GridLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
+        message.ShouldEndWith("Add 'class GridLocalizationEnGb : GridLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.");
     }
 }

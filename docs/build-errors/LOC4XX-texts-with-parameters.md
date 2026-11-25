@@ -29,7 +29,7 @@ Use the same parameter names in every language.
 
 The IDE fix gives every parameter the contract's name. When the set has the contract's names in another order, on parameters of one type, the fix moves the names and leaves the body as it is. Each use then reads the parameter of its name, so the example above becomes `Invited(string host, string guest) => $"{host} has invited {guest}"`. A rename doesn't help here, because it renames the uses too and keeps the swap. Swapped names on parameters of different types get no fix, because the body was written for the positions.
 
-When a name is one the contract doesn't have, as `aantal` for `count`, the fix renames it along with its uses and its doc comments. There's no fix when:
+When a name is one the contract doesn't have, as `aantal` for `count`, the fix renames it along with its uses and its doc comments. A call in your project that names it, as in `ItemsInCart(aantal: 2)`, names it anew too. There's no fix when:
 
 - a name the contract gives another parameter stands next to one it lacks, because a use could then mean either parameter
 - the new name is already used in the method
@@ -52,7 +52,7 @@ An inline text is held to the same rule. The wording of the default language sho
 LocalizableText.Inline(en: $"Hello, {name}!", nl: "Hallo!") // LOC402: the 'nl' wording doesn't use 'name'
 ```
 
-A value is a local variable, a parameter, or a field or property of your own assembly. A constant is wording, so it isn't a value. The build reports only what it can read, so these get no error:
+A value is a local variable, a parameter, or a field or property of your own assembly. A constant is wording, so it isn't a value. Neither is a text, such as `ShopLocalization.Checkout`, which another language may word its own way. The build reports only what it can read, so these get no error:
 
 - a wording that isn't written in the call, such as a variable or the result of a method
 - a wording that calls a local function or a delegate, which may read the value

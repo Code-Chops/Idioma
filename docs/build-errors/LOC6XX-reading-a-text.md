@@ -65,8 +65,13 @@ warning LOC602: 'ShopLocalization.Checkout' is read once, when 'Label' is initia
 
 What counts as a text:
 
-- a member of a generated class, such as `ShopLocalization.Checkout` or `ShopLocalization.GetTextByKey("Checkout")`
+- a text of a generated class, such as `ShopLocalization.Checkout` or `ShopLocalization.GetTextByKey("Checkout")`, and not a helper you wrote next to its texts
 - `LocalizableText.Inline`, `LocalizableText.GetTextByMember` and `LocalizableText.GetTextOfType`
 - `GetText()` on a value of an enum
 
-A text inside a lambda gets no warning, because it's read when the lambda runs: `static readonly Func<string> Label = () => ShopLocalization.Checkout;`. Neither does a text an instance field keeps, which lives as long as its object. So a text kept in a singleton, a cache or a local variable that outlives the request still compiles ([What the build misses](../build-errors.md#what-the-build-misses)).
+A text inside a lambda gets no warning, because it's read when the lambda runs: `static readonly Func<string> Label = () => ShopLocalization.Checkout;`. A lambda that runs as the initializer does is the exception, so these get the warning too:
+
+- A lambda of a LINQ query that the initializer enumerates, as `ToList()`, `First()` and `[.. query]` do: `static readonly List<string> Labels = statuses.Select(status => status.GetText()).ToList();`. A query stored as it is runs later, each time it's enumerated, so it gets no warning.
+- A lambda given to `Lazy<T>`, which keeps the wording it reads first.
+
+A text an instance field keeps gets no warning, because it lives as long as its object. So a text kept in a singleton, a cache or a local variable that outlives the request still compiles ([What the build misses](../build-errors.md#what-the-build-misses)).

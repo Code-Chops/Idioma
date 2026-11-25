@@ -447,6 +447,7 @@ public static class GeneratedCode
             valuesCulture: providedCulture,
             name,
             select,
+            defaultSetType: typeof(TDefaultSet),
             getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
             takesValues,
             resolved,

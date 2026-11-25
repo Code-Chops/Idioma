@@ -88,23 +88,30 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (FindText(initializer.Value, text) is { } read)
+        if (FindText(initializer.Value, text, isEnumerated: false, runsLambdas: false) is { } read)
             context.ReportDiagnostic(Diagnostic.Create(KeptTextRule, read.Syntax.GetLocation(), read.Syntax.ToString(), member.Name));
     }
 
     /// <summary>
     /// The first text an expression reads as it's evaluated, or <see langword="null"/>. What a lambda or a local
-    /// function reads is read when that runs, so it isn't looked into.
+    /// function reads is read when that runs, so it isn't looked into, unless the lambda runs as the initializer does.
     /// </summary>
-    private static IOperation? FindText(IOperation operation, INamedTypeSymbol text)
+    /// <param name="operation">The expression, or a part of it.</param>
+    /// <param name="text">The class <c>LocalizableText</c>.</param>
+    /// <param name="isEnumerated">
+    /// Whether the initializer enumerates what the expression gives, as <c>ToList()</c> or <c>[.. query]</c> does. A
+    /// query of LINQ that it stores as it is runs its lambdas only when it's enumerated, later.
+    /// </param>
+    /// <param name="runsLambdas">Whether a lambda the expression is runs as the initializer does.</param>
+    private static IOperation? FindText(IOperation operation, INamedTypeSymbol text, bool isEnumerated, bool runsLambdas)
     {
         // A nameof names a text and reads none.
-        if (operation is IAnonymousFunctionOperation or ILocalFunctionOperation or INameOfOperation)
+        if (operation is ILocalFunctionOperation or INameOfOperation || (operation is IAnonymousFunctionOperation && !runsLambdas))
             return null;
 
         var isText = operation switch
         {
-            IPropertyReferenceOperation { Property: { IsStatic: true } property } => IsGeneratedClass(property.ContainingType),
+            IPropertyReferenceOperation { Property: { IsStatic: true } property } => IsTextOfGeneratedClass(property),
             IInvocationOperation { TargetMethod: var method } => IsTextMethod(method, text),
             _ => false,
         };
@@ -112,11 +119,47 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
         if (isText)
             return operation;
 
+        // How the parts of the expression run: what a part of a query of LINQ gives is enumerated when the query is,
+        // and its lambdas run then. A method that takes a query, such as ToList() or string.Join, enumerates it, and so
+        // does a collection, but a lambda handed to another method may run later or never. Lazy<T> runs its lambda once
+        // and keeps the value, as an initializer does. A lambda's body runs anew, as code of its own.
+        var (enumeratesParts, runsLambdasOfParts) = operation switch
+        {
+            IAnonymousFunctionOperation => (false, false),
+            IArgumentOperation or IDelegateCreationOperation or IConversionOperation or IParenthesizedOperation => (isEnumerated, runsLambdas),
+            IInvocationOperation { TargetMethod: var method } when IsQuery(method) => (isEnumerated, isEnumerated),
+            IInvocationOperation { TargetMethod: var method } when IsOfLinq(method) => (true, true),
+            IObjectCreationOperation { Type: INamedTypeSymbol { Name: "Lazy", Arity: 1, ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } => (true, true),
+            _ => (true, false),
+        };
+
         foreach (var child in operation.ChildOperations)
-            if (FindText(child, text) is { } read)
+            if (FindText(child, text, enumeratesParts, runsLambdasOfParts) is { } read)
                 return read;
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether a method is one of LINQ's for a sequence, such as <c>Select</c> or <c>ToList</c>.
+    /// </summary>
+    private static bool IsOfLinq(IMethodSymbol method)
+    {
+        var isOfLinq = method.ContainingType is { Name: "Enumerable", ContainingNamespace: { Name: "Linq", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } };
+        return isOfLinq;
+    }
+
+    /// <summary>
+    /// Whether a method of LINQ gives a query, which runs its lambdas only when it's enumerated, such as <c>Select</c>.
+    /// One that gives a list, a value or a dictionary, such as <c>ToList</c> or <c>First</c>, runs them as it's called.
+    /// </summary>
+    private static bool IsQuery(IMethodSymbol method)
+    {
+        var isQuery = IsOfLinq(method)
+                      && method.ReturnType is INamedTypeSymbol { IsGenericType: true, TypeKind: TypeKind.Interface } returned
+                      && returned.ConstructedFrom.ContainingNamespace?.ToDisplayString() is "System.Collections.Generic" or "System.Linq";
+
+        return isQuery;
     }
 
     /// <summary>
@@ -131,11 +174,12 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
         if (SymbolEqualityComparer.Default.Equals(method.ContainingType, text) || UnnamedLanguageAnalyzer.IsFactory(method))
             return true;
 
+        if (IsTextOfGeneratedClass(method))
+            return true;
+
         // An extension member's method lies in a block inside the static class that holds it.
         for (var type = method.ContainingType; type is not null; type = type.ContainingType)
         {
-            if (IsGeneratedClass(type))
-                return true;
 
             // The class the source generator writes for an enum with [Localized] members.
             if (String.Equals(method.Name, LocalizedMembers.ExtensionName, StringComparison.Ordinal)
@@ -154,8 +198,38 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     /// </summary>
     internal static bool IsGeneratedClass(INamedTypeSymbol? type)
     {
+        return FindContractOfGeneratedClass(type) is not null;
+    }
+
+    /// <summary>
+    /// Whether a member of a generated class gives a text: one of its texts, which its contract has too, or a method
+    /// the generator writes next to them (<c>GetTextByKey</c>, and <c>GetTextByValue</c> and <c>GetText()</c> for an
+    /// enum). A helper written next to them in the partial class gives none.
+    /// </summary>
+    internal static bool IsTextOfGeneratedClass(ISymbol member)
+    {
+        // An extension member's method lies in a block inside the static class that holds it.
+        for (var type = member.ContainingType; type is not null; type = type.ContainingType)
+        {
+            if (FindContractOfGeneratedClass(type) is not { } contract)
+                continue;
+
+            var isText = !contract.GetMembers(member.Name).IsEmpty
+                         || member.Name is LocalizationSetsAnalysis.GetName or LocalizationSetsAnalysis.LookupName or LocalizationSetsAnalysis.ExtensionName;
+
+            return isText;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The contract of a class the source generator writes for a set, or <see langword="null"/> for any other type.
+    /// </summary>
+    private static INamedTypeSymbol? FindContractOfGeneratedClass(INamedTypeSymbol? type)
+    {
         if (type is not { IsStatic: true, ContainingType: null, Arity: 0 })
-            return false;
+            return null;
 
         foreach (var contract in type.ContainingNamespace.GetTypeMembers($"I{type.Name}", arity: 0))
         {
@@ -167,11 +241,11 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
                 if (attribute.AttributeClass is { Name: ContractAttributeName } attributeClass
                     && String.Equals(attributeClass.ContainingNamespace.ToDisplayString(), PackageNames.InternalsNamespace, StringComparison.Ordinal))
                 {
-                    return true;
+                    return contract;
                 }
             }
         }
 
-        return false;
+        return null;
     }
 }

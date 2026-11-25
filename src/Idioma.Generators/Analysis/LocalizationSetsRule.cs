@@ -37,6 +37,12 @@ internal enum LocalizationSetsRule
     MissingContract,
 
     /// <summary>
+    /// <c>LOC209</c>: a set of a contract for a language that another set of that contract serves already, where
+    /// neither derives from the other.
+    /// </summary>
+    RepeatedLanguage,
+
+    /// <summary>
     /// <c>LOC700</c>: a referenced contract has no set for a supported language.
     /// </summary>
     LibraryMissingLanguage,
@@ -63,4 +69,10 @@ internal enum LocalizationSetsRule
     /// contract leaves the text out.
     /// </summary>
     UndeclaredText,
+
+    /// <summary>
+    /// <c>LOC305</c>: a text of the default-language set of an enum isn't a member of its enums. The analyzer reports
+    /// the same in every other set.
+    /// </summary>
+    TextOutsideEnum,
 }

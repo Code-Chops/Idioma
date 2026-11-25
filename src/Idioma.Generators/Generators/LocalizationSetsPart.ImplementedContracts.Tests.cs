@@ -31,6 +31,40 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    public void DefaultSetWithoutItsContract_ShouldLeaveLOC204TheOnlyErrorOfTheBuild()
+    {
+        // Arrange & Act: a property and a method, and a text named like a member of a class, which the class that
+        // implements the contract for the set mustn't clash with.
+        var errors = GeneratorTestHelper.CompileWithGenerators("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet
+            {
+                public string Checkout => "Checkout";
+                public string ToString(int count) => $"{count} items";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+                public string ToString(int count) => $"{count} artikelen";
+            }
+
+            public static class Page
+            {
+                public static string Title => ShopLocalization.Checkout + ShopLocalization.ToString(2);
+            }
+            """);
+
+        // Assert: no error in the generated file, where nothing can be fixed.
+        errors.Select(static error => error.Id).ShouldBe([LocalizationSetsPart.MissingContractDiagnosticId]);
+    }
+
+    [Test]
     public void ClassImplementingContractWithoutILocalizationSet_ShouldNotCountAsSet()
     {
         // Arrange & Act: the shape every other language's set had while the contract derived from ILocalizationSet.
@@ -51,7 +85,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert: it isn't the Dutch set, so Dutch is missing, and the message says why the class doesn't count.
         var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("Add 'class ShopLocalizationNl : ILocalizationSet, IShopLocalization'.");
-        message.ShouldEndWith("A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
+        message.ShouldEndWith("A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.");
     }
 
     [Test]

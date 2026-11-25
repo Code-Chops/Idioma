@@ -115,6 +115,8 @@ warning LOC305: 'OrderStatusLocalizationNl.Delivered' isn't a member of 'OrderSt
 
 Add the member to the enum if it's missing there. Every language then needs its text, so the build reports `CS0535` for each set that lacks it. Otherwise the text is usually left over from a member that was removed, so remove it from each set.
 
+A text in the default-language set is in the contract, so another language without it gets `CS0535` too. LOC305 is reported next to that error, at the text in the default-language set. Don't add the text to the other languages, because it isn't a member there either.
+
 - Write a caption for the enum, or a text that takes values, in a set of its own that lists `ILocalizationSet`.
 - An enum of another assembly, such as `DayOfWeek`, can't get a member, so move the text.
 - Mark a member that isn't a text `[ExcludeFromLocalizationDiscovery]`.

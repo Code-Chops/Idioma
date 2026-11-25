@@ -259,6 +259,43 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    public void TextOfDefaultSetThatIsNoMember_ShouldBeReportedNextToTheErrorOfTheSetThatLacksIt()
+    {
+        // Arrange: Delivered is no member of OrderStatus, and the contract has it, so the Dutch set doesn't compile. A
+        // build drops an analyzer's diagnostics next to that error, so the generator reports it.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public enum OrderStatus { Pending }
+
+            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "Pending";
+                public string Delivered => "Delivered";
+            }
+
+            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var diagnostic = SingleDiagnostic(Run(source), TextOutsideContractAnalyzer.TextOutsideEnumDiagnosticId);
+
+        // Assert: at the text, with the advice the analyzer gives in every other set.
+        errors.Select(static error => error.Id).ShouldBe(["CS0535"]);
+        diagnostic.Severity.ShouldBe(Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationEn.Delivered' isn't a member of 'OrderStatus', so GetText() never gives it. Add 'Delivered' to 'OrderStatus', move it to a set of its own, or mark it [ExcludeFromLocalizationDiscovery] if it isn't a text.");
+        diagnostic.Location.GetLineSpan().StartLinePosition.Line.ShouldBe(11);
+    }
+
+    [Test]
     public void SetOfEnumOfAnotherNamespaceOrInsideAClass_ShouldCompileWithoutWarningsAndWithResolvedCrefs()
     {
         // Arrange: an enum of another namespace, and an internal enum inside a class, with a member named like a
@@ -286,11 +323,13 @@ public sealed partial class LocalizationSetsPartTests
                 {
                     public string Pending => "Pending";
                     public string Shipped => "Shipped";
+            #pragma warning disable LOC305 // Texts that aren't members, kept on purpose
                     public string OrderStatus => "Order status";
                     public string value => "Value";
                     public string WordSetText => "Unknown";
                     public string TextsByValue => "Texts by value";
                     public string System => "System";
+            #pragma warning restore LOC305
                 }
 
                 public sealed class SpeedLocalizationEn : ILocalizationSet<Shipping.Speed>, ISpeedLocalization

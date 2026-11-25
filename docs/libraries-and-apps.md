@@ -40,6 +40,14 @@ Every project that starts is an app, and the languages of an app it references d
 - **The server project of a Blazor Web App** declares the same languages as its client project.
 - **A test project** declares the languages its tests read.
 
+A project that builds as a library but runs as the app isn't recognized, so it says it's the app. That's a project a host loads, such as an AWS Lambda function or an add-in of Excel:
+
+```csharp
+[assembly: SupportedLanguages(defaultLanguage: "en", "nl", IsApplication = true)]
+```
+
+The build takes a project for an app only when it builds an executable or an Android app.
+
 A process that no such app starts has no languages, such as a host written in F# that loads your library. There, `LocalizationRegistry.SupportedLanguages` is empty, every culture shows its own wording, and each text falls back to its own default language.
 
 ## A language the library lacks

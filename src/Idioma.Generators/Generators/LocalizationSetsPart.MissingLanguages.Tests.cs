@@ -31,6 +31,51 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    public void SetWithLanguageCodeThatIsNoCultureName_ShouldNotHideMissingLanguage()
+    {
+        // Arrange & Act: registering the British set throws (LOC207), so it serves no language, and Dutch is missing.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed class ShopLocalizationBritish : ILocalizationSet, IShopLocalization
+            {
+                public string LocalizationLanguageCode => "en_GB";
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert
+        SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage().ShouldContain("'ShopLocalization' has no set for 'nl'");
+    }
+
+    [Test]
+    public void StructOfTheNameOfTheSet_ShouldBeNamedInLOC201()
+    {
+        // Arrange & Act: a struct isn't a set, and registering needs a class.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public struct ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage().ShouldEndWith("neither does a struct, or a nested, generic, or file-local class.");
+    }
+
+    [Test]
     public void LanguageWithLongCodeWithoutSet_ShouldNameSetAfterCode()
     {
         // Arrange & Act
@@ -365,7 +410,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert: the set to add derives from the English one, so that it holds only the texts that differ.
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldBe("'ShopLocalization' has no set for 'en-GB', which [assembly: SupportedLanguages] requires. Add 'class ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
+        diagnostic.GetMessage().ShouldBe("'ShopLocalization' has no set for 'en-GB', which [assembly: SupportedLanguages] requires. Add 'class ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.");
     }
 
     [Test]
@@ -402,9 +447,9 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    [Arguments("\"nl\", \"en\", \"en-GB\"", "public sealed class ShopLocalizationEn", "Add 'class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.")]
-    [Arguments("\"nl\", \"en\", \"en-GB\"", "public record ShopLocalizationEn", "Add 'record ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.")]
-    [Arguments("\"nl\", \"en-GB\"", "public class ShopLocalizationEn", "Add 'class ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.")]
+    [Arguments("\"nl\", \"en\", \"en-GB\"", "public sealed class ShopLocalizationEn", "Add 'class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.")]
+    [Arguments("\"nl\", \"en\", \"en-GB\"", "public record ShopLocalizationEn", "Add 'record ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.")]
+    [Arguments("\"nl\", \"en-GB\"", "public class ShopLocalizationEn", "Add 'class ShopLocalizationEnGb : ShopLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.")]
     public void ListedRegionWithoutSet_ShouldBeToldWhichSetToAdd(string languages, string english, string advice)
     {
         // Arrange & Act: here the English set is not the default one. A sealed set has nothing deriving from it, a record
@@ -459,7 +504,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
-        message.ShouldEndWith("Add 'class ShopLocalizationZhHansCn : ShopLocalizationZhHans', which keeps the wording of 'zh-Hans' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
+        message.ShouldEndWith("Add 'class ShopLocalizationZhHansCn : ShopLocalizationZhHans', which keeps the wording of 'zh-Hans' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.");
     }
 
     [Test]
@@ -492,6 +537,6 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         var message = SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId).GetMessage();
         message.ShouldContain("'TestApp.IGridLocalization' has no set for 'en-GB'");
-        message.ShouldEndWith("Add 'class GridLocalizationEnGb : GridLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.");
+        message.ShouldEndWith("Add 'class GridLocalizationEnGb : GridLocalizationEn', which keeps the wording of 'en' for every text it doesn't override. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.");
     }
 }

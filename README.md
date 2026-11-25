@@ -155,7 +155,7 @@ If you add German to your languages, the build tells you which set to write:
 
 ```text
 error LOC201: 'ShopLocalization' has no set for 'de', which [assembly: SupportedLanguages] requires.
-Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.
+Add 'class ShopLocalizationDe : ILocalizationSet, IShopLocalization'. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.
 ```
 
 An enum gets a set of its own, which lists `ILocalizationSet<TEnum>` ([Enums](#enums)).
@@ -322,7 +322,7 @@ The docs cover the rest, a page per subject:
 
 - [Enums](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md): a [set of an enum](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md#a-set-of-the-enum), or [an attribute on each member](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md#an-attribute-on-each-member).
 - [Attributes](https://github.com/Code-Chops/Idioma/blob/main/docs/attributes.md): labels in a form, a table or an export, written with `[Localized]`, and [finding them by their member](https://github.com/Code-Chops/Idioma/blob/main/docs/attributes.md#finding-a-text-by-its-member).
-- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): [which wording a user sees](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order), [getting a text by its key](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key), registering a set by hand, [testing](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#testing), and what the source generator writes.
+- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): [which wording a user sees](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order), [getting a text by its key](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key), [registering a set by hand](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#registration), [testing](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#testing), and [what the source generator writes](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#what-the-source-generator-writes).
 - [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md): how a set's name gives its language, and [regional variants](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md#regional-variants) such as British English.
 - [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): writing a library, and [changing a text of a library](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#changing-a-text-of-a-library) in your app.
 - [Translating your texts](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md): with an AI coding assistant, and reviewing each language in a pull request.

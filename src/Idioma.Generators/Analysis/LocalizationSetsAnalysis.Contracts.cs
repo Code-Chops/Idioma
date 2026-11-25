@@ -125,7 +125,9 @@ internal sealed partial record LocalizationSetsAnalysis
 
         // The default-language set lists its contract next to ILocalizationSet, as every set does: the generated
         // texts read its wording through the contract.
-        if (!LocalizationDiscovery.ListsGeneratedContract(set, pass.GeneratedContracts, contractFullName))
+        var listsContract = LocalizationDiscovery.ListsGeneratedContract(set, pass.GeneratedContracts, contractFullName);
+
+        if (!listsContract)
         {
             pass.Findings?.Add(new LocalizationSetsFinding(
                 LocalizationSetsRule.MissingContract,
@@ -175,6 +177,7 @@ internal sealed partial record LocalizationSetsAnalysis
             Members: set.OfContract.Texts,
             Sets: new EquatableArray<SetLink>(links),
             HasTexts: hasTexts,
+            DefaultSetListsContract: listsContract,
             Usings: set.OfContract.Usings,
             Enums: set.OfContract.Enums,
             SuppressedDiagnostics: GetContractSuppressedDiagnostics(set)));
@@ -317,6 +320,11 @@ internal sealed partial record LocalizationSetsAnalysis
         // language would too, without a word.
         foreach (var text in set.OfContract.UndeclaredTexts)
             findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UndeclaredText, text.Location, new EquatableArray<string>([set.Name, text.Name, text.DeclaringType])));
+
+        // At the text that isn't a member of the enum. The contract has it, so every other language that lacks it fails
+        // to compile, and only this says where it comes from.
+        foreach (var text in set.OfContract.TextsOutsideEnums)
+            findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.TextOutsideEnum, text.Location, new EquatableArray<string>([set.Name, text.Name, text.Enums, text.Advice])));
     }
 
     /// <summary>
@@ -365,15 +373,17 @@ internal sealed partial record LocalizationSetsAnalysis
 
     /// <summary>
     /// What the file of a contract turns off besides <c>CS0612</c> and <c>CS0618</c>: what naming the default-language
-    /// set reports, then what naming its enums and their members reports, and what writing the types of its texts'
-    /// parameters reports. Each id once, in that order.
+    /// set reports, then what naming its enums and their members reports, what writing the types of its texts'
+    /// parameters reports, and what naming a text marked <c>[Obsolete]</c> or <c>[Experimental]</c> reports. Each id
+    /// once, in that order.
     /// </summary>
     private static EquatableArray<string> GetContractSuppressedDiagnostics(DiscoveredLocalization set)
     {
         var ofEnums = set.OfContract.Enums.SelectMany(static @enum => @enum.SuppressedDiagnostics);
         var ofParameters = set.OfContract.Texts.SelectMany(static text => text.Parameters).SelectMany(static parameter => parameter.SuppressedDiagnostics);
+        var ofTexts = set.OfContract.Texts.SelectMany(static text => text.SuppressedDiagnostics);
 
-        var suppressed = set.SuppressedDiagnostics.Concat(ofEnums).Concat(ofParameters).Distinct(StringComparer.Ordinal).ToImmutableArray();
+        var suppressed = set.SuppressedDiagnostics.Concat(ofEnums).Concat(ofParameters).Concat(ofTexts).Distinct(StringComparer.Ordinal).ToImmutableArray();
         return new EquatableArray<string>(suppressed);
     }
 

@@ -16,6 +16,10 @@ internal static partial class LocalizationContractSource
     /// <param name="Contract">The contract the file is written for.</param>
     /// <param name="Sets">The sets the contract links to, each with its texts by name.</param>
     /// <param name="ClassName">The default-language set, as code writes its name.</param>
+    /// <param name="DefaultSet">
+    /// What the texts take their default wording from, as code writes its name: the default-language set, or the class
+    /// that implements the contract for it where it doesn't list the contract (<see cref="AppendDefaultSetAsContract"/>).
+    /// </param>
     /// <param name="ContractName">The name of the contract interface.</param>
     /// <param name="TextsName">The generated class, as code writes its name.</param>
     /// <param name="Texts">The texts the generated class holds, which leaves out a text with a reserved name (<c>LOC300</c>).</param>
@@ -24,6 +28,7 @@ internal static partial class LocalizationContractSource
         LocalizationContract Contract,
         ContractDocComments.IndexedSet[] Sets,
         string ClassName,
+        string DefaultSet,
         string ContractName,
         string TextsName,
         LocalizationMember[] Texts,
@@ -41,6 +46,7 @@ internal static partial class LocalizationContractSource
             contract,
             ContractDocComments.IndexSets(contract),
             ClassName: CodeEscaping.EscapeIdentifier(contract.ClassName),
+            DefaultSet: CodeEscaping.EscapeIdentifier(contract.DefaultSetListsContract ? contract.ClassName : $"{contract.ClassName}AsContract"),
             ContractName: contract.ContractName,
             TextsName: CodeEscaping.EscapeIdentifier(contract.TextsName),
             texts,
@@ -83,9 +89,57 @@ internal static partial class LocalizationContractSource
             sb.AppendLine("}");
         }
 
+        if (contract.HasTexts && !contract.DefaultSetListsContract)
+            AppendDefaultSetAsContract(sb, file);
+
+        if (contract.HasTexts && texts.Any(static text => text.IsObsoleteAsError))
+            AppendObsoleteTexts(sb, file);
+
         GeneratedFile.AppendFooter(sb, warnings);
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Writes the class that implements the contract for a default-language set that doesn't list it (<c>LOC204</c>).
+    /// Each member hands on to the set. So the texts compile and show the set's wording, and LOC204 is the one error,
+    /// at the set, rather than an error per text in this file.
+    /// </summary>
+    // Explicit implementations, so that no text can clash with a member of the class, such as one named ToString or
+    // set. File-local, so that it's no type of the assembly: neither the generator nor the registry takes it for a set.
+    // Marked [Obsolete] where a text of the set is obsolete as an error, which code inside such a class may name.
+    private static void AppendDefaultSetAsContract(StringBuilder sb, ContractFile file)
+    {
+        var contract = file.Contract;
+        var name = file.ContractName;
+
+        sb.AppendLine($$"""
+
+            /// <summary>
+            /// Implements <see cref="{{name}}"/> for <see cref="{{file.ClassName}}"/>, which doesn't list it yet (LOC204), so that the texts compile.
+            /// </summary>
+            {{(contract.Members.Any(static member => member.IsObsoleteAsError) ? "[Obsolete] " : "")}}file sealed class {{file.DefaultSet}} : {{PackageNames.LocalizationSet}}, {{name}}
+            {
+                private readonly {{file.ClassName}} set = new();
+
+                string {{PackageNames.LocalizationSet}}.LocalizationLanguageCode => (({{PackageNames.LocalizationSet}})this.set).LocalizationLanguageCode;
+            """);
+
+        foreach (var member in contract.Members)
+        {
+            var memberName = CodeEscaping.EscapeIdentifier(member.Name);
+
+            if (!member.IsMethod)
+            {
+                sb.AppendLine($"    string {name}.{memberName} => this.set.{memberName};");
+                continue;
+            }
+
+            var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
+            sb.AppendLine($"    string {name}.{memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => this.set.{memberName}({arguments});");
+        }
+
+        sb.AppendLine("}");
     }
 
     /// <summary>

@@ -49,6 +49,10 @@ internal static partial class LocalizationContractSource
 
             ContractDocComments.AppendMemberDocs(sb, contract, sets, className, member);
 
+            // [Obsolete] and [Experimental] as the set has them, so that the code that shows the text is told.
+            if (member.Marks is { } marks)
+                sb.AppendLine($"    {marks}");
+
             // A text is worded on every read, by the set of the user's language. The package keeps that set per
             // culture and per position (FindSet), so a read is a call of the set's own member. Where no set is kept
             // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
@@ -57,7 +61,7 @@ internal static partial class LocalizationContractSource
             // argument is not looked for among the texts.
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => FindSet<{name}>({i}, {texts.Length})?.{memberName} ?? WordSetText<{name}, {className}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => FindSet<{name}>({i}, {texts.Length})?.{memberName} ?? WordSetText<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
@@ -69,7 +73,7 @@ internal static partial class LocalizationContractSource
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => FindSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? WordSetText<{name}, {className}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => FindSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? WordSetText<{name}, {file.DefaultSet}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
@@ -154,7 +158,7 @@ internal static partial class LocalizationContractSource
         foreach (var member in members)
         {
             var pattern = member.ObsoleteAsErrorValue is { } value ? $"({type})({value})" : $"{type}.{CodeEscaping.EscapeIdentifier(member.Name)}";
-            lookups.AppendLine($"        {pattern} => {textsName}.{CodeEscaping.EscapeIdentifier(member.Name)},");
+            lookups.AppendLine($"        {pattern} => {NameText(file, texts.First(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal)))},");
         }
 
         lookups.AppendLine($$"""
@@ -198,7 +202,7 @@ internal static partial class LocalizationContractSource
         foreach (var member in texts)
         {
             var keyLiteral = SymbolDisplay.FormatLiteral(member.Name, quote: true);
-            var text = $"{textsName}.{CodeEscaping.EscapeIdentifier(member.Name)}";
+            var text = NameText(file, member);
 
             if (!member.IsMethod)
             {
@@ -217,6 +221,59 @@ internal static partial class LocalizationContractSource
                     _ => throw CreateUnknownKeyException<{{name}}>(key, {{SymbolDisplay.FormatLiteral(contract.TextsName, quote: true)}}),
                 };
             """);
+    }
+
+    /// <summary>
+    /// A text as the file names it outside its member, by the name of its class in front. A text marked
+    /// <c>[Obsolete]</c> as an error can't be named there (<c>CS0619</c>), so it's named through the class that hands
+    /// it on (<see cref="AppendObsoleteTexts"/>).
+    /// </summary>
+    private static string NameText(ContractFile file, LocalizationMember member)
+    {
+        var holder = member.IsObsoleteAsError ? $"{ObsoleteTextsName}<{file.ContractName}>" : file.TextsName;
+
+        var text = $"{holder}.{CodeEscaping.EscapeIdentifier(member.Name)}";
+        return text;
+    }
+
+    /// <summary>
+    /// The class that hands on the texts marked <c>[Obsolete]</c> as an error.
+    /// </summary>
+    private const string ObsoleteTextsName = "ObsoleteTexts";
+
+    /// <summary>
+    /// Writes the class that hands on each text marked <c>[Obsolete]</c> as an error, for the method that gives a text
+    /// by its key and the one that gives the text of an enum value. Code inside a class marked <c>[Obsolete]</c> may name
+    /// what's obsolete, and naming the class itself is a warning this file turns off (<c>CS0612</c>). File-local, so
+    /// that it's no type of the assembly. Generic, so that no text can stand before it: a name with a type argument is
+    /// not looked for among the texts.
+    /// </summary>
+    private static void AppendObsoleteTexts(StringBuilder sb, ContractFile file)
+    {
+        var contract = file.Contract;
+
+        sb.AppendLine($$"""
+
+            [Obsolete]
+            file static class {{ObsoleteTextsName}}<TContract>
+            {
+            """);
+
+        foreach (var member in file.Texts.Where(static text => text.IsObsoleteAsError))
+        {
+            var memberName = CodeEscaping.EscapeIdentifier(member.Name);
+
+            if (!member.IsMethod)
+            {
+                sb.AppendLine($"    internal static string {memberName} => {file.TextsName}.{memberName};");
+                continue;
+            }
+
+            var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
+            sb.AppendLine($"    internal static string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => {file.TextsName}.{memberName}({arguments});");
+        }
+
+        sb.AppendLine("}");
     }
 
     /// <summary>

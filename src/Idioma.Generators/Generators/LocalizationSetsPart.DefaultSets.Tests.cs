@@ -40,6 +40,30 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     [Arguments("public sealed class FakeShopEn : ILocalizationSet, IShopLocalization")]
     [Arguments("public sealed class FakeShopEn : ILocalizationSet, IShopLocalization, System.IDisposable")]
+    public void SecondRegisteredClassOfDefaultLanguage_ShouldReportOnlyLOC209(string declaration)
+    {
+        // Arrange: a second class in the default language, which lists ILocalizationSet next to the contract generated
+        // from ShopLocalizationEn. It's registered like any set, so only one of the two would show.
+        var source = $$"""
+            {{ShopSets}}
+
+            {{declaration}}
+            {
+                public string Checkout => "Check out";
+                public string Total => "Sum";
+                public void Dispose() { }
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+
+        // Assert: no LOC200 for its shape, no LOC204 for a contract of its own, and one contract, from ShopLocalizationEn.
+        DiagnosticIds(result).ShouldBe([LocalizationSetsPart.RepeatedLanguageDiagnosticId]);
+        ContractText(result).ShouldContain("interface IShopLocalization");
+    }
+
+    [Test]
     [Arguments("public static class Tests { public sealed class FakeLocalizationEn : ILocalizationSet, IShopLocalization")]
     [Arguments("public static partial class Tests { private sealed partial class FakeLocalizationEn : ILocalizationSet, IShopLocalization")]
     [Arguments("file sealed class FakeLocalizationEn : ILocalizationSet, IShopLocalization")]
@@ -47,8 +71,8 @@ public sealed partial class LocalizationSetsPartTests
     [Arguments("public abstract class FakeLocalizationEn : ILocalizationSet, IShopLocalization")]
     public void DefaultLanguageClassImplementingContractOfAnotherSet_ShouldBeNoStartOfContract(string declaration)
     {
-        // Arrange: a second class in the default language, such as a test double, which lists ILocalizationSet next to
-        // the contract generated from ShopLocalizationEn, as every set does.
+        // Arrange: a second class in the default language that isn't registered automatically, which lists
+        // ILocalizationSet next to the contract generated from ShopLocalizationEn, as every set does.
         var closing = declaration.Contains("class Tests", StringComparison.Ordinal) ? "} }" : "}";
         var source = $$"""
             {{ShopSets}}
@@ -70,9 +94,33 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    [Arguments("public string LocalizationLanguageCode => \"nl\";", "its LocalizationLanguageCode gives 'nl', where its name gives 'en'")]
+    [Arguments("string ILocalizationSet.LocalizationLanguageCode => \"en-US\";", "its LocalizationLanguageCode gives 'en-US', where its name gives 'en'")]
+    [Arguments("public string LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"LANGUAGE\") ?? \"en\";", "its LocalizationLanguageCode isn't a constant, so the build can't read its language")]
+    public void SetNamedAfterDefaultLanguageWithAnotherCode_ShouldReportLOC200(string languageCode, string problem)
+    {
+        // Arrange & Act: no set starts IShopLocalization then, so every set that lists it fails to compile.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                {{languageCode}}
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
+        diagnostic.GetMessage().ShouldBe($"'ShopLocalizationEn' is the default-language set of a contract, but {problem}. The generator can't use it, so it writes no texts for it. Return the constant 'en' from LocalizationLanguageCode, or remove LocalizationLanguageCode so that the name gives the language.");
+        diagnostic.Properties.ShouldNotContainKey(LocalizationSetsPart.SuggestedNameProperty);
+    }
+
+    [Test]
     public void DefaultSetListingContractOfAnotherSetNextToItsOwn_ShouldStillStartItsContract()
     {
-        // Arrange: a set that starts IOrderLocalization and translates IShopLocalization in the same class.
+        // Arrange: a set that starts IOrderLocalization and words IShopLocalization in the same class, next to
+        // ShopLocalizationEn, which LOC209 reports.
         var source = $$"""
             {{ShopSets}}
 
@@ -93,7 +141,7 @@ public sealed partial class LocalizationSetsPartTests
         var result = Run(source);
 
         // Assert
-        DiagnosticIds(result).ShouldBeEmpty();
+        DiagnosticIds(result).ShouldBe([LocalizationSetsPart.RepeatedLanguageDiagnosticId]);
         result.Results.ShouldHaveSingleItem().GeneratedSources
             .ShouldContain(static generated => String.Equals(generated.HintName, "TestApp.OrderLocalizationEn.Localization.g.cs", StringComparison.Ordinal));
     }

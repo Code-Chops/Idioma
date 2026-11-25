@@ -112,7 +112,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    [Arguments("public class GiftLocalizationNl : ILocalizationSet, IShopLocalization { public virtual string Checkout => \"Afrekenen\"; public virtual string Total => \"Totaal\"; } [ExcludeFromLocalizationDiscovery] public sealed class GiftLocalizationEn : GiftLocalizationNl;")]
+    [Arguments("[ExcludeFromLocalizationDiscovery] public class GiftLocalizationNl : ILocalizationSet, IShopLocalization { public virtual string Checkout => \"Afrekenen\"; public virtual string Total => \"Totaal\"; } [ExcludeFromLocalizationDiscovery] public sealed class GiftLocalizationEn : GiftLocalizationNl;")]
     [Arguments("[ExcludeFromLocalizationDiscovery] public sealed class CartLocalizationNl : ILocalizationSet { public string Checkout => \"Afrekenen\"; }")]
     public void ExcludedSet_ShouldReportNothingAboutItself(string declaration)
     {

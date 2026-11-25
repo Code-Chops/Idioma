@@ -15,6 +15,7 @@ public sealed class KeptTextAnalyzerTests
     private const string Header = """
         using System;
         using System.Collections.Generic;
+        using System.Linq;
         using CodeChops.Idioma;
 
         [assembly: SupportedLanguages("en", "nl")]
@@ -43,6 +44,12 @@ public sealed class KeptTextAnalyzerTests
         {
             [Localized(en: "City", nl: "Plaats")]
             public string City { get; set; } = "";
+        }
+
+        public static partial class ShopLocalization
+        {
+            public static int TextCount => 2;
+            public static string Separator => " / ";
         }
         """;
 
@@ -76,6 +83,10 @@ public sealed class KeptTextAnalyzerTests
     [Arguments("private static readonly string[] All = [ShopLocalization.Checkout];", "ShopLocalization.Checkout", "All")]
     [Arguments("""private static readonly Dictionary<string, string> ByKey = new() { ["checkout"] = ShopLocalization.Checkout };""", "ShopLocalization.Checkout", "ByKey")]
     [Arguments("""private static readonly string Label = "Go to " + ShopLocalization.Checkout.ToLowerInvariant();""", "ShopLocalization.Checkout", "Label")]
+    [Arguments("private static readonly List<string> All = Enum.GetValues<ParcelStatus>().Select(status => status.GetText()).ToList();", "status.GetText()", "All")]
+    [Arguments("private static readonly string[] All = [.. new[] { 1, 2 }.Select(_ => ShopLocalization.Checkout)];", "ShopLocalization.Checkout", "All")]
+    [Arguments("private static readonly string First = new[] { 1, 2 }.Select(_ => ShopLocalization.Checkout).First();", "ShopLocalization.Checkout", "First")]
+    [Arguments("private static readonly Lazy<string> Label = new(() => ShopLocalization.Checkout);", "ShopLocalization.Checkout", "Label")]
     public async Task TextInStaticInitializer_ShouldReportLOC602(string member, string expectedText, string expectedMember)
     {
         // Act
@@ -102,6 +113,10 @@ public sealed class KeptTextAnalyzerTests
     [Arguments("""private const string Brand = "Idioma";""")]
     [Arguments("public static string Describe() { var label = ShopLocalization.Checkout; return label; }")]
     [Arguments("private static readonly string Machine = Environment.MachineName;")]
+    [Arguments("private static readonly IEnumerable<string> All = new[] { 1, 2 }.Select(_ => ShopLocalization.Checkout);")] // Read as it's enumerated
+    [Arguments("private static readonly List<Func<string>> All = new[] { 1, 2 }.Select(_ => (Func<string>)(() => ShopLocalization.Checkout)).ToList();")]
+    [Arguments("private static readonly int Count = ShopLocalization.TextCount;")] // A helper next to the texts
+    [Arguments("private static readonly string Separator = ShopLocalization.Separator;")]
     public async Task TextReadLaterOrKeptPerObject_ShouldReportNothing(string member)
     {
         // Act

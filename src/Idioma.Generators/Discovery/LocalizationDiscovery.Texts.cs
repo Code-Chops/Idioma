@@ -376,7 +376,10 @@ internal static partial class LocalizationDiscovery
                     Name: property.Name,
                     HasDocComment: declaration is not null && HasDocComment(declaration),
                     DefaultText: declaration is PropertyDeclarationSyntax ? reader.Read(declaration, cancellationToken) : null,
-                    Parameters: default)));
+                    Parameters: default,
+                    Marks: ReadMarks(property),
+                    IsObsoleteAsError: IsObsoleteAsError(property),
+                    SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(property)))));
             }
             else if (TextParameters.IsTextMethod(member, out var method))
             {
@@ -415,7 +418,10 @@ internal static partial class LocalizationDiscovery
                         declaration as MethodDeclarationSyntax,
                         // Only in a tree of this compilation, as for the wording (WordingReader.FindModel).
                         declaration is null ? null : reader.FindModel(declaration.SyntaxTree),
-                        cancellationToken))));
+                        cancellationToken),
+                    Marks: ReadMarks(method),
+                    IsObsoleteAsError: IsObsoleteAsError(method),
+                    SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(method)))));
             }
             else if (TextParameters.IsTextWithoutParameters(member, out var withoutParameters))
             {
@@ -567,5 +573,40 @@ internal static partial class LocalizationDiscovery
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The attributes <c>[Obsolete]</c> and <c>[Experimental]</c> of a text, as the generated member repeats them, or
+    /// <see langword="null"/> when it has neither, with their arguments as constants. The file of the generated class
+    /// imports <c>System</c>, as for every type of the framework it names, and not the namespace of
+    /// <c>[Experimental]</c>, which it writes in full.
+    /// </summary>
+    private static string? ReadMarks(ISymbol text)
+    {
+        var marks = new StringBuilder();
+
+        foreach (var attribute in text.GetAttributes())
+        {
+            var name = attribute.AttributeClass switch
+            {
+                { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } => "Obsolete",
+                { Name: "ExperimentalAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
+                    => "System.Diagnostics.CodeAnalysis.Experimental",
+                _ => null,
+            };
+
+            if (name is null || attribute.ConstructorArguments.Any(static argument => argument.Kind is TypedConstantKind.Error))
+                continue;
+
+            var arguments = attribute.ConstructorArguments.Select(static argument => argument.ToCSharpString())
+                .Concat(attribute.NamedArguments.Select(static argument => $"{argument.Key} = {argument.Value.ToCSharpString()}"));
+
+            if (marks.Length > 0)
+                marks.Append(' ');
+
+            marks.Append($"[{name}({String.Join(", ", arguments)})]");
+        }
+
+        return marks.Length > 0 ? marks.ToString() : null;
     }
 }

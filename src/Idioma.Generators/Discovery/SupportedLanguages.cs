@@ -9,6 +9,11 @@ namespace CodeChops.Idioma.Generators;
 internal static class SupportedLanguages
 {
     /// <summary>
+    /// The property of the attribute that marks a project built as a library as the app.
+    /// </summary>
+    private const string IsApplicationProperty = "IsApplication";
+
+    /// <summary>
     /// What the attribute of an assembly declares, read once per assembly (<see cref="ReadAssembly"/>).
     /// </summary>
     // Discovery asks for the languages of the assembly for every set, on every edit, and the attribute is the same
@@ -307,7 +312,21 @@ internal static class SupportedLanguages
             defaultLanguage,
             new EquatableArray<string>(codes.ToImmutable()),
             new EquatableArray<string>(problems.ToImmutable()),
-            location);
+            location,
+            IsApplication: ReadIsApplication(attribute));
+    }
+
+    /// <summary>
+    /// Whether the attribute marks the assembly as the app: <c>IsApplication = true</c>, for a project that builds as a
+    /// library.
+    /// </summary>
+    private static bool ReadIsApplication(AttributeData attribute)
+    {
+        foreach (var argument in attribute.NamedArguments)
+            if (String.Equals(argument.Key, IsApplicationProperty, StringComparison.Ordinal) && argument.Value.Value is true)
+                return true;
+
+        return false;
     }
 
     /// <summary>
@@ -501,7 +520,7 @@ internal readonly record struct UnknownLanguagePart(
 
 /// <summary>
 /// What an assembly's attribute declares: the default language, the valid languages in order, what is wrong with the
-/// others, and where the attribute is.
+/// others, where the attribute is, and whether it marks the assembly as the app (<c>IsApplication = true</c>).
 /// </summary>
 /// <remarks>
 /// The default language is <see langword="null"/> when the attribute's first argument is no language the build can use
@@ -512,4 +531,5 @@ internal readonly record struct DeclaredLanguages(
     string? DefaultLanguage,
     EquatableArray<string> Codes,
     EquatableArray<string> Problems,
-    DiagnosticLocation Location);
+    DiagnosticLocation Location,
+    bool IsApplication = false);

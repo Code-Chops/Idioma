@@ -108,10 +108,11 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LanguageCodeImplementingNothingOnSetWithoutLanguageInName_ReportsLOC206AndLOC208()
+    public void LanguageCodeImplementingNothingOnSetWithoutLanguageInName_ReportsLOC206AloneAndLeavesItUnregistered()
     {
         // Arrange & Act: the name gives no language either, so registering it would throw while the assembly loads. It
-        // used to be registered, as its property seemed to implement LocalizationLanguageCode.
+        // used to be registered, as its property seemed to implement LocalizationLanguageCode. LOC206 says why, and its
+        // fix gives the set its code, so no LOC208 says the same again.
         var result = Run($$"""
             {{ShopContract}}
 
@@ -128,11 +129,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert
         var run = result.Results.ShouldHaveSingleItem();
-        run.Diagnostics.Select(diagnostic => diagnostic.Id).Order(StringComparer.Ordinal).ShouldBe(
-        [
-            LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId,
-            LocalizationRegistrationPart.CannotRegisterDiagnosticId,
-        ]);
+        run.Diagnostics.Select(diagnostic => diagnostic.Id).ShouldBe([LocalizationRegistrationPart.UnmappedLanguageCodeDiagnosticId]);
         run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString().ShouldNotContain("new TestApp.ShopLocalizationBritish2(");
     }
 
@@ -247,8 +244,9 @@ public sealed partial class LocalizationRegistrationPartTests
     [Test]
     public void LanguageCodeNoCultureHas_IsReportedOnceForTheSetsInheritingItAndTurnedOffByAPragma()
     {
-        // Arrange: each of the two sets carries the code of the class they derive from. The second class turns the
-        // warning off, as for a code the build's tables don't know yet.
+        // Arrange: each of the two sets carries the code of the class they derive from, and one is registered by hand,
+        // as two sets of one language would be LOC209. The second class turns the warning off, as for a code the build's
+        // tables don't know yet.
         const string source = $$"""
             {{ShopContract}}
 
@@ -260,6 +258,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
             public sealed class ShopWording : DanishWording;
 
+            [ExcludeFromLocalizationDiscovery]
             public sealed class GiftWording : DanishWording;
 
             public sealed class NewWording : ILocalizationSet, IShopLocalization

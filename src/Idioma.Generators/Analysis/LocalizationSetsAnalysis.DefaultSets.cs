@@ -41,6 +41,48 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
+    /// Reports a set named after the default language whose <c>LocalizationLanguageCode</c> gives it another language, or
+    /// one the build can't read (<c>LOC200</c>). It lists the contract named after it, which no set then starts.
+    /// </summary>
+    // Without this, every set that lists the contract fails to compile (CS0246), and nothing says why. A code that isn't
+    // a culture name is LOC207 already.
+    private static void ReportDefaultSetsOfAnotherLanguage(
+        ImmutableArray<DiscoveredLocalization> sets,
+        string defaultLanguage,
+        GeneratedContracts generatedContracts,
+        ImmutableArray<LocalizationSetsFinding>.Builder findings)
+    {
+        foreach (var set in sets)
+        {
+            if (set is not { ListsLocalizationSet: true, NameGivesNoLanguage: false, Locations.InvalidLanguageCode: null }
+                || String.Equals(set.Language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
+                || LocalizationDiscovery.ImplementsContract(set)
+                || LocalizationDiscovery.RewordsSet(set)
+                || LocalizationDiscovery.DeriveBaseName(set.Name, defaultLanguage) is not { } baseName)
+            {
+                continue;
+            }
+
+            var ownContract = $"I{baseName}";
+
+            if (!set.UnresolvedBaseTypes.Any(baseType => String.Equals(baseType.Name, ownContract, StringComparison.Ordinal)
+                                                         && LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is null))
+            {
+                continue;
+            }
+
+            var problem = set.Language is { } language
+                ? $"its LocalizationLanguageCode gives '{language}', where its name gives '{defaultLanguage}'"
+                : "its LocalizationLanguageCode isn't a constant, so the build can't read its language";
+
+            findings.Add(new LocalizationSetsFinding(
+                LocalizationSetsRule.CannotExtend,
+                set.Location,
+                new EquatableArray<string>([set.Name, problem, $"Return the constant '{defaultLanguage}' from LocalizationLanguageCode, or remove LocalizationLanguageCode so that the name gives the language."])));
+        }
+    }
+
+    /// <summary>
     /// Reports a default-language set that implements another contract and also lists the contract named after it,
     /// which it can't start (<c>LOC200</c>).
     /// </summary>

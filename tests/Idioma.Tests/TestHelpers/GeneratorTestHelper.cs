@@ -225,7 +225,7 @@ internal static class GeneratorTestHelper
     {
         return
         [
-            .. RunAllGenerators(source, references).Diagnostics.Where(static diagnostic => diagnostic.Severity is DiagnosticSeverity.Warning),
+            .. RunAllGenerators(source, references).Diagnostics.Where(static diagnostic => diagnostic is { Severity: DiagnosticSeverity.Warning, IsSuppressed: false }),
         ];
     }
 

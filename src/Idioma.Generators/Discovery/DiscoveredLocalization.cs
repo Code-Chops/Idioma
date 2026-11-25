@@ -184,6 +184,8 @@ internal readonly record struct BaseSet(
 /// written. Most sets have none.</item>
 /// <item><see cref="UndeclaredTexts"/> are the texts it inherits from a class of its assembly without declaring them,
 /// which its contract leaves out (<c>LOC303</c>). Most sets have none.</item>
+/// <item><see cref="TextsOutsideEnums"/> are the texts of a set of an enum that aren't a member of its enums
+/// (<c>LOC305</c>). Most sets have none.</item>
 /// </list>
 /// </remarks>
 internal readonly record struct SetTextsOfContract(
@@ -197,7 +199,23 @@ internal readonly record struct SetTextsOfContract(
     string? TypeNamedLikeTexts,
     string? TypeNamedLikeContract,
     EquatableArray<ReservedText> ReservedTexts,
-    EquatableArray<UndeclaredText> UndeclaredTexts);
+    EquatableArray<UndeclaredText> UndeclaredTexts,
+    EquatableArray<TextOutsideEnums> TextsOutsideEnums);
+
+/// <summary>
+/// A text of the default-language set of an enum that isn't a member of its enums: its name, where it's written, the
+/// enums as the message of <c>LOC305</c> lists them, and the advice that ends it.
+/// </summary>
+/// <remarks>
+/// The generator reports it, and not <c>TextOutsideContractAnalyzer</c>, which reports it in every other set. The
+/// contract has the text, so a set of another language that lacks it doesn't compile (<c>CS0535</c>). A build reports no
+/// analyzer's diagnostic next to an error of the compiler, so only the generator can say where the text comes from.
+/// </remarks>
+internal readonly record struct TextOutsideEnums(
+    string Name,
+    DiagnosticLocation Location,
+    string Enums,
+    string Advice);
 
 /// <summary>
 /// A text a set inherits from a class of its assembly without declaring it: its name, the class that declares it, and
@@ -434,11 +452,20 @@ internal readonly record struct SetLanguageCode(
 /// (<see cref="MethodWording"/>; then a text without a doc comment is documented with that wording), and the
 /// parameters of a text that takes values, which is a method. A property has none.
 /// </summary>
+/// <remarks>
+/// A text marked <c>[Obsolete]</c> or <c>[Experimental]</c> carries the attribute as the generated member repeats it
+/// (<see cref="Marks"/>), so that code showing the text is told. <see cref="IsObsoleteAsError"/> says whether naming it
+/// is an error that no pragma turns off (<c>CS0619</c>), and <see cref="SuppressedDiagnostics"/> holds what naming it
+/// reports besides <c>CS0612</c> and <c>CS0618</c>, which the generated file turns off.
+/// </remarks>
 internal readonly record struct LocalizationMember(
     string Name,
     bool HasDocComment,
     string? DefaultText,
-    EquatableArray<TextParameter> Parameters)
+    EquatableArray<TextParameter> Parameters,
+    string? Marks = null,
+    bool IsObsoleteAsError = false,
+    EquatableArray<string> SuppressedDiagnostics = default)
 {
     /// <summary>
     /// Whether the text takes values, and so is a method of the set, of the contract, and of the generated class.

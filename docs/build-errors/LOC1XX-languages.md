@@ -48,6 +48,8 @@ The app's attribute decides the languages your users get, and its first language
 
 A library needs the attribute only for texts of its own ([LOC100](#loc100)).
 
+The build takes a project for an app when it builds an executable or an Android app. A project that builds as a library but runs as the app, such as an AWS Lambda function, gets no LOC103. Declare its languages all the same, with `IsApplication = true` ([details](../libraries-and-apps.md#the-apps-languages)).
+
 ## LOC104
 
 A language code has the form of a culture name, but its language or its region doesn't exist. This is a warning. The code compiles and its sets are complete, but no user's culture ever matches it:

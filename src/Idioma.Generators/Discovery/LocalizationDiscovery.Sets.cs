@@ -242,7 +242,8 @@ internal static partial class LocalizationDiscovery
                 TypeNamedLikeTexts: null,
                 TypeNamedLikeContract: language is not null ? FindTypeNamedLikeContract(type, language) : null,
                 ReservedTexts: default,
-                UndeclaredTexts: default));
+                UndeclaredTexts: default,
+                TextsOutsideEnums: default));
 
         // The texts a contract is written from, which only a set a contract may come from has: one in the default
         // language, or in any language while the build can't read the default one, as the analysis takes them
@@ -263,6 +264,7 @@ internal static partial class LocalizationDiscovery
                 TypeNamedLikeTexts = language is not null ? FindTypeNamedLikeTexts(type, language, cancellationToken) : null,
                 ReservedTexts = new EquatableArray<ReservedText>(language is null ? ImmutableArray<ReservedText>.Empty : GetReservedTexts(type, language, texts, hasEnums: enums.Length > 0)),
                 UndeclaredTexts = new EquatableArray<UndeclaredText>(GetUndeclaredTexts(type)),
+                TextsOutsideEnums = new EquatableArray<TextOutsideEnums>(language is null ? ImmutableArray<TextOutsideEnums>.Empty : GetTextsOutsideEnums(type, language, texts)),
             },
         };
 
@@ -422,6 +424,39 @@ internal static partial class LocalizationDiscovery
         }
 
         return reserved.ToImmutable();
+    }
+
+    /// <summary>
+    /// The texts a set of an enum declares that aren't a member of its enums (<c>LOC305</c>), each with where it's
+    /// written. Not a text with a name its generated class can't give it, which <c>LOC300</c> reports.
+    /// </summary>
+    private static ImmutableArray<TextOutsideEnums> GetTextsOutsideEnums(INamedTypeSymbol type, string language, ImmutableArray<LocalizationMember> texts)
+    {
+        var enums = TextOutsideContractAnalyzer.GetEnums(type);
+
+        if (enums.Length is 0 || DeriveBaseName(type.Name, language) is not { } textsName)
+            return ImmutableArray<TextOutsideEnums>.Empty;
+
+        var outside = ImmutableArray.CreateBuilder<TextOutsideEnums>();
+
+        foreach (var text in texts)
+        {
+            if (TextOutsideContractAnalyzer.IsMemberOfAny(enums, text.Name)
+                || LocalizationSetsAnalysis.IsReservedTextName(text.Name, textsName, hasLookup: true)
+                || type.GetMembers(text.Name).FirstOrDefault(static member => member is IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary }) is not { } declared
+                || declared.Locations.FirstOrDefault(static location => location.IsInSource) is not { } location)
+            {
+                continue;
+            }
+
+            outside.Add(new TextOutsideEnums(
+                text.Name,
+                DiagnosticLocation.From(location),
+                TextOutsideContractAnalyzer.JoinNames(enums),
+                TextOutsideContractAnalyzer.AdviseOnEnums(enums, text.Name, type.ContainingAssembly)));
+        }
+
+        return outside.ToImmutable();
     }
 
     private static bool ImplementsLocalizationSet(ITypeSymbol type)
@@ -627,10 +662,15 @@ internal static partial class LocalizationDiscovery
 
         // At run time this would throw while the assembly loads, where the cause is hard to see.
         if (!EndsInTwoLetterSuffix(type.Name) && !hasLanguageCode)
-            return "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LocalizationLanguageCode";
+            return NoLanguageCodeProblem;
 
         return null;
     }
+
+    /// <summary>
+    /// Why a set without a language code can't be registered, as the clause of the <c>LOC208</c> message.
+    /// </summary>
+    internal const string NoLanguageCodeProblem = "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LocalizationLanguageCode";
 
     /// <summary>
     /// Why a set marked <c>[Obsolete]</c> as an error can't be registered, as the clause of a message.

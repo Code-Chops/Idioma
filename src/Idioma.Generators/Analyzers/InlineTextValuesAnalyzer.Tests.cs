@@ -158,6 +158,35 @@ public sealed class InlineTextValuesAnalyzerTests
     }
 
     [Test]
+    public async Task TextOfSetInDefaultWording_ShouldBeNoValueOtherLanguagesHaveToShow()
+    {
+        // Arrange & Act: a text is wording, which Dutch writes its own way here.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+
+            public class ShopLocalizationEnGb : ShopLocalizationEn;
+
+            public static class Hints
+            {
+                public static string Pay => LocalizableText.Inline(en: $"Press {ShopLocalization.Checkout}", nl: "Klik op afrekenen", enGb: $"Press {ShopLocalization.Checkout}");
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
     [Arguments("""en: $"Hello, {name}!", nl: dutch, enGb: $"Hello, {name}!" """, """var dutch = "Hallo!";""")]
     [Arguments("""en: $"Hello, {name}!", nl: DescribeShop(), enGb: $"Hello, {name}!" """, "")]
     [Arguments("""en: english, nl: "Hallo!", enGb: "Hello!" """, """var english = $"Hello, {name}!";""")]

@@ -205,9 +205,9 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
         }
 
         /// <summary>
-        /// The declaration with each type it names by its full name, as the contract of a library, named as the new
-        /// file reaches it, with the namespaces the file then imports. Each name is the first of these that the compiler
-        /// binds to the type in that file:
+        /// The declaration with each type it names by its full name, as the contract of a library or the enum of
+        /// <c>ILocalizationSet&lt;TEnum&gt;</c>, named as the new file reaches it, with the namespaces the file then
+        /// imports. Each name is the first of these that the compiler binds to the type in that file:
         /// <list type="number">
         /// <item>The name alone, as where a global using imports its namespace.</item>
         /// <item>The name alone, with a <see langword="using"/> of its namespace.</item>
@@ -237,17 +237,41 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
 
             for (var i = 0; i < names.Length; i++)
             {
-                if (baseList.Types[i].Type is not QualifiedNameSyntax { Left: var left, Right: var right } written
-                    || compilation.GetTypeByMetadataName(ToMetadataName(written)) is not { } type)
+                // A contract, or the enum of ILocalizationSet<Shop.OrderStatus>, which a namespace around the set can
+                // take the first part of just the same. Each name it tries stands in the place of the full one: alone,
+                // or as the type argument.
+                QualifiedNameSyntax written;
+                Func<string, string> around;
+
+                switch (baseList.Types[i].Type)
                 {
-                    continue;
+                    case QualifiedNameSyntax qualified:
+                        written = qualified;
+                        around = static name => name;
+                        break;
+
+                    case GenericNameSyntax { TypeArgumentList.Arguments: [QualifiedNameSyntax argument] } generic:
+                    {
+                        var identifier = generic.Identifier.Text;
+                        written = argument;
+                        around = name => $"{identifier}<{name}>";
+                        break;
+                    }
+
+                    default:
+                        continue;
                 }
+
+                if (compilation.GetTypeByMetadataName(ToMetadataName(written)) is not { } type)
+                    continue;
+
+                var (left, right) = (written.Left, written.Right);
 
                 var withUsing = usings.Add(left.ToString());
 
                 foreach (var (name, imports) in new[] { (right.ToString(), usings), (right.ToString(), withUsing), (written.ToString(), usings) })
                 {
-                    names[i] = name;
+                    names[i] = around(name);
 
                     if (Binds(Write(@namespace, $"{head}: {String.Join(", ", names)}", imports, "\n"), i, type, compilation, cancellationToken))
                     {
@@ -256,7 +280,7 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
                     }
 
                     // As the diagnostic writes it until one binds, and when none does.
-                    names[i] = written.ToString();
+                    names[i] = around(written.ToString());
                 }
             }
 
@@ -274,18 +298,21 @@ public sealed class MissingLanguageCodeFixProvider : CodeFixProvider
         }
 
         /// <summary>
-        /// Whether a base type of the new set binds to <paramref name="type"/>, in the file as it would be added to the
-        /// project.
+        /// Whether a base type of the new set binds to <paramref name="type"/>, or its type argument does, in the file as
+        /// it would be added to the project. The argument by itself, because the file imports the package's namespace
+        /// only once the names are settled, so <c>ILocalizationSet&lt;TEnum&gt;</c> binds to nothing yet.
         /// </summary>
         private static bool Binds(string file, int index, INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
         {
             var tree = CSharpSyntaxTree.ParseText(file, compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions, cancellationToken: cancellationToken);
             var model = compilation.AddSyntaxTrees(tree).GetSemanticModel(tree);
 
-            var binds = tree.GetRoot(cancellationToken).DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault() is { BaseList.Types: var types }
-                        && index < types.Count
-                        && SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(types[index].Type, cancellationToken).Symbol, type);
+            if (tree.GetRoot(cancellationToken).DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault() is not { BaseList.Types: var types } || index >= types.Count)
+                return false;
 
+            var written = types[index].Type is GenericNameSyntax { TypeArgumentList.Arguments: [var argument] } ? argument : types[index].Type;
+
+            var binds = SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(written, cancellationToken).Symbol, type);
             return binds;
         }
 

@@ -202,6 +202,41 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
+    public void LibraryMarkedAsApplication_RegistersItsLanguagesFirst()
+    {
+        // Arrange & Act: a project built as a library that a host loads, such as an AWS Lambda function, says in its
+        // attribute that it's the app.
+        var text = GeneratedText(GeneratorTestHelper.RunWithBuildProperties(LocalizationParts.Registration(), """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("nl", "en", IsApplication = true)]
+
+            namespace TestApp;
+            """, [SetsLibrary]));
+
+        // Assert: as for an application built as an executable.
+        text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
+        text.IndexOf("GeneratedCode.RegisterLanguages(\"nl\", \"en\");", StringComparison.Ordinal)
+            .ShouldBeLessThan(text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void LibraryMarkedAsNoApplication_RegistersNoLanguages()
+    {
+        // Arrange & Act
+        var result = GeneratorTestHelper.RunWithBuildProperties(LocalizationParts.Registration(), """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("nl", "en", IsApplication = false)]
+
+            namespace TestApp;
+            """, []);
+
+        // Assert: as for any library that only declares languages.
+        ShouldEmitNothing(result);
+    }
+
+    [Test]
     public void AndroidApplicationReferencingAssemblyWithSets_CallsItsRegistrar()
     {
         // Arrange & Act: no sets of its own, like the plain library below, which emits nothing.

@@ -169,6 +169,30 @@ public sealed class ParameterNamesCodeFixProviderTests
     }
 
     [Test]
+    public async Task ParameterWithANameTheContractLacks_ShouldBeRenamedInNamedArgumentsOfCalls()
+    {
+        // Arrange: a call that names the Dutch parameter, and one that names the contract's, which stays.
+        const string Dutch = """public string ItemsInCart(int aantal, string shop) => $"{aantal} artikelen in je winkelwagen bij {shop}";""";
+        const string Calls = """
+
+            public static class Page
+            {
+                public static string Dutch => new ShopLocalizationNl().ItemsInCart(aantal: 2, shop: "Idioma");
+                public static string Any => ShopLocalization.ItemsInCart(count: 2, shop: "Idioma");
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(Sets($"{DutchInvited}\n{Dutch}") + Calls);
+
+        // Assert
+        var expected = Sets($"{DutchInvited}\n{Dutch.Replace("aantal", "count", StringComparison.Ordinal)}") + Calls.Replace("aantal:", "count:", StringComparison.Ordinal);
+
+        fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem().ShouldBe(expected);
+        await ShouldReportNothingAsync(expected);
+    }
+
+    [Test]
     public async Task ParametersWithNamesTheContractLacks_ShouldBeRenamedAtOnce()
     {
         // Arrange

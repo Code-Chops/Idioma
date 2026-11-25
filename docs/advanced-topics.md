@@ -4,7 +4,7 @@ The [getting started guide](../README.md#getting-started) covers what most apps 
 
 - [Fallback order](#fallback-order): which wording a user sees, and [where the user's culture comes from](#the-current-culture)
 - [Texts with parameters](#texts-with-parameters): what a call does, and keeping a public method of a set from becoming a text
-- [What the source generator writes](#what-the-source-generator-writes), and [getting a text by its key](#getting-a-text-by-its-key)
+- [What the source generator writes](#what-the-source-generator-writes), [getting a text by its key](#getting-a-text-by-its-key), and [a contract you write yourself](#a-contract-you-write-yourself)
 - [Registration](#registration): how sets register, and registering a set by hand
 - [Reading sets yourself](#reading-sets-yourself): the wording of one set, and [testing](#testing)
 
@@ -188,6 +188,8 @@ Only a class that implements `ILocalizationSet` is a set, whatever its name. A c
 
 Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only the method `GetTextByKey`, and `GetTextByValue` and `GetText` in a [set of an enum](enums.md#a-set-of-the-enum). So a text can take any name except those and the name of the class itself (`LOC300`).
 
+A text marked `[Obsolete]` or `[Experimental]` in the default-language set is marked the same in the generated class. So code that shows it gets the warning or the error, as code that reads the set does.
+
 Each generated text is a `string` property, which finds the set for the user's language on every read. The package keeps that set per culture, so a read is one call of the set's own property and allocates nothing ([Performance](performance.md)).
 
 The key of a text is its name, `Checkout` here. `GetTextByKey` takes it.
@@ -203,6 +205,30 @@ string cart = ShopLocalization.GetTextByKey("Cart"); // What ShopLocalization.Ca
 - **The key.** It's the name of the text, in the same letter case. A key no text has throws `KeyNotFoundException`.
 - **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many.
 - **The result.** It's the wording for the user's language, a `string`, as the text itself gives it.
+
+### A contract you write yourself
+
+The generator writes the contract from the default-language set. You can write it yourself instead, as an interface that derives from `ILocalizationSet`. Every set then lists it, the default-language set too:
+
+```csharp
+public interface IGridLocalization : ILocalizationSet
+{
+    string First { get; }
+    string Page(int number);
+}
+
+public class GridLocalizationEn : ILocalizationSet, IGridLocalization
+{
+    public string First => "First";
+    public string Page(int number) => $"Page {number}";
+}
+```
+
+What to know:
+
+- **The build checks it as it checks a generated contract.** Each of your languages needs a set (`LOC201`), and every language uses the values the default-language set shows (`LOC402`).
+- **There's no generated class.** So there's no `GridLocalization.First`, and no fallback to your default language. Read a text through the set of the user's culture: `LocalizationRegistry.Current.Find<IGridLocalization>(CultureInfo.CurrentUICulture)?.First`, which is `null` for a culture without a set ([Reading sets yourself](#reading-sets-yourself)).
+- **Its sets are registered automatically**, as the sets of a generated contract are.
 
 ## Registration
 
@@ -270,7 +296,7 @@ var dutch = CultureInfo.GetCultureInfo("nl");
 string? checkout = LocalizationRegistry.Current.Find<IShopLocalization>(dutch)?.Checkout;
 ```
 
-`Find` gives one set, without the [fallback order](#fallback-order). A culture without a set gives `null`. The texts of a generated class, such as `ShopLocalization.Checkout`, always read `LocalizationRegistry.Current`.
+`Find` gives the set of the culture, or else of its parent culture, as the `nl` set for `nl-NL`. It doesn't fall back to a default language, as a text does ([fallback order](#fallback-order)). So a culture without a set gives `null`. The texts of a generated class, such as `ShopLocalization.Checkout`, always read `LocalizationRegistry.Current`.
 
 ### Testing
 

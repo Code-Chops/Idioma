@@ -81,6 +81,28 @@ public sealed class SupportedLanguagesAttribute : Attribute
     public IReadOnlyList<string> Languages { get; }
 
     /// <summary>
+    /// Marks a project that builds as a library as the app, such as an AWS Lambda function or an add-in of Excel:
+    /// <c>[assembly: SupportedLanguages("en", "nl", IsApplication = true)]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The build takes a project for the app when it builds an executable or an Android app. A project that builds as a
+    /// library, and that a host which doesn't use Idioma loads, isn't recognized. So set this to <see langword="true"/>
+    /// there. Its languages then become <see cref="LocalizationRegistry.SupportedLanguages"/>, and its default language
+    /// is the fallback for every text, as in any other app.
+    /// </para>
+    /// <para>
+    /// Without it, the process has no languages. Each text then falls back to the default language of its own assembly.
+    /// So a library that has German shows German next to your English.
+    /// </para>
+    /// <para>
+    /// An app that another app references doesn't decide, as for an executable. So a test project that references the
+    /// project still declares its own languages.
+    /// </para>
+    /// </remarks>
+    public bool IsApplication { get; init; }
+
+    /// <summary>
     /// Declares the languages of this assembly, the default language first.
     /// </summary>
     /// <param name="defaultLanguage">

@@ -31,6 +31,7 @@ public sealed partial class LocalizationRegistry
     /// </param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="select">Gives the text as a set of the contract words it, with its values where it takes any.</param>
+    /// <param name="defaultSetType">The type of the set the text was declared with.</param>
     /// <param name="getDefaultSet">Gives the set the text was declared with, which implements the contract.</param>
     /// <param name="takesValues">Whether the text takes values, so that a method of the set words it.</param>
     /// <param name="resolved">Where a set that words the text on every call is kept, or <see langword="null"/>.</param>
@@ -39,7 +40,7 @@ public sealed partial class LocalizationRegistry
     /// When every set gives <see langword="null"/> as the wording, the set the text was declared with included.
     /// </exception>
     internal string Word<TContract>(CultureLookup lookup, CultureInfo culture, CultureInfo? valuesCulture, string name,
-        Func<TContract, string?> select, Func<ILocalizationSet> getDefaultSet, bool takesValues,
+        Func<TContract, string?> select, Type defaultSetType, Func<ILocalizationSet> getDefaultSet, bool takesValues,
         ResolvedSets<TContract>? resolved = null, int text = -1)
         where TContract : class
     {
@@ -92,8 +93,12 @@ public sealed partial class LocalizationRegistry
 
         mayKeep &= appDefaultLanguage is null || set is null;
 
-        var defaultSet = getDefaultSet();
-        var defaultLanguage = defaultSet.LocalizationLanguageCode;
+        // The language the build recorded for the set, so that a registered set of that language words the text without
+        // the set being created to tell it. A set the build recorded none for, such as one whose code isn't a constant,
+        // tells it itself.
+        var recordedLanguage = FindLanguageCode(defaultSetType);
+        var defaultSet = recordedLanguage is null ? getDefaultSet() : null;
+        var defaultLanguage = recordedLanguage ?? defaultSet!.LocalizationLanguageCode;
 
         if (this.WordInLanguage(defaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isToldByRecord, out isServed) is { } rewording)
         {
@@ -111,6 +116,7 @@ public sealed partial class LocalizationRegistry
 
         using var defaultScope = entersScope && !isServed ? EnterLanguage(this.ResolveLanguage(defaultLanguage).Culture, valuesCulture) : default;
 
+        defaultSet ??= getDefaultSet();
         var defaultWording = select((TContract)defaultSet);
 
         // A member of a set may hand on a value that's null at run time, such as a nickname from a database, though

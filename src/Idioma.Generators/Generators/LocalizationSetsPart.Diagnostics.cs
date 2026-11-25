@@ -8,6 +8,7 @@ public static partial class LocalizationSetsPart
     public const string UnlistedLanguageDiagnosticId = "LOC202";
     public const string DerivedFromOtherLanguageDiagnosticId = "LOC203";
     public const string MissingContractDiagnosticId = "LOC204";
+    public const string RepeatedLanguageDiagnosticId = "LOC209";
     public const string LibraryMissingLanguageDiagnosticId = "LOC700";
     public const string LibraryCannotBeTranslatedDiagnosticId = "LOC701";
     public const string ReservedTextNameDiagnosticId = "LOC300";
@@ -54,7 +55,7 @@ public static partial class LocalizationSetsPart
     private static readonly DiagnosticDescriptor MissingLanguageRule = Error(
         MissingLanguageDiagnosticId,
         "Contract lacks a language",
-        "'{0}' has no set for '{1}', which [assembly: SupportedLanguages] requires. Add {2}. A class without ILocalizationSet doesn't count as a set, and neither does a nested, generic, or file-local one.",
+        "'{0}' has no set for '{1}', which [assembly: SupportedLanguages] requires. Add {2}. A class without ILocalizationSet doesn't count as a set, and neither does a struct, or a nested, generic, or file-local class.",
         "Every contract needs a set for each language of [assembly: SupportedLanguages], just as every inline text takes wording for each. That includes a listed region, such as en-GB next to en. Its set derives from the set of its language and holds only the texts that differ.");
 
     private static readonly DiagnosticDescriptor UnlistedLanguageRule = Error(
@@ -74,6 +75,12 @@ public static partial class LocalizationSetsPart
         "Localization set doesn't implement its contract",
         "'{0}' is a set for '{1}' but doesn't implement '{2}', so no text reads it. Add '{2}', the contract generated from '{3}', next to ILocalizationSet.",
         "Every set lists ILocalizationSet and its contract, the default-language set included. The contract is what requires every text in every language, and what a text reads its wording through.");
+
+    private static readonly DiagnosticDescriptor RepeatedLanguageRule = Error(
+        RepeatedLanguageDiagnosticId,
+        "Second set of a contract for one language",
+        "'{0}' is a second set of '{1}' for '{2}', next to '{3}'. Users of '{2}' see only one of them. Remove one of the two, or derive '{0}' from '{3}' to reword some of its texts.",
+        "A contract has one set per language. Of two sets of one language, the one whose name sorts last would show, and the other would be left out without a word. A set that derives from a set of the same language rewords it, and always wins over it.");
 
     private static readonly DiagnosticDescriptor LibraryMissingLanguageRule = Error(
         LibraryMissingLanguageDiagnosticId,
@@ -127,11 +134,13 @@ public static partial class LocalizationSetsPart
                 LocalizationSetsRule.UnlistedLanguage => UnlistedLanguageRule,
                 LocalizationSetsRule.DerivedFromOtherLanguage => DerivedFromOtherLanguageRule,
                 LocalizationSetsRule.MissingContract => MissingContractRule,
+                LocalizationSetsRule.RepeatedLanguage => RepeatedLanguageRule,
                 LocalizationSetsRule.LibraryMissingLanguage => LibraryMissingLanguageRule,
                 LocalizationSetsRule.LibraryCannotBeTranslated => LibraryCannotBeTranslatedRule,
                 LocalizationSetsRule.UnsupportedText => UnsupportedTextRule,
                 LocalizationSetsRule.ReservedTextName => ReservedTextNameRule,
                 LocalizationSetsRule.UndeclaredText => UndeclaredTextRule,
+                LocalizationSetsRule.TextOutsideEnum => TextOutsideContractAnalyzer.TextOutsideEnumRule,
                 // A rule added without a descriptor here. The generator fails with CS8785, and a test of the new rule
                 // shows it, where reporting it under another code would go unnoticed.
                 _ => throw new ArgumentOutOfRangeException(nameof(findings), finding.Rule, "A rule without a descriptor."),

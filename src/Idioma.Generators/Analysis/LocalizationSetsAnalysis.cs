@@ -70,7 +70,8 @@ internal sealed partial record LocalizationSetsAnalysis(
         // A set whose name gives no language, and that has no LocalizationLanguageCode, serves none. It gets LOC208, and
         // its contract is held to every language as if it weren't there: taken for a set of any language, a Dutch set
         // renamed ShopLocalizationDutch would hide every missing language of its contract behind that one warning.
-        var unreadable = sets.Concat(excludedSets).Where(static set => set is { Language: null, NameGivesNoLanguage: false }).ToImmutableArray();
+        // Nor is a set whose code is no culture name (LOC207), as "en_GB": registering it throws, so it serves none.
+        var unreadable = sets.Concat(excludedSets).Where(static set => IsUnreadable(set)).ToImmutableArray();
         var findings = ImmutableArray.CreateBuilder<LocalizationSetsFinding>();
         var contracts = ImmutableArray.CreateBuilder<LocalizationContract>();
         var provided = ImmutableArray.CreateBuilder<ProvidedLocalizationSet>();
@@ -99,9 +100,13 @@ internal sealed partial record LocalizationSetsAnalysis(
             AnalyzeSets(sets, declared.Codes, defaultLanguage, generatedContracts, findings);
             ReportExcludedSetsOfUnlistedLanguages(excluded, declared.Codes, findings);
             ReportDefaultSetsWithoutLanguage(sets, declared, defaultLanguage, generatedContracts, findings);
+            ReportDefaultSetsOfAnotherLanguage(sets, defaultLanguage, generatedContracts, findings);
             ReportDefaultSetsOfAnotherContract(sets, defaultLanguage, generatedContracts, findings);
             ReportUnextendableDefaultSets(unextendable, defaultLanguage, generatedContracts, findings);
         }
+
+        // Needs no language list: an app adding a language to a library's contract may declare none.
+        ReportRepeatedLanguages(sets, generatedContracts, findings);
 
         var analysis = new LocalizationSetsAnalysis(
             new EquatableArray<LocalizationContract>(contracts.ToImmutable()),
@@ -120,12 +125,23 @@ internal sealed partial record LocalizationSetsAnalysis(
     {
         foreach (var set in sets)
         {
-            if (set.NameGivesNoLanguage)
+            if (set.NameGivesNoLanguage || (set.Language is null && !IsUnreadable(set)))
                 continue;
 
             foreach (var contract in set.ContractNames)
                 provided.Add(new ProvidedLocalizationSet(contract, set.Language ?? ProvidedLocalizationSet.UnreadableLanguage));
         }
+    }
+
+    /// <summary>
+    /// Whether a set has a language the build can't read, so that it may be the set of any language: its
+    /// <c>LocalizationLanguageCode</c> isn't a constant, or it inherits it from a set of another assembly. Not a set
+    /// whose name gives no language, and not one whose code is no culture name (<c>LOC207</c>), which serve none.
+    /// </summary>
+    private static bool IsUnreadable(DiscoveredLocalization set)
+    {
+        var isUnreadable = set is { Language: null, NameGivesNoLanguage: false, Locations.InvalidLanguageCode: null };
+        return isUnreadable;
     }
 
     /// <summary>

@@ -244,7 +244,8 @@ public sealed class InlineTextValuesAnalyzer : DiagnosticAnalyzer
 
         if (FindValue(operation) is { } value)
         {
-            if (IsValueOfCaller(value, argument) && !shown.Contains(value, SymbolEqualityComparer.Default))
+            // A text is wording, as a constant is, so another language may word it its own way.
+            if (IsValueOfCaller(value, argument) && !KeptTextAnalyzer.IsTextOfGeneratedClass(value) && !shown.Contains(value, SymbolEqualityComparer.Default))
                 shown.Add(value);
 
             return;

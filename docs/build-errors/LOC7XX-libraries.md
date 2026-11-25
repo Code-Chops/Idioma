@@ -10,7 +10,7 @@ A library you reference has no set for one of your languages. The message names 
 error LOC700: No set serves 'Shop.IShopLocalization' in 'de', which this assembly supports. Add 'class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization'.
 ```
 
-The IDE fix adds that class in a file of its own, without texts, as the fix of [LOC201](LOC2XX-sets.md#loc201) does. The file goes next to the one that lists your languages, and the class gets that file's namespace. It names the contract after a `using` of its namespace, as in `using Shop;` and `IShopLocalization`, and writes its full name only where the short one would mean another type. "Fix all" adds a set for every library and language at once.
+The IDE fix adds that class in a file of its own, without texts, as the fix of [LOC201](LOC2XX-sets.md#loc201) does. The file goes next to the one that lists your languages, and the class gets that file's namespace. It names the contract after a `using` of its namespace, as in `using Shop;` and `IShopLocalization`, and writes its full name only where the short one would mean another type. The enum of a set of an enum, in `ILocalizationSet<OrderStatus>`, is named the same way. "Fix all" adds a set for every library and language at once.
 
 See [a language the library lacks](../libraries-and-apps.md#a-language-the-library-lacks).
 

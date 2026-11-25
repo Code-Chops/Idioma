@@ -20,7 +20,9 @@ namespace CodeChops.Idioma.CodeFixes;
 /// </para>
 /// <para>
 /// When each name that differs is one the contract doesn't have, as <c>aantal</c> for <c>count</c>, the parameter is
-/// renamed along with its uses and its doc comments. The method then words the same values as before.
+/// renamed along with its uses and its doc comments. The method then words the same values as before. A call in the
+/// project that names the parameter, as in <c>ItemsInCart(aantal: 2)</c>, names it anew too. Moving names needs no such
+/// change, because a named argument and a use in the body both follow the name.
 /// </para>
 /// <para>
 /// There's no fix when:
@@ -39,7 +41,7 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
 {
     private const string EquivalenceKey = "NameParametersAsContract";
 
-    private static readonly FixAllProvider FixAll = new ReplaceNodesFixAllProvider<MethodDeclarationSyntax>("Name the parameters of every text as its contract does", EquivalenceKey, Fix);
+    private static readonly FixAllProvider FixAll = new ReplaceNodesFixAllProvider<SyntaxNode>("Name the parameters of every text as its contract does", EquivalenceKey, Fix);
 
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [TextParametersAnalyzer.ParameterNamesDifferDiagnosticId];
 
@@ -56,37 +58,40 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            if (Name(root, semanticModel, diagnostic, context.CancellationToken) is not var (method, named, title))
+            if (Name(root, semanticModel, diagnostic, context.CancellationToken) is not var (method, named, title, calls))
                 continue;
+
+            var nodes = new Dictionary<SyntaxNode, SyntaxNode>(calls) { [method] = named };
 
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title,
-                    createChangedDocument: _ => Task.FromResult(document.WithSyntaxRoot(root.ReplaceNode(method, named))),
+                    createChangedSolution: cancellationToken => CodeFixSupport.ReplaceNodesAsync(document.Project.Solution, nodes.Keys, node => nodes[node], cancellationToken),
                     equivalenceKey: EquivalenceKey),
                 diagnostic);
         }
     }
 
     /// <summary>
-    /// The method a diagnostic sits on, with what it becomes. <see langword="null"/> when there's no fix (see the
-    /// remarks of this class).
+    /// The method a diagnostic sits on, with what it becomes, and each named argument of a call that names a renamed
+    /// parameter. <see langword="null"/> when there's no fix (see the remarks of this class).
     /// </summary>
-    private static Dictionary<MethodDeclarationSyntax, MethodDeclarationSyntax>? Fix(SyntaxNode root, SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken)
+    private static Dictionary<SyntaxNode, SyntaxNode>? Fix(SyntaxNode root, SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken)
     {
-        var fix = Name(root, semanticModel, diagnostic, cancellationToken) is var (method, named, _)
-            ? new Dictionary<MethodDeclarationSyntax, MethodDeclarationSyntax> { [method] = named }
+        var fix = Name(root, semanticModel, diagnostic, cancellationToken) is var (method, named, _, calls)
+            ? new Dictionary<SyntaxNode, SyntaxNode>(calls) { [method] = named }
             : null;
 
         return fix;
     }
 
     /// <summary>
-    /// The method a diagnostic sits on, with its parameters named as the contract names them, and the title of that
-    /// fix. <see langword="null"/> when there's no fix (see the remarks of this class).
+    /// The method a diagnostic sits on, with its parameters named as the contract names them, the title of that fix,
+    /// and the name of each named argument elsewhere in the project that names a renamed parameter, with its new name.
+    /// <see langword="null"/> when there's no fix (see the remarks of this class).
     /// </summary>
-    private static (MethodDeclarationSyntax Method, MethodDeclarationSyntax Named, string Title)? Name(SyntaxNode root, SemanticModel semanticModel, Diagnostic diagnostic,
-        CancellationToken cancellationToken)
+    private static (MethodDeclarationSyntax Method, MethodDeclarationSyntax Named, string Title, Dictionary<SyntaxNode, SyntaxNode> Calls)? Name(SyntaxNode root,
+        SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken)
     {
         // The diagnostic sits on the name of a parameter.
         if (!diagnostic.Properties.TryGetValue(TextParametersAnalyzer.ContractParameterNamesProperty, out var value)
@@ -123,7 +128,7 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
             for (var i = 0; i < parameters.Count; i++)
                 renamed.Add(parameters[i].Identifier, expected[i]);
 
-            return (method, Rename(method, renamed), "Put the parameter names in the contract's order");
+            return (method, Rename(method, renamed), "Put the parameter names in the contract's order", []);
         }
 
         // Each parameter whose name differs, with the name of the contract.
@@ -156,7 +161,48 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
             ? $"Rename '{parametersToRename.Keys.First().Name}' to '{parametersToRename.Values.First()}'"
             : "Rename the parameters as the contract names them";
 
-        return (method, Rename(method, renamed), title);
+        return (method, Rename(method, renamed), title, RenameNamedArguments(method, parametersToRename, semanticModel.Compilation, cancellationToken));
+    }
+
+    /// <summary>
+    /// Each name of a named argument in the project that names one of the parameters, as in <c>ItemsInCart(aantal: 2)</c>,
+    /// with the name the parameter gets. One inside the method itself is renamed with the method.
+    /// </summary>
+    // Each tree is read as text first, so that only one that holds an old name is bound. A call in another project
+    // isn't found: the build reports it there (CS1739).
+    private static Dictionary<SyntaxNode, SyntaxNode> RenameNamedArguments(MethodDeclarationSyntax method, Dictionary<ISymbol, string> parameters, Compilation compilation,
+        CancellationToken cancellationToken)
+    {
+        var renamed = new Dictionary<SyntaxNode, SyntaxNode>();
+        var oldNames = parameters.Keys.Select(static parameter => parameter.Name).ToArray();
+
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var text = tree.GetText(cancellationToken).ToString();
+
+            if (!oldNames.Any(name => text.Contains(name)))
+                continue;
+
+            SemanticModel? model = null;
+
+            foreach (var argument in tree.GetRoot(cancellationToken).DescendantNodes().OfType<NameColonSyntax>())
+            {
+                if (!oldNames.Contains(argument.Name.Identifier.ValueText, StringComparer.Ordinal)
+                    || (argument.SyntaxTree == method.SyntaxTree && method.Span.Contains(argument.Span)))
+                {
+                    continue;
+                }
+
+                model ??= compilation.GetSemanticModel(tree);
+
+                if (model.GetSymbolInfo(argument.Name, cancellationToken).Symbol is { } parameter && parameters.TryGetValue(parameter, out var name))
+                    renamed.Add(argument.Name, argument.Name.WithIdentifier(SyntaxFactory.Identifier(argument.Name.Identifier.LeadingTrivia, name, argument.Name.Identifier.TrailingTrivia)));
+            }
+        }
+
+        return renamed;
     }
 
     /// <summary>

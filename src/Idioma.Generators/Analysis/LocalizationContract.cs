@@ -6,8 +6,10 @@ namespace CodeChops.Idioma.Generators;
 /// them, whether the generated class holds the texts, the using directives its file repeats
 /// (<see cref="RepeatedUsings"/>), and the enums whose members it has a text for, each of which the generated class
 /// gets a method for that gives the text of a value. The class doesn't hold the texts when the generated code can't
-/// create the set for their default wording (<c>LOC200</c>). The file turns off what naming the default-language set,
-/// its enums and the types of its parameters reports (<see cref="LocalizationSetsAnalysis.GetContractSuppressedDiagnostics"/>).
+/// create the set for their default wording (<c>LOC200</c>). Where the default-language set doesn't list the contract
+/// (<c>LOC204</c>), the texts take their default wording from it through a class of the file that does. The file turns
+/// off what naming the default-language set, its enums and the types of its parameters reports
+/// (<see cref="LocalizationSetsAnalysis.GetContractSuppressedDiagnostics"/>).
 /// </summary>
 internal sealed record LocalizationContract(
     string HintName,
@@ -19,6 +21,7 @@ internal sealed record LocalizationContract(
     EquatableArray<LocalizationMember> Members,
     EquatableArray<SetLink> Sets,
     bool HasTexts,
+    bool DefaultSetListsContract,
     RepeatedUsings Usings,
     EquatableArray<LocalizedEnum> Enums,
     EquatableArray<string> SuppressedDiagnostics);

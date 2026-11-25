@@ -142,6 +142,21 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
+    /// An English set that counts how often it's created, of every instance. Only one test uses it.
+    /// </summary>
+    private sealed class CountedLocalizationEn : ISetLocalization
+    {
+        private static int _created;
+
+        public CountedLocalizationEn() => Interlocked.Increment(ref _created);
+
+        public static int Created => Volatile.Read(ref _created);
+
+        public string Greeting => "Hello";
+        public string Farewell => "Goodbye";
+    }
+
+    /// <summary>
     /// An app's rewording of the greeting, recorded as wording that text alone.
     /// </summary>
     private sealed class RecordedRewordedLocalizationEn : RecordedLocalizationEn
@@ -439,7 +454,7 @@ public sealed class LocalizationRegistryWordingTests
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var wording = registry.Word(registry.Resolve(culture), culture, valuesCulture, name, select, static () => GeneratedCode.GetDefaultSet<TDefaultSet>(), takesValues, resolved, text);
+        var wording = registry.Word(registry.Resolve(culture), culture, valuesCulture, name, select, typeof(TDefaultSet), static () => GeneratedCode.GetDefaultSet<TDefaultSet>(), takesValues, resolved, text);
         return wording;
     }
 
@@ -565,6 +580,23 @@ public sealed class LocalizationRegistryWordingTests
         // rewording still ends at the set the text was declared with.
         Checkout(reworded, french).ShouldBe("Pay now");
         Checkout(empty, french).ShouldBe("Checkout");
+    }
+
+    [Test]
+    public void Word_ForCultureWithoutSet_ShouldCreateNoSecondDefaultSetWhereTheRegisteredOneWordsIt()
+    {
+        // Arrange: a registry without languages, as in a host that declares none, with the English set registered and
+        // recorded, as the generated registrar records it.
+        LocalizationRegistry.RecordSet<CountedLocalizationEn>("en", []);
+        var registry = LocalizationRegistry.Create([new CountedLocalizationEn()]);
+        var created = CountedLocalizationEn.Created;
+
+        // Act
+        var greeting = Word<ISetLocalization, CountedLocalizationEn>(registry, Culture("fr-FR"), "Greeting", static set => set.Greeting);
+
+        // Assert: the registered set words it, and no instance is created only to tell its language.
+        greeting.ShouldBe("Hello");
+        CountedLocalizationEn.Created.ShouldBe(created);
     }
 
     [Test]

@@ -34,7 +34,8 @@ namespace CodeChops.Idioma.Generators;
 /// registration counts, and the app's own registrar runs first. So an application it references never decides, such
 /// as the client of a Blazor Web App's server, or the app a test project tests. An application is an assembly built
 /// as an executable, or an Android app, which the Android SDK builds as a library and marks with its
-/// <c>AndroidApplication</c> property.
+/// <c>AndroidApplication</c> property. Any other project built as a library says so in its attribute, as in
+/// <c>[assembly: SupportedLanguages("en", "nl", IsApplication = true)]</c>, such as an AWS Lambda function.
 /// </para>
 /// <para>
 /// So an application must declare its languages, also one without texts of its own (<c>LOC103</c>). Without them, its
@@ -92,7 +93,7 @@ public static class LocalizationRegistrationPart
     private static readonly DiagnosticDescriptor UnmappedLanguageCodeRule = new(
         id: UnmappedLanguageCodeDiagnosticId,
         title: "LocalizationLanguageCode that implements nothing",
-        messageFormat: "'{0}' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing and the set serves the language of its name. List the interface again: 'class {0} : {1}, ILocalizationSet'.",
+        messageFormat: "'{0}' inherits ILocalizationSet without listing it, so its LocalizationLanguageCode implements nothing, and the set doesn't serve the language it returns. List the interface again: 'class {0} : {1}, ILocalizationSet'.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -165,9 +166,12 @@ public static class LocalizationRegistrationPart
                 var ((sets, languages), contracts) = data;
 
                 // Nor a default-language set whose name gives it no language, which LOC200 reports with the name to
-                // give it.
+                // give it. Nor a set whose LocalizationLanguageCode implements nothing, for its missing code: LOC206
+                // says why, and its fix gives the set its code.
                 return new EquatableArray<UnregistrableLocalization>(sets
                     .Where(set => set.RegistrationProblem is not null
+                                  && !(set.Locations.UnmappedLanguageCode is not null
+                                       && String.Equals(set.RegistrationProblem, LocalizationDiscovery.NoLanguageCodeProblem, StringComparison.Ordinal))
                                   && (languages is not { } declared
                                       || (!LocalizationDiscovery.IsDefaultSet(set, declared.DefaultLanguage, contracts)
                                           && !(declared.DefaultLanguage is not null && LocalizationDiscovery.IsDefaultSetWithoutLanguage(set, contracts)))))
@@ -225,9 +229,11 @@ public static class LocalizationRegistrationPart
             .Select(static (data, _) =>
             {
                 var (((((sets, records), assembly), languages), memberTexts), suppressedDiagnostics) = data;
-                var forwards = sets.Length > 0 || assembly.IsApplication || languages is { Codes.Length: > 0 };
+                // A project built as a library may say that it's the app, in its attribute.
+                var isApplication = assembly.IsApplication || languages is { IsApplication: true };
+                var forwards = sets.Length > 0 || isApplication || languages is { Codes.Length: > 0 };
                 // Not without a default language (LOC101): the first valid language must not become the app's default.
-                var appLanguages = assembly.IsApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
+                var appLanguages = isApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
 
                 return new Registrar(
                     Name: assembly.RegistrarName,

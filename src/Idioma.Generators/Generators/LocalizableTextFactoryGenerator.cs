@@ -60,7 +60,7 @@ public sealed class LocalizableTextFactoryGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor InvalidLanguagesRule = new(
         id: InvalidLanguagesDiagnosticId,
         title: "Invalid language in [assembly: SupportedLanguages]",
-        messageFormat: "[assembly: SupportedLanguages] lists an invalid language: {0}. List each language once, as a culture name such as en or en-GB.",
+        messageFormat: "[assembly: SupportedLanguages] can't use one of its languages, because {0}. List each language once, as a culture name such as en or en-GB.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,

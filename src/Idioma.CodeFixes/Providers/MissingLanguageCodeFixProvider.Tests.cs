@@ -48,6 +48,24 @@ public sealed class MissingLanguageCodeFixProviderTests
         """);
 
     /// <summary>
+    /// A library with a set of its enum in English alone, which an app that supports German adds a set to.
+    /// </summary>
+    private static MetadataReference StatusLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("MissingLanguageFixStatus", """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en")]
+
+        namespace MissingLanguageFixStatus;
+
+        public enum OrderStatus { Pending }
+
+        public class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+        {
+            public virtual string Pending => "Pending";
+        }
+        """);
+
+    /// <summary>
     /// The errors of the files of one project as a build compiles them, with the generators run over them.
     /// </summary>
     private static ImmutableArray<Diagnostic> CompileFilesWithGenerators(MetadataReference[] references, params string[] sources)
@@ -260,6 +278,41 @@ public sealed class MissingLanguageCodeFixProviderTests
         // The set implements the library's contract, so the only error is the text it lacks, which is the compiler's to
         // name (CS0535).
         CompileFilesWithGenerators([ShopLibrary], source, text).ShouldHaveSingleItem().Id.ShouldBe("CS0535");
+    }
+
+    [Test]
+    public async Task LibraryMissingLanguageOfEnum_NamespaceThatEndsInTheLibrarysFirstPart_ShouldNameTheEnumAsTheContract()
+    {
+        // Arrange: inside namespace Contoso.MissingLanguageFixStatus, the full name MissingLanguageFixStatus.OrderStatus
+        // would mean Contoso.MissingLanguageFixStatus.OrderStatus, as for the contract.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "de")]
+
+            namespace Contoso.MissingLanguageFixStatus;
+
+            public static class Marker;
+            """;
+
+        // Act
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), [StatusLibrary], source);
+
+        // Assert: the enum by its name alone, through the using the contract needs.
+        var text = fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem().Text;
+        text.ShouldBe("""
+            using CodeChops.Idioma;
+            using MissingLanguageFixStatus;
+
+            namespace Contoso.MissingLanguageFixStatus;
+
+            public class OrderStatusLocalizationDe : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
+            {
+            }
+
+            """);
+
+        CompileFilesWithGenerators([StatusLibrary], source, text).ShouldHaveSingleItem().Id.ShouldBe("CS0535");
     }
 
     [Test]
