@@ -283,21 +283,23 @@ public sealed partial class LocalizationRegistryTests
     {
         // Arrange: a set that gives its language itself, which the registry creates when it's built, to file it. The
         // text the set reads builds the registry too, which created the set again and overflowed the stack.
-        GeneratedCode.RegisterSets(
-            asDefaults: true,
-            (typeof(RegistrySelfReadingCodedLocalization), static () => new RegistrySelfReadingCodedLocalization()),
-            (typeof(RegistrySteadyLocalizationNl), static () => new RegistrySteadyLocalizationNl()));
-
         var dutch = Culture("nl");
         using var cultures = new TestHelpers.CulturesScope(dutch, dutch);
         ILocalizationSet? other;
         InvalidOperationException failure;
 
-        // Act
+        // The set reads its text from before it's registered. Any test that reads a text builds the registry, and one
+        // that runs next to this test could otherwise create the set, and so file it, before it reads.
         RegistrySelfReadingCodedLocalization.ReadsOwnText = true;
 
         try
         {
+            GeneratedCode.RegisterSets(
+                asDefaults: true,
+                (typeof(RegistrySelfReadingCodedLocalization), static () => new RegistrySelfReadingCodedLocalization()),
+                (typeof(RegistrySteadyLocalizationNl), static () => new RegistrySteadyLocalizationNl()));
+
+            // Act
             other = Should.NotThrow(() => LocalizationRegistry.Current.Find<IRegistrySteadyLocalization>(dutch));
             failure = Should.Throw<InvalidOperationException>(static () => ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>());
         }
@@ -406,21 +408,24 @@ public sealed partial class LocalizationRegistryTests
         LocalizationRegistry.Register(second);
 
         using var stop = new CancellationTokenSource();
+        var writing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var writer = Task.Run(() =>
+        // The writer must run during the reads for the test to mean anything. So it has a thread of its own, and the
+        // reads start once it has registered. Taken from the thread pool, it could start only after the reads on a
+        // machine with few cores, such as a runner of CI.
+        var writer = Task.Factory.StartNew(() =>
         {
-            var registrations = 0;
-
             while (!stop.IsCancellationRequested)
             {
                 LocalizationRegistry.Register(first);
                 LocalizationRegistry.Register(second);
                 LocalizationRegistry.RegisterDefaults(new RegistryConcurrentDefaultLocalizationNl());
-                registrations++;
+                writing.TrySetResult();
             }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-            return registrations;
-        });
+        // A writer that throws before its first registration ends the wait too, and the await below throws it.
+        await Task.WhenAny(writing.Task, writer);
 
         // Act
         var wrong = await Task.WhenAll(Enumerable.Range(start: 0, count: 4).Select(_ => Task.Run(() =>
@@ -451,12 +456,11 @@ public sealed partial class LocalizationRegistryTests
         })));
 
         await stop.CancelAsync();
-        var registrations = await writer;
+        await writer;
 
         // Assert: nothing but the wording of a registered set, and a registry that follows the last registration once
-        // the writes have ended. The writer must have run during the reads for the test to mean anything.
+        // the writes have ended.
         wrong.SelectMany(static problems => problems).Distinct(StringComparer.Ordinal).ShouldBeEmpty();
-        registrations.ShouldBeGreaterThan(0);
 
         using var cultures = new TestHelpers.CulturesScope(dutch, dutch);
         LocalizationRegistry.Register(first);
