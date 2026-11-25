@@ -5,7 +5,11 @@ using CodeChops.Idioma;
 
 [assembly: SupportedLanguages(defaultLanguage: "en", "en-GB", "nl")]
 
-foreach (var culture in LocalizationRegistry.SupportedLanguages)
+// The supported languages, then two cultures without a set of their own, to show the fallback.
+// American English gets English, its parent culture. German gets English too, because it's the default language.
+string[] cultures = [.. LocalizationRegistry.SupportedLanguages, "en-US", "de"];
+
+foreach (var culture in cultures)
 {
     CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
     Console.WriteLine($"{culture}: {ShopLocalization.Greeting("Max")} {ShopLocalization.ItemsInCart(2)}. {ShopLocalization.GoToCheckout}");

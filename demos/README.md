@@ -3,11 +3,16 @@
 This folder has four demos of [Idioma](../README.md). Each is a complete app in one file, which `dotnet run` runs without a project:
 
 - [`SetDemo.cs`](SetDemo.cs) writes its texts in a set per language, including a plural.
-- [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline.
+- [`InlineTextDemo.cs`](InlineTextDemo.cs) writes its text inline, and shows it in each language with [`UseCulture`](../docs/advanced-topics.md#another-language).
 - [`AttributeDemo.cs`](AttributeDemo.cs) writes its texts as attributes on a class and its properties.
 - [`EnumDemo.cs`](EnumDemo.cs) gives two enums their texts, one in each [way](../docs/enums.md): a set of the enum, and an attribute on each member.
 
-All four support English and Dutch. `SetDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../docs/language-codes.md#regional-variants) of English. Each prints its texts in each of its languages. A user of a language the demos don't support, such as German, gets English, the default, as a [fallback](../docs/advanced-topics.md#fallback-order).
+All four support English and Dutch. `SetDemo.cs` and `AttributeDemo.cs` also support British English (`en-GB`), a [regional variant](../docs/language-codes.md#regional-variants) of English. Each prints its texts in each of its languages.
+
+`SetDemo.cs` also prints them for two cultures without a set of their own, to show the [fallback](../docs/advanced-topics.md#fallback-order):
+
+- American English (`en-US`) gets English, its parent culture.
+- German gets English too, because it's the default language.
 
 ## In your browser
 
