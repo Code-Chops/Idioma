@@ -32,7 +32,15 @@ switch (args)
         SizeReport.Print(root, suffix, label);
         break;
 
+    // BenchmarkDotNet, with its own options, such as --filter '*IdiomaSet*'. With --quick, one launch of fewer iterations
+    // (Timing).
     default:
+        if (args.Contains("--quick", StringComparer.Ordinal))
+        {
+            Environment.SetEnvironmentVariable(Timing.QuickVariable, "true");
+            args = [.. args.Where(static arg => !String.Equals(arg, "--quick", StringComparison.Ordinal))];
+        }
+
         BenchmarkSwitcher.FromAssembly(typeof(TextLookup).Assembly).Run(args);
         break;
 }

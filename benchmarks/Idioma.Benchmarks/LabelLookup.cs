@@ -18,9 +18,7 @@ namespace Benchmarks;
 /// </remarks>
 [MemoryDiagnoser]
 [HideColumns("Median", "RatioSD", "Alloc Ratio")]
-// Three launches, because the time of a lookup varies from one process to the next more than within one, and the
-// error of a single launch doesn't show that.
-[SimpleJob(launchCount: 3, warmupCount: 5, iterationCount: 15)]
+[Config(typeof(Timing))]
 public class LabelLookup
 {
     private static readonly PropertyInfo Checkout = typeof(LabelledOrder).GetProperty(nameof(LabelledOrder.Checkout))!;
