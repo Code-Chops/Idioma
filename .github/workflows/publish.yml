@@ -19,15 +19,25 @@ jobs:
   # Nothing is published that no app has consumed: an app is built against the packed package with the compiler of
   # .NET SDK 10, published with NativeAOT, and run, as in CI (ci.yml). CI runs on main and on pull requests only, so
   # without this job a tag on a commit that CI never built would publish without it. A job of its own, which can't
-  # sign in to nuget.org: it installs a toolchain and restores more packages than the publish job does.
+  # sign in to nuget.org: it installs a toolchain and restores more packages than the publish job does. It tests the
+  # package the pack job made, which the publish job pushes, and packs none of its own.
   aot-smoke:
     name: NativeAOT smoke test of the package
+    needs: pack
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      IDIOMA_PACKED: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Where the scripts below take the package from.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: artifacts
 
       # 10.0.1xx and no later band of SDK 10, as in CI: only that band has the compiler the generators are built against.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -40,11 +50,11 @@ jobs:
       - name: Native toolchain
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      - name: Pack, publish a consumer with NativeAOT, and run it
+      - name: Publish a consumer of the package with NativeAOT, and run it
         run: ./tests/Idioma.AotSmoke/run.sh
 
       # A demo fetches the published package, so a demo written for a newer API fails for every visitor until that
-      # version is out. This shows that the demos run with the package as it is packed here.
+      # version is out. This shows that the demos run with the package the publish job pushes.
       - name: Run the demos against the package
         run: ./tests/Idioma.Demos/run.sh
 
@@ -66,7 +76,19 @@ jobs:
           echo "::error::Run this workflow on a version tag such as v0.1.0, not on '${GITHUB_REF_NAME}'."
           exit 1
 
+      # With the history of every branch, for the check below.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Only a commit of main is released, so a tag pushed on another branch, or on a commit of no branch, publishes
+      # nothing.
+      - name: Check that the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::The tag '${GITHUB_REF_NAME}' is on a commit that main doesn't hold. Tag a commit of main."
+            exit 1
+          fi
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -130,11 +152,16 @@ jobs:
 
   # Pushes the package the pack job made, and does nothing else: no checkout, no restore, and no code of the
   # repository or of a package runs in the job that can get an API key.
+  #
+  # It runs in the environment nuget.org, which gates the release. In the repository's settings, under Environments,
+  # give nuget.org a required reviewer, and allow it only for tags that match v*. The trusted publishing policy on
+  # nuget.org can name the environment too, so that no other job gets an API key.
   publish:
     name: Publish
     needs: [aot-smoke, pack, test-other-platforms]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: nuget.org
     permissions:
       id-token: write # lets GitHub issue the token that nuget.org exchanges for a short-lived API key
     steps:
@@ -154,9 +181,10 @@ jobs:
         with:
           user: CodeChops
 
-      # The symbols package (.snupkg) next to the package is pushed along.
+      # The symbols package (.snupkg) next to the package is pushed along. A package that is there already is skipped,
+      # so a run again after a push that failed halfway, such as at the symbols, pushes what's left.
       - name: Push
-        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
   # Pushes the same package to GitHub Packages, so the repository's page lists it. nuget.org stays the feed to install
   # from, because GitHub's feed needs a sign-in even for a public package. It runs after the push to nuget.org, so
@@ -179,6 +207,6 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # GitHub Packages takes no symbols package, so the .snupkg stays behind.
+      # GitHub Packages takes no symbols package, so the .snupkg stays behind. A run again skips what's there already.
       - name: Push
-        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --no-symbols
+        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.GITHUB_TOKEN }} --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --no-symbols --skip-duplicate

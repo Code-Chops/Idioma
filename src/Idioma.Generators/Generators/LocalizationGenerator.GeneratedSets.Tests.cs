@@ -569,7 +569,7 @@ namespace CodeChops.Idioma.Tests
             // that the text is a call of that set's method.
             using var _ = new CulturesScope(culture);
             const string name = "Max";
-            var set = LocalizationRegistry.Find<IGeneratedLocalization>(CultureInfo.CurrentUICulture).ShouldNotBeNull();
+            var set = LocalizationRegistry.GetLocalizationSet<IGeneratedLocalization>(CultureInfo.CurrentUICulture).ShouldNotBeNull();
 
             // Act: per call, the least of a few rounds of ten thousand. The wording itself is measured, not written
             // down, because the runtime decides what an interpolated string allocates.
@@ -678,14 +678,21 @@ namespace CodeChops.Idioma.Tests
         [Arguments("checkout")]
         [Arguments("CodeChops.Idioma.Tests.GeneratedSets.GeneratedLocalization.Checkout")]
         [Arguments("")]
-        public void GeneratedGetTextByKey_ShouldThrowForKeyNoTextHas(string key)
+        public void GeneratedGetTextByKey_ShouldGiveNullForKeyNoTextHas(string key)
         {
-            // Arrange & Act: a mistyped key, another letter case, and the full name.
-            var exception = Should.Throw<KeyNotFoundException>(() => GeneratedLocalization.GetTextByKey(key));
+            // Arrange & Act: a mistyped key, another letter case, the full name, and an empty key, as one from a
+            // database may be.
+            var text = GeneratedLocalization.GetTextByKey(key);
 
             // Assert
-            exception.Message.ShouldStartWith($"'GeneratedLocalization' has no text with the key '{key}'.");
-            Should.Throw<ArgumentNullException>(() => GeneratedLocalization.GetTextByKey(null!));
+            text.ShouldBeNull();
+        }
+
+        [Test]
+        public void GeneratedGetTextByKey_ShouldThrowForNullKey()
+        {
+            // Arrange & Act & Assert: a key that is null is a mistake of the caller, as a value the text doesn't take is.
+            Should.Throw<ArgumentNullException>(() => GeneratedLocalization.GetTextByKey(null!)).ParamName.ShouldBe("key");
         }
 
         [Test]
@@ -699,22 +706,13 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        public void GeneratedTryGetTextByKey_ShouldGiveTextWithThatKeyAndFalseForKeyNoTextHas()
+        public void GeneratedGetTextByKey_ShouldRefuseNullForParameterThatIsNotNullable()
         {
-            // Arrange
-            using var _ = new UICultureScope("nl-NL");
+            // Arrange & Act: null for the string name of Welcome, which every set reads without a check.
+            var refused = Should.Throw<ArgumentException>(() => GeneratedLocalization.GetTextByKey("Welcome", [null]));
 
-            // Act & Assert: a text, a text that takes a value, and a key no text has, as one from a database may be.
-            GeneratedLocalization.TryGetTextByKey("Greeting", out var greeting).ShouldBeTrue();
-            greeting.ShouldBe("Hallo!");
-            GeneratedLocalization.TryGetTextByKey("Welcome", out var welcome, "Max").ShouldBeTrue();
-            welcome.ShouldBe("Welkom, Max!");
-            GeneratedLocalization.TryGetTextByKey("Chekout", out var unknown).ShouldBeFalse();
-            unknown.ShouldBeNull();
-
-            // A key that is null and values the text doesn't take are mistakes of the caller, so they throw as before.
-            Should.Throw<ArgumentNullException>(() => GeneratedLocalization.TryGetTextByKey(null!, out var ignored));
-            Should.Throw<ArgumentException>(() => GeneratedLocalization.TryGetTextByKey("Welcome", out var ignored)).Message.ShouldContain("takes 1 value, but 0 were passed");
+            // Assert: refused before a set is called, so the set throws no NullReferenceException of its own.
+            refused.Message.ShouldStartWith("The text 'Welcome' takes a value of type 'System.String' for 'name', which isn't nullable, but null was passed.");
         }
 
         [Test]

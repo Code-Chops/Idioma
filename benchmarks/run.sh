@@ -10,7 +10,7 @@
 #      Idioma.Benchmarks.Size, with Mono's interpreter and AOT.
 #   5. Finding a label on .NET, with BenchmarkDotNet, in the run of step 1.
 #
-# Takes about 30 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
+# Takes about 50 minutes on a laptop. Needs Chrome: set CHROME=/path/to/chrome when it's installed elsewhere.
 
 set -euo pipefail
 

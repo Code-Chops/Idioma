@@ -18,12 +18,12 @@ Lightweight and fast translations for any .NET app, written in C# and checked at
   - Go to definition;
   - Every language's wording on hover;
   - Find all references.
-- A wording can use your app's services, where a resx entry is a fixed string. A set is a class, so its constructor can take services from dependency injection ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#dependency-injection)).
+- A wording can be any C#, where a resx entry is a fixed string. A set is a class, so a set you register yourself can take your app's services in its constructor ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#dependency-injection)).
 - Idioma shows texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
 - An AI coding assistant translates your texts well:
   - It sees the code that uses them so it knows the context.
   - The build names each missing translation, so the assistant knows when it's done ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md)).
-- The package has no dependencies, and is safe to trim and to publish with Native AOT.
+- The package has no dependencies, and is safe to trim and to publish with Native AOT ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#native-aot)).
 
 ### At a glance
 
@@ -316,7 +316,7 @@ A member you add to the enum later is a build error in every language until it h
 
 ## Where Idioma doesn't fit
 
-- When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can ask an `IStringLocalizer` first, such as one that reads a database ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#keeping-a-resource-file-as-an-override)).
+- When you need to add translations without a new build. Every language is compiled into your assembly, so a new language or a changed wording takes a new build. Where a wording must change without one, your app can ask an `IStringLocalizer` first, such as one that reads a database, and show the text where it has no entry. The key of a text is its name.
 - When your translators work in a translation tool, which reads files such as XLIFF.
 - When your app targets .NET 9 or earlier, or can't move to C# 14.
 
@@ -326,14 +326,15 @@ The docs cover the rest, a page per subject:
 
 - [Enums](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md): a [set of an enum](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md#a-set-of-the-enum), or [an attribute on each member](https://github.com/Code-Chops/Idioma/blob/main/docs/enums.md#an-attribute-on-each-member).
 - [Attributes](https://github.com/Code-Chops/Idioma/blob/main/docs/attributes.md): labels in a form, a table or an export, written with `[Localized]`, and [finding them by their member](https://github.com/Code-Chops/Idioma/blob/main/docs/attributes.md#finding-a-text-by-its-member).
-- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): [which wording a user sees](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order), [getting a text by its key](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key), [registering a set by hand](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#registration), [testing](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#testing), and [what the source generator writes](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#what-the-source-generator-writes).
+- [Advanced topics](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md): [which wording a user sees](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order), [getting a text by its key](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#getting-a-text-by-its-key), [registering a set by hand](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#registration), and [testing](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#testing).
 - [Language codes](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md): how a set's name gives its language, and [regional variants](https://github.com/Code-Chops/Idioma/blob/main/docs/language-codes.md#regional-variants) such as British English.
 - [Libraries that use Idioma](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md): writing a library, and [changing a text of a library](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#changing-a-text-of-a-library) in your app.
 - [Translating your texts](https://github.com/Code-Chops/Idioma/blob/main/docs/translating.md): with an AI coding assistant, and reviewing each language in a pull request.
 - [ASP.NET Core](https://github.com/Code-Chops/Idioma/blob/main/docs/aspnet-core.md): the language of a request, labels and validation messages, and what to watch on a server.
 - [Blazor](https://github.com/Code-Chops/Idioma/blob/main/docs/blazor.md): a language picker for every render mode, a browser language the app doesn't have, and dates and numbers.
+- [.NET MAUI](https://github.com/Code-Chops/Idioma/blob/main/docs/maui.md): showing a text in XAML, the device's language, and switching languages in the app.
 - [What the build rejects](https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors.md): every build error and warning, by its code.
-- [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, and keeping a resource file as an override.
+- [Coming from resx](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md): what becomes what, and [validation and display attributes](https://github.com/Code-Chops/Idioma/blob/main/docs/coming-from-resx.md#validation-and-display-attributes).
 - [Performance](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md): how long a text takes next to `IStringLocalizer`, and what Idioma adds to a download.
 - [The demos](https://github.com/Code-Chops/Idioma/blob/main/demos/README.md): four complete apps, each one file that `dotnet run` runs.
 

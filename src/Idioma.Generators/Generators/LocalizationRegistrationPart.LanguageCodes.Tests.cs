@@ -156,7 +156,7 @@ public sealed partial class LocalizationRegistrationPartTests
         diagnostic.Id.ShouldBe(LocalizationRegistrationPart.InvalidLanguageCodeDiagnosticId);
         diagnostic.Id.ShouldBe("LOC207");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
-        diagnostic.GetMessage().ShouldStartWith($"'ShopLocalizationBritish' gives \"{expectedCode}\" as its LocalizationLanguageCode, which isn't a culture name");
+        diagnostic.GetMessage().ShouldStartWith($"'ShopLocalizationBritish' gives '{expectedCode}' as its LocalizationLanguageCode, which isn't a culture name");
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldBe("LocalizationLanguageCode");
     }
 
@@ -302,7 +302,7 @@ public sealed partial class LocalizationRegistrationPartTests
         // Assert
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe("LOC207");
-        diagnostic.GetMessage().ShouldStartWith("'BritishWording' gives \"en_GB\" as its LocalizationLanguageCode");
+        diagnostic.GetMessage().ShouldStartWith("'BritishWording' gives 'en_GB' as its LocalizationLanguageCode");
     }
 
     [Test]

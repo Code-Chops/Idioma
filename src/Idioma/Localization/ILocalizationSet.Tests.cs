@@ -88,8 +88,8 @@ public sealed class ILocalizationSetTests
 
         // Act & Assert: zh-Hans-CN resolves through zh-Hans; zh-Hant-TW walks zh-Hant and zh, neither registered.
         ((ILocalizationSet)set).LocalizationLanguageCode.ShouldBe("zh-Hans");
-        registry.FindSet<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hans-CN")).ShouldBeSameAs(set);
-        registry.FindSet<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hant-TW")).ShouldBeNull();
+        registry.GetByCulture<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hans-CN")).ShouldBeSameAs(set);
+        registry.GetByCulture<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hant-TW")).ShouldBeNull();
     }
 
     [Test]

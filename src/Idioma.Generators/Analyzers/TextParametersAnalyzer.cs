@@ -47,21 +47,9 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         description: "A text with parameters is a method that every language implements with the parameters of the contract. The compiler checks their types and order, but not their names. So a set that declares two parameters of one type the other way round compiles, and swaps the two values.",
         helpLinkUri: PackageNames.HelpLink(ParameterNamesDifferDiagnosticId));
 
-    // The code of an inline text that leaves a value out, which InlineTextValuesAnalyzer reports. The code is shared on
-    // purpose.
-#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
-    private static readonly DiagnosticDescriptor ValueLeftOutRule = new(
-        id: ValueLeftOutDiagnosticId,
-        title: "Value of a text left out of its wording",
-        messageFormat: "'{0}.{1}' doesn't use its parameter '{2}', but the default wording of '{3}.{1}' shows it. Use '{2}' in every language, or users of {4} won't see it.",
-        category: "Design",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "A text with parameters is a method that every language implements. The compiler allows a parameter a method never uses, so wording that leaves a value out compiles. Every language must use a value the default wording shows. A value the default wording only uses to choose between wordings, such as a form of address, may go unused in a language that makes no such distinction.",
-        helpLinkUri: PackageNames.HelpLink(ValueLeftOutDiagnosticId));
-#pragma warning restore RS1019
-
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [ParameterNamesDifferRule, ValueLeftOutRule];
+    // LOC402 is the code of an inline text that leaves a value out too, which InlineTextValuesAnalyzer reports
+    // (SharedRules).
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [ParameterNamesDifferRule, SharedRules.ValueLeftOut];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -153,7 +141,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
                         ? $"'{code}'"
                         : "that language";
 
-                    context.ReportDiagnostic(Diagnostic.Create(ValueLeftOutRule, location, set.Name, text.Name, parameter.Name, text.ContainingType.Name, language));
+                    context.ReportDiagnostic(Diagnostic.Create(SharedRules.ValueLeftOut, location, $"'{set.Name}.{text.Name}'", $"its parameter '{parameter.Name}'", $"the default wording of '{text.ContainingType.Name}.{text.Name}'", parameter.Name, language));
                 }
             }
 

@@ -215,7 +215,6 @@ public sealed class LocalizedMembersSourceTests
         text.ShouldContain("if (type == typeof(Shop.Domain.Order.Line))");
         text.ShouldContain("if (type == typeof(Shop.Domain.Page<>))");
         text.ShouldContain("if (type == typeof(Shop.Domain.Page<>.Kind))");
-        text.ShouldContain("internal static readonly string[] Languages = [\"en\", \"nl\", \"en-GB\"];");
         text.ShouldContain("internal static readonly string[] Text0 = [\"Items\", \"Regels\", \"Items\"];");
         text.ShouldContain(" = [\"Article\", \"Artikel\", \"Article\"];");
         text.ShouldContain("internal static readonly string[] OwnText = [\"Address\", \"Adres\", \"Address\"];");
@@ -235,6 +234,11 @@ public sealed class LocalizedMembersSourceTests
         // Of two members of one value, the first gives the value its text.
         text.ShouldContain("Shop.Domain.Speed.Fast =>");
         text.ShouldNotContain("Shop.Domain.Speed.Quick =>");
+
+        // The texts pass the languages of LocalizedText.Inline, because the package keeps its last pick for one array.
+        text.ShouldContain("GetLanguageIndex(GeneratedLocalizedText.Languages)");
+        text.ShouldContain("RecordMemberTexts(GeneratedLocalizedText.Languages,");
+        text.ShouldNotContain("static readonly string[] Languages");
     }
 
     [Test]

@@ -17,10 +17,10 @@ Expect("languages", string.Join(",", LocalizationRegistry.SupportedLanguages), "
 
 // The language of a set comes from the end of its name, which the published app must still know, and a regional set from
 // the code its assembly declares.
-var british = LocalizationRegistry.Find<IShopLocalization>(CultureInfo.GetCultureInfo("en-GB"));
+var british = LocalizationRegistry.GetLocalizationSet<IShopLocalization>(CultureInfo.GetCultureInfo("en-GB"));
 Expect("set for en-GB", british?.GetType().Name, nameof(ShopLocalizationEnGb));
 Expect("language code of the set for en-GB", (british as ILocalizationSet)?.LocalizationLanguageCode, "en-GB");
-Expect("language code of the set for nl", (LocalizationRegistry.Find<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
+Expect("language code of the set for nl", (LocalizationRegistry.GetLocalizationSet<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
 
 // An inline text gives the wording of the moment it's read, so it's read in each culture below.
 static string Orders() => LocalizedText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");

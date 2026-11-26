@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis.CodeFixes;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace CodeChops.Idioma.CodeFixes;
 
@@ -140,6 +141,9 @@ internal static class CodeFixSupport
     /// A node may lie inside another node that is replaced too, as a named argument does inside a method that a
     /// "Fix all" renames the parameters of. Its replacement is then written into that of the node around it
     /// (<see cref="Nest"/>).
+    /// <para>
+    /// A replacement marked <see cref="FormatAnnotation"/> is formatted, with the line endings its file has.
+    /// </para>
     /// </remarks>
     public static async Task<Solution> ReplaceNodesAsync<TNode>(Solution solution, IEnumerable<TNode> nodes, Func<TNode, SyntaxNode> replace, CancellationToken cancellationToken)
         where TNode : SyntaxNode
@@ -152,10 +156,30 @@ internal static class CodeFixSupport
             var root = await tree.Key.GetRootAsync(cancellationToken).ConfigureAwait(false);
             var replacements = Nest(tree.Distinct().ToDictionary(static SyntaxNode (node) => node, node => replace(node)));
 
-            solution = solution.WithDocumentSyntaxRoot(document.Id, root.ReplaceNodes(replacements.Keys, (original, _) => replacements[original]));
+            var replaced = root.ReplaceNodes(replacements.Keys, (original, _) => replacements[original]);
+            solution = solution.WithDocumentSyntaxRoot(document.Id, replaced);
+
+            if (replaced.HasAnnotation(FormatAnnotation) || replaced.GetAnnotatedNodes(FormatAnnotation).Any())
+                solution = await FormatAsync(solution.GetDocument(document.Id)!, FindEndOfLine(root), cancellationToken).ConfigureAwait(false);
         }
 
         return solution;
+    }
+
+    /// <summary>
+    /// Marks a replacement to be formatted with the line endings of its file (<see cref="ReplaceNodesAsync"/>), in place of
+    /// <see cref="Formatter.Annotation"/>. The IDE formats what that one marks with the line endings of .editorconfig, or
+    /// else of the machine, so a file with other line endings would get one line that differs from the rest.
+    /// </summary>
+    public static SyntaxAnnotation FormatAnnotation { get; } = new(nameof(FormatAnnotation));
+
+    private static async Task<Solution> FormatAsync(Document document, SyntaxTrivia endOfLine, CancellationToken cancellationToken)
+    {
+        var options = await document.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
+        var withEndOfLine = options.WithChangedOption(FormattingOptions.NewLine, LanguageNames.CSharp, endOfLine.ToString());
+
+        var formatted = await Formatter.FormatAsync(document, FormatAnnotation, withEndOfLine, cancellationToken).ConfigureAwait(false);
+        return formatted.Project.Solution;
     }
 
     /// <summary>

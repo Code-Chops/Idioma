@@ -3,8 +3,8 @@
 #pragma warning disable CS0612, CS0618 // Only generated code calls GeneratedCode.
 
 using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.CodeDom.Compiler;
 using System.Diagnostics.CodeAnalysis;
 using static CodeChops.Idioma.Internals.GeneratedCode;
 
@@ -33,7 +33,8 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Checkout">nl</see>: Afrekenen</description></item>
     /// </list>
     /// </remarks>
-    public static string Checkout => FindSet<IShopLocalization>(0, 2)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
+    public static string Checkout => GetSet<IShopLocalization>(0, 2)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
 
     /// <summary>
     /// Total
@@ -45,46 +46,32 @@ public static partial class ShopLocalization
     /// <item><description><see cref="ShopLocalizationNl.Total">nl</see>: Totaal</description></item>
     /// </list>
     /// </remarks>
-    public static string Total => FindSet<IShopLocalization>(1, 2)?.Total ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(1, 2, "Total", static set => set.Total);
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
+    public static string Total => GetSet<IShopLocalization>(1, 2)?.Total ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(1, 2, "Total", static set => set.Total);
 
     /// <summary>
-    /// The text with a key. The key is the name of the text, such as <c>"Checkout"</c>.
+    /// The text with a key, or <see langword="null"/> for an unknown key. The key is the name of the text, such as <c>"Checkout"</c>.
     /// </summary>
     /// <remarks>
-    /// For a key that may be unknown, such as one from a database, use <see cref="TryGetTextByKey"/>.
+    /// A key may be one your code only has at run time, such as one from a database. <see cref="TextKeys"/> lists every key.
     /// </remarks>
     /// <param name="key">The key of the text: its name, in the same letter case.</param>
-    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
-    /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
-    /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => TryGetTextByKey(key, out var text, values) ? text : throw CreateUnknownKeyException<IShopLocalization>(key, "ShopLocalization");
-
-    /// <summary>
-    /// Gives the text with a key, when a text has that key. The key is the name of the text, such as <c>"Checkout"</c>.
-    /// </summary>
-    /// <param name="key">The key of the text: its name, in the same letter case.</param>
-    /// <param name="text">The text, or <see langword="null"/> when no text has the key.</param>
-    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-    /// <returns><see langword="true"/> when a text has the key.</returns>
+    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter, and only a nullable parameter takes <see langword="null"/>.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static bool TryGetTextByKey(string key, [NotNullWhen(true)] out string? text, params ReadOnlySpan<object?> values)
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
+    public static string? GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
     {
-        text = key switch
-        {
-            "Checkout" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Checkout, key, values),
-            "Total" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Total, key, values),
-            null => throw CreateUnknownKeyException<IShopLocalization>(key, "ShopLocalization"),
-            _ => null,
-        };
-
-        return text is not null;
-    }
+        "Checkout" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Checkout, key, values),
+        "Total" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Total, key, values),
+        null => throw CreateNullKeyException<IShopLocalization>(key),
+        _ => null,
+    };
 
     /// <summary>
     /// The key of every text, sorted by name in ordinal order. <see cref="GetTextByKey"/> takes each of them.
     /// </summary>
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
     public static ImmutableArray<string> TextKeys => TextKeysOf<IShopLocalization>.Keys;
 }
 
@@ -95,6 +82,7 @@ public static partial class ShopLocalization
 /// Each set is registered automatically, so there's nothing to register.
 /// </summary>
 [CodeChops.Idioma.Internals.LocalizationContract]
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}")]
 public interface IShopLocalization
 {
     /// <inheritdoc cref="ShopLocalization.Checkout"/>
@@ -103,6 +91,7 @@ public interface IShopLocalization
     string Total { get; }
 }
 
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
 file static class TextKeysOf<TContract>
 {
     internal static readonly ImmutableArray<string> Keys = ["Checkout", "Total"];

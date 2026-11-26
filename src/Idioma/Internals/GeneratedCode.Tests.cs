@@ -101,11 +101,11 @@ public sealed class GeneratedCodeTests
     private static readonly string[] FrenchGerman = ["fr", "de"];
     private static readonly string[] UpperCase = ["EN", "NL", "EN-gb"];
 
-    private static int FindLanguageIndexFor(string culture, string[] languages)
+    private static int GetLanguageIndexFor(string culture, string[] languages)
     {
         using var _ = new CulturesScope(culture);
 
-        var index = GeneratedCode.FindLanguageIndex(languages);
+        var index = GeneratedCode.GetLanguageIndex(languages);
         return index;
     }
     #endregion
@@ -122,12 +122,12 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["FindLanguageIndex", "FindSet", "FindSetForValues", "ResolveWording", "RecordMemberTexts", "RegisterEnumTexts", "FindEnumText", "ResolveKeyedWording", "GetKeyedValue", "CreateUnknownKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
+            ["GetLanguageIndex", "GetSet", "GetSetForValues", "ResolveWording", "RecordMemberTexts", "RegisterEnumTexts", "GetEnumText", "ResolveKeyedWording", "GetKeyedValue", "CreateNullKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
             ignoreOrder: true);
     }
 
     /// <summary>
-    /// An enum that only the tests of <see cref="GeneratedCode.RegisterEnumTexts{TEnum}"/> register texts for, because
+    /// An enum that only the tests of <see cref="GeneratedCode.RegisterEnumTexts{TEnum, TContract}"/> register texts for, because
     /// what they register stays for the process.
     /// </summary>
     private enum RegisteredStatus
@@ -144,21 +144,46 @@ public sealed class GeneratedCodeTests
         Open,
     }
 
-    [Test]
-    public void FindEnumText_ShouldGiveTheTextOfTheSetRegisteredLastAndNullForAnEnumWithoutOne()
+    /// <summary>
+    /// An enum that only the test of the order of two assemblies registers texts for.
+    /// </summary>
+    private enum OrderedStatus
     {
-        // Arrange: two sets of one enum, as a library and the app that uses it may both have.
-        GeneratedCode.RegisterEnumTexts<RegisteredStatus>(static value => $"first {value}");
-        GeneratedCode.RegisterEnumTexts<RegisteredStatus>(static value => value is RegisteredStatus.Open ? "Open" : "Gesloten");
+        Open,
+    }
+
+    [Test]
+    public void GetEnumText_ShouldGiveTheTextOfTheAssemblyWhoseSetsRegisteredLastWhicheverRegisteredItsTextsFirst()
+    {
+        // Arrange: the sets of this assembly registered as it started, as an app's own sets do after those of the
+        // libraries it references. Those of the assembly of Uri never did. Its texts come later, as a library's may when
+        // it loads after the app started.
+        GeneratedCode.RegisterEnumTexts<OrderedStatus, GeneratedCodeTests>(static _ => "of the app");
+        GeneratedCode.RegisterEnumTexts<OrderedStatus, Uri>(static _ => "of a library");
 
         // Act
-        var closed = GeneratedCode.FindEnumText(RegisteredStatus.Closed);
-        var unregistered = GeneratedCode.FindEnumText(UnregisteredStatus.Open);
+        var text = GeneratedCode.GetEnumText(OrderedStatus.Open);
+
+        // Assert
+        LocalizationRegistry.GetSetsRegisteredAt(typeof(GeneratedCodeTests).Assembly).ShouldBeGreaterThan(0);
+        text.ShouldBe("of the app");
+    }
+
+    [Test]
+    public void GetEnumText_ShouldGiveTheTextOfTheSetRegisteredLastAndNullForAnEnumWithoutOne()
+    {
+        // Arrange: two sets of one enum, as a library and the app that uses it may both have.
+        GeneratedCode.RegisterEnumTexts<RegisteredStatus, GeneratedCodeTests>(static value => $"first {value}");
+        GeneratedCode.RegisterEnumTexts<RegisteredStatus, GeneratedCodeTests>(static value => value is RegisteredStatus.Open ? "Open" : "Gesloten");
+
+        // Act
+        var closed = GeneratedCode.GetEnumText(RegisteredStatus.Closed);
+        var unregistered = GeneratedCode.GetEnumText(UnregisteredStatus.Open);
 
         // Assert
         closed.ShouldBe("Gesloten");
         unregistered.ShouldBeNull();
-        Should.Throw<ArgumentNullException>(static () => GeneratedCode.RegisterEnumTexts<RegisteredStatus>(null!));
+        Should.Throw<ArgumentNullException>(static () => GeneratedCode.RegisterEnumTexts<RegisteredStatus, GeneratedCodeTests>(null!));
     }
 
     [Test]
@@ -181,57 +206,57 @@ public sealed class GeneratedCodeTests
     [Arguments("en-US", 0)]
     [Arguments("en-GB", 0)]
     [Arguments("en", 0)]
-    public void FindLanguageIndex_ShouldGiveThePositionOfTheLanguageOfTheCurrentUICulture(string culture, int expected)
+    public void GetLanguageIndex_ShouldGiveThePositionOfTheLanguageOfTheCurrentUICulture(string culture, int expected)
     {
         // Arrange & Act
-        var index = FindLanguageIndexFor(culture, EnglishDutch);
+        var index = GetLanguageIndexFor(culture, EnglishDutch);
 
-        // Assert: the culture's own language, or else that of a culture above it.
+        // Assert: the culture's own language, or else that of a culture it falls back to.
         index.ShouldBe(expected);
     }
 
     [Test]
-    public void FindLanguageIndex_ShouldGiveARegionItsOwnWordingAndOtherRegionsThatOfTheLanguage()
+    public void GetLanguageIndex_ShouldGiveARegionItsOwnWordingAndOtherRegionsThatOfTheLanguage()
     {
         // Arrange & Act & Assert: British English next to English. A language is matched in any letter case.
-        FindLanguageIndexFor("en-GB", EnglishDutchBritish).ShouldBe(2);
-        FindLanguageIndexFor("en-US", EnglishDutchBritish).ShouldBe(0);
-        FindLanguageIndexFor("en", EnglishDutchBritish).ShouldBe(0);
-        FindLanguageIndexFor("nl-BE", EnglishDutchBritish).ShouldBe(1);
-        FindLanguageIndexFor("en-GB", UpperCase).ShouldBe(2);
-        FindLanguageIndexFor("nl-NL", UpperCase).ShouldBe(1);
+        GetLanguageIndexFor("en-GB", EnglishDutchBritish).ShouldBe(2);
+        GetLanguageIndexFor("en-US", EnglishDutchBritish).ShouldBe(0);
+        GetLanguageIndexFor("en", EnglishDutchBritish).ShouldBe(0);
+        GetLanguageIndexFor("nl-BE", EnglishDutchBritish).ShouldBe(1);
+        GetLanguageIndexFor("en-GB", UpperCase).ShouldBe(2);
+        GetLanguageIndexFor("nl-NL", UpperCase).ShouldBe(1);
     }
 
     [Test]
-    public void FindLanguageIndex_ForCultureTheAppDoesNotShow_ShouldGiveTheAppDefaultLanguageElseTheFirst()
+    public void GetLanguageIndex_ForCultureTheAppDoesNotShow_ShouldGiveTheAppDefaultLanguageElseTheFirst()
     {
         // Arrange & Act & Assert: this app shows English and Dutch, and its default language is English. A German
         // user gets English wherever it stands, also where the assembly has German, because the app's own texts are
         // English for them too. An assembly without English gives its first language.
-        FindLanguageIndexFor("de-DE", EnglishDutch).ShouldBe(0);
-        FindLanguageIndexFor("de-DE", DutchEnglish).ShouldBe(1);
-        FindLanguageIndexFor("de-DE", FrenchGerman).ShouldBe(0);
-        FindLanguageIndexFor("", DutchEnglish).ShouldBe(1);
+        GetLanguageIndexFor("de-DE", EnglishDutch).ShouldBe(0);
+        GetLanguageIndexFor("de-DE", DutchEnglish).ShouldBe(1);
+        GetLanguageIndexFor("de-DE", FrenchGerman).ShouldBe(0);
+        GetLanguageIndexFor("", DutchEnglish).ShouldBe(1);
 
         // A culture the app shows falls back the same way where the assembly lacks its language.
-        FindLanguageIndexFor("nl-NL", FrenchGerman).ShouldBe(0);
+        GetLanguageIndexFor("nl-NL", FrenchGerman).ShouldBe(0);
     }
 
     [Test]
-    public void FindLanguageIndex_WithTheSameArrayForAnotherCulture_ShouldPickAgain()
+    public void GetLanguageIndex_WithTheSameArrayForAnotherCulture_ShouldPickAgain()
     {
         // Arrange & Act & Assert: the last pick is kept per thread, for the same languages and the same culture alone.
         for (var round = 0; round < 3; round++)
         {
-            FindLanguageIndexFor("nl-NL", EnglishDutch).ShouldBe(1);
-            FindLanguageIndexFor("nl-NL", DutchEnglish).ShouldBe(0);
-            FindLanguageIndexFor("en-US", EnglishDutch).ShouldBe(0);
-            FindLanguageIndexFor("en-US", DutchEnglish).ShouldBe(1);
+            GetLanguageIndexFor("nl-NL", EnglishDutch).ShouldBe(1);
+            GetLanguageIndexFor("nl-NL", DutchEnglish).ShouldBe(0);
+            GetLanguageIndexFor("en-US", EnglishDutch).ShouldBe(0);
+            GetLanguageIndexFor("en-US", DutchEnglish).ShouldBe(1);
         }
     }
 
     [Test]
-    public void FindLanguageIndex_InRegistryWithLanguagesOfItsOwn_ShouldFollowThoseLanguages()
+    public void GetLanguageIndex_InRegistryWithLanguagesOfItsOwn_ShouldFollowThoseLanguages()
     {
         // Arrange: registries apart from the app's, as a culture resolves in each.
         var french = CultureInfo.GetCultureInfo("fr-FR");
@@ -240,8 +265,8 @@ public sealed class GeneratedCodeTests
         var withoutLanguages = LocalizationRegistry.Create([]).Resolve(french);
         var withFrench = LocalizationRegistry.Create([], "nl", "fr").Resolve(french);
 
-        // Act & Assert: the default language of the registry, or else a language above it, and the first language
-        // where the registry has no languages. A culture the registry shows gets its own.
+        // Act & Assert: the default language of the registry, or else a language it falls back to, and the first
+        // language where the registry has no languages. A culture the registry shows gets its own.
         InlineLanguage.IndexOfShownLanguage(EnglishDutch, dutchFirst).ShouldBe(1);
         InlineLanguage.IndexOfShownLanguage(EnglishDutchBritish, britishFirst).ShouldBe(2);
         InlineLanguage.IndexOfShownLanguage(EnglishDutch, britishFirst).ShouldBe(0);
@@ -254,29 +279,29 @@ public sealed class GeneratedCodeTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void FindLanguageIndex_WithCurrentUICultureProvider_ShouldFollowItsCultureInPlaceOfCurrentUICulture()
+    public void GetLanguageIndex_WithCurrentUICultureProvider_ShouldFollowItsCultureInPlaceOfCurrentUICulture()
     {
         // Arrange: the thread is American, and the app keeps a Dutch user's culture somewhere else.
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert
         using (new ProvidedCultureScope("nl-NL"))
-            GeneratedCode.FindLanguageIndex(EnglishDutch).ShouldBe(1);
+            GeneratedCode.GetLanguageIndex(EnglishDutch).ShouldBe(1);
 
         // A provider that gives no culture leaves the text on the current UI culture.
         using (new ProvidedCultureScope(name: null))
-            GeneratedCode.FindLanguageIndex(EnglishDutch).ShouldBe(0);
+            GeneratedCode.GetLanguageIndex(EnglishDutch).ShouldBe(0);
     }
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void FindLanguageIndex_ShouldAllocateNothing()
+    public void GetLanguageIndex_ShouldAllocateNothing()
     {
         // Arrange: apart from the tests that register sets, which make the next read build the registry anew.
         using var _ = new CulturesScope("nl-NL");
 
         // Act: per 10,000 calls.
-        var allocated = GeneratedSetsTests.Allocated(static () => GeneratedCode.FindLanguageIndex(EnglishDutch)) / 10_000;
+        var allocated = GeneratedSetsTests.Allocated(static () => GeneratedCode.GetLanguageIndex(EnglishDutch)) / 10_000;
 
         // Assert
         allocated.ShouldBe(0);
@@ -304,19 +329,19 @@ public sealed class GeneratedCodeTests
     public void GetKeyedValue_ShouldGiveTheValueOfTheParameter()
     {
         // Arrange & Act & Assert: by its position, as its own type, and null where the type allows it.
-        GeneratedCode.GetKeyedValue<int>("Items", [3, "Idioma"], index: 0, count: 2, "count").ShouldBe(3);
-        GeneratedCode.GetKeyedValue<string>("Items", [3, "Idioma"], index: 1, count: 2, "shop").ShouldBe("Idioma");
-        GeneratedCode.GetKeyedValue<string?>("Greeting", [null], index: 0, count: 1, "name").ShouldBeNull();
-        GeneratedCode.GetKeyedValue<int?>("Items", [null], index: 0, count: 1, "count").ShouldBeNull();
-        GeneratedCode.GetKeyedValue<object>("Items", [3], index: 0, count: 1, "count").ShouldBe(3);
+        GeneratedCode.GetKeyedValue<int>("Items", [3, "Idioma"], index: 0, count: 2, "count", acceptsNull: true).ShouldBe(3);
+        GeneratedCode.GetKeyedValue<string>("Items", [3, "Idioma"], index: 1, count: 2, "shop", acceptsNull: false).ShouldBe("Idioma");
+        GeneratedCode.GetKeyedValue<string?>("Greeting", [null], index: 0, count: 1, "name", acceptsNull: true).ShouldBeNull();
+        GeneratedCode.GetKeyedValue<int?>("Items", [null], index: 0, count: 1, "count", acceptsNull: true).ShouldBeNull();
+        GeneratedCode.GetKeyedValue<object>("Items", [3], index: 0, count: 1, "count", acceptsNull: false).ShouldBe(3);
     }
 
     [Test]
     public void GetKeyedValue_ShouldRefuseAnotherNumberOfValuesThanTheTextTakes()
     {
         // Arrange & Act
-        var tooFew = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", [], index: 0, count: 2, "count"));
-        var tooMany = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<string>("Greeting", ["Anna", "Max"], index: 0, count: 1, "name"));
+        var tooFew = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", [], index: 0, count: 2, "count", acceptsNull: true));
+        var tooMany = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<string>("Greeting", ["Anna", "Max"], index: 0, count: 1, "name", acceptsNull: false));
 
         // Assert
         tooFew.ParamName.ShouldBe("values");
@@ -328,14 +353,25 @@ public sealed class GeneratedCodeTests
     public void GetKeyedValue_ShouldRefuseValueOfAnotherTypeWithoutConvertingIt()
     {
         // Arrange & Act: an int for a long, and null for a type that has none.
-        var otherType = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<long>("Items", [3], index: 0, count: 1, "count"));
-        var noValue = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", [null], index: 0, count: 1, "count"));
+        var otherType = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<long>("Items", [3], index: 0, count: 1, "count", acceptsNull: true));
+        var noValue = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", [null], index: 0, count: 1, "count", acceptsNull: true));
 
         // Assert
         otherType.ParamName.ShouldBe("values");
         otherType.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int64' for 'count', but a value of type 'System.Int32' was passed.");
         otherType.Message.ShouldContain("Pass a value of that type, because a value isn't converted.");
-        noValue.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', but null was passed.");
+        noValue.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', which isn't nullable, but null was passed.");
+    }
+
+    [Test]
+    public void GetKeyedValue_ForReferenceTypeThatIsNotNullable_ShouldRefuseNull()
+    {
+        // Arrange & Act: a string, which isn't nullable, where the method of the set would read the value without a check.
+        var refused = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<string>("Greeting", [null], index: 0, count: 1, "name", acceptsNull: false));
+
+        // Assert
+        refused.ParamName.ShouldBe("values");
+        refused.Message.ShouldStartWith("The text 'Greeting' takes a value of type 'System.String' for 'name', which isn't nullable, but null was passed. Pass a value that isn't null.");
     }
 
     [Test]
@@ -345,7 +381,7 @@ public sealed class GeneratedCodeTests
         const string cart = "Cart";
 
         // Act
-        var value = GeneratedCode.GetKeyedValue<string>("Removed", [cart], index: 0, count: 1, "what");
+        var value = GeneratedCode.GetKeyedValue<string>("Removed", [cart], index: 0, count: 1, "what", acceptsNull: false);
 
         // Assert
         value.ShouldBeSameAs(cart);
@@ -356,8 +392,8 @@ public sealed class GeneratedCodeTests
     {
         // Arrange & Act: a string for a number isn't parsed, and a string for a type it converts to in code isn't
         // converted.
-        var forNumber = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", ["3"], index: 0, count: 1, "count"));
-        var forLabel = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<Label>("Removed", ["Cart"], index: 0, count: 1, "what"));
+        var forNumber = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<int>("Items", ["3"], index: 0, count: 1, "count", acceptsNull: true));
+        var forLabel = Should.Throw<ArgumentException>(() => GeneratedCode.GetKeyedValue<Label>("Removed", ["Cart"], index: 0, count: 1, "what", acceptsNull: false));
 
         // Assert
         forNumber.Message.ShouldStartWith("The text 'Items' takes a value of type 'System.Int32' for 'count', but a value of type 'System.String' was passed.");
@@ -365,15 +401,13 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
-    public void CreateUnknownKeyException_ShouldNameTheKeyAndTheClass()
+    public void CreateNullKeyException_ShouldNameTheKeyParameter()
     {
         // Arrange & Act
-        var unknown = GeneratedCode.CreateUnknownKeyException<IGeneratedCodeLocalization>("Crat", "ShopLocalization");
-        var missing = GeneratedCode.CreateUnknownKeyException<IGeneratedCodeLocalization>(key: null, "ShopLocalization");
+        var exception = GeneratedCode.CreateNullKeyException<IGeneratedCodeLocalization>(key: null);
 
         // Assert
-        unknown.ShouldBeOfType<KeyNotFoundException>().Message.ShouldStartWith("'ShopLocalization' has no text with the key 'Crat'.");
-        missing.ShouldBeOfType<ArgumentNullException>().ParamName.ShouldBe("key");
+        exception.ParamName.ShouldBe("key");
     }
 
     [Test]
@@ -462,14 +496,14 @@ public sealed class GeneratedCodeTests
         // Act: the first call looks the set up, and the next one words the text with the set kept for it.
         var first = CulturesOf("Ada");
         var second = CulturesOf("Max");
-        var resolved = ResolvedSets<ICulturesLocalization>.Find(CultureInfo.GetCultureInfo("fr-FR"), count: 2);
+        var resolved = ResolvedSets<ICulturesLocalization>.Get(CultureInfo.GetCultureInfo("fr-FR"), count: 2);
 
         // Assert: in the UI culture of English, with the values formatted for the reader.
         var valuesCulture = provided ?? thread;
 
         first.ShouldBe($"Ada: en/{valuesCulture}");
         second.ShouldBe($"Max: en/{valuesCulture}");
-        resolved.FindFallback(1).ShouldNotBeNull().Culture.ShouldNotBeNull().Name.ShouldBe("en");
+        resolved.GetFallback(1).ShouldNotBeNull().Culture.ShouldNotBeNull().Name.ShouldBe("en");
         resolved.SetsForValues[1].ShouldBeNull();
         CultureInfo.CurrentUICulture.Name.ShouldBe(thread);
     }
@@ -486,7 +520,7 @@ public sealed class GeneratedCodeTests
         // Act: the first call looks the set up, and the next one words the text with the set kept for it.
         var first = CulturesOf("Ada");
         var second = CulturesOf("Max");
-        var kept = ResolvedSets<ICulturesLocalization>.Find(CultureInfo.GetCultureInfo("en-GB"), count: 2).SetsForValues[1];
+        var kept = ResolvedSets<ICulturesLocalization>.Get(CultureInfo.GetCultureInfo("en-GB"), count: 2).SetsForValues[1];
 
         // Assert: both in the provider's culture, and the thread's cultures back afterwards.
         first.ShouldBe("Ada: en-GB/en-GB");
@@ -504,7 +538,7 @@ public sealed class GeneratedCodeTests
         // this machine, as under invariant globalization. No other test reads for fr-BE, so none finds this fallback.
         using var _ = new CulturesScope("en-US");
         using var provider = new ProvidedCultureScope("fr-BE");
-        var resolved = ResolvedSets<ICulturesLocalization>.Find(CultureInfo.GetCultureInfo("fr-BE"), count: 2);
+        var resolved = ResolvedSets<ICulturesLocalization>.Get(CultureInfo.GetCultureInfo("fr-BE"), count: 2);
         resolved.KeepFallback(1, GeneratedCode.GetDefaultSet<CulturesLocalizationEn>(), culture: null);
 
         // Act
@@ -528,9 +562,9 @@ public sealed class GeneratedCodeTests
         // Assert: worded, and no set is kept or read outside the texts.
         wording.ShouldBe("Checkout");
         negative.ShouldBe("Checkout");
-        GeneratedCode.FindSet<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
-        GeneratedCode.FindSet<IGeneratedCodeLocalization>(-1, 3).ShouldBeNull();
-        GeneratedCode.FindSetForValues<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
+        GeneratedCode.GetSet<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
+        GeneratedCode.GetSet<IGeneratedCodeLocalization>(-1, 3).ShouldBeNull();
+        GeneratedCode.GetSetForValues<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
     }
 
     [Test]
@@ -552,14 +586,14 @@ public sealed class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert: asking for a kept set creates none.
-        GeneratedCode.FindSet<ILazyLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetSet<ILazyLocalization>(0, 1).ShouldBeNull();
         LazyLocalizationEn.Created.ShouldBe(0);
 
         // The first text that needs the set creates it, and every text after it reads the same one.
         GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
         GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
         LazyLocalizationEn.Created.ShouldBe(1);
-        GeneratedCode.FindSet<ILazyLocalization>(0, 1).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
+        GeneratedCode.GetSet<ILazyLocalization>(0, 1).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
     }
 
     [Test]
@@ -569,7 +603,7 @@ public sealed class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert: asking for a kept set creates none, so the generated class is there for every text.
-        GeneratedCode.FindSet<IThrowingLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetSet<IThrowingLocalization>(0, 1).ShouldBeNull();
         ThrowingLocalizationEn.Created.ShouldBe(0);
 
         // What needs the set says which set threw, with the set's own exception inside, and so does every read after
@@ -581,6 +615,6 @@ public sealed class GeneratedCodeTests
         first.InnerException.ShouldBeOfType<FormatException>().Message.ShouldBe("No shop name.");
         second.Message.ShouldBe(first.Message);
         ThrowingLocalizationEn.Created.ShouldBe(2);
-        GeneratedCode.FindSet<IThrowingLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetSet<IThrowingLocalization>(0, 1).ShouldBeNull();
     }
 }

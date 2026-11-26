@@ -22,7 +22,7 @@ public sealed partial class LocalizationRegistryTests
 
         // Assert
         var current = LocalizationRegistry.Current;
-        current.FindSet<IRegistryTierLocalization>(Culture("nl-NL")).ShouldBeSameAs(appOverride);
+        current.GetByCulture<IRegistryTierLocalization>(Culture("nl-NL")).ShouldBeSameAs(appOverride);
         current.AllSets.IndexOf(libraryDefault).ShouldBeLessThan(current.AllSets.IndexOf(appOverride));
     }
 
@@ -37,11 +37,11 @@ public sealed partial class LocalizationRegistryTests
 
         // Act & Assert: the later set wins; registering a type again replaces its instance and makes it the last.
         LocalizationRegistry.Register(first, second);
-        LocalizationRegistry.Find<IRegistryOrderLocalization>(Culture("nl")).ShouldBeSameAs(second);
+        LocalizationRegistry.GetLocalizationSet<IRegistryOrderLocalization>(Culture("nl")).ShouldBeSameAs(second);
 
         LocalizationRegistry.Register(firstAgain);
         var current = LocalizationRegistry.Current;
-        current.FindSet<IRegistryOrderLocalization>(Culture("nl")).ShouldBeSameAs(firstAgain);
+        current.GetByCulture<IRegistryOrderLocalization>(Culture("nl")).ShouldBeSameAs(firstAgain);
         current.AllSets.Count(set => set is RegistryOrderFirstLocalizationNl).ShouldBe(1);
     }
 
@@ -108,7 +108,7 @@ public sealed partial class LocalizationRegistryTests
         LocalizationRegistry.Register<RegistryGenericLocalizationNl>();
 
         // Assert
-        LocalizationRegistry.Find<IRegistryGenericLocalization>(Culture("nl")).ShouldBeOfType<RegistryGenericLocalizationNl>();
+        LocalizationRegistry.GetLocalizationSet<IRegistryGenericLocalization>(Culture("nl")).ShouldBeOfType<RegistryGenericLocalizationNl>();
     }
 
     [Test]
@@ -131,12 +131,12 @@ public sealed partial class LocalizationRegistryTests
         var before = RegistryLazyLocalizationNl.Created;
 
         // Act
-        Internals.GeneratedCode.RegisterSets(asDefaults: true, (typeof(RegistryLazyLocalizationNl), static () => new RegistryLazyLocalizationNl()));
+        GeneratedCode.RegisterSets(asDefaults: true, (typeof(RegistryLazyLocalizationNl), static () => new RegistryLazyLocalizationNl()));
         var createdAtRegistration = RegistryLazyLocalizationNl.Created - before;
 
-        var found = LocalizationRegistry.Find<IRegistryLazyLocalization>(Culture("nl"));
+        var found = LocalizationRegistry.GetLocalizationSet<IRegistryLazyLocalization>(Culture("nl"));
         LocalizationRegistry.Register(new RegistryConfiguredLocalization("it"));
-        var foundAgain = LocalizationRegistry.Find<IRegistryLazyLocalization>(Culture("nl"));
+        var foundAgain = LocalizationRegistry.GetLocalizationSet<IRegistryLazyLocalization>(Culture("nl"));
 
         // Assert: created at the first read, under the language of its name, and kept when the registry is built again.
         createdAtRegistration.ShouldBe(0);
@@ -160,7 +160,9 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
+    // Alone, because any test that reads the sets of the app, or builds the registry anew, creates this set too, and
+    // would take its one failure.
+    [NotInParallel]
     public void RegisterSets_WhoseConstructorThrowsOnce_ShouldFailOnlyTheTextsOfItsContractAndOnlyOnce()
     {
         // Arrange: recorded as the build records a set, so the registry files it under its language without creating it.
@@ -175,9 +177,9 @@ public sealed partial class LocalizationRegistryTests
 
         // Act: the language an inline text shows, a set of another contract, and the set itself, twice.
         var inlineLanguage = InlineLanguage.IndexOfShownLanguage(["en", "nl"], LocalizationRegistry.Current.Resolve(dutch));
-        var other = LocalizationRegistry.Find<IRegistrySteadyLocalization>(dutch);
-        var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Find<IRegistryFlakyLocalization>(dutch));
-        var retried = LocalizationRegistry.Find<IRegistryFlakyLocalization>(dutch);
+        var other = LocalizationRegistry.GetLocalizationSet<IRegistrySteadyLocalization>(dutch);
+        var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.GetLocalizationSet<IRegistryFlakyLocalization>(dutch));
+        var retried = LocalizationRegistry.GetLocalizationSet<IRegistryFlakyLocalization>(dutch);
 
         // Assert: only the texts of its contract fail, and the next one creates the set again.
         inlineLanguage.ShouldBe(1);
@@ -188,7 +190,8 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
+    // Alone, for the reason above: building the registry anew creates this set to file it.
+    [NotInParallel]
     public void RegisterSets_WhoseConstructorThrowsBeforeItGivesItsLanguage_ShouldFailOnlyTheTextsOfItsContract()
     {
         // Arrange: a set that gives its language itself, which the registry creates when it's built, to file it. That
@@ -202,10 +205,10 @@ public sealed partial class LocalizationRegistryTests
         var dutch = Culture("nl");
 
         // Act: the second text of its contract creates it, and the registry files it for the texts after that.
-        var other = LocalizationRegistry.Find<IRegistrySteadyLocalization>(dutch);
-        var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Find<IRegistryFlakyCodedLocalization>(dutch));
-        _ = LocalizationRegistry.Find<IRegistryFlakyCodedLocalization>(dutch);
-        var filed = LocalizationRegistry.Find<IRegistryFlakyCodedLocalization>(dutch);
+        var other = LocalizationRegistry.GetLocalizationSet<IRegistrySteadyLocalization>(dutch);
+        var failure = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.GetLocalizationSet<IRegistryFlakyCodedLocalization>(dutch));
+        _ = LocalizationRegistry.GetLocalizationSet<IRegistryFlakyCodedLocalization>(dutch);
+        var filed = LocalizationRegistry.GetLocalizationSet<IRegistryFlakyCodedLocalization>(dutch);
 
         // Assert
         other.ShouldBeOfType<RegistrySteadyLocalizationNl>();
@@ -300,7 +303,7 @@ public sealed partial class LocalizationRegistryTests
                 (typeof(RegistrySteadyLocalizationNl), static () => new RegistrySteadyLocalizationNl()));
 
             // Act
-            other = Should.NotThrow(() => LocalizationRegistry.Find<IRegistrySteadyLocalization>(dutch));
+            other = Should.NotThrow(() => LocalizationRegistry.GetLocalizationSet<IRegistrySteadyLocalization>(dutch));
             failure = Should.Throw<InvalidOperationException>(static () => ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>());
         }
         finally
@@ -332,7 +335,7 @@ public sealed partial class LocalizationRegistryTests
         using var cultures = new TestHelpers.CulturesScope(dutch, dutch);
 
         // Act
-        var found = LocalizationRegistry.Find<IRegistryReaderLocalization>(dutch);
+        var found = LocalizationRegistry.GetLocalizationSet<IRegistryReaderLocalization>(dutch);
 
         // Assert: filed at the first read, with the text it read. That's the Dutch wording, unless a test beside this
         // one built the registry first, for an English reader.
@@ -398,7 +401,7 @@ public sealed partial class LocalizationRegistryTests
         // without a lock, so reads and registrations run side by side. Two sets of one language and contract, which the
         // writer registers one after the other, so that either may be the last.
         // The text is read as a property of a generated class reads it, which keeps the set it found per registry.
-        static string Read() => GeneratedCode.FindSet<IRegistryConcurrentLocalization>(0, 1)?.Name
+        static string Read() => GeneratedCode.GetSet<IRegistryConcurrentLocalization>(0, 1)?.Name
             ?? GeneratedCode.ResolveWording<IRegistryConcurrentLocalization, RegistryConcurrentLocalizationEn>(0, 1, "Name", static set => set.Name);
 
         var first = new RegistryConcurrentFirstLocalizationNl();
@@ -438,7 +441,7 @@ public sealed partial class LocalizationRegistryTests
                 try
                 {
                     var wording = Read();
-                    var set = LocalizationRegistry.Find<IRegistryConcurrentLocalization>(dutch);
+                    var set = LocalizationRegistry.GetLocalizationSet<IRegistryConcurrentLocalization>(dutch);
 
                     if (wording is not ("Eerste" or "Tweede"))
                         problems.Add($"wording '{wording}'");

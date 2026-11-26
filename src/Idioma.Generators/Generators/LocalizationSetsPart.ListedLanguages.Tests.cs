@@ -197,6 +197,38 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
+    [Arguments("ShopLocalizationEnGb", "If it's meant for 'en-GB'", "Otherwise remove the set, because 'gb' is no language.")]
+    [Arguments("ShopLocalizationQq", "'qq' is no language", "so name the set after one that the attribute lists, or remove the set.")]
+    public void SetNamedAfterNoLanguage_ShouldReportLOC202WithoutAdvisingToListIt(string name, string advice, string otherwise)
+    {
+        // Arrange & Act: en-GB is not declared, so the last two letters count, and 'gb' is no language. Listed, it would
+        // only give LOC104.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            {{DutchSet}}
+
+            public sealed class {{name}} : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert: and the fix lists nothing but a code the name was meant for.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
+        diagnostic.GetMessage().ShouldContain(advice);
+        diagnostic.GetMessage().ShouldEndWith(otherwise);
+        diagnostic.GetMessage().ShouldNotContain("Otherwise add");
+        diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var suggested);
+        suggested.ShouldBe(name.EndsWith("EnGb", StringComparison.Ordinal) ? "en-GB" : null);
+    }
+
+    [Test]
     [Arguments("AdminUiNl")]
     [Arguments("MyAppNl")]
     public void SetWhoseNameEndsInWordAndUnlistedLanguage_ShouldReportLOC202WithoutGuessingLongerCode(string name)

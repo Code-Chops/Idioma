@@ -2,6 +2,9 @@
 #nullable enable
 #pragma warning disable CS0612, CS0618 // Only generated code calls GeneratedCode and applies InlineTexts.
 
+using System.CodeDom.Compiler;
+using System.Diagnostics.CodeAnalysis;
+
 // The texts below carry their wording themselves, as an inline text does.
 [assembly: CodeChops.Idioma.Internals.InlineTextsAttribute]
 
@@ -12,11 +15,12 @@ namespace CodeChops.Idioma.Generated
     /// The assembly's registrar calls it.
     /// </summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
     internal static class LocalizedMembers_TestAssembly
     {
         internal static void Register()
         {
-            CodeChops.Idioma.Internals.GeneratedCode.RecordMemberTexts(OwnLocalizedMembers.Languages, static (type, member) => OwnLocalizedMembers.Find(type, member));
+            CodeChops.Idioma.Internals.GeneratedCode.RecordMemberTexts(GeneratedLocalizedText.Languages, static (type, member) => OwnLocalizedMembers.Get(type, member));
         }
     }
 }
@@ -25,23 +29,20 @@ namespace CodeChops.Idioma.Generated
 /// Finds the texts of this assembly's members marked <c>[Localized]</c>. This class is outside the namespace above, so a type's
 /// name is resolved from the global namespace, not from that namespace first.
 /// </summary>
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
 file static class OwnLocalizedMembers
 {
     /// <summary>
-    /// The languages of this assembly, the default first. Each text below has its wording in this order.
+    /// The wording of a text for the current UI culture. Each text below has its wording in the order of
+    /// <see cref="GeneratedLocalizedText.Languages"/>, the languages of this assembly.
     /// </summary>
-    internal static readonly string[] Languages = ["en", "nl"];
+    internal static string Word(string[] wordings) => wordings[CodeChops.Idioma.Internals.GeneratedCode.GetLanguageIndex(GeneratedLocalizedText.Languages)];
 
     /// <summary>
-    /// The wording of a text for the current UI culture.
-    /// </summary>
-    internal static string Word(string[] wordings) => wordings[CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(Languages)];
-
-    /// <summary>
-    /// The wording of a member of a type per language, in the order of <see cref="Languages"/>, or the type's own for a member that is
+    /// The wording of a member of a type per language, in the order of <see cref="GeneratedLocalizedText.Languages"/>, or the type's own for a member that is
     /// <see langword="null"/>.
     /// </summary>
-    internal static string[]? Find(System.Type type, string? member)
+    internal static string[]? Get(System.Type type, string? member)
     {
         if (type == typeof(Shop.Domain.Address))
         {
@@ -71,6 +72,7 @@ file static class OwnLocalizedMembers
 /// <summary>
 /// The texts of <c>Shop.Domain.Address</c>.
 /// </summary>
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
 file static class LocalizedTexts0
 {
     internal static readonly string[] Text0 = ["City", "Plaats"];
@@ -80,13 +82,14 @@ file static class LocalizedTexts0
 /// <summary>
 /// The texts of <c>Shop.Domain.PackageStatus</c>.
 /// </summary>
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
 file static class LocalizedTexts1
 {
     internal static readonly string[] OwnText = ["Status", "Status"];
     internal static readonly string[] Text0 = ["Assigned", "Toegewezen"];
     internal static readonly string[] Text1 = ["Picked", "Gepickt"];
 
-    internal static string Get(Shop.Domain.PackageStatus value) => CodeChops.Idioma.Internals.GeneratedCode.FindEnumText(value) ?? value switch
+    internal static string Get(Shop.Domain.PackageStatus value) => CodeChops.Idioma.Internals.GeneratedCode.GetEnumText(value) ?? value switch
     {
         Shop.Domain.PackageStatus.Assigned => OwnLocalizedMembers.Word(Text0),
         Shop.Domain.PackageStatus.Picked => OwnLocalizedMembers.Word(Text1),
@@ -99,6 +102,7 @@ namespace Shop.Domain
     /// <summary>
     /// Gives a value of <see cref="PackageStatus"/> its text, as in <c>status.GetText()</c>.
     /// </summary>
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
     public static class PackageStatusLocalizedExtensions
     {
         /// <param name="value">The value to give the text of.</param>

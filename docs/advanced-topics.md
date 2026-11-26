@@ -1,12 +1,13 @@
 # Advanced topics
 
-The [getting started guide](../README.md#getting-started) covers what most apps write. This page explains what happens behind the texts you write, and covers the tasks the guide leaves out:
+The [getting started guide](../README.md#getting-started) covers what most apps need. This page explains what happens behind the texts you write, and covers the tasks the guide leaves out:
 
 - [Fallback order](#fallback-order): which wording a user sees, and [where the user's culture comes from](#the-current-culture)
 - [Texts with parameters](#texts-with-parameters): what a call does, and keeping a public method of a set from becoming a text
-- [What the source generator writes](#what-the-source-generator-writes), [getting a text by its key](#getting-a-text-by-its-key), and [a contract you write yourself](#a-contract-you-write-yourself)
+- [Getting a text by its key](#getting-a-text-by-its-key): for a key your code only has at run time, such as one from a database
 - [Registration](#registration): how sets register, and registering a set by hand
-- [Reading sets yourself](#reading-sets-yourself): the wording of one set, and [testing](#testing)
+- [Reading sets yourself](#reading-sets-yourself): the wording of one set, whatever the user's culture
+- [Native AOT](#native-aot): the languages of an app published without globalization data
 
 Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
@@ -151,88 +152,19 @@ What else to know:
 - **Inline texts.** An inline text takes a value as you write it: `LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. Every language uses the values that the wording of the default language shows in its interpolated strings (`LOC402`). C# builds the wording of every language before `Inline` picks one. So write a text with a costly value as a method of a set, which builds one wording.
 - **Placeholders.** A wording that holds a format-string placeholder, such as `{0}` or `{0:N2}`, gets build warning `LOC403`, in a set and in an inline text. A text shows its wording as written, so nothing would fill the placeholder in. Braces around anything but a number are text. A string passed to a method, such as the format of `string.Format`, gets no warning, because the method may fill the placeholder in. Neither does a text that a validation attribute names as its error message, which it fills in ([details](coming-from-resx.md#validation-and-display-attributes)).
 
-## What the source generator writes
+## Getting a text by its key
 
-`LocalizedText.Inline` gets one required parameter per declared language, named after it: `enGb` for `en-GB`. The attribute `[Localized]` gets the same parameters ([Attributes](attributes.md)).
-
-From the default-language set, `ShopLocalizationEn` in the namespace `MyApp.Localization`, the generator writes the generated class `ShopLocalization` and the contract `IShopLocalization`. In outline:
+`ShopLocalization.GetTextByKey` gives the text with a key. It's for a key your code only has at run time, such as one from a database. Where you know the text, write `ShopLocalization.Checkout`, which the build checks.
 
 ```csharp
-namespace MyApp.Localization;
-
-public static partial class ShopLocalization
-{
-    public static string Cart => ...;     // The wording of the set for the user's language
-    public static string Checkout => ...;
-
-    public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => ...;
-    public static bool TryGetTextByKey(string key, out string? text, params ReadOnlySpan<object?> values) => ...;
-    public static ImmutableArray<string> TextKeys => ...;
-}
-
-[LocalizationContract]
-public interface IShopLocalization
-{
-    string Cart { get; }
-    string Checkout { get; }
-}
+string? cart = ShopLocalization.GetTextByKey("Cart"); // What ShopLocalization.Cart gives
 ```
 
-Every set lists `ILocalizationSet` and the contract, the default-language set too: `class ShopLocalizationNl : ILocalizationSet, IShopLocalization`. The contract doesn't derive from `ILocalizationSet`, so neither entry is redundant. The build rejects a set without its contract (`LOC204`), and your IDE adds it.
-
-An interface of your own named `IShopLocalization`, next to `ShopLocalizationEn`, is build error `LOC200`. The generator writes the contract under that name.
-
-A text always has wording, so the contract declares it as `string`. A set that returns `string?` for a text gets compiler warning `CS8766`, because it doesn't match the contract. Return a `string`.
-
-The contract takes the texts the default-language set declares itself, overrides included. A text it only inherits from a class of its assembly would be left out, so that's build error `LOC303`. A text that only another language declares isn't in the contract either, so no user sees it. The build warns about it (`LOC304`).
-
-Only a class that implements `ILocalizationSet` is a set, whatever its name. A class that implements only a contract, such as a test double, isn't one, so the build doesn't read a language from its name. A set that derives from another set, such as a regional one, implements `ILocalizationSet` through that set.
-
-Each generated text shows its wording in every language and links to it. Hovering over `ShopLocalization.Checkout` shows `nl: Afrekenen`, and you can jump from there to `ShopLocalizationNl.Checkout`. The generated class is partial, so a helper can sit next to the texts. Besides the texts it holds only what gives a [text by its key](#getting-a-text-by-its-key), which is `GetTextByKey`, `TryGetTextByKey` and `TextKeys`, and `GetTextByValue` and `GetText` in a [set of an enum](enums.md#a-set-of-the-enum). So a text can take any name except those and the name of the class itself (`LOC300`).
-
-A text marked `[Obsolete]` or `[Experimental]` in the default-language set is marked the same in the generated class. So code that shows it gets the warning or the error, as code that reads the set does.
-
-Each generated text is a `string` property, which finds the set for the user's language on every read. The package keeps that set per culture, so a read is one call of the set's own property and allocates nothing ([Performance](performance.md)).
-
-The key of a text is its name, `Checkout` here. `GetTextByKey` takes it.
-
-### Getting a text by its key
-
-`GetTextByKey` gives the text with a key. It's for a key your code only has at run time, such as one from a database. Where you know the text, write `ShopLocalization.Checkout`, which the build checks.
-
-```csharp
-string cart = ShopLocalization.GetTextByKey("Cart"); // What ShopLocalization.Cart gives
-```
-
-- **The key.** It's the name of the text, in the same letter case. A key no text has throws `KeyNotFoundException`.
-- **A key that may be unknown.** `TryGetTextByKey` gives `false` for it, where `GetTextByKey` throws: `ShopLocalization.TryGetTextByKey(key, out var text)`. Use it for a key from a database, which a text may have lost since it was stored.
+- **The key.** It's the name of the text, in the same letter case.
+- **An unknown key.** It gives `null`, such as for a key from a database whose text was renamed since it was stored. Show something else in its place: `ShopLocalization.GetTextByKey(key) ?? key`.
 - **Every key.** `ShopLocalization.TextKeys` lists them, sorted by name in ordinal order, as `StringComparer.Ordinal` sorts them. An app can check its stored keys against it at startup.
-- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many. `TryGetTextByKey` throws for them too, because wrong values are a mistake in the call and not in the key.
-- **The result.** It's the wording for the user's language, a `string`, as the text itself gives it.
-
-### A contract you write yourself
-
-The generator writes the contract from the default-language set. You can write it yourself instead, as an interface that derives from `ILocalizationSet`. Every set then lists it, the default-language set too:
-
-```csharp
-public interface IGridLocalization : ILocalizationSet
-{
-    string First { get; }
-    string Page(int number);
-}
-
-public class GridLocalizationEn : ILocalizationSet, IGridLocalization
-{
-    public string First => "First";
-    public string Page(int number) => $"Page {number}";
-}
-```
-
-What to know:
-
-- **The build checks it as it checks a generated contract.** Each of your languages needs a set (`LOC201`), and every language uses the values the default-language set shows (`LOC402`).
-- **There's no generated class.** So there's no `GridLocalization.First`, and no fallback to your default language. Read a text through the set of the user's culture: `LocalizationRegistry.Find<IGridLocalization>(CultureInfo.CurrentUICulture)?.First`, which is `null` for a culture without a set ([Reading sets yourself](#reading-sets-yourself)).
-- **Its sets are registered automatically**, as the sets of a generated contract are.
+- **The values.** A text with parameters takes its values after the key, in the order of its parameters: `ShopLocalization.GetTextByKey("ItemsInCart", cart.Count, shop.Name)`. Each value has to be of the type of its parameter, because a value isn't converted. An `int` for a `long` throws `ArgumentException`, and so does a missing value or one too many. So does `null` for a parameter that isn't nullable, such as `string name`. Wrong values throw, where an unknown key doesn't, because they're a mistake in the call and not in the key. So does a key that is `null`.
+- **The result.** It's the wording for the user's language, as the text itself gives it.
 
 ## Registration
 
@@ -291,18 +223,32 @@ What to know:
 
 ## Reading sets yourself
 
-Besides registering, `LocalizationRegistry` reads a set directly: `LocalizationRegistry.Find<IShopLocalization>(culture)`.
+Besides registering, `LocalizationRegistry` reads a set directly: `LocalizationRegistry.GetLocalizationSet<IShopLocalization>(culture)`.
 
 ```csharp
 var dutch = CultureInfo.GetCultureInfo("nl");
 
 // The Dutch set itself, whatever the current UI culture
-string? checkout = LocalizationRegistry.Find<IShopLocalization>(dutch)?.Checkout;
+string? checkout = LocalizationRegistry.GetLocalizationSet<IShopLocalization>(dutch)?.Checkout;
 ```
 
-`Find` gives the set of the culture, or else of its parent culture, as the `nl` set for `nl-NL`. It doesn't fall back to a default language, as a text does ([fallback order](#fallback-order)). So a culture without a set gives `null`. The texts of a generated class, such as `ShopLocalization.Checkout`, read the same sets.
+`GetLocalizationSet` gives the set of the culture, or else of its parent culture, as the `nl` set for `nl-NL`. It doesn't fall back to a default language, as a text does ([fallback order](#fallback-order)). So a culture without a set gives `null`. The texts of a generated class, such as `ShopLocalization.Checkout`, read the same sets.
 
-### Testing
+## Native AOT
+
+Idioma is safe to trim and to publish with Native AOT. It finds no member by reflection, because the source generator writes every lookup as code.
+
+Check one setting of your project. The templates of a Native AOT app, such as `dotnet new console --aot` and `dotnet new webapiaot`, set `<InvariantGlobalization>true</InvariantGlobalization>`. Such an app has no cultures but the invariant one:
+
+- Every user sees your default language, because the user's culture is the invariant one.
+- `CultureInfo.GetCultureInfo("nl")` throws a `CultureNotFoundException`, and so does `app.UseRequestLocalization("en", "nl")`.
+
+Choose one of two settings in the project file:
+
+- `<InvariantGlobalization>false</InvariantGlobalization>` gives the app every culture, with its dates and numbers. On Linux, the app then needs the ICU libraries on the machine.
+- `<PredefinedCulturesOnly>false</PredefinedCulturesOnly>`, next to invariant globalization, lets the app create a culture by its name. Texts then follow the user's language, but dates and numbers keep the invariant format, as in `1,234.50`. That suits an app whose texts show no dates or numbers.
+
+## Testing
 
 A test reads a text as your app does, so it gets the wording your sets give:
 
@@ -317,8 +263,6 @@ What to know:
 
 - **A test project declares its languages.** It's an app, so it needs `[assembly: SupportedLanguages]` ([LOC103](build-errors/LOC1XX-languages.md#loc103)). List the languages your tests read, because the languages of the app it tests don't count in the test process.
 - **Choose the culture with `UseCulture`.** It flows with the test, so tests that run in parallel each keep their own culture. Setting `CultureInfo.CurrentUICulture` works too, unless your app sets `CurrentUICultureProvider`, which then wins.
-- **A text always reads the sets of the whole app.** A test can't give `ShopLocalization.Checkout` a registry of its own. To read the set a culture gets, use `LocalizationRegistry.Find<IShopLocalization>(culture)`.
+- **A text always reads the sets of the whole app.** A test can't give `ShopLocalization.Checkout` a registry of its own. To read the set a culture gets, use `LocalizationRegistry.GetLocalizationSet<IShopLocalization>(culture)`.
 - **`LocalizationRegistry.Register` is for the whole process and has no undo.** A set a test registers stays for every test after it, also those that run in parallel. Register in a fixture that runs once, or keep such tests out of parallel runs.
 - **To check one set, create it.** `new ShopLocalizationNl().Checkout` needs no registry and no culture.
-
-A set of a test project may implement the internal contract of the library it tests, which it sees through `InternalsVisibleTo`. It translates that contract, as a set of a public contract does.

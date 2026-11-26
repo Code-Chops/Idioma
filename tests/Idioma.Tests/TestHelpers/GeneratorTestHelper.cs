@@ -394,6 +394,7 @@ internal static class GeneratorTestHelper
             [
                 new LocalizedTextFactoryGenerator().AsSourceGenerator(),
                 new LocalizationGenerator().AsSourceGenerator(),
+                new ReferencedVersionsGenerator().AsSourceGenerator(),
             ],
             parseOptions: parseOptions);
     }

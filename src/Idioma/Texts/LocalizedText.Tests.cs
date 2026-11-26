@@ -4,7 +4,7 @@ using CodeChops.Idioma.Tests.TestHelpers;
 
 #region Fixture
 // Top-level, because the generated code names these types from the top level of the assembly. The languages are those
-// of GeneratedSets.Tests.cs: en and nl.
+// of LocalizationGenerator.GeneratedSets.Tests.cs: en and nl.
 namespace CodeChops.Idioma.Tests.Members
 {
     /// <summary>
@@ -57,6 +57,7 @@ namespace CodeChops.Idioma.Tests.Members
 
     public sealed class BusinessAddress : Address;
 
+    [Localized(en: "Page", nl: "Pagina")]
     public sealed class Page<T>
     {
         [Localized(en: "Items", nl: "Regels")]
@@ -105,7 +106,7 @@ namespace CodeChops.Idioma.Tests.Members
 
 namespace CodeChops.Idioma.Tests
 {
-    using CodeChops.Idioma.Tests.Members;
+    using Members;
 
     /// <summary>
     /// Tests for the texts of members marked <c>[Localized]</c>: <c>LocalizedText.GetTextByMember</c> gives the
@@ -342,7 +343,19 @@ namespace CodeChops.Idioma.Tests
             LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
             LocalizedText.GetTextOfType(typeof(Address)).ShouldBe("Adres");
             LocalizedText.GetTextByMember(typeof(Address)).ShouldBe("Adres");
-            LocalizedText.GetTextOfType<Page<int>>().ShouldBeNull();
+        }
+
+        [Test]
+        public void GetTextOfType_OfTypeWithTypeArguments_ShouldGiveTheTextOfItsDefinition()
+        {
+            // Arrange
+            using var _ = new CulturesScope("nl-NL");
+
+            // Act & Assert: the definition itself, and two types with type arguments through every overload.
+            LocalizedText.GetTextOfType(typeof(Page<>)).ShouldBe("Pagina");
+            LocalizedText.GetTextOfType<Page<int>>().ShouldBe("Pagina");
+            LocalizedText.GetTextOfType(typeof(Page<Address>)).ShouldBe("Pagina");
+            LocalizedText.GetTextByMember(typeof(Page<Address>)).ShouldBe("Pagina");
         }
 
         [Test]

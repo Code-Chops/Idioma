@@ -47,7 +47,7 @@ public sealed partial class LocalizationSetsPartTests
     [Arguments("namespace Orders.Texts;", "Orders")]
     [Arguments("", "ResolveWording")]
     [Arguments("namespace TestApp;", "CodeChops")]
-    [Arguments("namespace TestApp;", "FindSet")]
+    [Arguments("namespace TestApp;", "GetSet")]
     [Arguments("namespace TestApp;", "ResolveWording")]
     [Arguments("namespace TestApp;", "ResolveKeyedWording")]
     public void TextNamedLikeNameGeneratedClassWrites_ShouldCompileWithResolvedCrefs(string @namespace, string text)
@@ -213,8 +213,8 @@ public sealed partial class LocalizationSetsPartTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
 
         // Assert
-        text.ShouldContain("public static new string Equals => FindSet<IFilterLocalization>(");
-        text.ShouldContain("public static string Contains => FindSet<IFilterLocalization>(");
+        text.ShouldContain("public static new string Equals => GetSet<IFilterLocalization>(");
+        text.ShouldContain("public static string Contains => GetSet<IFilterLocalization>(");
         warnings.ShouldBeEmpty();
         errors.ShouldBeEmpty();
     }

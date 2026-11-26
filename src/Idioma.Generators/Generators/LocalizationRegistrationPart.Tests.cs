@@ -276,11 +276,13 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """);
 
-        // Assert
+        // Assert: and its record holds its language alone. The base is never registered, so the set rewords nothing,
+        // and the registry never asks which texts it words itself.
         var text = GeneratedText(result);
         text.ShouldContain("RegisterSets(asDefaults: true,");
         text.ShouldNotContain("RegisterSets(asDefaults: false,");
         text.ShouldNotContain("ShopLocalizationBase");
+        text.ShouldContain("RecordSet<TestApp.ShopLocalizationDe>(\"de\");");
     }
 
     [Test]

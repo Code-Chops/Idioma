@@ -123,7 +123,7 @@ public sealed class HiddenTextAnalyzerTests
             """, ShopLibrary);
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'MyShopLocalizationEn.Total' hides 'ShopLocalizationEn.Total' instead of overriding it, so users of 'en' won't see its wording. Make 'ShopLocalizationEn.Total' virtual and override it, or list 'IShopLocalization' again next to 'ShopLocalizationEn'.");
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'MyShopLocalizationEn.Total' hides 'ShopLocalizationEn.Total' instead of overriding it, so users of 'en' won't see its wording. List 'IShopLocalization' again next to 'ShopLocalizationEn', because 'ShopLocalizationEn.Total' isn't virtual and lies in another assembly.");
     }
 
     [Test]

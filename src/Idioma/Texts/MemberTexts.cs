@@ -1,12 +1,12 @@
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace CodeChops.Idioma;
 
 /// <summary>
 /// Finds the texts of members marked <c>[Localized]</c>: a property, a field, an enum member, or a type. Each assembly
-/// records one function that gives a member's wording per language, and this class keeps what those functions find.
-/// <see cref="LocalizedText.GetTextByMember{T}(string)"/> and <see cref="LocalizedText.GetTextOfType{T}()"/> read
-/// from it.
+/// records one function that gives a member's wording per language. This class keeps what those functions find.
+/// Every overload of <c>LocalizedText.GetTextByMember</c> and <c>LocalizedText.GetTextOfType</c> reads from it.
 /// </summary>
 internal static class MemberTexts
 {
@@ -31,9 +31,9 @@ internal static class MemberTexts
     /// The wording of a member of a type the code names, for the current UI culture, or <see langword="null"/> for a
     /// member without a text.
     /// </summary>
-    public static string? Find<T>(string memberName)
+    public static string? Get<T>(string memberName)
     {
-        var text = FindTextsOf<T>().Find(memberName)?.Word();
+        var text = GetTextsOf<T>().Get(memberName)?.Word();
         return text;
     }
 
@@ -41,27 +41,27 @@ internal static class MemberTexts
     /// The wording of a member of a type the code holds, for the current UI culture, or <see langword="null"/> for a
     /// member without a text.
     /// </summary>
-    public static string? Find(Type type, string memberName)
+    public static string? Get(Type type, string memberName)
     {
-        var text = FindTextsOf(type).Find(memberName)?.Word();
+        var text = GetTextsOf(type).Get(memberName)?.Word();
         return text;
     }
 
     /// <summary>
     /// The wording of a type itself, for a type the code names, or <see langword="null"/> for a type without a text.
     /// </summary>
-    public static string? FindOwn<T>()
+    public static string? GetOwn<T>()
     {
-        var text = FindTextsOf<T>().FindOwn()?.Word();
+        var text = GetTextsOf<T>().GetOwn()?.Word();
         return text;
     }
 
     /// <summary>
     /// The wording of a type itself, for a type the code holds, or <see langword="null"/> for a type without a text.
     /// </summary>
-    public static string? FindOwn(Type type)
+    public static string? GetOwn(Type type)
     {
-        var text = FindTextsOf(type).FindOwn()?.Word();
+        var text = GetTextsOf(type).GetOwn()?.Word();
         return text;
     }
 
@@ -75,6 +75,7 @@ internal static class MemberTexts
         ArgumentNullException.ThrowIfNull(find);
 
         var finder = new MemberTextFinder(languages, find);
+        CollectibleAssemblies.Watch(find.Method.Module.Assembly);
 
         // A new whole, without the texts found so far: a member looked up before its assembly registered was kept as
         // one without a text. A lookup that started on the old whole keeps what it finds there, where no one reads it.
@@ -89,15 +90,41 @@ internal static class MemberTexts
     }
 
     /// <summary>
+    /// Forgets the functions of the assemblies of a context that unloads (<see cref="CollectibleAssemblies"/>). Each
+    /// is also emptied, because a thread may still hold the whole it was part of, through the texts of the last type it
+    /// asked for.
+    /// </summary>
+    public static void Forget(AssemblyLoadContext context)
+    {
+        MemberTextSources current, next;
+
+        do
+        {
+            current = Volatile.Read(ref Sources);
+            var kept = current.Finders.Where(finder => !finder.IsOf(context)).ToArray();
+
+            if (kept.Length == current.Finders.Length)
+                return;
+
+            next = new MemberTextSources(kept);
+        }
+        while (!ReferenceEquals(Interlocked.CompareExchange(ref Sources, next, current), current));
+
+        foreach (var finder in current.Finders)
+            if (finder.IsOf(context))
+                finder.Forget();
+    }
+
+    /// <summary>
     /// The texts of a type the code names. Kept per type, so that asking again is a read of a field.
     /// </summary>
-    private static TypeTexts FindTextsOf<T>()
+    private static TypeTexts GetTextsOf<T>()
     {
         var texts = TextsOf<T>.Value;
 
         // Found again when an assembly recorded its texts since: what was found before may lack one of them.
         if (texts is null || !ReferenceEquals(texts.Sources, Volatile.Read(ref Sources)))
-            TextsOf<T>.Value = texts = FindTextsOf(typeof(T));
+            TextsOf<T>.Value = texts = GetTextsOf(typeof(T));
 
         return texts;
     }
@@ -105,7 +132,7 @@ internal static class MemberTexts
     /// <summary>
     /// The texts of a type the code holds.
     /// </summary>
-    private static TypeTexts FindTextsOf(Type type)
+    private static TypeTexts GetTextsOf(Type type)
     {
         var sources = Volatile.Read(ref Sources);
         var last = LastTextsByType;
@@ -122,6 +149,11 @@ internal static class MemberTexts
         }
 
         texts = sources.AddTextsOf(type);
+
+        // The field doesn't hold on to a type that can be unloaded either.
+        if (!type.IsCollectible)
+            LastTextsByType = texts;
+
         return texts;
     }
 
@@ -141,11 +173,35 @@ internal static class MemberTexts
     {
         public string[] Languages { get; } = languages;
 
+        // Null once its assembly unloads, so that nothing here holds the assembly's code any more.
+        private volatile Func<Type, string?, string[]?>? _find = find;
+
         /// <summary>
         /// Gives the wording of a member per language, in the order of <see cref="Languages"/>, or
         /// <see langword="null"/> for what has no text.
         /// </summary>
-        public Func<Type, string?, string[]?> Find { get; } = find;
+        public string[]? Get(Type type, string? member)
+        {
+            var wordings = this._find?.Invoke(type, member);
+            return wordings;
+        }
+
+        /// <summary>
+        /// Whether the function lies in an assembly of a context that unloads.
+        /// </summary>
+        public bool IsOf(AssemblyLoadContext context)
+        {
+            var isOf = this._find is { } find && CollectibleAssemblies.IsIn(find.Method.Module.Assembly, context);
+            return isOf;
+        }
+
+        /// <summary>
+        /// Lets go of the function, whose assembly unloads.
+        /// </summary>
+        public void Forget()
+        {
+            this._find = null;
+        }
     }
 
     /// <summary>
@@ -175,7 +231,7 @@ internal static class MemberTexts
 
         /// <summary>
         /// The texts found for each type that was asked for. A type with type arguments, such as
-        /// <c>Page&lt;Order&gt;</c>, has those of its definition.
+        /// <c>Page&lt;Order&gt;</c>, has those of its definition, <c>Page&lt;T&gt;</c>.
         /// </summary>
         public ConcurrentDictionary<Type, TypeTexts> TextsByType { get; } = new();
 
@@ -183,14 +239,14 @@ internal static class MemberTexts
         /// Asks every function for the member of the type, and then of each class it derives from. A type's own text
         /// is asked of the type alone.
         /// </summary>
-        public MemberText? Find(Type type, string? member)
+        public MemberText? Get(Type type, string? member)
         {
             for (var current = type; current is not null && current != typeof(object); current = member is null ? null : current.BaseType)
             {
                 var definition = current.IsConstructedGenericType ? current.GetGenericTypeDefinition() : current;
 
                 foreach (var finder in this.Finders)
-                    if (finder.Find(definition, member) is { Length: > 0 } wordings)
+                    if (finder.Get(definition, member) is { Length: > 0 } wordings)
                         return new MemberText(finder.Languages, wordings);
             }
 
@@ -202,18 +258,14 @@ internal static class MemberTexts
         /// </summary>
         public TypeTexts AddTextsOf(Type type)
         {
-            // A type with type arguments by its definition, which is the type the attribute is written in.
-            var definition = type.IsConstructedGenericType ? type.GetGenericTypeDefinition() : type;
-
             // A type that can be unloaded isn't kept, because the texts found would hold on to it.
             if (type.IsCollectible)
-                return new TypeTexts(this, definition);
+                return new TypeTexts(this, type);
 
-            var texts = this.TextsByType.GetOrAdd(definition, static (definition, sources) => new TypeTexts(sources, definition), this);
-
-            if (!ReferenceEquals(definition, type))
-                this.TextsByType.TryAdd(type, texts);
-
+            // A type with type arguments is kept as it's asked for, and not as its definition. A thread's last lookup
+            // compares the type it was asked for, so it recognizes such a type only this way. Get finds the texts of
+            // the definition.
+            var texts = this.TextsByType.GetOrAdd(type, static (type, sources) => new TypeTexts(sources, type), this);
             return texts;
         }
     }
@@ -223,11 +275,11 @@ internal static class MemberTexts
     /// included.
     /// </summary>
     /// <remarks>
-    /// A name is looked up without hashing all of it. Its place comes from its length and three of its characters,
-    /// and it's compared as an object first. A name written as <c>nameof(Address.City)</c> is the same string on
-    /// every call, and so is the name a <see cref="PropertyInfo"/> gives, so nearly every lookup ends at that
-    /// comparison. Hashing the whole name took most of the time of a lookup in WebAssembly, where the runtime's own
-    /// hash is interpreted.
+    /// A name is looked up without hashing all of it. Its place comes from its length and three of its characters.
+    /// It's compared as an object first. Nearly every lookup ends at that comparison, because a name is nearly always
+    /// the same string on every call: one written as <c>nameof(Address.City)</c>, and the name a
+    /// <see cref="PropertyInfo"/> gives. Hashing the whole name took most of the time of a lookup in WebAssembly,
+    /// where the runtime's own hash is interpreted.
     /// </remarks>
     private sealed class TypeTexts(MemberTextSources sources, Type type)
     {
@@ -250,12 +302,12 @@ internal static class MemberTexts
         /// <summary>
         /// The text of the type itself.
         /// </summary>
-        public MemberText? FindOwn()
+        public MemberText? GetOwn()
         {
             if (this._hasOwnText)
                 return this._ownText;
 
-            var text = this.Sources.Find(this.Type, member: null);
+            var text = this.Sources.Get(this.Type, member: null);
 
             this._ownText = text;
             this._hasOwnText = true;
@@ -266,7 +318,7 @@ internal static class MemberTexts
         /// <summary>
         /// The text of a member, by its name.
         /// </summary>
-        public MemberText? Find(string member)
+        public MemberText? Get(string member)
         {
             var kept = this._table;
             var names = kept.Names;
@@ -282,7 +334,7 @@ internal static class MemberTexts
                 if (ReferenceEquals(name, member) || String.Equals(name, member, StringComparison.Ordinal))
                     return kept.Texts[place];
 
-            var text = this.Sources.Find(this.Type, member);
+            var text = this.Sources.Get(this.Type, member);
 
             if (kept.Count < MaxKept)
                 this._table = kept.With(member, text);

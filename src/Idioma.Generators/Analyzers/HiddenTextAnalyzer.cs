@@ -32,7 +32,7 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor HiddenTextRule = new(
         id: HiddenTextDiagnosticId,
         title: "Text hidden instead of overridden",
-        messageFormat: "'{0}.{1}' hides '{2}.{1}' instead of overriding it, so users of {3} won't see its wording. Make '{2}.{1}' virtual and override it, or list '{4}' again next to '{2}'.",
+        messageFormat: "'{0}.{1}' hides '{2}.{1}' instead of overriding it, so users of {3} won't see its wording. {4}.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -106,10 +106,28 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
                         text.Name,
                         implementation.ContainingType.Name,
                         language,
-                        contract.Name));
+                        GetAdvice(text.Name, implementation, contract.Name, context.Compilation)));
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// What to do about a hidden text, without the period that ends the message. A text that can be overridden is overridden. One of this assembly can be made
+    /// virtual first. One of another assembly, such as a library's, can't, so the contract is listed again.
+    /// </summary>
+    private static string GetAdvice(string text, ISymbol implementation, string contract, Compilation compilation)
+    {
+        var holder = implementation.ContainingType.Name;
+        var listAgain = $"list '{contract}' again next to '{holder}'";
+
+        if (implementation is { IsVirtual: true } or { IsAbstract: true } or { IsOverride: true, IsSealed: false })
+            return $"Override '{holder}.{text}' instead, or {listAgain}";
+
+        if (SymbolEqualityComparer.Default.Equals(implementation.ContainingAssembly, compilation.Assembly))
+            return $"Make '{holder}.{text}' virtual and override it, or {listAgain}";
+
+        return $"List '{contract}' again next to '{holder}', because '{holder}.{text}' isn't virtual and lies in another assembly";
     }
 
     /// <summary>

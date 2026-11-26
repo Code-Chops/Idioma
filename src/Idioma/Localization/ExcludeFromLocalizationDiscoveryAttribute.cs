@@ -4,7 +4,7 @@ namespace CodeChops.Idioma;
 /// Keeps the build from picking up a set or a member. A marked <see cref="ILocalizationSet">set</see> doesn't register
 /// itself, so it takes effect only once you pass it to
 /// <see cref="LocalizationRegistry.Register(ReadOnlySpan{ILocalizationSet})">LocalizationRegistry.Register</see>. A
-/// marked public property or method of the set of your default language isn't a text.
+/// marked public property or method of a set, or of a class a set derives from, isn't a text.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,8 +19,17 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <list type="bullet">
 /// <item>Make a helper <see langword="private"/> or <see langword="internal"/>.</item>
-/// <item>Make a helper that other assemblies call <see langword="static"/>. A static member isn't a text.</item>
+/// <item>If other assemblies call a helper, make it <see langword="static"/>. A static member isn't a text.</item>
 /// <item>Implement a member of another interface explicitly. An explicit implementation isn't a text.</item>
+/// </list>
+/// <para>
+/// The attribute works on members of other classes too. The build points to it for these:
+/// </para>
+/// <list type="bullet">
+/// <item>A member of the set of another language that the contract doesn't have (<c>LOC304</c>).</item>
+/// <item>A member of a set of an enum that isn't a member of the enum (<c>LOC305</c>).</item>
+/// <item>A member that the set of your default language inherits from a class of its assembly (<c>LOC303</c>). Mark
+/// it in that class.</item>
 /// </list>
 /// <para>
 /// The build still counts an excluded set as the set of its language, also for the apps that use your library, so it
@@ -38,16 +47,6 @@ namespace CodeChops.Idioma;
 /// </remarks>
 /// <example>
 /// <code>
-/// // A set that takes the shop's name from configuration, so it needs a constructor argument.
-/// [ExcludeFromLocalizationDiscovery]
-/// public sealed class BrandedShopLocalizationEn(string shopName) : ShopLocalizationEn
-/// {
-///     public override string Checkout => $"Pay at {shopName}";
-/// }
-///
-/// // At startup:
-/// LocalizationRegistry.Register(new BrandedShopLocalizationEn(configuration["ShopName"]!));
-///
 /// // Money overrides a public member of PriceFormatter, so it has to stay public. It isn't a text.
 /// public class ShopLocalizationEn : PriceFormatter, ILocalizationSet, IShopLocalization
 /// {
@@ -58,9 +57,19 @@ namespace CodeChops.Idioma;
 ///     [ExcludeFromLocalizationDiscovery]
 ///     public override string Money(decimal amount) => amount.ToString("C");
 /// }
+///
+/// // A set that takes the shop's name from configuration, so it needs a constructor argument.
+/// [ExcludeFromLocalizationDiscovery]
+/// public sealed class BrandedShopLocalizationEn(string shopName) : ShopLocalizationEn
+/// {
+///     public override string Checkout => $"Pay at {shopName}";
+/// }
+///
+/// // At startup:
+/// LocalizationRegistry.Register(new BrandedShopLocalizationEn(configuration["ShopName"]!));
 /// </code>
 /// </example>
-// The source generator locates this type by its metadata-name string, so renaming it or changing its namespace
-// silently disables the exclusion.
+// The source generator locates this type by its full name (PackageNames.ExcludeFromLocalizationDiscoveryAttribute).
+// A rename that misses that constant silently disables the exclusion, so a test pins the two to each other.
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method, Inherited = false)]
 public sealed class ExcludeFromLocalizationDiscoveryAttribute : Attribute;

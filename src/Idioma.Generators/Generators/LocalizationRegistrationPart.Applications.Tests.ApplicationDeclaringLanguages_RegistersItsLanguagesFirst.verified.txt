@@ -8,6 +8,7 @@ namespace CodeChops.Idioma.Generated
     /// Adds the localization sets of this assembly, and of the assemblies it references, to the sets of the whole app.
     /// Registers the app's languages first.
     /// </summary>
+    [System.CodeDom.Compiler.GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     internal static class LocalizationRegistrar_TestAssembly
     {

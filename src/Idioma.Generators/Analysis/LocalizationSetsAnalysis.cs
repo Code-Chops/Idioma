@@ -22,16 +22,10 @@ internal sealed partial record LocalizationSetsAnalysis(
     public const string ExtensionName = "GetText";
 
     /// <summary>
-    /// The name of the method every generated class gets, which gives a text by its key:
-    /// <c>ShopLocalization.GetTextByKey("Checkout")</c>.
+    /// The name of the method every generated class gets, which gives a text by its key, or <see langword="null"/> for
+    /// an unknown key: <c>ShopLocalization.GetTextByKey("Checkout")</c>.
     /// </summary>
     public const string GetName = "GetTextByKey";
-
-    /// <summary>
-    /// The name of the method every generated class gets, which gives a text by its key when a text has that key:
-    /// <c>ShopLocalization.TryGetTextByKey(key, out var text)</c>.
-    /// </summary>
-    public const string TryGetName = "TryGetTextByKey";
 
     /// <summary>
     /// The name of the property every generated class gets, which lists the key of every text:
@@ -42,7 +36,7 @@ internal sealed partial record LocalizationSetsAnalysis(
     /// <summary>
     /// Whether a text can't become a member of the generated texts class (<c>LOC300</c>). It carries the class's own
     /// name, which C# allows no member, the name of a member that gives a text by its key or lists the keys
-    /// (<see cref="GetName"/>, <see cref="TryGetName"/>, <see cref="KeysName"/>), or the name of a method that gives
+    /// (<see cref="GetName"/>, <see cref="KeysName"/>), or the name of a method that gives
     /// the text of an enum value (<see cref="LookupName"/>, and <see cref="ExtensionName"/> on the value itself). The
     /// class declares no other member of its own, so that no other name is taken.
     /// </summary>
@@ -53,7 +47,6 @@ internal sealed partial record LocalizationSetsAnalysis(
     {
         var isReserved = String.Equals(name, textsName, StringComparison.Ordinal)
                          || String.Equals(name, GetName, StringComparison.Ordinal)
-                         || String.Equals(name, TryGetName, StringComparison.Ordinal)
                          || String.Equals(name, KeysName, StringComparison.Ordinal)
                          || (hasLookup && String.Equals(name, LookupName, StringComparison.Ordinal))
                          || (hasLookup && String.Equals(name, ExtensionName, StringComparison.Ordinal));
@@ -172,7 +165,7 @@ internal sealed partial record LocalizationSetsAnalysis(
         {
                 // Without a default language there is no telling which set the contract should come from.
                 if (set.ListsLocalizationSet && !LocalizationDiscovery.ImplementsContract(set) && !LocalizationDiscovery.RewordsSet(set))
-                    findings.Add(new LocalizationSetsFinding(LocalizationSetsRule.NoLanguagesDeclared, set.Location, new EquatableArray<string>([set.Name])));
+                    findings.Add(new LocalizationSetsFinding(LocalizationSetsRule.NoLanguagesDeclared, set.Location, new EquatableArray<string>([$"'{set.Name}' is a localization set"])));
                 // No language list needed: an app rewording a library under a name without its language suffix would
                 // serve another language without a word.
                 else if (set.Language is { } language && IsDerivedFromOtherLanguage(set, generatedContracts))

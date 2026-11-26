@@ -65,7 +65,7 @@ public sealed class UnmarkedEnumMemberCodeFixProviderTests
 
         var error = GeneratorTestHelper.CompileWithGenerators(source).ShouldHaveSingleItem();
         error.Id.ShouldBe("CS7036");
-        error.GetMessage(System.Globalization.CultureInfo.InvariantCulture).ShouldContain("'nl'");
+        error.GetMessage(CultureInfo.InvariantCulture).ShouldContain("'nl'");
     }
 
     [Test]

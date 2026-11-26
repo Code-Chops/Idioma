@@ -72,22 +72,6 @@ public sealed class CultureFallbackTests
     }
 
     [Test]
-    public void Names_OfCultureName_ShouldBeSameStringsOnNextWalk()
-    {
-        // Arrange
-        var first = Names("zh-Hant-TW");
-
-        // Act
-        var second = Names(new string("zh-Hant-TW"));
-
-        // Assert: the names that dropping a subtag or the script gives are kept, so that a walk by name allocates
-        // nothing.
-        second[1].ShouldBeSameAs(first[1]);
-        second[2].ShouldBeSameAs(first[2]);
-        second[3].ShouldBeSameAs(first[3]);
-    }
-
-    [Test]
     public void Names_WithScript_ShouldTryNameWithoutScriptRightAfterIt()
     {
         // Arrange & Act & Assert: a platform can give a culture with its script, where an app declares the name without

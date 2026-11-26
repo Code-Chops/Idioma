@@ -527,6 +527,11 @@ internal static partial class LocalizationDiscovery
     /// How many sets the type derives from. The generated registration adds a set after the sets it derives from, so a
     /// set rewording another of its own assembly wins within their tier.
     /// </summary>
+    /// <remarks>
+    /// An abstract class isn't counted, such as a base that the sets of every language share. It's never registered,
+    /// so a set deriving from it rewords no set, and words every text itself. Counted, it would make the registrar
+    /// record every text of every such set (<see cref="DiscoveredLocalization.OwnTexts"/>), which nothing reads.
+    /// </remarks>
     /// <param name="type">The set.</param>
     /// <param name="ancestors">The classes of this assembly it derives from, nearest first, as the start of its chain.</param>
     private static int GetDepth(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors)
@@ -535,6 +540,9 @@ internal static partial class LocalizationDiscovery
         var index = 0;
         for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType, index++)
         {
+            if (baseType.IsAbstract)
+                continue;
+
             // A class of this assembly implementing a contract generated here binds that contract to nothing yet, so
             // what it lists, or what a class it derives from lists, has to stand in for the interface.
             var implementsGeneratedContract = index < ancestors.Length

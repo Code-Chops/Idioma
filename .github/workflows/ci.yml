@@ -39,7 +39,8 @@ jobs:
       - name: Build
         run: dotnet build Idioma.slnx -c Release -warnaserror
 
-      # The suite runs on Microsoft.Testing.Platform (TUnit), so it is executed, not `dotnet test`ed.
+      # The suite runs on Microsoft.Testing.Platform (TUnit), as a program per framework, so that each runtime gets a step
+      # of its own.
       - name: Tests (net10.0)
         run: dotnet run --project tests/Idioma.Tests/Idioma.Tests.csproj -c Release -f net10.0 --no-build
 

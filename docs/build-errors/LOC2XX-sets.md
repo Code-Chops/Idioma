@@ -74,7 +74,7 @@ A set is for a language that `[assembly: SupportedLanguages]` doesn't list. Add 
 
 This also applies to a set you register yourself.
 
-The IDE fix adds the language at the end of the attribute. A set whose name ends in a longer code, such as `ShopLocalizationEnGb`, adds that code (`en-GB`), which its name then gives it. Every other contract then lacks a set for that language, which is [LOC201](#loc201), and its fix adds the sets.
+The IDE fix adds the language at the end of the attribute. A set whose name ends in a longer code, such as `ShopLocalizationEnGb`, adds that code (`en-GB`), which its name then gives it. Neither the message nor the fix advises a code that is no language, such as `gb`, because that would only give [LOC104](LOC1XX-languages.md#loc104). Every other contract then lacks a set for that language, which is [LOC201](#loc201), and its fix adds the sets.
 
 ## LOC203
 
@@ -189,6 +189,6 @@ Keep one set per language. Two sets aren't reported in these cases:
 
 - A set that derives from another set of its language rewords that set, and always wins over it.
 - A set marked `[ExcludeFromLocalizationDiscovery]` is one you register yourself, and wins because you register it.
-- A set of another assembly, such as a library's, is one an app may reword ([details](../libraries-and-apps.md#changing-a-text-of-a-library)).
+- A set of another assembly, such as a library's, is one an app may reword ([details](../libraries-and-apps.md#changing-a-text-of-a-library)). Your app may reword it in several sets, which each show the texts they change. Two of them are reported only where both reword the same text.
 
 A test double that lists `ILocalizationSet` is a set too, so it's registered next to the real one. Let it list only the contract.

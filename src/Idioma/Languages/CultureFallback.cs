@@ -16,39 +16,23 @@ namespace CodeChops.Idioma;
 // Through CultureInfo.Parent, because a parent need not be a prefix of the name (zh-TW falls back to zh-Hant), and by
 // name as well: under invariant globalization a culture either can't be created at all (the default) or has the
 // invariant culture as its parent (PredefinedCulturesOnly off), while en still serves en-GB, as the build checks it.
-// By name alone for a language code, so that the walk never needs a CultureInfo. A plain struct enumerator, and a
-// name that dropping a subtag gives is kept for the next walk, so a lookup allocates nothing once its names are kept:
-// the parent cultures hold their names, and an app's default language (en-GB, then en) is walked by name for every
-// text that falls back to it.
+// By name alone for a language code that has no culture of that name (see OfLanguage). The registry keeps the names
+// of each walk in its lookup of the culture or the code (LocalizationRegistry.Resolve and ResolveLanguage), so a name
+// is walked about once per registry. The names that dropping a subtag gives are therefore cut anew on each walk. Only
+// the check of a script is kept (NamesWithoutScript), because it reads the cultures of this machine.
 internal readonly struct CultureFallback
 {
-    // Far more than the languages of an app and the cultures of its users; a name beyond it is cut on every walk, so
-    // that culture names from outside (a request header, where invariant globalization with PredefinedCulturesOnly
-    // off lets any name become a culture) can't grow this without end.
+    // Far more than the cultures of an app's users. A name beyond it is checked again on every walk, so that culture
+    // names from outside, such as those of a request header, can't grow NamesWithoutScript without end.
     private const int MaxNamesKept = 1024;
 
     // Every script subtag has four letters (ISO 15924), and no other subtag has four letters in second place.
     private const int ScriptLength = 4;
 
     /// <summary>
-    /// Per culture name, the name above it, which is the same name without its last subtag (<c>zh-Hant-TW</c> gives
-    /// <c>zh-Hant</c>, <c>en-GB</c> gives <c>en</c>). Up to <see cref="MaxNamesKept"/> names are kept, so a walk by name
-    /// hands out the same strings each time instead of cutting new ones.
-    /// </summary>
-    // Keyed by the exact spelling, so en-GB and EN-gb are kept apart: each walk gives back the casing it was asked for.
-    private static ConcurrentDictionary<string, string> NamesAbove { get; } = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Whether <see cref="NamesAbove"/> holds <see cref="MaxNamesKept"/> names, so no more are kept.
-    /// </summary>
-    // Names are never removed, so this is set once. A walk past the limit then skips NamesAbove.Count, which takes all
-    // of the dictionary's locks. A thread that doesn't see it set yet reads Count once more, which is harmless.
-    private static bool HasKeptMaxNames { get; set; }
-
-    /// <summary>
     /// Per culture name with a script and more after it, such as <c>zh-Hant-TW</c>, the same name without its script
     /// (<c>zh-TW</c>), or <see langword="null"/> where that name is another culture. Up to <see cref="MaxNamesKept"/>
-    /// names are kept, as in <see cref="NamesAbove"/>.
+    /// names are kept.
     /// </summary>
     // A user's culture can carry its script, as zh-Hant-TW does on Apple platforms, where an app declares zh-TW. The
     // parent cultures of zh-Hant-TW are zh-Hant and zh, so without this the walk never meets zh-TW.
@@ -57,6 +41,8 @@ internal readonly struct CultureFallback
     /// <summary>
     /// Whether <see cref="NamesWithoutScript"/> holds <see cref="MaxNamesKept"/> names, so no more are kept.
     /// </summary>
+    // Names are never removed, so this is set once. A walk past the limit then skips NamesWithoutScript.Count, which
+    // takes all of the dictionary's locks. A thread that doesn't see it set yet reads Count once more, which is harmless.
     private static bool HasKeptMaxNamesWithoutScript { get; set; }
 
     private CultureInfo? Culture { get; }
@@ -93,7 +79,7 @@ internal readonly struct CultureFallback
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
 
-        var fallback = CultureName.FindCulture(language) is { } culture && String.Equals(culture.Name, language, StringComparison.OrdinalIgnoreCase)
+        var fallback = CultureName.GetCulture(language) is { } culture && String.Equals(culture.Name, language, StringComparison.OrdinalIgnoreCase)
             ? new CultureFallback(culture)
             : new CultureFallback(language);
 
@@ -105,27 +91,6 @@ internal readonly struct CultureFallback
         return new Enumerator(this.Culture, this.Name);
     }
 
-    private static string GetNameAbove(string name, int separator)
-    {
-        if (NamesAbove.TryGetValue(name, out var above))
-            return above;
-
-        above = name[..separator];
-
-        // The string that is kept, also when another thread kept one for this name in the meantime: every walk
-        // then hands out that one, where two threads walking a name for the first time would otherwise each go on
-        // with a string of their own.
-        if (HasKeptMaxNames)
-            return above;
-
-        if (NamesAbove.Count < MaxNamesKept)
-            above = NamesAbove.GetOrAdd(name, above);
-        else
-            HasKeptMaxNames = true;
-
-        return above;
-    }
-
     /// <summary>
     /// A culture name without its script, such as <c>zh-TW</c> for <c>zh-Hant-TW</c>, where that's the same culture.
     /// It's <see langword="null"/> for:
@@ -135,25 +100,27 @@ internal readonly struct CultureFallback
     /// <item>A name whose culture without the script writes in another one. <c>sr-RS</c> is written in Cyrillic, so it
     /// isn't tried for <c>sr-Latn-RS</c>.</item>
     /// </list>
+    /// Under invariant globalization, the name without its script is always tried, because the scripts can't be compared
+    /// there. So <c>sr-Latn-RS</c> tries <c>sr-RS</c> too.
     /// </summary>
     private static string? GetNameWithoutScript(string name)
     {
         // Told without a lookup, because nearly every name has no script.
-        var start = FindScript(name);
-        if (start < 0 || start + ScriptLength == name.Length)
+        var scriptStart = IndexOfScript(name);
+        if (scriptStart < 0 || scriptStart + ScriptLength == name.Length)
             return null;
 
         if (NamesWithoutScript.TryGetValue(name, out var kept))
             return kept;
 
-        var withoutScript = String.Concat(name.AsSpan(0, start - 1), name.AsSpan(start + ScriptLength));
-        var sameCulture = HasSameScript(name, name.AsSpan(start, ScriptLength), withoutScript) ? withoutScript : null;
+        var withoutScript = String.Concat(name.AsSpan(start: 0, scriptStart - 1), name.AsSpan(scriptStart + ScriptLength));
+        var sameCulture = HasSameScript(name, name.AsSpan(scriptStart, ScriptLength), withoutScript) ? withoutScript : null;
 
         if (HasKeptMaxNamesWithoutScript)
             return sameCulture;
 
         if (NamesWithoutScript.Count < MaxNamesKept)
-            sameCulture = NamesWithoutScript.GetOrAdd(name, sameCulture);
+            NamesWithoutScript.TryAdd(name, sameCulture);
         else
             HasKeptMaxNamesWithoutScript = true;
 
@@ -170,12 +137,12 @@ internal readonly struct CultureFallback
     // per name (NamesWithoutScript), so the cultures are read once too.
     private static bool HasSameScript(string name, ReadOnlySpan<char> script, string withoutScript)
     {
-        if (CultureName.FindCulture(withoutScript) is not { } other || CultureName.FindCulture(name) is not { } culture)
+        if (CultureName.GetCulture(withoutScript) is not { } other || CultureName.GetCulture(name) is not { } culture)
             return true;
 
         // The culture itself too, for a name the cultures know under another one with a script.
         for (var current = other; current.Name.Length > 0; current = current.Parent)
-            if (FindScript(current.Name) is >= 0 and var start)
+            if (IndexOfScript(current.Name) is >= 0 and var start)
                 return current.Name.AsSpan(start, ScriptLength).Equals(script, StringComparison.OrdinalIgnoreCase);
 
         var format = culture.DateTimeFormat;
@@ -191,7 +158,7 @@ internal readonly struct CultureFallback
     /// Where the script of a culture name starts, or -1 for a name without one. A script is the second subtag, of
     /// <see cref="ScriptLength"/> letters, after a language of two letters or more: <c>Hant</c> in <c>zh-Hant-TW</c>.
     /// </summary>
-    private static int FindScript(string name)
+    private static int IndexOfScript(string name)
     {
         var first = name.IndexOf('-', StringComparison.Ordinal);
 
@@ -290,7 +257,7 @@ internal readonly struct CultureFallback
             if (separator < 0)
                 return false;
 
-            this.Last = GetNameAbove(this.Last, separator);
+            this.Last = this.Last[..separator];
 
             return true;
         }

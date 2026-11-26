@@ -12,7 +12,7 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 ## A language picker
 
-This picker works in Blazor WebAssembly, Blazor Server, and a Blazor Web App in any render mode, `InteractiveAuto` included. It shows a button for each language your app declares in its own project ([details](libraries-and-apps.md#the-apps-languages)):
+This picker works in Blazor WebAssembly, Blazor Server, and a Blazor Web App in any interactive render mode, `InteractiveAuto` included. The picker itself must be interactive, because its buttons run code ([details](#a-picker-in-a-static-layout)). It shows a button for each language your app declares in its own project ([details](libraries-and-apps.md#the-apps-languages)):
 
 ```razor
 @* LanguagePicker.razor *@
@@ -73,6 +73,17 @@ The picker does one of two things:
 - **On a server**, it stores the choice in the culture cookie and reloads the page. The same happens with `InteractiveAuto` until the WebAssembly runtime has downloaded.
 
 Either way, it stores the choice in the browser's local storage as well, for the WebAssembly runtime to start in (see [Remembering the choice](#remembering-the-choice)).
+
+### A picker in a static layout
+
+In a Blazor Web App whose pages choose their own render mode, the layout is rendered statically, and so is a picker placed in it. Its buttons then do nothing. Give the picker a render mode of its own, one your app supports:
+
+```razor
+@* MainLayout.razor *@
+<LanguagePicker @rendermode="InteractiveServer" />
+```
+
+Leave `LanguageChanged` out there. A static layout can't pass a handler to an interactive component, so the picker reloads the page instead. An app that sets one render mode for all of it, as in `<Routes @rendermode="InteractiveAuto" />`, needs none of this, because its layout is interactive too.
 
 The rest of this page sets up the parts the picker needs. A standalone Blazor WebAssembly app needs only [Showing the new language everywhere](#showing-the-new-language-everywhere), [Remembering the choice](#remembering-the-choice), and [Dates and numbers](#dates-and-numbers).
 

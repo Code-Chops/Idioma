@@ -1,3 +1,7 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
+
 namespace CodeChops.Idioma;
 
 // The half of LocalizationRegistry that keeps what is registered: the sets of the whole app, the app's languages, and
@@ -20,12 +24,66 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// What the source generator recorded about the sets it found, per type: the language the build read from its name,
     /// and, for a set deriving from another, the texts its own class words. Lock-free to read, because every
-    /// LocalizationLanguageCode a set doesn't implement reads it, and so does every lookup in a set that derives from another.
+    /// LocalizationLanguageCode a set doesn't implement reads it, and so does every lookup in a set that derives from
+    /// another.
     /// </summary>
     // The language, so that a set keeps it when its type is renamed after the build, and a set named after a longer
     // code its assembly declares, such as ShopLocalizationEnGb for en-GB, isn't read by its last two letters. The texts,
-    // so that the registry knows which texts a set rewords without calling it (FindWording).
+    // so that the registry knows which texts a set rewords without calling it (GetWording).
     private static ConcurrentDictionary<Type, RecordedSet> RecordedSets { get; } = new();
+
+    // How many times the generated code registered sets, which orders the assemblies (SetsRegisteredAt).
+    private static long SetsRegistered;
+
+    /// <summary>
+    /// Per assembly, when its sets were last registered by the generated code, as a number that grows with each
+    /// registration (<see cref="RegistrationCount"/>). An app's registrar registers the sets of the assemblies it
+    /// references first, and its own last. So of two assemblies that give an enum of a third one its texts, the one
+    /// whose sets registered later is the app, or the assembly nearer to it
+    /// (<see cref="Internals.GeneratedCode.RegisterEnumTexts{TEnum, TContract}"/>).
+    /// </summary>
+    // Weak, so that an assembly that can be unloaded isn't held here.
+    private static ConditionalWeakTable<Assembly, StrongBox<long>> SetsRegisteredAt { get; } = new();
+
+    /// <summary>
+    /// How often anything was registered or forgotten that may change which registration of the texts of an enum
+    /// wins. A reader that kept the winner checks it against this.
+    /// </summary>
+    internal static int RegistrationCount => Volatile.Read(ref _registrationCount);
+    // ReSharper disable once InconsistentNaming
+    private static int _registrationCount;
+
+    /// <summary>
+    /// When the generated code last registered the sets of an assembly, or 0 where it never did.
+    /// </summary>
+    internal static long GetSetsRegisteredAt(Assembly assembly)
+    {
+        var at = SetsRegisteredAt.TryGetValue(assembly, out var registered) ? Volatile.Read(ref registered.Value) : 0;
+        return at;
+    }
+
+    /// <summary>
+    /// Counts a registration or a forgotten one that may change which registration of the texts of an enum wins.
+    /// </summary>
+    internal static void CountRegistration()
+    {
+        Interlocked.Increment(ref _registrationCount);
+    }
+
+    /// <summary>
+    /// Forgets what the assemblies of a context that unloads registered (<see cref="CollectibleAssemblies"/>): their
+    /// sets, and what the build recorded about them.
+    /// </summary>
+    internal static void Forget(AssemblyLoadContext context)
+    {
+        foreach (var type in RecordedSets.Keys)
+            if (CollectibleAssemblies.IsIn(type, context))
+                RecordedSets.TryRemove(type, out _);
+
+        // ReSharper disable once HeapView.CanAvoidClosure - Once per context that unloads.
+        ImmutableInterlocked.Update(ref Registered, registered => registered.Without(context));
+        CountRegistration();
+    }
 
     /// <summary>
     /// Adds a set that isn't registered automatically to the sets of your whole app.
@@ -44,16 +102,17 @@ public sealed partial class LocalizationRegistry
     /// The set wins over the sets registered before it, for every text it changes. See <see cref="ILocalizationSet"/>.
     /// </para>
     /// <para>
-    /// A set for a language your app doesn't declare never shows, because a culture outside
-    /// <see cref="SupportedLanguages"/> gets the app's default language. Only <see cref="Find{TContract}(CultureInfo)"/>
-    /// returns such a set.
+    /// A set shows for a language your app declares, and for a region of one. A set for <c>en-AU</c> shows to
+    /// Australian users of an app that declares <c>en</c>, because <c>en</c> serves <c>en-AU</c>. A set for any other
+    /// language never shows, because a culture outside <see cref="SupportedLanguages"/> gets the app's default language.
+    /// Only <see cref="GetLocalizationSet{TContract}(CultureInfo)"/> returns such a set.
     /// </para>
     /// </remarks>
     /// <typeparam name="TSet">The set.</typeparam>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
-    /// as <c>en-GB</c>.
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
+    /// culture name such as <c>en-GB</c>.
     /// </exception>
     public static void Register<TSet>()
         where TSet : class, ILocalizationSet, new()
@@ -70,9 +129,10 @@ public sealed partial class LocalizationRegistry
     /// Registering a set of the same type and language again replaces the earlier one.
     /// </para>
     /// <para>
-    /// A set for a language your app doesn't declare never shows, because a culture outside
-    /// <see cref="SupportedLanguages"/> gets the app's default language. Only <see cref="Find{TContract}(CultureInfo)"/>
-    /// returns such a set.
+    /// A set shows for a language your app declares, and for a region of one. A set for <c>en-AU</c> shows to
+    /// Australian users of an app that declares <c>en</c>, because <c>en</c> serves <c>en-AU</c>. A set for any other
+    /// language never shows, because a culture outside <see cref="SupportedLanguages"/> gets the app's default language.
+    /// Only <see cref="GetLocalizationSet{TContract}(CultureInfo)"/> returns such a set.
     /// </para>
     /// </remarks>
     /// <param name="sets">
@@ -81,8 +141,8 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
-    /// as <c>en-GB</c>.
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
+    /// culture name such as <c>en-GB</c>.
     /// </exception>
     public static void Register(params ReadOnlySpan<ILocalizationSet> sets)
     {
@@ -104,8 +164,8 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
-    /// as <c>en-GB</c>.
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
+    /// culture name such as <c>en-GB</c>.
     /// </exception>
     public static void RegisterDefaults(params ReadOnlySpan<ILocalizationSet> sets)
     {
@@ -132,8 +192,9 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// Records what the build read about a set, for <see cref="Internals.GeneratedCode.RecordSet"/>: its language, or
-    /// <see langword="null"/> for a set whose <see cref="ILocalizationSet.LocalizationLanguageCode"/> the build couldn't read,
-    /// and the texts its own class words. A set has one code. Recording the same code again changes nothing, and another code is refused.
+    /// <see langword="null"/> for a set whose <see cref="ILocalizationSet.LocalizationLanguageCode"/> the build couldn't
+    /// read, and the texts its own class words. A set has one code. Recording the same code again changes nothing, and
+    /// another code is refused.
     /// </summary>
     internal static void RecordSet<TSet>(string? languageCode, string[] ownTexts)
         where TSet : class, ILocalizationSet
@@ -144,6 +205,8 @@ public sealed partial class LocalizationRegistry
         // tables are built again, far from this call.
         if (languageCode is not null)
             languageCode = ToCultureName(languageCode, nameof(languageCode));
+
+        CollectibleAssemblies.Watch(typeof(TSet).Assembly);
 
         // A set registered before its record is filed under the language of its name, and compared by wording, until
         // the lookup tables are built again. So the registrations are swapped for a copy, which builds them anew.
@@ -166,7 +229,7 @@ public sealed partial class LocalizationRegistry
     /// The language code recorded for a set's type, or else for the nearest class it derives from that has one. So a
     /// rewording of a British set serves British English too. <see langword="null"/> when none has one.
     /// </summary>
-    internal static string? FindLanguageCode(Type type)
+    internal static string? GetRecordedLanguageCode(Type type)
     {
         for (var current = type; current is not null; current = current.BaseType)
             if (RecordedSets.TryGetValue(current, out var recorded) && recorded.LanguageCode is { } languageCode)
@@ -212,14 +275,12 @@ public sealed partial class LocalizationRegistry
         /// </summary>
         public bool Words(ReadOnlySpan<char> textName)
         {
-            var ownTexts = this.OwnTexts;
-
-            if (ownTexts.Length > MaxScannedTexts)
-                return IsAmongSorted(ownTexts, textName);
+            if (this.OwnTexts.Length > MaxScannedTexts)
+                return IsAmongSorted(this.OwnTexts, textName);
 
             // The length first, which tells most names apart without a call: in WebAssembly's interpreter, a call costs
             // more than the comparison.
-            foreach (var ownText in ownTexts)
+            foreach (var ownText in this.OwnTexts)
                 if (ownText.Length == textName.Length && textName.SequenceEqual(ownText))
                     return true;
 
@@ -267,6 +328,7 @@ public sealed partial class LocalizationRegistry
         {
             ArgumentNullException.ThrowIfNull(sets[i], nameof(sets));
             entries[i] = Registration.Of(sets[i]);
+            CollectibleAssemblies.Watch(entries[i].Type.Assembly);
         }
 
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
@@ -296,10 +358,20 @@ public sealed partial class LocalizationRegistry
             // without a code, and the code of a set it derives from isn't its own.
             var language = RecordedSets.TryGetValue(type, out var recorded) ? recorded.LanguageCode : null;
             entries[i] = Registration.ToCreate(type, create, language);
+            CollectibleAssemblies.Watch(type.Assembly);
         }
 
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
         ImmutableInterlocked.Update(ref Registered, registered => registered.With(entries, asDefaults));
+
+        // Noted per assembly after the sets are in, in the order the registrars run.
+        foreach (var entry in entries)
+        {
+            var at = Interlocked.Increment(ref SetsRegistered);
+            SetsRegisteredAt.AddOrUpdate(entry.Type.Assembly, new StrongBox<long>(at));
+        }
+
+        CountRegistration();
     }
 
     /// <summary>
@@ -523,6 +595,18 @@ public sealed partial class LocalizationRegistry
                     return index;
 
             return -1;
+        }
+
+        /// <summary>
+        /// These registrations without the sets of a context that unloads.
+        /// </summary>
+        public Registrations Without(AssemblyLoadContext context)
+        {
+            var defaults = this.Defaults.RemoveAll(registration => CollectibleAssemblies.IsIn(registration.Type, context));
+            var overrides = this.Overrides.RemoveAll(registration => CollectibleAssemblies.IsIn(registration.Type, context));
+
+            var registrations = new Registrations(defaults, overrides, this.Languages);
+            return registrations;
         }
 
         /// <summary>

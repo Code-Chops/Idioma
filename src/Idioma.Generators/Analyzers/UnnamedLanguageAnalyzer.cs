@@ -44,21 +44,9 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
         description: "Every parameter of LocalizedText.Inline and of [Localized] is a string, so wording in the wrong position compiles and shows in the wrong language.",
         helpLinkUri: PackageNames.HelpLink(UnnamedLanguageDiagnosticId));
 
-    // The code of a set in an assembly without languages, which the generator reports: both say that the attribute is
-    // missing, and both have the same fix. So the code is shared on purpose.
-#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
-    private static readonly DiagnosticDescriptor InlineWithoutLanguagesRule = new(
-        id: NoLanguagesDeclaredDiagnosticId,
-        title: "Inline text in an assembly without languages",
-        messageFormat: "{0} takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
-        category: "Design",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "The source generator writes LocalizedText.Inline with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such method (CS0117).",
-        helpLinkUri: PackageNames.HelpLink(NoLanguagesDeclaredDiagnosticId));
-#pragma warning restore RS1019
-
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [UnnamedLanguageRule, InlineWithoutLanguagesRule];
+    // LOC100 is the code of a set and of [Localized] in an assembly without languages too, which the generators report
+    // (SharedRules).
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [UnnamedLanguageRule, SharedRules.NoLanguagesDeclared];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -109,7 +97,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
             && SymbolEqualityComparer.Default.Equals(receiver, text)
             && context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken) is { Symbol: null, CandidateSymbols.IsEmpty: true })
         {
-            context.ReportDiagnostic(Diagnostic.Create(InlineWithoutLanguagesRule, access.Name.GetLocation(), $"{PackageNames.LocalizedTextName}.{LocalizedTextFactoryGenerator.FactoryName}"));
+            context.ReportDiagnostic(Diagnostic.Create(SharedRules.NoLanguagesDeclared, access.Name.GetLocation(), $"{PackageNames.LocalizedTextName}.{LocalizedTextFactoryGenerator.FactoryName} takes a wording per language"));
         }
     }
 

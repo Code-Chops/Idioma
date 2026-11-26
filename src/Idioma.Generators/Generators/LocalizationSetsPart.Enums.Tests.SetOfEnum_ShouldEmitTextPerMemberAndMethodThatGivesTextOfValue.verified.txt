@@ -3,8 +3,8 @@
 #pragma warning disable CS0612, CS0618 // Only generated code calls GeneratedCode.
 
 using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.CodeDom.Compiler;
 using System.Diagnostics.CodeAnalysis;
 using static CodeChops.Idioma.Internals.GeneratedCode;
 
@@ -35,7 +35,8 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Pending">nl</see>: In behandeling</description></item>
     /// </list>
     /// </remarks>
-    public static string Pending => FindSet<IOrderStatusLocalization>(0, 2)?.Pending ?? ResolveWording<IOrderStatusLocalization, OrderStatusLocalizationEn>(0, 2, "Pending", static set => set.Pending);
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
+    public static string Pending => GetSet<IOrderStatusLocalization>(0, 2)?.Pending ?? ResolveWording<IOrderStatusLocalization, OrderStatusLocalizationEn>(0, 2, "Pending", static set => set.Pending);
 
     /// <inheritdoc cref="OrderStatusLocalizationEn.Shipped"/>
     /// <remarks>
@@ -45,7 +46,8 @@ public static partial class OrderStatusLocalization
     /// <item><description><see cref="OrderStatusLocalizationNl.Shipped">nl</see>: Verzonden</description></item>
     /// </list>
     /// </remarks>
-    public static string Shipped => FindSet<IOrderStatusLocalization>(1, 2)?.Shipped ?? ResolveWording<IOrderStatusLocalization, OrderStatusLocalizationEn>(1, 2, "Shipped", static set => set.Shipped);
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
+    public static string Shipped => GetSet<IOrderStatusLocalization>(1, 2)?.Shipped ?? ResolveWording<IOrderStatusLocalization, OrderStatusLocalizationEn>(1, 2, "Shipped", static set => set.Shipped);
 
     /// <summary>
     /// The text of a value of <see cref="OrderStatus"/>, such as <see cref="Pending"/> for <c>OrderStatus.Pending</c>.
@@ -53,6 +55,7 @@ public static partial class OrderStatusLocalization
     /// <remarks>
     /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
     /// </remarks>
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
     public static string GetTextByValue(OrderStatus value) => TextsByValue<IOrderStatusLocalization>.Get(value);
 
     /// <param name="value">The value to give the text of.</param>
@@ -64,47 +67,33 @@ public static partial class OrderStatusLocalization
         /// <remarks>
         /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
         /// </remarks>
+        [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
         public string GetText() => TextsByValue<IOrderStatusLocalization>.Get(value);
     }
 
     /// <summary>
-    /// The text with a key. The key is the name of the text, such as <c>"Pending"</c>.
+    /// The text with a key, or <see langword="null"/> for an unknown key. The key is the name of the text, such as <c>"Pending"</c>.
     /// </summary>
     /// <remarks>
-    /// For a key that may be unknown, such as one from a database, use <see cref="TryGetTextByKey"/>.
+    /// A key may be one your code only has at run time, such as one from a database. <see cref="TextKeys"/> lists every key.
     /// </remarks>
     /// <param name="key">The key of the text: its name, in the same letter case.</param>
-    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
-    /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
-    /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => TryGetTextByKey(key, out var text, values) ? text : throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization");
-
-    /// <summary>
-    /// Gives the text with a key, when a text has that key. The key is the name of the text, such as <c>"Pending"</c>.
-    /// </summary>
-    /// <param name="key">The key of the text: its name, in the same letter case.</param>
-    /// <param name="text">The text, or <see langword="null"/> when no text has the key.</param>
-    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-    /// <returns><see langword="true"/> when a text has the key.</returns>
+    /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter, and only a nullable parameter takes <see langword="null"/>.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-    public static bool TryGetTextByKey(string key, [NotNullWhen(true)] out string? text, params ReadOnlySpan<object?> values)
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
+    public static string? GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch
     {
-        text = key switch
-        {
-            "Pending" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
-            "Shipped" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
-            null => throw CreateUnknownKeyException<IOrderStatusLocalization>(key, "OrderStatusLocalization"),
-            _ => null,
-        };
-
-        return text is not null;
-    }
+        "Pending" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Pending, key, values),
+        "Shipped" => ResolveKeyedWording<IOrderStatusLocalization>(OrderStatusLocalization.Shipped, key, values),
+        null => throw CreateNullKeyException<IOrderStatusLocalization>(key),
+        _ => null,
+    };
 
     /// <summary>
     /// The key of every text, sorted by name in ordinal order. <see cref="GetTextByKey"/> takes each of them.
     /// </summary>
+    [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
     public static ImmutableArray<string> TextKeys => TextKeysOf<IOrderStatusLocalization>.Keys;
 }
 
@@ -115,6 +104,7 @@ public static partial class OrderStatusLocalization
 /// Each set is registered automatically, so there's nothing to register.
 /// </summary>
 [CodeChops.Idioma.Internals.LocalizationContract(typeof(OrderStatus))]
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}")]
 public interface IOrderStatusLocalization
 {
     /// <inheritdoc cref="OrderStatusLocalization.Pending"/>
@@ -123,6 +113,7 @@ public interface IOrderStatusLocalization
     string Shipped { get; }
 }
 
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
 file static class TextsByValue<TContract>
 {
     internal static string Get(OrderStatus value) => value switch
@@ -133,6 +124,7 @@ file static class TextsByValue<TContract>
     };
 }
 
+[GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
 file static class TextKeysOf<TContract>
 {
     internal static readonly ImmutableArray<string> Keys = ["Pending", "Shipped"];

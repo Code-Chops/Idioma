@@ -12,8 +12,8 @@ namespace CodeChops.Idioma;
 /// <item>Register a set that isn't registered automatically, such as one that needs constructor arguments. Mark it
 /// <see cref="ExcludeFromLocalizationDiscoveryAttribute">[ExcludeFromLocalizationDiscovery]</see> and pass an instance to
 /// <see cref="Register(ReadOnlySpan{ILocalizationSet})"/>.</item>
-/// <item>Read a set directly with <see cref="Find{TContract}(CultureInfo)"/>, such as for the Dutch wording of a text
-/// whatever the current UI culture.</item>
+/// <item>Read a set directly with <see cref="GetLocalizationSet{TContract}(CultureInfo)"/>, such as for the Dutch
+/// wording of a text whatever the current UI culture.</item>
 /// </list>
 /// <para>
 /// When several sets word a text for one language, the last set in <see cref="Sets"/> that changes the text wins. See
@@ -34,7 +34,7 @@ namespace CodeChops.Idioma;
 ///
 /// // The Dutch wording of one text, whatever the current UI culture:
 /// var dutch = CultureInfo.GetCultureInfo("nl");
-/// string? checkout = LocalizationRegistry.Find&lt;IShopLocalization&gt;(dutch)?.Checkout;
+/// string? checkout = LocalizationRegistry.GetLocalizationSet&lt;IShopLocalization&gt;(dutch)?.Checkout;
 /// </code>
 /// </example>
 public sealed partial class LocalizationRegistry
@@ -177,7 +177,7 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <remarks>
     /// Each language is written as culture names are, whatever letter case its sets use. For example, <c>en-GB</c> for
-    /// a set whose code is <c>EN-gb</c>.
+    /// a set whose code is <c>EN-gb</c>. The languages are in ordinal order, so <c>en</c> comes before <c>en-GB</c>.
     /// </remarks>
     public static ImmutableArray<string> RegisteredLanguages => Current.SetLanguages;
 
@@ -188,7 +188,7 @@ public sealed partial class LocalizationRegistry
     /// <remarks>
     /// <para>
     /// Read a text from it to get that set's wording, whatever the current UI culture. For example:
-    /// <c>LocalizationRegistry.Find&lt;IShopLocalization&gt;(culture)?.Checkout</c>. Unlike a text, this
+    /// <c>LocalizationRegistry.GetLocalizationSet&lt;IShopLocalization&gt;(culture)?.Checkout</c>. Unlike a text, this
     /// doesn't fall back to a default language. A culture without a set gives <see langword="null"/>. Among several
     /// sets for one language, this returns the last one in <see cref="Sets"/>.
     /// </para>
@@ -208,10 +208,10 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="InvalidOperationException">
     /// When the constructor of a set that registered itself throws, with that exception inside.
     /// </exception>
-    public static TContract? Find<TContract>(CultureInfo culture)
+    public static TContract? GetLocalizationSet<TContract>(CultureInfo culture)
         where TContract : class
     {
-        return Current.FindSet<TContract>(culture);
+        return Current.GetByCulture<TContract>(culture);
     }
 
     /// <summary>
@@ -220,8 +220,8 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This works as <see cref="Find{TContract}(CultureInfo)"/> does. That one is simpler when you know the contract
-    /// at compile time.
+    /// This works as <see cref="GetLocalizationSet{TContract}(CultureInfo)"/> does. That one is simpler when you know
+    /// the contract at compile time.
     /// </para>
     /// </remarks>
     /// <param name="contract">The contract the set implements, such as <c>typeof(IShopLocalization)</c>.</param>
@@ -235,9 +235,9 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="InvalidOperationException">
     /// When the constructor of a set that registered itself throws, with that exception inside.
     /// </exception>
-    public static ILocalizationSet? Find(Type contract, CultureInfo culture)
+    public static ILocalizationSet? GetLocalizationSet(Type contract, CultureInfo culture)
     {
-        return Current.FindSet(contract, culture);
+        return Current.GetByCulture(contract, culture);
     }
 
     /// <summary>
@@ -275,7 +275,7 @@ public sealed partial class LocalizationRegistry
     private ImmutableArray<Registration> SetRegistrations { get; }
 
     /// <summary>
-    /// The languages this registry has at least one set for, each written as culture names are.
+    /// The languages this registry has at least one set for, each written as culture names are, in ordinal order.
     /// <see cref="RegisteredLanguages"/> gives those of <see cref="Current"/>.
     /// </summary>
     internal ImmutableArray<string> SetLanguages { get; }
@@ -298,6 +298,13 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     private FrozenDictionary<string, LanguageSets> SetsByLanguage { get; }
 
+    /// <summary>
+    /// Whether a set of an assembly that can be unloaded is registered here, such as a plugin's. A thread then keeps
+    /// nothing of this registry as its last lookup. No other thread could let go of that when the plugin unloads, and
+    /// the registry holds the plugin's sets (<see cref="CollectibleAssemblies"/>).
+    /// </summary>
+    internal bool HoldsCollectibleSets { get; }
+
     private LocalizationRegistry(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages,
         FrozenDictionary<string, LanguageSets> setsByLanguage)
     {
@@ -306,7 +313,9 @@ public sealed partial class LocalizationRegistry
         this.SetRegistrations = registrations;
         this.AppLanguages = appLanguages;
         this.SetsByLanguage = setsByLanguage;
-        this.SetLanguages = setsByLanguage.Keys;
+        this.HoldsCollectibleSets = registrations.Any(static registration => registration.Type.IsCollectible);
+        // Sorted, because a frozen dictionary gives its keys in an order of its own, which a reader can't rely on.
+        this.SetLanguages = setsByLanguage.Keys.Sort(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -321,8 +330,8 @@ public sealed partial class LocalizationRegistry
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
-    /// as <c>en-GB</c>.
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
+    /// culture name such as <c>en-GB</c>.
     /// </exception>
     // Internal: a registry of your own could only give back the sets you passed it, as no public member reads a text
     // from it.
@@ -356,8 +365,8 @@ public sealed partial class LocalizationRegistry
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a culture name such
-    /// as <c>en-GB</c>.
+    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
+    /// culture name such as <c>en-GB</c>.
     /// </exception>
     // The tests of the fallback order read through LocalizationRegistry.Word.
     internal static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, string defaultLanguage,
@@ -401,7 +410,7 @@ public sealed partial class LocalizationRegistry
         ArgumentNullException.ThrowIfNull(language, parameterName);
 
         if (!CultureName.IsValid(language))
-            throw new ArgumentException($"\"{language}\" isn't a culture name. Pass one such as en or en-GB.", parameterName);
+            throw new ArgumentException($"'{language}' isn't a culture name. Pass one such as en or en-GB.", parameterName);
 
         var culture = CultureName.Normalize(language);
         return culture;
@@ -450,12 +459,14 @@ public sealed partial class LocalizationRegistry
     /// The registry of the whole app (<see cref="Current"/>), built again with every registration. Each set is filed
     /// under the language it registered with, without creating it where the build recorded that language.
     /// </summary>
-    // A set is created here only where its language can't be told without it: a set whose LocalizationLanguageCode the
-    // build couldn't read, as one that isn't a constant, or one registered as an instance. A set whose code is no culture name any more is filed
+    // A set is created here only where its language can't be told without it, such as a set whose
+    // LocalizationLanguageCode the build couldn't read because it isn't a constant. A set that exists already, such as
+    // one registered as an instance, has its code read again. A set whose code is no culture name any more is filed
     // under the language it registered with, because it would otherwise fail every text of the app, far from what
     // changed its code. A set that can't be filed, because creating it or reading its code throws, fails only the texts
     // of its contract (LanguageSets.Of), and is tried again there.
-    private static LocalizationRegistry CreateOfRegistrations(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages)
+    private static LocalizationRegistry CreateOfRegistrations(ImmutableArray<Registration> registrations,
+        ImmutableArray<string> appLanguages)
     {
         var filed = ImmutableArray.CreateBuilder<Registration>(registrations.Length);
         var languages = new List<string>(registrations.Length);
@@ -463,7 +474,7 @@ public sealed partial class LocalizationRegistry
 
         foreach (var registration in registrations)
         {
-            if (FindFilingLanguage(registration) is { } language)
+            if (GetFilingLanguage(registration) is { } language)
             {
                 filed.Add(registration);
                 languages.Add(language);
@@ -481,7 +492,7 @@ public sealed partial class LocalizationRegistry
     /// The language a registered set is filed under, or <see langword="null"/> when creating it, or reading its code,
     /// throws.
     /// </summary>
-    private static string? FindFilingLanguage(Registration registration)
+    private static string? GetFilingLanguage(Registration registration)
     {
         try
         {
@@ -490,7 +501,9 @@ public sealed partial class LocalizationRegistry
             if (registration.IsCreated)
             {
                 var set = registration.Set;
-                return set.LocalizationLanguageCode is { } current && CultureName.IsValid(current) ? current : registration.Language ?? ReadLanguageCode(set);
+                return set.LocalizationLanguageCode is { } current && CultureName.IsValid(current)
+                    ? current
+                    : registration.Language ?? ReadLanguageCode(set);
             }
 
             // The build's record of the type itself. A set whose LocalizationLanguageCode the build couldn't read is
@@ -541,53 +554,43 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// The set of this registry implementing <typeparamref name="TContract"/> for a culture, or else for its parent
-    /// culture. <see cref="Find{TContract}(CultureInfo)"/> reads <see cref="Current"/> through it.
+    /// culture. <see cref="GetLocalizationSet{TContract}(CultureInfo)"/> reads <see cref="Current"/> through it.
     /// </summary>
     /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    internal TContract? FindSet<TContract>(CultureInfo culture)
+    internal TContract? GetByCulture<TContract>(CultureInfo culture)
         where TContract : class
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        var contract = (TContract?)this.FindSet(typeof(TContract), culture);
+        var contract = (TContract?)this.GetByCulture(typeof(TContract), culture);
         return contract;
     }
 
     /// <summary>
-    /// The set of this registry implementing a contract for a culture, or else for its parent culture.
-    /// <see cref="Find(Type, CultureInfo)"/> reads <see cref="Current"/> through it.
+    /// The set of this registry implementing a contract for a culture, or else for its parent culture. Among several
+    /// sets for one language, the last in <see cref="Sets"/> wins. <see cref="GetLocalizationSet(Type, CultureInfo)"/>
+    /// reads <see cref="Current"/> through it.
     /// </summary>
     /// <exception cref="ArgumentNullException">
     /// When <paramref name="contract"/> or <paramref name="culture"/> is <see langword="null"/>.
     /// </exception>
-    internal ILocalizationSet? FindSet(Type contract, CultureInfo culture)
+    // Through the lookup a text of the culture reads too (Resolve), so the culture's names and their sets are worked
+    // out once per culture name, and not on every call.
+    internal ILocalizationSet? GetByCulture(Type contract, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(culture);
 
-        foreach (var name in new CultureFallback(culture))
-            if (this.FindByLanguage(contract, name) is { } set)
-                return set;
+        foreach (var sets in this.Resolve(culture).Levels)
+            if (sets.Of(contract) is [.., var last])
+                return last.Set;
 
         return null;
     }
 
     /// <summary>
-    /// The set implementing a contract that is registered for one language, or <see langword="null"/> when none is. The
-    /// language is an <see cref="ILocalizationSet.LocalizationLanguageCode"/>, matched in any letter case, without the culture walk.
-    /// Among several sets for the language, the last in <see cref="Sets"/> wins.
-    /// </summary>
-    internal ILocalizationSet? FindByLanguage(Type contract, string language)
-    {
-        var set = this.SetsByLanguage.TryGetValue(language, out var sets) && sets.Of(contract) is [.., var last]
-            ? last.Set
-            : null;
-
-        return set;
-    }
-
-    /// <summary>
-    /// A set's language code, read once to file the set under it.
+    /// A set's language code, read once to file the set under it, or to fall back to the language of the set a text
+    /// was declared with. Throws when it isn't a culture name.
     /// </summary>
     private static string ReadLanguageCode(ILocalizationSet set)
     {
@@ -599,9 +602,9 @@ public sealed partial class LocalizationRegistry
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (languageCode is null || !CultureName.IsValid(languageCode))
         {
-            var given = languageCode is null ? "null" : $"\"{languageCode}\"";
+            var given = languageCode is null ? "null" : $"'{languageCode}'";
 
-            throw new InvalidOperationException($"{set.GetType()} gives {given} as its {nameof(ILocalizationSet)}.{nameof(ILocalizationSet.LocalizationLanguageCode)}. Return a culture name, such as en or en-GB.");
+            throw new InvalidOperationException($"'{set.GetType()}' gives {given} as its {nameof(ILocalizationSet)}.{nameof(ILocalizationSet.LocalizationLanguageCode)}. Return a culture name, such as en or en-GB.");
         }
 
         return languageCode;

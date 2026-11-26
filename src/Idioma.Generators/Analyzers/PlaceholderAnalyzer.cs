@@ -190,10 +190,11 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
             found.Add((identifier.GetLocation(), placeholderOfConstant));
         }
 
-        // A text an attribute names as its error message, which it formats: the attribute fills in {0}. Asked last,
-        // because it reads the attributes of the whole compilation.
+        // A text marked as a format, or one an attribute names as its error message, which it formats: something fills
+        // in {0}. The attributes of the compilation are asked last, because they're searched in every file.
         if (found.Count is 0
-            || (declaration is PropertyDeclarationSyntax && IsNamedAsErrorMessage(member, set, context.Compilation, context.CancellationToken)))
+            || (declaration is PropertyDeclarationSyntax
+                && (IsMarkedAsFormat(member, set) || IsNamedAsErrorMessage(member, set, context.Compilation, context.CancellationToken))))
         {
             return;
         }
@@ -203,6 +204,50 @@ public sealed class PlaceholderAnalyzer : DiagnosticAnalyzer
 
         foreach (var (location, placeholder) in found)
             context.ReportDiagnostic(Diagnostic.Create(PlaceholderRule, location, subject, placeholder, SetAdvice));
+    }
+
+    /// <summary>
+    /// Whether a property is marked as a composite format, as in
+    /// <c>[StringSyntax(StringSyntaxAttribute.CompositeFormat)]</c>: something outside the set fills in its
+    /// placeholders, as an attribute in another project does that names the text as its error message, which this build
+    /// can't see. The mark counts on the property itself, and on the text of the generated class, which takes it from
+    /// the set of the default language. So marking that set marks every language.
+    /// </summary>
+    private static bool IsMarkedAsFormat(ISymbol member, INamedTypeSymbol set)
+    {
+        if (IsCompositeFormat(member))
+            return true;
+
+        foreach (var text in ContractTexts.FindImplementedTexts(member, set))
+            if (ResourceNamedTexts.FindGeneratedClass(text) is { } generatedClass && generatedClass.GetMembers(text.Name).Any(IsCompositeFormat))
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a member is marked <c>[StringSyntax(StringSyntaxAttribute.CompositeFormat)]</c>.
+    /// </summary>
+    internal static bool IsCompositeFormat(ISymbol member)
+    {
+        foreach (var attribute in member.GetAttributes())
+        {
+            if (attribute.AttributeClass is
+                {
+                    Name: "StringSyntaxAttribute",
+                    ContainingNamespace:
+                    {
+                        Name: "CodeAnalysis",
+                        ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } },
+                    },
+                }
+                && attribute.ConstructorArguments is [{ Value: "CompositeFormat" }, ..])
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

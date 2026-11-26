@@ -7,6 +7,9 @@
 #
 # Needs the native toolchain of NativeAOT: on Ubuntu, `sudo apt-get install clang zlib1g-dev`. If the published program
 # is stopped by the machine, `dotnet run --project AotSmokeApp` from here runs the same checks without NativeAOT.
+#
+# With IDIOMA_PACKED=true, it packs nothing and takes the package that is in artifacts/ already. The publish workflow
+# runs it so on the package it pushes, which another job packed.
 
 set -euo pipefail
 
@@ -14,8 +17,16 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 
 # The repository's own SDK (its global.json) packs; the SDK of this folder builds the app.
-(cd "$root" && dotnet pack src/Idioma/Idioma.csproj -c Release -o artifacts -warnaserror)
 version="$(cd "$root" && dotnet msbuild src/Idioma/Idioma.csproj -getProperty:Version)"
+
+if [ "${IDIOMA_PACKED:-}" = "true" ]; then
+  if [ ! -f "$root/artifacts/CodeChops.Idioma.$version.nupkg" ]; then
+    echo "IDIOMA_PACKED is true, but artifacts/ holds no CodeChops.Idioma.$version.nupkg to test." >&2
+    exit 1
+  fi
+else
+  (cd "$root" && dotnet pack src/Idioma/Idioma.csproj -c Release -o artifacts -warnaserror)
+fi
 
 cd "$here"
 # The package restored by an earlier run has the same version as the one packed now, and would stand in for it.

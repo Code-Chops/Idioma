@@ -274,7 +274,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         text.ShouldContain($"public interface {contract}{Environment.NewLine}");
         text.ShouldContain($"public static partial class {texts}");
-        text.ShouldContain($"public static string Checkout => FindSet<{contract}>(0, 1)?.Checkout ?? ResolveWording<{contract}, {className}>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain($"public static string Checkout => GetSet<{contract}>(0, 1)?.Checkout ?? ResolveWording<{contract}, {className}>(0, 1, \"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
@@ -300,7 +300,7 @@ public sealed partial class LocalizationSetsPartTests
             """));
 
         // Assert
-        text.ShouldContain("public static string Checkout => FindSet<IShopLocalization>(0, 1)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain("public static string Checkout => GetSet<IShopLocalization>(0, 1)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
@@ -454,7 +454,7 @@ public sealed partial class LocalizationSetsPartTests
         var text = ContractText(Run(ShopSets));
 
         // Assert: a set lists ILocalizationSet itself, so neither of the two it lists is redundant.
-        text.ShouldContain($"[CodeChops.Idioma.Internals.LocalizationContract]{Environment.NewLine}public interface IShopLocalization{Environment.NewLine}");
+        text.ShouldContain($"[CodeChops.Idioma.Internals.LocalizationContract]{Environment.NewLine}{GeneratedFile.ImportedGeneratedCodeAttribute}{Environment.NewLine}public interface IShopLocalization{Environment.NewLine}");
         text.ShouldNotContain("IShopLocalization :");
         text.ShouldNotContain("partial class ShopLocalizationEn");
     }
@@ -526,7 +526,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         text.ShouldContain("public interface IShopLocalization");
         text.ShouldContain("public static partial class ShopLocalization");
-        text.ShouldNotContain("FindSet<");
+        text.ShouldNotContain("GetSet<");
         text.ShouldNotContain("ResolveWording<");
     }
 
@@ -607,7 +607,8 @@ public sealed partial class LocalizationSetsPartTests
         var text = ContractText(Run(ShopSets));
         var usings = text.Split('\n').Where(static line => line.StartsWith("using ", StringComparison.Ordinal)).Select(static line => line.TrimEnd()).ToArray();
 
-        // Assert: the namespaces of what the method that gives a text by its key names, and what words a text.
-        usings.ShouldBe(["using System;", "using System.Collections.Generic;", "using System.Collections.Immutable;", "using System.Diagnostics.CodeAnalysis;", "using static CodeChops.Idioma.Internals.GeneratedCode;"]);
+        // Assert: the namespaces of what the method that gives a text by its key names, of the attributes that mark
+        // generated code, and what words a text.
+        usings.ShouldBe(["using System;", "using System.Collections.Immutable;", "using System.CodeDom.Compiler;", "using System.Diagnostics.CodeAnalysis;", "using static CodeChops.Idioma.Internals.GeneratedCode;"]);
     }
 }

@@ -49,19 +49,21 @@ internal static partial class LocalizationContractSource
 
             ContractDocComments.AppendMemberDocs(sb, contract, sets, className, member);
 
+            sb.AppendLine($"    {GeneratedFile.ImportedCodeAttributes}");
+
             // [Obsolete] and [Experimental] as the set has them, so that the code that shows the text is told.
             if (member.Marks is { } marks)
                 sb.AppendLine($"    {marks}");
 
             // A text is worded on every read, by the set of the user's language. The package keeps that set per
-            // culture and per position (FindSet), so a read is a call of the set's own member. Where no set is kept
+            // culture and per position (GetSet), so a read is a call of the set's own member. Where no set is kept
             // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
             // comment gives (ResolveWording), which also creates the set of the default language when a text first
             // needs it. Both are called with a type argument, so that no text can stand before them: a name with a type
             // argument is not looked for among the texts.
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => FindSet<{name}>({i}, {texts.Length})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetSet<{name}>({i}, {texts.Length})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
@@ -73,7 +75,7 @@ internal static partial class LocalizationContractSource
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => FindSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
@@ -130,6 +132,7 @@ internal static partial class LocalizationContractSource
                 /// <remarks>
                 /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                 /// </remarks>
+                {{GeneratedFile.ImportedCodeAttributes}}
                 {{(@enum.IsPublic ? "public" : "internal")}} static string {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
             """);
 
@@ -149,6 +152,7 @@ internal static partial class LocalizationContractSource
                         /// <remarks>
                         /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                         /// </remarks>
+                        {{GeneratedFile.ImportedCodeAttributes}}
                         {{(@enum.IsPublic ? "public" : "internal")}} string {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
                     }
                 """);
@@ -179,55 +183,38 @@ internal static partial class LocalizationContractSource
     /// <summary>
     /// Writes the members that give a text by its key, which is its name:
     /// <c>ShopLocalization.GetTextByKey("Checkout")</c>, or
-    /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c> for a text that takes values. A key no text has
-    /// throws there, and gives <see langword="false"/> from <c>TryGetTextByKey</c>. Values that aren't those the text
-    /// takes throw from both. <c>TextKeys</c> lists every key.
+    /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c> for a text that takes values. An unknown key
+    /// gives <see langword="null"/>. Values that aren't those the text takes throw. <c>TextKeys</c> lists every key.
     /// </summary>
     // Each text by the name of its class in front, because the parameters of the method stand before a text named
-    // key, text or values. What checks the values is called with a type argument, which no text has. The framework's
-    // types stand by their name alone, as the file imports their namespaces.
+    // key or values. What checks the values, and what a null key throws, is called with a type argument, which no text
+    // has. The framework's types stand by their name alone, as the file imports their namespaces.
     //
-    // One switch, in TryGetTextByKey, which GetTextByKey calls: two would double what a contract of many texts adds to
-    // its assembly. The keys stand in a class outside the generated one (TextKeysOf). A static field of the generated
-    // class itself would give that class an initializer, which every read of a text would have to check for.
+    // The keys stand in a class outside the generated one (TextKeysOf). A static field of the generated class itself
+    // would give that class an initializer, which every read of a text would have to check for.
     private static void AppendGet(StringBuilder sb, ContractFile file)
     {
         var contract = file.Contract;
         var name = file.ContractName;
-        var textsName = file.TextsName;
         var texts = file.Texts;
 
         var example = texts.Length > 0 ? $", such as <c>{CodeEscaping.EscapeXml(SymbolDisplay.FormatLiteral(texts[0].Name, quote: true))}</c>" : "";
-        var unknownKey = $"CreateUnknownKeyException<{name}>(key, {SymbolDisplay.FormatLiteral(contract.TextsName, quote: true)})";
 
         sb.AppendLine();
         sb.AppendLine($$"""
                 /// <summary>
-                /// The text with a key. The key is the name of the text{{example}}.
+                /// The text with a key, or <see langword="null"/> for an unknown key. The key is the name of the text{{example}}.
                 /// </summary>
                 /// <remarks>
-                /// For a key that may be unknown, such as one from a database, use <see cref="{{LocalizationSetsAnalysis.TryGetName}}"/>.
+                /// A key may be one your code only has at run time, such as one from a database. <see cref="{{LocalizationSetsAnalysis.KeysName}}"/> lists every key.
                 /// </remarks>
                 /// <param name="key">The key of the text: its name, in the same letter case.</param>
-                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-                /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
-                /// <exception cref="KeyNotFoundException">When no text has the key.</exception>
-                /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-                public static string {{LocalizationSetsAnalysis.GetName}}(string key, params ReadOnlySpan<object?> values) => {{LocalizationSetsAnalysis.TryGetName}}(key, out var text, values) ? text : throw {{unknownKey}};
-
-                /// <summary>
-                /// Gives the text with a key, when a text has that key. The key is the name of the text{{example}}.
-                /// </summary>
-                /// <param name="key">The key of the text: its name, in the same letter case.</param>
-                /// <param name="text">The text, or <see langword="null"/> when no text has the key.</param>
-                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter.</param>
-                /// <returns><see langword="true"/> when a text has the key.</returns>
+                /// <param name="values">The values of a text that takes them, in the order of its parameters. A value isn't converted to the type of its parameter, and only a nullable parameter takes <see langword="null"/>.</param>
                 /// <exception cref="ArgumentNullException">When <paramref name="key"/> is <see langword="null"/>.</exception>
                 /// <exception cref="ArgumentException">When <paramref name="values"/> doesn't hold one value of the right type for each parameter of the text.</exception>
-                public static bool {{LocalizationSetsAnalysis.TryGetName}}(string key, [NotNullWhen(true)] out string? text, params ReadOnlySpan<object?> values)
+                {{GeneratedFile.ImportedCodeAttributes}}
+                public static string? {{LocalizationSetsAnalysis.GetName}}(string key, params ReadOnlySpan<object?> values) => key switch
                 {
-                    text = key switch
-                    {
             """);
 
         foreach (var member in texts)
@@ -237,29 +224,27 @@ internal static partial class LocalizationContractSource
 
             if (!member.IsMethod)
             {
-                sb.AppendLine($"            {keyLiteral} => ResolveKeyedWording<{name}>({text}, key, values),");
+                sb.AppendLine($"        {keyLiteral} => ResolveKeyedWording<{name}>({text}, key, values),");
                 continue;
             }
 
             var count = member.Parameters.Length;
             var arguments = String.Join(", ", member.Parameters.Select((parameter, index)
-                => $"GetKeyedValue<{ContractTypeNames.RenderType(parameter.Type, contract.Namespace)}>(key, values, {index}, {count}, {SymbolDisplay.FormatLiteral(parameter.Name, quote: true)})"));
+                => $"GetKeyedValue<{ContractTypeNames.RenderType(parameter.Type, contract.Namespace)}>(key, values, {index}, {count}, {SymbolDisplay.FormatLiteral(parameter.Name, quote: true)}, acceptsNull: {(parameter.AcceptsNull ? "true" : "false")})"));
 
-            sb.AppendLine($"            {keyLiteral} => {text}({arguments}),");
+            sb.AppendLine($"        {keyLiteral} => {text}({arguments}),");
         }
 
-        // A key that is null throws from both methods, as a key that isn't one.
+        // A key that is null is a mistake in the call, so it throws, where an unknown key gives null.
         sb.AppendLine($$"""
-                        null => throw {{unknownKey}},
-                        _ => null,
-                    };
-
-                    return text is not null;
-                }
+                    null => throw CreateNullKeyException<{{name}}>(key),
+                    _ => null,
+                };
 
                 /// <summary>
                 /// The key of every text, sorted by name in ordinal order. <see cref="{{LocalizationSetsAnalysis.GetName}}"/> takes each of them.
                 /// </summary>
+                {{GeneratedFile.ImportedCodeAttributes}}
                 public static ImmutableArray<string> {{LocalizationSetsAnalysis.KeysName}} => {{TextKeysName}}<{{name}}>.Keys;
             """);
     }
@@ -276,12 +261,13 @@ internal static partial class LocalizationContractSource
     {
         var contract = file.Contract;
 
-        sb.AppendLine("""
+        sb.AppendLine($$"""
 
             /// <summary>
             /// Gives the values of each enum of another assembly whose members are marked <c>[Localized]</c> there the texts of this set.
             /// The <c>GetText()</c> of that assembly then gives them.
             /// </summary>
+            {{GeneratedFile.ImportedCodeAttributes}}
             file static class EnumTextsOfOtherAssemblies
             {
                 [System.Runtime.CompilerServices.ModuleInitializer]
@@ -290,7 +276,7 @@ internal static partial class LocalizationContractSource
             """);
 
         foreach (var @enum in contract.Enums.Where(static @enum => @enum.HasTextsOfItsAssembly))
-            sb.AppendLine($"        RegisterEnumTexts<{ContractTypeNames.RenderType(@enum.Type, contract.Namespace)}>({file.TextsName}.{LocalizationSetsAnalysis.LookupName});");
+            sb.AppendLine($"        RegisterEnumTexts<{ContractTypeNames.RenderType(@enum.Type, contract.Namespace)}, {file.ContractName}>({file.TextsName}.{LocalizationSetsAnalysis.LookupName});");
 
         sb.AppendLine("""
                 }
@@ -318,6 +304,7 @@ internal static partial class LocalizationContractSource
 
         sb.AppendLine($$"""
 
+            {{GeneratedFile.ImportedCodeAttributes}}
             file static class {{TextKeysName}}<TContract>
             {
                 internal static readonly ImmutableArray<string> Keys = [{{keys}}];
@@ -357,6 +344,7 @@ internal static partial class LocalizationContractSource
         sb.AppendLine($$"""
 
             [Obsolete]
+            {{GeneratedFile.ImportedCodeAttributes}}
             file static class {{ObsoleteTextsName}}<TContract>
             {
             """);

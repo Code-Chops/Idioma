@@ -9,11 +9,13 @@
 /// Writes texts in every language of this assembly's <see cref="CodeChops.Idioma.SupportedLanguagesAttribute"/>.
 /// </summary>
 [Microsoft.CodeAnalysis.EmbeddedAttribute]
+[System.CodeDom.Compiler.GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 internal static class GeneratedLocalizedText
 {
     // The languages, the default first, as the package picks one of them by its position. One array for
-    // every call, which the package tells apart by reference.
-    private static readonly string[] Languages = ["en", "nl", "de"];
+    // every call, which the package tells apart by reference. The texts on members pass it too, because
+    // the package keeps its last pick for one array.
+    internal static readonly string[] Languages = ["en", "nl", "de"];
 
     extension(CodeChops.Idioma.LocalizedText)
     {
@@ -32,7 +34,7 @@ internal static class GeneratedLocalizedText
         /// <param name="de">The wording in <c>de</c>.</param>
         public static string Inline(string en, string nl, string de)
         {
-            return CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(Languages) switch
+            return CodeChops.Idioma.Internals.GeneratedCode.GetLanguageIndex(Languages) switch
             {
                 1 => nl ?? throw new System.ArgumentNullException(nameof(nl)),
                 2 => de ?? throw new System.ArgumentNullException(nameof(de)),

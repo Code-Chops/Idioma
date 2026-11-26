@@ -7,7 +7,7 @@ Each code has an example and the fix. The [list of every code](../build-errors.m
 A text has a name the generated class can't give it, so that text isn't generated. Rename the text. These names are taken:
 
 - The name of the generated class, as in `ShopLocalization.ShopLocalization`. In C#, a member can't have the name of its own class.
-- `GetTextByKey` and `TryGetTextByKey`. The generated class has a method of each name, which gives a [text by its key](../advanced-topics.md#getting-a-text-by-its-key).
+- `GetTextByKey`. The generated class has a method of that name, which gives a [text by its key](../advanced-topics.md#getting-a-text-by-its-key).
 - `TextKeys`. The generated class has a property of that name, which lists the key of every text.
 - `GetTextByValue`, in a [set of an enum](../enums.md#a-set-of-the-enum). The generated class has a method of that name, which gives the text of an enum value.
 - `GetText`, in a set of an enum. The generated class has an extension method of that name, which gives a value its text: `order.Status.GetText()`.

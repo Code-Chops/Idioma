@@ -76,13 +76,17 @@ internal readonly ref struct WordingScope
         var uiCulture = CultureInfo.CurrentUICulture;
         var currentCulture = CultureInfo.CurrentCulture;
         var changesUiCulture = !culture.Equals(uiCulture);
-        var changesCulture = valuesCulture is not null && !ReferenceEquals(valuesCulture, currentCulture);
+        var changesCulture = valuesCulture is not null && !CultureFormats.AreAlike(valuesCulture, currentCulture);
 
         if (changesUiCulture || changesCulture)
         {
             var previous = ExecutionContext.Capture();
-            var switchedUiCulture = changesUiCulture ? culture : uiCulture;
-            var switchedCulture = changesCulture ? valuesCulture! : currentCulture;
+
+            // What the scope sets, with null for a culture it leaves alone, because that's all the context holds. A
+            // culture left alone may come from a default of the process, such as
+            // CultureInfo.DefaultThreadCurrentCulture, which can change while the context lives.
+            var switchedUiCulture = changesUiCulture ? culture : null;
+            var switchedCulture = changesCulture ? valuesCulture : null;
 
             this.PreviousContext = previous;
             this.PreviousUICulture = changesUiCulture ? uiCulture : null;
@@ -123,7 +127,7 @@ internal readonly ref struct WordingScope
     /// <param name="takesKept">
     /// Whether to take the provider's answer that <see cref="KeepProvidedCulture"/> kept, in place of asking again.
     /// </param>
-    public static CultureInfo FindReaderCulture(out CultureInfo? providedCulture, bool takesKept = false)
+    public static CultureInfo GetReaderCulture(out CultureInfo? providedCulture, bool takesKept = false)
     {
         providedCulture = null;
 
@@ -161,7 +165,7 @@ internal readonly ref struct WordingScope
 
     /// <summary>
     /// Keeps the provider's answer for the text that is worded next on this thread
-    /// (<see cref="FindReaderCulture"/>).
+    /// (<see cref="GetReaderCulture"/>).
     /// </summary>
     /// <param name="providedCulture">What the provider gave, which may be <see langword="null"/>.</param>
     public static void KeepProvidedCulture(CultureInfo? providedCulture)
@@ -194,21 +198,23 @@ internal readonly ref struct WordingScope
     }
 
     /// <summary>
-    /// An execution context with the cultures a scope switched to: the UI culture, and the culture that formats values.
+    /// An execution context with the cultures a scope set in it: the UI culture, the culture that formats values, or
+    /// both.
     /// </summary>
-    private sealed class SwitchedContext(CultureInfo uiCulture, CultureInfo culture, ExecutionContext context)
+    private sealed class SwitchedContext(CultureInfo? uiCulture, CultureInfo? culture, ExecutionContext context)
     {
         public ExecutionContext Context { get; } = context;
 
         // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
-        private CultureInfo UICulture { get; } = uiCulture;
-        private CultureInfo Culture { get; } = culture;
+        private CultureInfo? UICulture { get; } = uiCulture;
+        private CultureInfo? Culture { get; } = culture;
 
         /// <summary>
-        /// Whether the context holds these cultures. They're compared as objects, because a scope switches to the
-        /// culture object its language or its provider gives, which is the same one text after text.
+        /// Whether a scope set these cultures in the context, where <see langword="null"/> is one it left alone.
+        /// They're compared as objects, because a scope switches to the culture object its language or its provider
+        /// gives, which is the same one text after text.
         /// </summary>
-        public bool Holds(CultureInfo uiCulture, CultureInfo culture)
+        public bool Holds(CultureInfo? uiCulture, CultureInfo? culture)
         {
             var holds = ReferenceEquals(this.UICulture, uiCulture) && ReferenceEquals(this.Culture, culture);
             return holds;

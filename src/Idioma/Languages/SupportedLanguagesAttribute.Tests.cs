@@ -42,6 +42,17 @@ public sealed class SupportedLanguagesAttributeTests
     }
 
     [Test]
+    public void ShouldHoldLanguagesInLetterCaseOfCultureNames()
+    {
+        // Arrange & Act: the build accepts a language in any letter case.
+        var attribute = new SupportedLanguagesAttribute("EN-gb", "NL", "zh-hans");
+
+        // Assert
+        attribute.DefaultLanguage.ShouldBe("en-GB");
+        attribute.Languages.ShouldBe(["en-GB", "nl", "zh-Hans"]);
+    }
+
+    [Test]
     public void Languages_ShouldBeReadableFromDeclaringAssembly()
     {
         // Arrange & Act: what an app reads to offer a choice of language; this test project declares en and nl.
@@ -76,7 +87,6 @@ public sealed class SupportedLanguagesAttributeTests
         var remarks = member.Element("remarks").ShouldNotBeNull().ToString();
 
         // Assert: a set, an inline text, and an attribute on a member, each of which the attribute's languages hold.
-        remarks.ShouldContain("three ways");
         remarks.ShouldContain("T:CodeChops.Idioma.ILocalizationSet");
         remarks.ShouldContain("LocalizedText.Inline(");
         remarks.ShouldContain("[Localized(");

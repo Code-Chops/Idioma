@@ -32,27 +32,19 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
     private const string Title = "Set whose enums don't match its contract";
     private const string Description = "The contract of a set of an enum has a text for each member of the enum. Every set of it lists ILocalizationSet<TEnum>, in each language, and no other enum, so each set shows which enum it words. List it in place of ILocalizationSet.";
 
-    private static readonly DiagnosticDescriptor MissingEnumRule = new(
+    // One descriptor for both cases, an enum the set lacks and one it lists too many, so that an IDE lists the code once.
+    // What's wrong is the first argument, and what to do the second.
+    private static readonly DiagnosticDescriptor SetOfEnumRule = new(
         id: SetOfEnumDiagnosticId,
         title: Title,
-        messageFormat: "'{0}' doesn't list {1}, which every set of '{2}' lists. {3}.",
+        messageFormat: "{0}. {1}.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: Description,
         helpLinkUri: PackageNames.HelpLink(SetOfEnumDiagnosticId));
 
-    private static readonly DiagnosticDescriptor ExtraEnumRule = new(
-        id: SetOfEnumDiagnosticId,
-        title: Title,
-        messageFormat: "'{0}' lists '{1}', but '{2}' has no texts of '{3}'. {4}.",
-        category: "Design",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: Description,
-        helpLinkUri: PackageNames.HelpLink(SetOfEnumDiagnosticId));
-
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [MissingEnumRule, ExtraEnumRule];
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [SetOfEnumRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -115,11 +107,9 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
             : $"List {pronoun} next to '{plan.Contract.Name}'";
 
         context.ReportDiagnostic(Diagnostic.Create(
-            MissingEnumRule,
+            SetOfEnumRule,
             location,
-            set.Name,
-            JoinNames(plan.Missing),
-            plan.Contract.Name,
+            $"'{set.Name}' doesn't list {JoinNames(plan.Missing)}, which every set of '{plan.Contract.Name}' lists",
             advice));
     }
 
@@ -135,12 +125,9 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
             : fix;
 
         context.ReportDiagnostic(Diagnostic.Create(
-            ExtraEnumRule,
+            SetOfEnumRule,
             location,
-            set.Name,
-            $"{PackageNames.LocalizationSetName}<{@enum.Name}>",
-            plan.Contract.Name,
-            @enum.Name,
+            $"'{set.Name}' lists '{PackageNames.LocalizationSetName}<{@enum.Name}>', but '{plan.Contract.Name}' has no texts of '{@enum.Name}'",
             advice));
     }
 

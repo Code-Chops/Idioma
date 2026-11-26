@@ -69,8 +69,12 @@ public sealed partial class LocalizationRegistry
             lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, new CultureFallback(culture), culture, language: null), ref this._culturesKept);
 
         // Both written on this thread, one after the other, so the culture asked always belongs to the lookup next to it.
-        LastCulture = lookup;
-        LastCultureAsked = culture;
+        // Not for a registry that holds a plugin's sets, which the thread would hold after the plugin unloads.
+        if (!this.HoldsCollectibleSets)
+        {
+            LastCulture = lookup;
+            LastCultureAsked = culture;
+        }
 
         return lookup;
     }
@@ -85,9 +89,11 @@ public sealed partial class LocalizationRegistry
             return last;
 
         if (!this.ByLanguageCode.TryGetValue(language, out var lookup))
-            lookup = Keep(this.ByLanguageCode, language, new CultureLookup(this, CultureFallback.OfLanguage(language), CultureName.FindCulture(language), language), ref this._languagesKept);
+            lookup = Keep(this.ByLanguageCode, language, new CultureLookup(this, CultureFallback.OfLanguage(language), CultureName.GetCulture(language), language), ref this._languagesKept);
 
-        LastLanguage = lookup;
+        if (!this.HoldsCollectibleSets)
+            LastLanguage = lookup;
+
         return lookup;
     }
 
@@ -141,7 +147,7 @@ public sealed partial class LocalizationRegistry
         /// <summary>
         /// The culture this was worked out for, which another culture of the same name gets too. For a language code,
         /// the culture of the language, or <see langword="null"/> where this machine has none, as under invariant
-        /// globalization (see <see cref="CultureName.FindCulture"/>).
+        /// globalization (see <see cref="CultureName.GetCulture"/>).
         /// </summary>
         public CultureInfo? Culture { get; }
 
@@ -228,7 +234,7 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// The wording the sets of a contract give a text for the first of the names that has a set, or
     /// <see langword="null"/> when none has. Within a name, it's the wording of the set registered last that words the
-    /// text itself, rather than leaving it to the set it derives from (<see cref="FindLevelSet"/>). So rewordings of
+    /// text itself, rather than leaving it to the set it derives from (<see cref="GetLevelSet"/>). So rewordings of
     /// one set, registered one after another, each show the texts they change. When that set leaves the text to a set of
     /// a less specific name it derives from, the text takes the wording of that name instead, and so on up. So a set that
     /// rewords a language reaches the regional sets built on that language, for every text they leave as it was.
@@ -252,7 +258,7 @@ public sealed partial class LocalizationRegistry
     // A set is asked for its wording only once it's known to give it, or where only its wording can tell. A British set
     // that leaves a text to the English one isn't called for that text at all. Called anyway, a text that a wording
     // shows was worded twice per level for a British user.
-    internal string? FindWording<TContract>(CultureLookup lookup, string name, Func<TContract, string?> select,
+    internal string? GetWording<TContract>(CultureLookup lookup, string name, Func<TContract, string?> select,
         out TContract? set, out bool isToldByRecord)
         where TContract : class
     {
@@ -272,7 +278,7 @@ public sealed partial class LocalizationRegistry
 
             if (found is not null)
             {
-                basis = FindBase(candidates, found.Set);
+                basis = GetBase(candidates, found.Set);
 
                 if (basis is null)
                     continue;
@@ -298,7 +304,7 @@ public sealed partial class LocalizationRegistry
             }
 
             // Null only before the first name with a set of the contract: a basis is one of the candidates.
-            if (FindLevelSet(candidates, name, select, out var levelWording, out var isLevelWorded, ref isToldByRecord) is not { } level)
+            if (GetLevelSet(candidates, name, select, out var levelWording, out var isLevelWorded, ref isToldByRecord) is not { } level)
                 continue;
 
             found = level;
@@ -335,7 +341,7 @@ public sealed partial class LocalizationRegistry
     /// that a set a less specific name overrides isn't called at all.
     /// </param>
     /// <param name="isToldByRecord">Set to <see langword="false"/> where a wording was compared to tell the set.</param>
-    private static ContractSet? FindLevelSet<TContract>(ContractSet[] candidates, string name, Func<TContract, string?> select,
+    private static ContractSet? GetLevelSet<TContract>(ContractSet[] candidates, string name, Func<TContract, string?> select,
         out string? wording, out bool isWorded, ref bool isToldByRecord)
         where TContract : class
     {
@@ -382,7 +388,7 @@ public sealed partial class LocalizationRegistry
     /// The set registered last among the candidates that the class of <paramref name="derived"/> derives from, or
     /// <see langword="null"/>.
     /// </summary>
-    private static ILocalizationSet? FindBase(ContractSet[] candidates, ILocalizationSet derived)
+    private static ILocalizationSet? GetBase(ContractSet[] candidates, ILocalizationSet derived)
     {
         var type = derived.GetType();
 
@@ -514,14 +520,14 @@ public sealed partial class LocalizationRegistry
         {
             var contractSets = this.ByContract.TryGetValue(contract, out var known)
                 ? known
-                : this.ByContract.GetOrAdd(contract, static (contract, languageSets) => languageSets.Find(contract), this);
+                : this.ByContract.GetOrAdd(contract, static (contract, languageSets) => languageSets.Get(contract), this);
 
             return contractSets;
         }
 
         // Each set is created here, at the first text of its contract in this language, so a set whose constructor
         // throws fails the texts of its own contract alone.
-        private ContractSet[] Find(Type contract)
+        private ContractSet[] Get(Type contract)
         {
             foreach (var registration in this.Unfiled)
                 if (contract.IsAssignableFrom(registration.Type))

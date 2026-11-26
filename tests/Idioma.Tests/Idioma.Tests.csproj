@@ -28,7 +28,6 @@
     <PackageReference Include="Architect.AmbientContexts" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="TUnit" />
     <PackageReference Include="Verify" />
@@ -40,7 +39,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Idioma\Idioma.csproj" />
-    <!-- Both: an analyzer for the fixtures in GeneratedSets.Tests.cs, and a reference for the tests of the generator itself. -->
+    <!-- Both: an analyzer for the fixtures in LocalizationGenerator.GeneratedSets.Tests.cs, and a reference for the tests of the generator itself. -->
     <ProjectReference Include="..\..\src\Idioma.Generators\Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     <ProjectReference Include="..\..\src\Idioma.CodeFixes\Idioma.CodeFixes.csproj" />
   </ItemGroup>

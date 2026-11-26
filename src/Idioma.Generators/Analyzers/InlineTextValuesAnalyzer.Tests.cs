@@ -187,6 +187,61 @@ public sealed class InlineTextValuesAnalyzerTests
     }
 
     [Test]
+    [Arguments("public static string Checkout => LocalizedText.Inline(en: \"Checkout\", nl: \"Afrekenen\", enGb: \"Checkout\");")]
+    [Arguments("public static string Checkout { get { return LocalizedText.Inline(en: \"Checkout\", nl: \"Afrekenen\", enGb: \"Checkout\"); } }")]
+    [Arguments("public static string Checkout => LocalizedText.GetTextOfType<User>() ?? \"Checkout\";")]
+    [Arguments("public static string Checkout => Button; private static string Button => LocalizedText.Inline(en: \"Checkout\", nl: \"Afrekenen\", enGb: \"Checkout\");")]
+    public async Task PropertyThatGivesTextInDefaultWording_ShouldBeNoValueOtherLanguagesHaveToShow(string property)
+    {
+        // Arrange & Act: a property of its own whose getter gives a text, in another file, as a text of a set is wording.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public static class Hints
+            {
+                public static string Pay => LocalizedText.Inline(en: $"Press {ShopTexts.Checkout}", nl: "Klik op afrekenen", enGb: $"Press {ShopTexts.Checkout}");
+            }
+            """, ("ShopTexts.cs", $$"""
+            using CodeChops.Idioma;
+
+            namespace TestApp;
+
+            public static class ShopTexts
+            {
+                {{property}}
+            }
+            """));
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("public static string Checkout => Brand.ToUpperInvariant(); private static string Brand = \"Idioma\";")]
+    [Arguments("public static string Checkout { get { Calls++; return LocalizedText.Inline(en: \"Checkout\", nl: \"Afrekenen\", enGb: \"Checkout\"); } } private static int Calls;")]
+    [Arguments("public static string Checkout { get; set; } = \"Checkout\";")]
+    public async Task PropertyThatGivesNoTextOrDoesMore_ShouldStayValueOtherLanguagesHaveToShow(string property)
+    {
+        // Arrange & Act: a getter that gives something else, or does more than give a text.
+        var diagnostics = await AnalyzeAsync($$"""
+            {{Header}}
+
+            public static class ShopTexts
+            {
+                {{property}}
+            }
+
+            public static class Hints
+            {
+                public static string Pay => LocalizedText.Inline(en: $"Press {ShopTexts.Checkout}", nl: "Klik op afrekenen", enGb: $"Press {ShopTexts.Checkout}");
+            }
+            """);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe(InlineTextValuesAnalyzer.ValueLeftOutDiagnosticId);
+    }
+
+    [Test]
     [Arguments("""en: $"Hello, {name}!", nl: dutch, enGb: $"Hello, {name}!" """, """var dutch = "Hallo!";""")]
     [Arguments("""en: $"Hello, {name}!", nl: DescribeShop(), enGb: $"Hello, {name}!" """, "")]
     [Arguments("""en: english, nl: "Hallo!", enGb: "Hello!" """, """var english = $"Hello, {name}!";""")]

@@ -134,6 +134,89 @@ public sealed class PlaceholderAnalyzerTests
     }
 
     [Test]
+    public async Task TextMarkedAsCompositeFormatInDefaultLanguage_ShouldReportNothingInAnyLanguage()
+    {
+        // Arrange: an attribute in another project names the text as its error message, which this build can't see. The
+        // mark on the English set says that something fills in {0}, and the generated class repeats it for every
+        // language.
+        var source = """
+            using System.Diagnostics.CodeAnalysis;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                [StringSyntax(StringSyntaxAttribute.CompositeFormat)]
+                public string NameRequired => "Enter {0}";
+
+                public string NameLabel => "Name {0}";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string NameRequired => "Vul {0} in";
+                public string NameLabel => "Naam {0}";
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: only the text that isn't marked, in both languages.
+        diagnostics.Length.ShouldBe(2);
+        diagnostics.ShouldAllBe(diagnostic => diagnostic.GetMessage().Contains(".NameLabel'", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task AttributeRemovedInLaterCompilation_ShouldReportPlaceholderAgain()
+    {
+        // Arrange: the attributes of each file are kept with its syntax tree, and what they name is asked anew of each
+        // compilation.
+        const string sets = """
+            using System.ComponentModel.DataAnnotations;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string NameRequired => "Enter {0}";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string NameRequired => "Vul {0} in";
+            }
+            """;
+
+        const string withAttribute = """
+            using System.ComponentModel.DataAnnotations;
+
+            namespace TestApp;
+
+            public class Customer
+            {
+                [Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]
+                public string? Name { get; set; }
+            }
+            """;
+
+        // Act: the model as a file of its own, first with the attribute, then without it.
+        var before = await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), sets, [], ("Customer.cs", withAttribute));
+        var after = await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), sets, [], ("Customer.cs", withAttribute.Replace(
+            "[Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]", "", StringComparison.Ordinal)));
+
+        // Assert
+        before.ShouldBeEmpty();
+        after.Length.ShouldBe(2);
+    }
+
+    [Test]
     [Arguments("""en: "Hello!", nl: "Hallo, {0}!", enGb: "Hello!" """, "\"Hallo, {0}!\"", "The 'nl' wording holds the placeholder {0}. Nothing fills it in")]
     [Arguments("""en: "Total", nl: "Totaal", enGb: "Total: {0:N2}" """, "\"Total: {0:N2}\"", "The 'en-GB' wording holds the placeholder {0:N2}. Nothing fills it in")]
     [Arguments("""nl: "{1,8} van {0}", en: "Some", enGb: "Some" """, "\"{1,8} van {0}\"", "The 'nl' wording holds the placeholder {1,8}. Nothing fills it in")]

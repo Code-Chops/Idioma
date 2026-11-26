@@ -8,16 +8,17 @@ namespace CodeChops.Idioma;
 /// Such a text has a wording for each language of its assembly, the default language first. It shows the first of
 /// these:
 /// <list type="number">
-/// <item>The wording for the reader's culture, or else for a culture above it. A culture none of the app's languages
-/// serves skips this.</item>
-/// <item>The wording for the app's default language, or else for a language above it.</item>
+/// <item>The wording for the reader's culture, or else for a culture it falls back to. A culture none of the app's
+/// languages serves skips this.</item>
+/// <item>The wording for the app's default language, or else for a language it falls back to.</item>
 /// <item>The wording for the assembly's default language.</item>
 /// </list>
 /// </remarks>
 internal static class InlineLanguage
 {
-    // What this thread picked last. A render asks for the same languages and culture text after text, and comparing
-    // two references skips the names. Per thread, for the reason the registry keeps its last lookups per thread.
+    // What this thread picked last. A render asks for the same languages and culture text after text, so comparing two
+    // references skips walking the names. An assembly's inline texts and texts on members pass one array, so a render
+    // that shows both in turn still finds its pick here. Per thread, for the reason LocalizationRegistry.LastCulture is.
     [ThreadStatic]
     private static LocalizationRegistry.CultureLookup? LastLookup;
 
@@ -28,12 +29,13 @@ internal static class InlineLanguage
     private static int LastIndex;
 
     /// <summary>
-    /// The position, among an assembly's languages, of the one a text shows for the current UI culture.
+    /// The position, among an assembly's languages, of the one a text shows for the reader's culture
+    /// (<see cref="WordingScope.GetReaderCulture"/>).
     /// </summary>
     /// <param name="languages">The languages of the assembly, each a culture name, the default first.</param>
     public static int IndexOfShownLanguage(string[] languages)
     {
-        var culture = WordingScope.FindReaderCulture(out _);
+        var culture = WordingScope.GetReaderCulture(out _);
         var lookup = LocalizationRegistry.Current.Resolve(culture);
 
         if (ReferenceEquals(lookup, LastLookup) && ReferenceEquals(languages, LastLanguages))
@@ -41,9 +43,13 @@ internal static class InlineLanguage
 
         var index = IndexOfShownLanguage(languages, lookup);
 
-        LastLookup = lookup;
-        LastLanguages = languages;
-        LastIndex = index;
+        // Not for a registry that holds a plugin's sets (LocalizationRegistry.HoldsCollectibleSets).
+        if (!lookup.Registry.HoldsCollectibleSets)
+        {
+            LastLookup = lookup;
+            LastLanguages = languages;
+            LastIndex = index;
+        }
 
         return index;
     }

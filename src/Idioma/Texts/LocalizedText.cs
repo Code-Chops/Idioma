@@ -4,36 +4,31 @@ namespace CodeChops.Idioma;
 
 /// <summary>
 /// Where you write and read the texts that carry their own wording: <c>LocalizedText.Inline</c> for a text written
-/// where it's used, and <see cref="GetTextByMember{T}(string)"/> for a text written on a member. Each gives a
-/// <see cref="string"/>: the wording for <see cref="CultureInfo.CurrentUICulture"/> at the call.
+/// where it's used, <see cref="GetTextByMember{T}(string)"/> for a text written on a member, and
+/// <see cref="GetTextOfType{T}()"/> for a text written on a type. Each gives the wording for
+/// <see cref="CultureInfo.CurrentUICulture"/> at the call.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Start by declaring your languages, the default one first:
 /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>. A text that lacks one of
-/// them doesn't build. Write each text in one of three ways:
+/// them doesn't build. <see cref="SupportedLanguagesAttribute"/> lists the three ways to write a text: a set, an inline
+/// text, and an attribute on a type or a member.
 /// </para>
-/// <list type="bullet">
-/// <item>Inline: <c>LocalizedText.Inline(en: "Checkout", nl: "Afrekenen")</c>.</item>
-/// <item>In one class per language, for a library or a larger group of texts (see <see cref="ILocalizationSet"/>).</item>
-/// <item>As an attribute on the type or the member it names, for the label of a type, a property or an enum member:
-/// <c>[Localized(en: "City", nl: "Plaats")]</c>. <see cref="GetTextByMember{T}(string)"/> gives the text of a
-/// member, and <see cref="GetTextOfType{T}()"/> that of a type.</item>
-/// </list>
 /// <para>
 /// For wording that differs in a region, list the region next to its language:
 /// <c>[assembly: SupportedLanguages("en", "nl", "en-GB")]</c>. Every text then needs British wording too. An inline
-/// text takes <c>enGb: "Colour"</c>, and a class per language gets a class for <c>en-GB</c>. British users see that
+/// text takes <c>enGb: "Colour"</c>, and every English set needs a British set next to it. British users see that
 /// wording, and other English users keep the <c>en</c> wording.
 /// </para>
 /// <para>
-/// A text gives the first wording it finds:
+/// A text gives the first wording it finds, in this fallback order:
 /// </para>
 /// <list type="number">
 /// <item>The wording for the user's UI culture, or else for its parent culture. An <c>en</c> wording serves
 /// <c>en-US</c> and <c>en-GB</c> alike.</item>
-/// <item>The wording for your app's default language. A culture your app doesn't declare starts here, even for a
-/// library's text that has that culture's language. So no screen ends up in two languages.</item>
+/// <item>The wording for your app's default language. A culture that none of your app's languages serves starts here,
+/// even for a library's text that has that culture's language. So no screen ends up in two languages.</item>
 /// <item>The wording for the text's own default language, that of the project that wrote it.</item>
 /// </list>
 /// <para>
@@ -45,10 +40,10 @@ namespace CodeChops.Idioma;
 /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/>, and every text follows that instead.
 /// </para>
 /// <para>
-/// To put a value in the wording, write it into every language:
-/// <c>LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a class per language, such a text
-/// is a method that takes the value, such as <c>ShopLocalization.Greeting(customer.Name)</c>. Every language
-/// implements it with the same parameters (see <see cref="ILocalizationSet"/>).
+/// To put a parameter's value in the wording, write it into every language:
+/// <c>LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")</c>. In a set, such a text is a method
+/// that takes the value, such as <c>ShopLocalization.Greeting(customer.Name)</c>. Every language implements it with
+/// the same parameters (see <see cref="ILocalizationSet"/>).
 /// </para>
 /// </remarks>
 /// <example>
@@ -94,8 +89,8 @@ public sealed class LocalizedText
     /// The string is the wording for the current UI culture at the call. Read it where you show it.
     /// </para>
     /// <para>
-    /// For a value of an enum, <c>status.GetText()</c> gives its text without a name. For the text of a type itself,
-    /// call <see cref="GetTextOfType{T}()"/>.
+    /// For a value of an enum, <c>status.GetText()</c> gives the text of its member, so you don't name it. For the
+    /// text of a type itself, call <see cref="GetTextOfType{T}()"/>.
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The type that declares the member, or one that derives from it.</typeparam>
@@ -105,7 +100,7 @@ public sealed class LocalizedText
     {
         ArgumentNullException.ThrowIfNull(memberName);
 
-        var text = MemberTexts.Find<T>(memberName);
+        var text = MemberTexts.Get<T>(memberName);
         return text;
     }
 
@@ -127,7 +122,7 @@ public sealed class LocalizedText
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(memberName);
 
-        var text = MemberTexts.Find(type, memberName);
+        var text = MemberTexts.Get(type, memberName);
         return text;
     }
 
@@ -146,10 +141,10 @@ public sealed class LocalizedText
         ArgumentNullException.ThrowIfNull(member);
 
         if (member is Type type)
-            return MemberTexts.FindOwn(type);
+            return MemberTexts.GetOwn(type);
 
         var text = member.DeclaringType is { } declaringType
-            ? MemberTexts.Find(declaringType, member.Name)
+            ? MemberTexts.Get(declaringType, member.Name)
             : null;
 
         return text;
@@ -171,7 +166,7 @@ public sealed class LocalizedText
     /// <typeparam name="T">The type that is marked.</typeparam>
     public static string? GetTextOfType<T>()
     {
-        var text = MemberTexts.FindOwn<T>();
+        var text = MemberTexts.GetOwn<T>();
         return text;
     }
 
@@ -189,7 +184,7 @@ public sealed class LocalizedText
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        var text = MemberTexts.FindOwn(type);
+        var text = MemberTexts.GetOwn(type);
         return text;
     }
 }

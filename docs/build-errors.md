@@ -56,6 +56,7 @@ The first digit of a code names its subject.
 | **[Libraries](build-errors/LOC7XX-libraries.md)**                                         |                                                         |
 | [`LOC700`](build-errors/LOC7XX-libraries.md#loc700) (code fix)                            | A library without a set for one of your languages       |
 | [`LOC701`](build-errors/LOC7XX-libraries.md#loc701) (warning)                             | A library whose inline texts lack one of your languages |
+| [`LOC702`](build-errors/LOC7XX-libraries.md#loc702)                                       | A library built with an incompatible version of Idioma  |
 
 ## What the build misses
 

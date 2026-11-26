@@ -114,19 +114,30 @@ internal sealed partial record LocalizationSetsAnalysis
     /// A set of a language the attribute doesn't list. It carries the language its code fix lists: the longer code its
     /// name was likely meant for, such as <c>en-GB</c> for <c>ShopLocalizationEnGb</c>, and else its own.
     /// </summary>
+    /// <remarks>
+    /// The language its name gives may be no language at all, such as <c>gb</c>, the last two letters of
+    /// <c>ShopLocalizationEnGb</c>. Listing that would only give <c>LOC104</c>, so it's neither advised nor listed by the
+    /// fix.
+    /// </remarks>
     private static LocalizationSetsFinding UnlistedLanguage(DiscoveredLocalization set, string language, EquatableArray<string> codes)
     {
         var meant = GuessLongCode(set.Name, codes);
+        var isLanguage = SupportedLanguages.FindUnknownPart(language) is null;
+        var meantAdvice = $"If it's meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ILocalizationSet.LocalizationLanguageCode => \"{meant}\";'.";
 
-        var advice = meant is not null
-            ? $"If it's meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ILocalizationSet.LocalizationLanguageCode => \"{meant}\";'. Otherwise add '{language}' to the attribute, or remove the set."
-            : "Add the language to the attribute, or remove the set.";
+        var advice = (meant, isLanguage) switch
+        {
+            (not null, true) => $"{meantAdvice} Otherwise add '{language}' to the attribute, or remove the set.",
+            (not null, false) => $"{meantAdvice} Otherwise remove the set, because '{language}' is no language.",
+            (null, true) => "Add the language to the attribute, or remove the set.",
+            (null, false) => $"'{language}' is no language, so name the set after one that the attribute lists, or remove the set.",
+        };
 
         var unlistedLanguageFinding = new LocalizationSetsFinding(
             LocalizationSetsRule.UnlistedLanguage,
             set.Location,
             new EquatableArray<string>([set.Name, language, advice]),
-            SuggestedName: meant ?? language);
+            SuggestedName: meant ?? (isLanguage ? language : null));
 
         return unlistedLanguageFinding;
     }

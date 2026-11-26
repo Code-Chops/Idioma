@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.Loader;
 
 namespace CodeChops.Idioma.Internals;
 
@@ -29,8 +31,8 @@ public static class GeneratedCode
     /// </para>
     /// </summary>
     /// <remarks>
-    /// A culture with wording gets it, or else that of a culture above it. A culture none of the app's languages
-    /// serves gets the wording in the app's default language, else the first.
+    /// A culture with wording gets it, or else that of a culture it falls back to. A culture none of the app's
+    /// languages serves gets the wording in the app's default language, else the first.
     /// </remarks>
     /// <param name="languages">
     /// The languages of the assembly, each a culture name such as <c>en</c> or <c>en-GB</c>, in any letter case, the
@@ -39,7 +41,7 @@ public static class GeneratedCode
     [EditorBrowsable(EditorBrowsableState.Never)]
     // An array, and not a span: the generated code passes the one array it keeps, which is told apart by reference.
 #pragma warning disable MA0109 // Consider adding an overload with a Span<T> or Memory<T>
-    public static int FindLanguageIndex(string[] languages)
+    public static int GetLanguageIndex(string[] languages)
 #pragma warning restore MA0109
     {
         Debug.Assert(languages is not null);
@@ -95,7 +97,7 @@ public static class GeneratedCode
             {
                 return new TSet();
             }
-            catch (System.Reflection.TargetInvocationException exception) when (exception.InnerException is { } thrown)
+            catch (TargetInvocationException exception) when (exception.InnerException is { } thrown)
             {
                 System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(thrown);
                 throw;
@@ -112,7 +114,7 @@ public static class GeneratedCode
     /// is kept yet. A property of the generated class reads its wording from it, and words the text with
     /// <see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/> otherwise:
     /// <code>
-    /// FindSet&lt;IShopLocalization&gt;(1, 3)?.Checkout
+    /// GetSet&lt;IShopLocalization&gt;(1, 3)?.Checkout
     ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, "Checkout", static set => set.Checkout)
     /// </code>
     /// </para>
@@ -125,7 +127,7 @@ public static class GeneratedCode
     /// <param name="text">The position of the text among the texts of its generated class.</param>
     /// <param name="count">The number of texts the generated class has.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? FindSet<TContract>(int text, int count)
+    public static TContract? GetSet<TContract>(int text, int count)
         where TContract : class
     {
         CultureInfo culture;
@@ -149,7 +151,7 @@ public static class GeneratedCode
             culture = provided ?? CultureInfo.CurrentUICulture;
         }
 
-        var sets = ResolvedSets<TContract>.Find(culture, count).Sets;
+        var sets = ResolvedSets<TContract>.Get(culture, count).Sets;
         var set = (uint)text < (uint)sets.Length ? sets[text] : null;
 
         // ResolveWording words the text next, and takes this answer rather than ask the provider again, which may read
@@ -169,7 +171,7 @@ public static class GeneratedCode
     /// kept yet. A method of the generated class calls the set's method with its values, and words the text with
     /// <c>ResolveWording</c> otherwise:
     /// <code>
-    /// FindSetForValues&lt;IShopLocalization&gt;(2, 3)?.Greeting(name)
+    /// GetSetForValues&lt;IShopLocalization&gt;(2, 3)?.Greeting(name)
     ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, "Greeting", static (set, name) => set.Greeting(name), name)
     /// </code>
     /// </para>
@@ -183,7 +185,7 @@ public static class GeneratedCode
     /// <param name="text">The position of the text among the texts of its generated class.</param>
     /// <param name="count">The number of texts the generated class has.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? FindSetForValues<TContract>(int text, int count)
+    public static TContract? GetSetForValues<TContract>(int text, int count)
         where TContract : class
     {
         CultureInfo culture;
@@ -201,9 +203,10 @@ public static class GeneratedCode
         {
             var provided = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
 
-            // The method must run in the provided culture, which takes a scope where the thread has another.
+            // The method must run in the provided culture, which takes a scope where the thread has another, or one of its
+            // name that formats values otherwise (CultureFormats).
             // ResolveWording enters it, with this answer of the provider.
-            if (provided is not null && (!ReferenceEquals(provided, CultureInfo.CurrentCulture) || !provided.Equals(CultureInfo.CurrentUICulture)))
+            if (provided is not null && (!CultureFormats.AreAlike(provided, CultureInfo.CurrentCulture) || !provided.Equals(CultureInfo.CurrentUICulture)))
             {
                 WordingScope.KeepProvidedCulture(provided);
                 return null;
@@ -211,7 +214,7 @@ public static class GeneratedCode
 
             culture = provided ?? CultureInfo.CurrentUICulture;
 
-            var keptSets = ResolvedSets<TContract>.Find(culture, count).SetsForValues;
+            var keptSets = ResolvedSets<TContract>.Get(culture, count).SetsForValues;
             var keptSet = (uint)text < (uint)keptSets.Length ? keptSets[text] : null;
 
             if (keptSet is null)
@@ -220,7 +223,7 @@ public static class GeneratedCode
             return keptSet;
         }
 
-        var sets = ResolvedSets<TContract>.Find(culture, count).SetsForValues;
+        var sets = ResolvedSets<TContract>.Get(culture, count).SetsForValues;
 
         var set = (uint)text < (uint)sets.Length ? sets[text] : null;
         return set;
@@ -232,7 +235,7 @@ public static class GeneratedCode
     /// </para>
     /// <para>
     /// The wording of a text of a localization contract for the current UI culture, for a text whose set
-    /// <see cref="FindSet{TContract}"/> doesn't hold. It finds the set that words the text, and keeps it where the same
+    /// <see cref="GetSet{TContract}"/> doesn't hold. It finds the set that words the text, and keeps it where the same
     /// set words the text on every call.
     /// </para>
     /// </summary>
@@ -271,7 +274,7 @@ public static class GeneratedCode
     /// </para>
     /// <para>
     /// The wording of a text of a localization contract that takes values, for the current UI culture, for a text whose
-    /// set <see cref="FindSetForValues{TContract}"/> doesn't give. There's an overload per number of values.
+    /// set <see cref="GetSetForValues{TContract}"/> doesn't give. There's an overload per number of values.
     /// </para>
     /// </summary>
     /// <remarks>
@@ -462,8 +465,8 @@ public static class GeneratedCode
         {
             Debug.Assert(name is not null);
 
-            var culture = WordingScope.FindReaderCulture(out var providedCulture, takesKept: true);
-            var resolved = ResolvedSets<TContract>.Find(culture, count);
+            var culture = WordingScope.GetReaderCulture(out var providedCulture, takesKept: true);
+            var resolved = ResolvedSets<TContract>.Get(culture, count);
 
             var wording = LookUp(culture, providedCulture, resolved, text, name, select, takesValues: false);
             return wording;
@@ -484,8 +487,8 @@ public static class GeneratedCode
         {
             Debug.Assert(name is not null);
 
-            var culture = WordingScope.FindReaderCulture(out var providedCulture, takesKept: true);
-            var resolved = ResolvedSets<TContract>.Find(culture, count);
+            var culture = WordingScope.GetReaderCulture(out var providedCulture, takesKept: true);
+            var resolved = ResolvedSets<TContract>.Get(culture, count);
             var setsForValues = resolved.SetsForValues;
 
             // The set kept for the text, which the generated class couldn't call itself, because a provider gives a
@@ -497,7 +500,7 @@ public static class GeneratedCode
                 if (word(kept, call) is { } keptWording)
                     return keptWording;
             }
-            else if (resolved.FindFallback(text) is { } fallback)
+            else if (resolved.GetFallback(text) is { } fallback)
             {
                 // A method formats its values as it runs, so it runs in a scope wherever a text with values does. Where
                 // the language has no culture on this machine, that's the scope of the reader, as in the lookup.
@@ -578,19 +581,27 @@ public static class GeneratedCode
     /// Gives the values of an enum the texts of a set of it, in place of the texts its members are marked
     /// <c>[Localized]</c> with in the enum's own assembly. That assembly's <c>GetText()</c> then gives the set's
     /// wording, in the languages of the set. A set of a library's enum registers this when the assembly that holds
-    /// the set starts. Where two do, the one registered last gives the texts.
+    /// the set starts.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// Where two assemblies register texts of one enum, those of the assembly whose sets registered later give them,
+    /// whichever registered its texts first. An app's registrar registers the sets of the assemblies it references
+    /// first, and its own last. So the app wins over a library it references, and a library over one it references.
+    /// Of two that registered no sets, the later registration wins.
+    /// </remarks>
     /// <typeparam name="TEnum">The enum.</typeparam>
+    /// <typeparam name="TContract">The contract of the set, which tells the assembly that holds it.</typeparam>
     /// <param name="getText">Gives a value of the enum its text, as <c>GetTextByValue</c> of the set's generated class does.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="getText"/> is <see langword="null"/>.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RegisterEnumTexts<TEnum>(Func<TEnum, string> getText)
+    public static void RegisterEnumTexts<TEnum, TContract>(Func<TEnum, string> getText)
         where TEnum : struct, Enum
+        where TContract : class
     {
         ArgumentNullException.ThrowIfNull(getText);
 
-        EnumTexts<TEnum>.GetText = getText;
+        EnumTexts<TEnum>.Add(typeof(TContract).Assembly, getText);
     }
 
     /// <summary>
@@ -598,33 +609,119 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// The text a set gives a value of an enum, where one registered its texts (<see cref="RegisterEnumTexts{TEnum}"/>), or
-    /// <see langword="null"/>. <c>GetText()</c> of an enum whose members are marked <c>[Localized]</c> asks this
-    /// first.
+    /// The text a set gives a value of an enum, where one registered its texts
+    /// (<see cref="RegisterEnumTexts{TEnum, TContract}"/>), or <see langword="null"/>. <c>GetText()</c> of an enum whose
+    /// members are marked <c>[Localized]</c> asks this first.
     /// </para>
     /// </summary>
     /// <typeparam name="TEnum">The enum.</typeparam>
     /// <param name="value">The value to give the text of.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string? FindEnumText<TEnum>(TEnum value)
+    public static string? GetEnumText<TEnum>(TEnum value)
         where TEnum : struct, Enum
     {
-        var getText = EnumTexts<TEnum>.GetText;
+        // Null for nearly every enum, where no set registered its texts.
+        if (EnumTexts<TEnum>.Chosen is not { } chosen)
+            return null;
 
-        var text = getText?.Invoke(value);
+        // Chosen again after a registration since, which may change which one wins.
+        if (chosen.Count != LocalizationRegistry.RegistrationCount)
+            chosen = EnumTexts<TEnum>.Choose();
+
+        var text = chosen.GetText?.Invoke(value);
         return text;
     }
 
     /// <summary>
-    /// Per enum, what gives its values the texts of a set of it (<see cref="RegisterEnumTexts{TEnum}"/>), or
-    /// <see langword="null"/> where no set did.
+    /// Per enum, what gives its values the texts of a set of it (<see cref="RegisterEnumTexts{TEnum, TContract}"/>):
+    /// every registration, and the one that wins.
     /// </summary>
-    // A field per enum, which a text reads without a lookup: the enum's own GetText() asks on every call. Written once
-    // as the app starts, and a reference is read whole, so a reader sees the delegate or null.
     private static class EnumTexts<TEnum>
         where TEnum : struct, Enum
     {
-        public static Func<TEnum, string>? GetText { get; set; }
+        /// <summary>
+        /// The registration that gives the texts, or <see langword="null"/> where none registered. A field per enum,
+        /// which a text reads without a lookup: the enum's own <c>GetText()</c> asks on every call.
+        /// </summary>
+        public static ChosenTexts? Chosen;
+
+        // Every registration, in the order they came.
+        private static ImmutableArray<Registration> Registered = [];
+
+        private static int Forgets;
+
+        public static void Add(Assembly assembly, Func<TEnum, string> getText)
+        {
+            ImmutableInterlocked.Update(ref Registered, static (registered, added) => registered.Add(added), new Registration(assembly, getText));
+
+            // Forgotten when a plugin that gave a lasting enum its texts unloads. An enum of the plugin itself goes with
+            // it, and a function kept for it would hold the plugin.
+            CollectibleAssemblies.Watch(assembly);
+
+            if (assembly.IsCollectible && !typeof(TEnum).IsCollectible && Interlocked.Exchange(ref Forgets, value: 1) is 0)
+                CollectibleAssemblies.AddForgetter(static context => Forget(context));
+
+            LocalizationRegistry.CountRegistration();
+            Choose();
+        }
+
+        /// <summary>
+        /// Chooses the registration that gives the texts: that of the assembly whose sets registered last, and of two
+        /// alike, the later one.
+        /// </summary>
+        public static ChosenTexts Choose()
+        {
+            // Counted before the registrations are read, so that one that comes in meanwhile makes the next read choose
+            // again.
+            var count = LocalizationRegistry.RegistrationCount;
+
+            Func<TEnum, string>? getText = null;
+            var latest = -1L;
+
+            foreach (var registration in Registered)
+            {
+                var at = LocalizationRegistry.GetSetsRegisteredAt(registration.Assembly);
+
+                if (at >= latest)
+                {
+                    getText = registration.GetText;
+                    latest = at;
+                }
+            }
+
+            var chosen = new ChosenTexts(count, getText);
+            Chosen = chosen;
+
+            return chosen;
+        }
+
+        private static void Forget(AssemblyLoadContext context)
+        {
+            ImmutableInterlocked.Update(
+                ref Registered,
+                static (registered, context) => registered.RemoveAll(registration => CollectibleAssemblies.IsIn(registration.Assembly, context)),
+                context);
+
+            Choose();
+        }
+
+        /// <summary>
+        /// A registration: the assembly of the set, and what gives a value its text.
+        /// </summary>
+        private sealed class Registration(Assembly assembly, Func<TEnum, string> getText)
+        {
+            public Assembly Assembly { get; } = assembly;
+            public Func<TEnum, string> GetText { get; } = getText;
+        }
+
+        /// <summary>
+        /// The registration that wins, and the count of registrations it was chosen at.
+        /// </summary>
+        public sealed class ChosenTexts(int count, Func<TEnum, string>? getText)
+        {
+            public int Count { get; } = count;
+            public Func<TEnum, string>? GetText { get; } = getText;
+        }
     }
 
     /// <summary>
@@ -665,7 +762,8 @@ public static class GeneratedCode
     /// </summary>
     /// <remarks>
     /// A value isn't converted. So an <see cref="int"/> isn't accepted for a parameter of type <see cref="long"/>.
-    /// <see langword="null"/> is accepted for a parameter whose type allows it.
+    /// <see langword="null"/> is accepted only for a parameter that may be <see langword="null"/>: a nullable value type,
+    /// or a reference type that <paramref name="acceptsNull"/> says is nullable.
     /// </remarks>
     /// <typeparam name="TValue">The type of the parameter.</typeparam>
     /// <param name="key">The key the text was asked for by, which is its name.</param>
@@ -673,12 +771,17 @@ public static class GeneratedCode
     /// <param name="index">The position of the parameter.</param>
     /// <param name="count">The number of parameters the text has.</param>
     /// <param name="parameterName">The name of the parameter.</param>
+    /// <param name="acceptsNull">
+    /// Whether the parameter may be <see langword="null"/>, as its nullable annotation says. The type argument can't say
+    /// it, because <c>string</c> and <c>string?</c> are the same type at run time. <see langword="true"/> for a
+    /// parameter without an annotation, as in code without nullable reference types.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// When <paramref name="values"/> doesn't hold one value per parameter, or the value at
     /// <paramref name="index"/> isn't of type <typeparamref name="TValue"/>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TValue GetKeyedValue<TValue>(string key, ReadOnlySpan<object?> values, int index, int count, string parameterName)
+    public static TValue GetKeyedValue<TValue>(string key, ReadOnlySpan<object?> values, int index, int count, string parameterName, bool acceptsNull)
     {
         if (values.Length != count)
             throw new ArgumentException($"The text '{key}' takes {count} {(count is 1 ? "value" : "values")}, but {values.Length} {(values.Length is 1 ? "was" : "were")} passed. Pass one for each of its parameters, in their order, after the key.", nameof(values));
@@ -688,13 +791,18 @@ public static class GeneratedCode
         if (value is TValue typed)
             return typed;
 
-        if (value is null && default(TValue) is null)
-            return default!;
+        if (value is null)
+        {
+            if (acceptsNull && default(TValue) is null)
+                return default!;
 
-        var passed = value is null ? "null was" : $"a value of type '{value.GetType()}' was";
+            throw new ArgumentException(
+                $"The text '{key}' takes a value of type '{typeof(TValue)}' for '{parameterName}', which isn't nullable, but null was passed. Pass a value that isn't null.",
+                nameof(values));
+        }
 
         throw new ArgumentException(
-            $"The text '{key}' takes a value of type '{typeof(TValue)}' for '{parameterName}', but {passed} passed. Pass a value of that type, because a value isn't converted.",
+            $"The text '{key}' takes a value of type '{typeof(TValue)}' for '{parameterName}', but a value of type '{value.GetType()}' was passed. Pass a value of that type, because a value isn't converted.",
             nameof(values));
     }
 
@@ -703,25 +811,23 @@ public static class GeneratedCode
     /// Don't use this method directly! This code is called by source-generated code.
     /// </para>
     /// <para>
-    /// Creates the exception that the method <c>GetTextByKey</c> of a generated class throws for a key that none of its texts
-    /// has.
+    /// Creates the exception that the method <c>GetTextByKey</c> of a generated class throws for a key that is
+    /// <see langword="null"/>. An unknown key gives <see langword="null"/> there, and throws nothing.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// The type argument only keeps a text of the generated class from hiding this method. A text has none, so a name
+    /// with one isn't looked for among the texts.
+    /// </remarks>
     /// <typeparam name="TContract">The contract of the generated class.</typeparam>
-    /// <param name="key">The key that was passed.</param>
-    /// <param name="className">The name of the generated class, such as <c>ShopLocalization</c>.</param>
-    /// <returns>
-    /// An <see cref="ArgumentNullException"/> when <paramref name="key"/> is <see langword="null"/>, and a
-    /// <see cref="KeyNotFoundException"/> for any other key.
-    /// </returns>
+    /// <param name="key">The key that was passed, which is <see langword="null"/>. Its name is that of the parameter of <c>GetTextByKey</c>.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static Exception CreateUnknownKeyException<TContract>(string? key, string className)
+    public static ArgumentNullException CreateNullKeyException<TContract>(string? key)
         where TContract : class
     {
-        if (key is null)
-            return new ArgumentNullException(nameof(key));
+        Debug.Assert(key is null);
 
-        var exception = new KeyNotFoundException($"'{className}' has no text with the key '{key}'. A key is the name of a text of '{typeof(TContract).Name}', in the same letter case.");
+        var exception = new ArgumentNullException(nameof(key));
         return exception;
     }
 

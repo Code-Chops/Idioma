@@ -1,4 +1,5 @@
 using CodeChops.Idioma.Generators;
+using CodeChops.Idioma.Tests.TestHelpers;
 using Microsoft.CodeAnalysis;
 
 namespace CodeChops.Idioma.Tests;
@@ -88,6 +89,77 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A library in English whose set has two texts an app can reword.
+    /// </summary>
+    private static MetadataReference RewordedLibrary { get; } = GeneratorTestHelper.CompileLibraryWithGenerators("RewordedLibrary", """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en")]
+
+        namespace RewordedLibrary;
+
+        public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+        {
+            public virtual string Cart => "Cart";
+            public virtual string Checkout => "Checkout";
+        }
+        """);
+
+    [Test]
+    public void TwoSetsRewordingOtherTextsOfLibrarySet_ShouldReportNoLOC209()
+    {
+        // Arrange & Act: each rewords one text of the library's English set, and the registry shows each for its own.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class PromoShopLocalizationEn : RewordedLibrary.ShopLocalizationEn
+            {
+                public override string Checkout => "Pay now";
+            }
+
+            public sealed class HolidayShopLocalizationEn : RewordedLibrary.ShopLocalizationEn
+            {
+                public override string Cart => "Gift bag";
+            }
+            """, RewordedLibrary);
+
+        // Assert
+        DiagnosticIds(result).Contains(LocalizationSetsPart.RepeatedLanguageDiagnosticId, StringComparer.Ordinal).ShouldBeFalse();
+    }
+
+    [Test]
+    public void TwoSetsRewordingOneTextOfLibrarySet_ShouldReportLOC209AtTheSecond()
+    {
+        // Arrange & Act: both reword the cart, and users see only one of the two wordings.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class PromoShopLocalizationEn : RewordedLibrary.ShopLocalizationEn
+            {
+                public override string Cart => "Basket";
+                public override string Checkout => "Pay now";
+            }
+
+            public sealed class HolidayShopLocalizationEn : RewordedLibrary.ShopLocalizationEn
+            {
+                public override string Cart => "Gift bag";
+            }
+            """, RewordedLibrary);
+
+        // Assert: at the set whose name sorts last.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.RepeatedLanguageDiagnosticId);
+        diagnostic.GetMessage().ShouldStartWith("'PromoShopLocalizationEn' is a second set of 'RewordedLibrary.IShopLocalization' for 'en', next to 'HolidayShopLocalizationEn'.");
     }
 
     [Test]

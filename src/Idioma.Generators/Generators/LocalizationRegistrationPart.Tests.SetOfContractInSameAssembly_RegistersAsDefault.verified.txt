@@ -7,6 +7,7 @@ namespace CodeChops.Idioma.Generated
     /// <summary>
     /// Adds the localization sets of this assembly, and of the assemblies it references, to the sets of the whole app.
     /// </summary>
+    [System.CodeDom.Compiler.GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public static class LocalizationRegistrar_TestAssembly
     {
@@ -30,6 +31,7 @@ namespace CodeChops.Idioma.Generated
 /// The localization sets of this assembly itself. This class is outside the namespace above, so a set's name is
 /// resolved from the global namespace, not from that namespace first.
 /// </summary>
+[System.CodeDom.Compiler.GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 file static class OwnLocalizationSets
 {
     internal static void Register()

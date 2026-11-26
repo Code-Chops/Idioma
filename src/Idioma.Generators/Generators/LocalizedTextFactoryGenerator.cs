@@ -46,6 +46,12 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
     internal const string FactoryName = "Inline";
 
     /// <summary>
+    /// The field of <see cref="ClassName"/> that holds the assembly's languages, the default first. The texts on members
+    /// (<see cref="LocalizedMembersSource"/>) pass this array too.
+    /// </summary>
+    internal const string LanguagesName = "Languages";
+
+    /// <summary>
     /// The symbol the generated attribute is conditional on. Nothing defines it, so the compiler checks each
     /// <c>[Localized]</c> and leaves it out of the assembly.
     /// </summary>
@@ -105,20 +111,6 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         description: "The code generated for an assembly that declares languages uses extension members, which C# 14 brings, so the generators write none of it for an older version. C# 14 is the default on .NET 10, unless the project sets an older LangVersion.",
         helpLinkUri: PackageNames.HelpLink(LanguageVersionTooOldDiagnosticId));
 
-    // The code of a set in an assembly without languages, and of a call of LocalizedText.Inline there: all say that
-    // the attribute is missing, and all have the same fix.
-#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
-    private static readonly DiagnosticDescriptor LocalizedWithoutLanguagesRule = new(
-        id: LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId,
-        title: "Text on a member in an assembly without languages",
-        messageFormat: "{0} takes a wording per language, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
-        category: "Design",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "The source generator writes [Localized] with one parameter per language of [assembly: SupportedLanguages]. Without the attribute it writes none, so the compiler finds no such attribute (CS0246).",
-        helpLinkUri: PackageNames.HelpLink(LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId));
-#pragma warning restore RS1019
-
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         context.RegisterPostInitializationOutput(static context => context.AddEmbeddedAttributeDefinition());
@@ -171,7 +163,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(localizedWithoutLanguages, static (context, locations) =>
         {
             foreach (var location in locations)
-                context.ReportDiagnostic(Diagnostic.Create(LocalizedWithoutLanguagesRule, location.ToLocation(), $"[{LocalizedMembers.AttributeName}]"));
+                context.ReportDiagnostic(Diagnostic.Create(SharedRules.NoLanguagesDeclared, location.ToLocation(), $"[{LocalizedMembers.AttributeName}] takes a wording per language"));
         });
 
         var callsInCode = context.SyntaxProvider
@@ -347,11 +339,13 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
             /// Writes texts in every language of this assembly's <see cref="{{PackageNames.SupportedLanguagesAttribute}}"/>.
             /// </summary>
             [Microsoft.CodeAnalysis.EmbeddedAttribute]
+            {{GeneratedFile.CodeAttributes}}
             internal static class {{ClassName}}
             {
                 // The languages, the default first, as the package picks one of them by its position. One array for
-                // every call, which the package tells apart by reference.
-                private static readonly string[] Languages = [{{languages}}];
+                // every call, which the package tells apart by reference. The texts on members pass it too, because
+                // the package keeps its last pick for one array.
+                internal static readonly string[] {{LanguagesName}} = [{{languages}}];
 
                 extension({{TextName}})
                 {
@@ -376,7 +370,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         sb.AppendLine($$"""
                     public static string Inline({{parameters}})
                     {
-                        return {{PackageNames.GeneratedCode}}.FindLanguageIndex(Languages) switch
+                        return {{PackageNames.GeneratedCode}}.GetLanguageIndex({{LanguagesName}}) switch
                         {
             """);
 

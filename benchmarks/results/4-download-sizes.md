@@ -2,22 +2,22 @@ Download sizes, with the interpreter, compressed with Brotli as a server sends t
 
 | What's downloaded | resx and IStringLocalizer | Idioma |
 |---|---:|---:|
-| The approach, with 100 texts in the default language | 19.3 KB | 32.4 KB |
+| The approach, with 100 texts in the default language | 19.2 KB | 32.4 KB |
 | Of that, its own assemblies | 11.3 KB | 16.9 KB |
-| Of that, the app's assembly | 4.1 KB | 9.3 KB |
-| Of that, .NET's own assemblies | 3.9 KB | 6.1 KB |
+| Of that, the app's assembly | 3.9 KB | 9.2 KB |
+| Of that, .NET's own assemblies | 3.9 KB | 6.2 KB |
 | Of that, the rest, such as dotnet.js | 0.1 KB | 0.1 KB |
-| Each extra language of 100 texts | 3.8 KB | 1.6 KB |
+| Each extra language of 100 texts | 3.9 KB | 1.8 KB |
 
 The files that grow by 0.5 KB or more, with 100 texts in the default language:
 
 | File | resx and IStringLocalizer | Idioma |
 |---|---:|---:|
 | CodeChops.Idioma.wasm | 0.0 KB | 16.9 KB |
-| Idioma.Benchmarks.Size.wasm | 4.1 KB | 9.3 KB |
+| Idioma.Benchmarks.Size.wasm | 3.9 KB | 9.2 KB |
 | Microsoft.Extensions.Localization.Abstractions.wasm | 2.5 KB | 0.0 KB |
 | Microsoft.Extensions.Localization.wasm | 8.8 KB | 0.0 KB |
-| System.Collections.Immutable.wasm | 0.1 KB | 2.5 KB |
+| System.Collections.Immutable.wasm | 0.1 KB | 2.6 KB |
 | System.Linq.wasm | 0.1 KB | 0.8 KB |
 | System.Private.CoreLib.wasm | 2.4 KB | 0.9 KB |
 | System.Threading.wasm | 0.0 KB | 1.7 KB |
@@ -26,6 +26,6 @@ Idioma in two languages, with the Dutch set in an assembly of its own that the a
 
 | What's downloaded | Both sets in the app's assembly | The Dutch set loaded lazily |
 |---|---:|---:|
-| By a user of the default language | 34.1 KB | 47.9 KB |
-| By a Dutch user | 34.1 KB | 52.9 KB |
-| Of that, the Dutch set | 1.6 KB | 5.0 KB |
+| By a user of the default language | 34.2 KB | 47.9 KB |
+| By a Dutch user | 34.2 KB | 52.9 KB |
+| Of that, the Dutch set | 1.8 KB | 5.1 KB |

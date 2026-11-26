@@ -7,6 +7,8 @@ Give an enum its texts in one of two ways:
 
 Either way, `order.Status.GetText()` gives the text of a value.
 
+[`EnumDemo.cs`](../demos/EnumDemo.cs) is a complete app that gives two enums their texts, one in each way. It's one file, which `dotnet run` runs without a project.
+
 Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
 ## A set of the enum
@@ -61,23 +63,6 @@ The contract takes its members from the enum, and not only from the default-lang
 
 `GetTextByValue` gives the wording for the user's language, as the text itself does, and allocates nothing. `order.Status.GetText()` gives the same, and is in reach wherever the namespace of the set is.
 
-What else to know:
-
-- **Every language.** Each set of the enum lists `ILocalizationSet<TEnum>`, in every language, so each set shows which enum it words. A set that lists `ILocalizationSet` in its place is build warning `LOC205`, and so is one that lists an enum the contract has no texts of. The fix for a missing language (`LOC201`) writes the generic one.
-- **Only texts of members.** A text that isn't a member of the enum is build warning `LOC305`, because `GetText()` never gives it. It's usually left over from a member that was removed. Write a caption for the enum, or a text that takes values, in a set of its own.
-- **A member's text is a property.** It takes no values, because `GetTextByValue` has none to give it. A method with the name of a member is build error `LOC400`.
-- **By name.** `GetTextByKey` takes the name of a member as its key: `OrderStatusLocalization.GetTextByKey("Shipped")`.
-- **Members with the same value.** `Default = 0` next to `None = 0` each need a text. `GetTextByValue` gives the text of the first one, because it can't tell the two apart. So `OrderStatus.None.GetText()` shows the text of `Default`. The build warns about such a call ([LOC600](build-errors/LOC6XX-reading-a-text.md#loc600)), and the IDE fix writes `OrderStatusLocalization.None`.
-- **A value that isn't a member.** `GetTextByValue` shows it as `ToString()` writes it, in every language. For a combination of flags, that's the names of the flags, as in `Read, Write`. For any other value, it's the number.
-- **A member marked `[Obsolete]` as an error.** It still needs a text, because stored data may still hold its value. `GetTextByValue` gives that value the text.
-- **Accessibility.** `GetTextByValue` and `GetText` are public for a public enum, and internal for an internal one.
-- **More than one enum.** A set that lists `ILocalizationSet<TEnum>` for two enums holds the texts of both, and gets a `GetTextByValue` and a `GetText` for each. Two members with the same name share a text.
-- **Two sets of one enum.** Each set gives the enum a `GetText`. Where the namespaces of both are in reach, the call is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
-- **A set of a library's enum with `[Localized]` members.** Your set's texts win over the library's attributes, in every language. The library already gives the enum a `GetText`, and that `GetText` gives your set's wording, also where the library's own code calls it. So your set writes no `GetText` of its own, which would make the call ambiguous (`CS0121`). This is how an app adds a language to such an enum. `GetTextByMember` still finds the texts of the library's attributes.
-- **A set and `[Localized]` members.** An enum that has a set in its own assembly gets its `GetText` from the set alone, also while its members are still marked. `GetTextByMember` still finds the texts of the marked members.
-
-For a library's enum, a set has two more advantages over attributes. An app can add a language to it, and reword a text the library made `virtual`. An app can't add a language to the attributes, but it can replace them with a set of the enum, which then words every member in every language.
-
 ## An attribute on each member
 
 To keep the wording next to each member, mark each one `[Localized]`. The attribute on the enum itself gives the enum a text of its own, which `LocalizedText.GetTextOfType<ParcelStatus>()` shows:
@@ -113,8 +98,25 @@ public static class ParcelStatusLocalizedExtensions
 
 `LocalizedText.GetTextByMember<ParcelStatus>(nameof(ParcelStatus.Picked))` finds the same text, as it does for any member marked `[Localized]` ([Attributes](attributes.md)).
 
-What else to know:
+## What else to know
 
-- **Members with the same value.** Of two members with the same value, the first gives the text. A member with the value of a marked member, such as `Default = Active`, shows that member's text. The build warns about a call that names the later of two marked members ([LOC600](build-errors/LOC6XX-reading-a-text.md#loc600)), because it shows the other's text. `GetTextByMember` gives the text of each.
+Either way:
+
+- **Members with the same value.** The first of them gives the text. So with `Default = 0` and `None = 0`, `OrderStatus.None.GetText()` shows the text of `Default`. The build warns about such a call where `None` has a text of its own ([LOC600](build-errors/LOC6XX-reading-a-text.md#loc600)). To show that text, write `OrderStatusLocalization.None` with a set, or call `GetTextByMember` with attributes.
+- **A value that isn't a member.** It shows as `ToString()` writes it, in every language, such as `Read, Write` for flags.
+- **A member marked `[Obsolete]` as an error.** It still needs a text, because stored data may hold its value.
+
+With a set of the enum:
+
+- **Every language.** Each set lists `ILocalizationSet<TEnum>`, not only the default language's (`LOC205`).
+- **Only members, as properties.** A set of an enum holds a property per member and nothing else (`LOC305`, `LOC400`). Write a caption for the enum, or a text that takes values, in a set of its own.
+- **By name.** `GetTextByKey` takes the member's name: `OrderStatusLocalization.GetTextByKey("Shipped")`.
+- **More than one enum.** A set that lists two enums holds the texts of both, and gets a `GetText` for each. Two members with the same name share a text.
+- **Two sets of one enum.** Each gives the enum a `GetText`, so a call that sees both is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
+- **A set and `[Localized]` members.** The set's texts win, in every language. `GetTextByMember` still finds the attributes' texts.
+- **A library's enum.** An app can add a language to a library's set, and reword a text the library made `virtual`. It adds a language to an enum with `[Localized]` members by writing a set of its own. That set's wording then shows wherever `GetText()` is called, also in the library.
+
+With an attribute on each member:
+
 - **A member without `[Localized]`.** It shows its name, in every language. The build warns about it when other members of the enum are marked (`LOC501`), because that's usually a member added later. An enum with a text of its own and no marked member gets no warning, because its values may never be shown.
-- **An enum inside a generic type.** An enum inside a type with type parameters gets no `GetText()`, and `GetTextByMember` still finds its texts.
+- **An enum inside a generic type.** It gets no `GetText()`, and `GetTextByMember` still finds its texts.

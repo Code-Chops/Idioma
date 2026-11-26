@@ -13,7 +13,7 @@ public sealed partial class LocalizationRegistry
     /// The one place that decides the order:
     /// <list type="number">
     /// <item>The wording of the sets registered for the culture. Where a regional set leaves a text as its language
-    /// words it, a rewording of that language wins (<see cref="FindWording"/>).</item>
+    /// words it, a rewording of that language wins (<see cref="GetWording"/>).</item>
     /// <item>The same for the default language of this registry's <see cref="AppLanguages"/>, so that a library's text
     /// falls back to the language the app chose rather than the library's own.</item>
     /// <item>The set registered for the text's own default language, which may reword the default wording.</item>
@@ -27,7 +27,7 @@ public sealed partial class LocalizationRegistry
     /// <param name="culture">The reader's culture.</param>
     /// <param name="valuesCulture">
     /// The culture to format values for, or <see langword="null"/> to format them as the thread does
-    /// (<see cref="WordingScope.FindReaderCulture"/>).
+    /// (<see cref="WordingScope.GetReaderCulture"/>).
     /// </param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="select">Gives the text as a set of the contract words it, with its values where it takes any.</param>
@@ -37,7 +37,8 @@ public sealed partial class LocalizationRegistry
     /// <param name="resolved">Where a set that words the text on every call is kept, or <see langword="null"/>.</param>
     /// <param name="text">The position of the text in <paramref name="resolved"/>.</param>
     /// <exception cref="InvalidOperationException">
-    /// When every set gives <see langword="null"/> as the wording, the set the text was declared with included.
+    /// When every set gives <see langword="null"/> as the wording, the set the text was declared with included. Also
+    /// when the build recorded no language for that set, and its language code isn't a culture name.
     /// </exception>
     internal string Word<TContract>(CultureLookup lookup, CultureInfo culture, CultureInfo? valuesCulture, string name,
         Func<TContract, string?> select, Type defaultSetType, Func<ILocalizationSet> getDefaultSet, bool takesValues,
@@ -55,7 +56,7 @@ public sealed partial class LocalizationRegistry
 
         TContract? set = null;
 
-        if (showsCulture && this.FindWording(lookup, name, select, out set, out var isToldByRecord) is { } wording)
+        if (showsCulture && this.GetWording(lookup, name, select, out set, out var isToldByRecord) is { } wording)
         {
             if (isToldByRecord)
                 resolved?.Keep(text, set!, forProperty: true, forValues: true);
@@ -86,10 +87,11 @@ public sealed partial class LocalizationRegistry
 
         // The language the build recorded for the set, so that a registered set of that language words the text without
         // the set being created to tell it. A set the build recorded none for, such as one whose code isn't a constant,
-        // tells it itself.
-        var recordedLanguage = FindLanguageCode(defaultSetType);
+        // tells it itself. Its code is checked as a registered set's is, so that null or a code that is no culture name
+        // names the set, rather than fail deep in the lookup.
+        var recordedLanguage = GetRecordedLanguageCode(defaultSetType);
         var defaultSet = recordedLanguage is null ? getDefaultSet() : null;
-        var defaultLanguage = recordedLanguage ?? defaultSet!.LocalizationLanguageCode;
+        var defaultLanguage = recordedLanguage ?? ReadLanguageCode(defaultSet!);
 
         if (this.WordInLanguage(defaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isToldByRecord, out isServed) is { } rewording)
         {
@@ -164,7 +166,7 @@ public sealed partial class LocalizationRegistry
     /// <param name="name">The name of the text.</param>
     /// <param name="select">Gives the text as a set of the contract words it.</param>
     /// <param name="set">The set that gave the wording.</param>
-    /// <param name="isToldByRecord">Whether the same set words the text on every call (<see cref="FindWording"/>).</param>
+    /// <param name="isToldByRecord">Whether the same set words the text on every call (<see cref="GetWording"/>).</param>
     /// <param name="isServed">Whether the language serves the reader's culture, so that no scope is needed.</param>
     // Through the culture of the language where there is one, so that a text falling back to a language shows what a
     // user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh) walks
@@ -180,7 +182,7 @@ public sealed partial class LocalizationRegistry
         // with that of the set it derives from, and that comparison only holds where both are worded in one culture.
         using var scope = entersScope && !isServed ? EnterLanguage(languageLookup.Culture, valuesCulture) : default;
 
-        var wording = this.FindWording(languageLookup, name, select, out set, out isToldByRecord);
+        var wording = this.GetWording(languageLookup, name, select, out set, out isToldByRecord);
         return wording;
     }
 
@@ -261,7 +263,7 @@ internal sealed class ResolvedSets<TContract>
     /// </summary>
     /// <param name="culture">The reader's culture.</param>
     /// <param name="count">The number of texts the contract has.</param>
-    public static ResolvedSets<TContract> Find(CultureInfo culture, int count)
+    public static ResolvedSets<TContract> Get(CultureInfo culture, int count)
     {
         var registry = LocalizationRegistry.Current;
         var last = Last;
@@ -273,8 +275,13 @@ internal sealed class ResolvedSets<TContract>
         // Both written on this thread, one after the other. So the culture asked always belongs to the sets next to it,
         // also where code goes on on another thread after an await.
         last = registry.Resolve(culture).GetResolvedSets<TContract>(count);
-        Last = last;
-        LastAsked = culture;
+
+        // Not for a registry that holds a plugin's sets (LocalizationRegistry.HoldsCollectibleSets).
+        if (!registry.HoldsCollectibleSets)
+        {
+            Last = last;
+            LastAsked = culture;
+        }
 
         return last;
     }
@@ -310,7 +317,7 @@ internal sealed class ResolvedSets<TContract>
     /// The set kept as a text's fallback, or <see langword="null"/> where none is kept.
     /// </summary>
     /// <param name="text">The position of the text.</param>
-    public FallbackSet<TContract>? FindFallback(int text)
+    public FallbackSet<TContract>? GetFallback(int text)
     {
         var fallbackSets = this.FallbackSets;
         var fallback = (uint)text < (uint)fallbackSets.Length ? fallbackSets[text] : null;

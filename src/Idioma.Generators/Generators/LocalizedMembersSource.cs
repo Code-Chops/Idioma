@@ -39,6 +39,15 @@ internal static class LocalizedMembersSource
 
     private const string OwnTextName = "OwnText";
 
+    /// <summary>
+    /// The assembly's languages, the default first, in the class of <c>LocalizedText.Inline</c>. Each text has its
+    /// wording in this order.
+    /// </summary>
+    // That array, and not one of this file, because the package keeps its last pick for one array (InlineLanguage). With
+    // two, a page that shows inline texts and texts on members in turn picked again for every text.
+    // LocalizedTextFactoryGenerator writes that class from the same languages, wherever this file is written.
+    private const string LanguagesReference = LocalizedTextFactoryGenerator.ClassName + "." + LocalizedTextFactoryGenerator.LanguagesName;
+
     public static string Generate(LocalizedMembersModel model)
     {
         var sb = new StringBuilder();
@@ -47,8 +56,15 @@ internal static class LocalizedMembersSource
         // for as long as it has a text.
         var warnings = GeneratedFile.WithSuppressed(GeneratedFile.ObsoleteWarnings, model.SuppressedDiagnostics);
 
+        sb.AppendLine(GeneratedFile.GetHeader(warnings, "Only generated code calls GeneratedCode and applies InlineTexts."));
+        sb.AppendLine();
+
+        // The namespaces of the attributes that mark generated code, which stand by their names alone, because a class
+        // that gives an enum GetText() lies in the enum's namespace (GeneratedFile.ImportedCodeAttributes).
+        foreach (var imported in GeneratedFile.CodeAttributeNamespaces)
+            sb.AppendLine($"using {imported};");
+
         sb.AppendLine($$"""
-            {{GeneratedFile.GetHeader(warnings, "Only generated code calls GeneratedCode and applies InlineTexts.")}}
 
             // The texts below carry their wording themselves, as an inline text does.
             [assembly: {{PackageNames.InlineTextsAttribute}}]
@@ -60,11 +76,12 @@ internal static class LocalizedMembersSource
                 /// The assembly's registrar calls it.
                 /// </summary>
                 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+                {{GeneratedFile.ImportedCodeAttributes}}
                 internal static class {{model.RecorderName}}
                 {
                     internal static void Register()
                     {
-                        {{PackageNames.GeneratedCode}}.RecordMemberTexts({{OwnMembersName}}.Languages, static (type, member) => {{OwnMembersName}}.Find(type, member));
+                        {{PackageNames.GeneratedCode}}.RecordMemberTexts({{LanguagesReference}}, static (type, member) => {{OwnMembersName}}.Get(type, member));
                     }
                 }
             }
@@ -73,23 +90,20 @@ internal static class LocalizedMembersSource
             /// Finds the texts of this assembly's members marked <c>[Localized]</c>. This class is outside the namespace above, so a type's
             /// name is resolved from the global namespace, not from that namespace first.
             /// </summary>
+            {{GeneratedFile.ImportedCodeAttributes}}
             file static class {{OwnMembersName}}
             {
                 /// <summary>
-                /// The languages of this assembly, the default first. Each text below has its wording in this order.
+                /// The wording of a text for the current UI culture. Each text below has its wording in the order of
+                /// <see cref="{{LanguagesReference}}"/>, the languages of this assembly.
                 /// </summary>
-                internal static readonly string[] Languages = [{{String.Join(", ", model.Codes.Select(static code => SymbolDisplay.FormatLiteral(code, quote: true)))}}];
+                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.GetLanguageIndex({{LanguagesReference}})];
 
                 /// <summary>
-                /// The wording of a text for the current UI culture.
-                /// </summary>
-                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.FindLanguageIndex(Languages)];
-
-                /// <summary>
-                /// The wording of a member of a type per language, in the order of <see cref="Languages"/>, or the type's own for a member that is
+                /// The wording of a member of a type per language, in the order of <see cref="{{LanguagesReference}}"/>, or the type's own for a member that is
                 /// <see langword="null"/>.
                 /// </summary>
-                internal static string[]? Find(System.Type type, string? member)
+                internal static string[]? Get(System.Type type, string? member)
                 {
             """);
 
@@ -153,6 +167,7 @@ internal static class LocalizedMembersSource
             /// <summary>
             /// The texts of <c>{{CodeEscaping.EscapeXml(type.Reference)}}</c>.
             /// </summary>
+            {{GeneratedFile.ImportedCodeAttributes}}
             file static class {{TextsName}}{{index}}
             {
             """);
@@ -171,7 +186,7 @@ internal static class LocalizedMembersSource
             // that it can give the enum its own languages.
             sb.AppendLine($$"""
 
-                    internal static string Get({{type.Reference}} value) => CodeChops.Idioma.Internals.GeneratedCode.FindEnumText(value) ?? value switch
+                    internal static string Get({{type.Reference}} value) => CodeChops.Idioma.Internals.GeneratedCode.GetEnumText(value) ?? value switch
                     {
                 """);
 
@@ -228,6 +243,7 @@ internal static class LocalizedMembersSource
             /// <summary>
             /// Gives a value of {{enumLink}} its text, as in <c>status.{{LocalizedMembers.ExtensionName}}()</c>.
             /// </summary>
+            {{GeneratedFile.ImportedCodeAttributes}}
             {{accessibility}} static class {{extension.HolderName}}
             {
                 /// <param name="value">The value to give the text of.</param>

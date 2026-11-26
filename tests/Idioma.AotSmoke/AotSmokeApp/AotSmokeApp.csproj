@@ -2,10 +2,9 @@
 
   <!--
     An app that shows texts the way the README does, published with NativeAOT, so that what the package says about
-    trimming is run and not only analyzed: the language of a set from the end of its name, the sets of a referenced
-    library found by name, and a text through JSON written by the System.Text.Json source generator. It is
-    published without ICU, as a NativeAOT console app often is, where any culture but the invariant one is made up by
-    name, which the lookups of the package must work with.
+    trimming is run and not only analyzed: the language of a set from the end of its name, and the sets of a referenced
+    library found by name. It is published without ICU, as a NativeAOT console app often is, where any culture but the
+    invariant one is made up by name, which the lookups of the package must work with.
   -->
 
   <PropertyGroup>

@@ -164,7 +164,8 @@ internal static class TextParameters
                 parameter.Name,
                 ReadType(parameter.Type),
                 shown[parameter.Ordinal],
-                new EquatableArray<string>(LocalizationDiscovery.GetSuppressedDiagnosticsOfType(parameter.Type))));
+                new EquatableArray<string>(LocalizationDiscovery.GetSuppressedDiagnosticsOfType(parameter.Type)),
+                AcceptsNull(parameter.Type)));
 
         return new EquatableArray<TextParameter>(parameters.MoveToImmutable());
     }
@@ -528,6 +529,17 @@ internal static class TextParameters
     }
 
     /// <summary>
+    /// Whether a parameter of the type may be <see langword="null"/>, as <c>GetTextByKey</c> checks a value that was
+    /// passed for it. Not for a reference type without an annotation in code with nullable reference types, such as
+    /// <c>string</c>. A value type is told at run time, and a type without annotations may be <see langword="null"/>.
+    /// </summary>
+    private static bool AcceptsNull(ITypeSymbol type)
+    {
+        var acceptsNull = type is not { IsReferenceType: true, NullableAnnotation: NullableAnnotation.NotAnnotated };
+        return acceptsNull;
+    }
+
+    /// <summary>
     /// A type as generated code can write it, in parts: each part starts at a type that lies in a namespace, and holds
     /// what follows it up to the next such type.
     /// </summary>
@@ -699,15 +711,17 @@ internal static class TextParameters
 
 /// <summary>
 /// A parameter of a text that takes values: its name, its type as generated code can write it, whether the
-/// default-language wording shows the value, which every other language is then held to (<c>LOC402</c>), and what
+/// default-language wording shows the value, which every other language is then held to (<c>LOC402</c>), what
 /// writing its type in generated code reports besides <c>CS0612</c> and <c>CS0618</c>, such as the id of a type marked
-/// <c>[Experimental]</c> (<see cref="LocalizationDiscovery.GetSuppressedDiagnosticsOfType"/>).
+/// <c>[Experimental]</c> (<see cref="LocalizationDiscovery.GetSuppressedDiagnosticsOfType"/>), and whether
+/// <c>GetTextByKey</c> accepts <see langword="null"/> for it.
 /// </summary>
 internal readonly record struct TextParameter(
     string Name,
     EquatableArray<TypeNamePart> Type,
     bool IsShown,
-    EquatableArray<string> SuppressedDiagnostics);
+    EquatableArray<string> SuppressedDiagnostics,
+    bool AcceptsNull);
 
 /// <summary>
 /// The using directives the file of a contract repeats, each as it is written (<c>using MyApp.Domain;</c>): those of

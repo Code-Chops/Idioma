@@ -146,6 +146,23 @@ public sealed class CannotExtendCodeFixProviderTests
     }
 
     [Test]
+    [Arguments("public abstract class ShopBase { public abstract string Checkout { get; } }", 0)]
+    [Arguments("public abstract class ShopRoot { public abstract string Checkout { get; } } public abstract class ShopBase : ShopRoot { public abstract override string Checkout { get; } }", 0)]
+    [Arguments("public abstract class ShopRoot { public abstract string Checkout { get; } } public abstract class ShopBase : ShopRoot { public override string Checkout => \"Checkout\"; }", 1)]
+    public async Task AbstractSetInheritingAbstractMember_ShouldGetFixOnlyWhereItIsOverridden(string bases, int expected)
+    {
+        // Arrange: a set that declares no abstract member, but inherits one. Without the modifier, a class that doesn't
+        // override it doesn't compile (CS0534). A class in between that overrides it implements it.
+        var source = File($"{bases} public abstract class ShopLocalizationEn : ShopBase, ILocalizationSet, IShopLocalization {{ }}");
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        fixes.Count(static fix => fix.Title.StartsWith("Remove 'abstract'", StringComparison.Ordinal)).ShouldBe(expected);
+    }
+
+    [Test]
     public async Task FixAll_SetsNotNamedAfterTheirLanguage_ShouldAllBeRenamedInEveryFile()
     {
         // Arrange: two sets whose names give no language, and a file that names both.

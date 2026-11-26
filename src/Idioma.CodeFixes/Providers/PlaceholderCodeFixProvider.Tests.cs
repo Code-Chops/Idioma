@@ -179,9 +179,12 @@ public sealed class PlaceholderCodeFixProviderTests
     }
 
     [Test]
-    public async Task PropertyWithDocCommentAndGetterBlock_ShouldKeepTheCommentAndGetTheBlockOfAMethod()
+    [Arguments("\n")]
+    [Arguments("\r\n")]
+    public async Task PropertyWithDocCommentAndGetterBlock_ShouldKeepTheCommentAndGetTheBlockOfAMethod(string endOfLine)
     {
-        // Arrange
+        // Arrange: a file with each kind of line ending, whatever the machine writes. The block is formatted, which
+        // writes the line endings of the file.
         const string dutch = """
             /// <summary>The greeting.</summary>
             public string Greeting
@@ -201,11 +204,11 @@ public sealed class PlaceholderCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await FixAsync(Sets(EnglishGreeting, dutch));
+        var fixes = await FixAsync(Sets(EnglishGreeting, dutch).ReplaceLineEndings(endOfLine));
 
-        // Assert: the block is formatted, which writes the line endings of the platform, so those don't count here.
+        // Assert: line ending for line ending.
         var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
-        fixedSource.ReplaceLineEndings().ShouldBe(Sets(EnglishGreetingTakingValue, expected).ReplaceLineEndings());
+        fixedSource.ShouldBe(Sets(EnglishGreetingTakingValue, expected).ReplaceLineEndings(endOfLine));
         await ShouldCompileWithoutPlaceholders(fixedSource);
     }
 
@@ -338,6 +341,32 @@ public sealed class PlaceholderCodeFixProviderTests
         // Assert: a display name shows as it's written, so the placeholder is still reported.
         (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC403");
         fixes.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("ShopLocalization.GetTextByKey(\"Greeting\")", 0)]
+    [Arguments("ShopLocalization.GetTextByKey(nameof(ShopLocalization.Greeting))", 0)]
+    [Arguments("ShopLocalization.GetTextByKey(\"Greeting\", \"Anna\")", 1)]
+    [Arguments("ShopLocalization.GetTextByKey(\"Checkout\")", 1)]
+    public async Task TextThatCodeAsksForByKeyWithoutValues_ShouldGetNoFix(string call, int expected)
+    {
+        // Arrange: a call by the key of the text, which goes on compiling once the text is a method, and throws
+        // because it passes no values. A call that passes values throws now, and works after the fix. So does a call for
+        // another text.
+        var source = $$"""
+            {{Sets(EnglishGreetingWithPlaceholder, DutchGreeting)}}
+
+            public static class Usage
+            {
+                public static string? Read() => {{call}};
+            }
+            """;
+
+        // Act
+        var fixes = await FixAsync(source);
+
+        // Assert
+        fixes.Length.ShouldBe(expected);
     }
 
     [Test]

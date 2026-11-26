@@ -46,7 +46,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either, except the @code of a component on SDK 11 or later. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
+        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either, except the @code and the @attribute of a component on SDK 11 or later. A component's code-behind file is C#, so the generator reads it on any SDK. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmarkedEnumMemberRule = new(
@@ -92,7 +92,11 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         var sample = $"[{LocalizedMembers.AttributeName}({String.Join(", ", codes.Select(static code => $"{SupportedLanguages.ToParameterName(code)}: \"...\""))})]";
 
         context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, codes), SyntaxKind.Attribute);
-        context.RegisterSyntaxNodeAction(c => AnalyzeEnum(c, sample), SyntaxKind.EnumDeclaration);
+        // Found when an enum first needs them, which is rare: only an enum with members both marked and not asks.
+        var compilation = context.Compilation;
+        var enumsWithSets = new Lazy<ImmutableHashSet<INamedTypeSymbol>>(() => FindEnumsWithSets(compilation), LazyThreadSafetyMode.PublicationOnly);
+
+        context.RegisterSyntaxNodeAction(c => AnalyzeEnum(c, sample, enumsWithSets), SyntaxKind.EnumDeclaration);
 
         if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText) is not { } text)
             return;
@@ -288,7 +292,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         // see a file of declarations, which Razor writes from SDK 11 on.
         if (context.IsGeneratedCode && !UnnamedLanguageAnalyzer.IsRazorDeclaration(attribute.SyntaxTree))
         {
-            Report("it's written in markup, which the source generator can't read", $"Move '{type?.Name ?? member.Name}' to a C# file");
+            Report("it's written in markup, which the source generator can't read", AdviseOnMarkup(member, type, attribute.SyntaxTree));
             return;
         }
 
@@ -308,10 +312,65 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports each member of an enum without <c>[Localized]</c>, where another member of the enum has it
-    /// (<c>LOC501</c>).
+    /// Where to move a <c>[Localized]</c> that Razor generated from markup. A member of a component, or an attribute on
+    /// the component itself, moves to a code-behind file, because the component's markup has to stay in its
+    /// <c>.razor</c> file. A class declared in markup moves to a C# file as a whole.
     /// </summary>
-    private static void AnalyzeEnum(SyntaxNodeAnalysisContext context, string sample)
+    private static string AdviseOnMarkup(ISymbol member, INamedTypeSymbol? type, SyntaxTree tree)
+    {
+        // Razor writes a component as a top-level class, and a class in its @code as a class inside it.
+        var isComponent = type is { ContainingType: null } && tree.FilePath.EndsWith("_razor.g.cs", StringComparison.Ordinal);
+
+        if (!isComponent)
+            return $"Move '{type?.Name ?? member.Name}' to a C# file";
+
+        var codeBehind = $"a code-behind file, such as 'partial class {type!.Name}' in '{type.Name}.razor.cs'";
+
+        var advice = member is INamedTypeSymbol
+            ? $"Move the attribute to {codeBehind}"
+            : $"Move '{member.Name}' to {codeBehind}";
+
+        return advice;
+    }
+
+    /// <summary>
+    /// The enums whose texts a set of this compilation holds, which it lists as <c>ILocalizationSet&lt;TEnum&gt;</c>.
+    /// </summary>
+    private static ImmutableHashSet<INamedTypeSymbol> FindEnumsWithSets(Compilation compilation)
+    {
+        var enums = ImmutableHashSet.CreateBuilder<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var namespaces = new Stack<INamespaceSymbol>([compilation.Assembly.GlobalNamespace]);
+
+        while (namespaces.Count > 0)
+        {
+            var @namespace = namespaces.Pop();
+
+            foreach (var child in @namespace.GetNamespaceMembers())
+                namespaces.Push(child);
+
+            foreach (var type in @namespace.GetTypeMembers())
+                AddEnumsOfSet(type, enums);
+        }
+
+        return enums.ToImmutable();
+
+        static void AddEnumsOfSet(INamedTypeSymbol type, ImmutableHashSet<INamedTypeSymbol>.Builder enums)
+        {
+            if (type.TypeKind is TypeKind.Class)
+                foreach (var @interface in type.AllInterfaces)
+                    if (PackageNames.IsLocalizationSetOfEnum(@interface) && @interface.TypeArguments is [INamedTypeSymbol { TypeKind: TypeKind.Enum } @enum])
+                        enums.Add(@enum);
+
+            foreach (var nested in type.GetTypeMembers())
+                AddEnumsOfSet(nested, enums);
+        }
+    }
+
+    /// <summary>
+    /// Reports each member of an enum without <c>[Localized]</c>, where another member of the enum has it
+    /// (<c>LOC501</c>). Not for an enum that a set holds the texts of, which gets its <c>GetText()</c> from the set.
+    /// </summary>
+    private static void AnalyzeEnum(SyntaxNodeAnalysisContext context, string sample, Lazy<ImmutableHashSet<INamedTypeSymbol>> enumsWithSets)
     {
         var declaration = (EnumDeclarationSyntax)context.Node;
 
@@ -332,6 +391,10 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         }
 
         if (unmarked.Count is 0 || marked.Count is 0)
+            return;
+
+        // An enum with a set gets its GetText() from the set, which has a text for every member (CS0535).
+        if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is { } declared && enumsWithSets.Value.Contains(declared))
             return;
 
         // A member with the value of a marked member, such as Default = Active, shows that member's text, because

@@ -1,10 +1,11 @@
+using System.Collections.Concurrent;
 using System.Composition;
 using System.Runtime.CompilerServices;
 using System.Text;
 using CodeChops.Idioma.Generators;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
-using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Text;
 
 namespace CodeChops.Idioma.CodeFixes;
 
@@ -403,6 +404,9 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
     /// <item>An attribute that reads the text as a resource, as <c>[Required]</c> with <c>ErrorMessageResourceName</c>
     /// and <c>[Display]</c> with <c>Name</c> do (<see cref="ResourceNamedTexts"/>). It finds the property by its name
     /// at run time, and throws where there's a method.</item>
+    /// <item><c>ShopLocalization.GetTextByKey("Greeting")</c>, which passes no values, and throws once the text takes
+    /// them (<see cref="IsAskedForByKeyWithoutValues"/>). A key the code only has at run time, such as one from a
+    /// database, can't be seen here.</item>
     /// </list>
     /// </remarks>
     // By name first, which binds nothing, and then by the compiler for a name that matches: one of a few in a project.
@@ -419,8 +423,16 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             .ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
         var resourceNamed = ResourceNamedTexts.Of(projectTexts.Compilation);
+        var names = properties.Select(GetTextName).ToImmutableHashSet(StringComparer.Ordinal);
 
-        foreach (var name in properties.Select(GetTextName).Distinct(StringComparer.Ordinal))
+        // So that one pass over each file finds the uses of every name.
+        foreach (var name in names)
+            projectTexts.ExpectUsesOf(name);
+
+        if (IsAskedForByKeyWithoutValues(names, generatedClasses, projectTexts, models, cancellationToken))
+            return true;
+
+        foreach (var name in names)
         {
             if (generatedClasses.Any(generatedClass => resourceNamed.IsNamed(generatedClass, name, cancellationToken)))
                 return true;
@@ -441,6 +453,39 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
                 {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether code asks a generated class for one of the texts by its key, written as a constant, and passes no values,
+    /// as in <c>ShopLocalization.GetTextByKey("Greeting")</c>. That goes on compiling once the text is a method, and
+    /// throws, because the text then takes values.
+    /// </summary>
+    private static bool IsAskedForByKeyWithoutValues(ImmutableHashSet<string> names, ImmutableHashSet<INamedTypeSymbol> generatedClasses,
+        ProjectTexts projectTexts, Dictionary<SyntaxTree, SemanticModel> models, CancellationToken cancellationToken)
+    {
+        foreach (var identifier in projectTexts.FindUsesOf(LocalizationSetsAnalysis.GetName, cancellationToken))
+        {
+            // The method by its name alone, inside the generated class, or after the class.
+            var invocation = identifier.Parent is MemberAccessExpressionSyntax access && access.Name == identifier
+                ? access.Parent as InvocationExpressionSyntax
+                : identifier.Parent as InvocationExpressionSyntax;
+
+            if (invocation?.ArgumentList.Arguments is not [var key])
+                continue;
+
+            if (!models.TryGetValue(identifier.SyntaxTree, out var model))
+                models.Add(identifier.SyntaxTree, model = projectTexts.Compilation.GetSemanticModel(identifier.SyntaxTree));
+
+            if (model.GetSymbolInfo(invocation, cancellationToken).Symbol is IMethodSymbol method
+                && generatedClasses.Contains(method.ContainingType)
+                && model.GetConstantValue(key.Expression, cancellationToken) is { HasValue: true, Value: string name }
+                && names.Contains(name))
+            {
+                return true;
             }
         }
 
@@ -573,6 +618,10 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
         /// <summary>
         /// Each place in the code of the project, generated code included, where a name is used, outside comments.
         /// </summary>
+        /// <remarks>
+        /// Each file is searched once for a name, and where it uses the name is kept with its syntax tree, which an
+        /// edit of another file leaves as it was. So after an edit, only the file it changed is searched again.
+        /// </remarks>
         public ImmutableArray<IdentifierNameSyntax> FindUsesOf(string name, CancellationToken cancellationToken)
         {
             lock (this.Gate)
@@ -582,12 +631,28 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
                 this.ExpectedNames.Add(name);
 
-                var found = this.ExpectedNames.ToDictionary(static expected => expected, static _ => ImmutableArray.CreateBuilder<IdentifierNameSyntax>(), StringComparer.Ordinal);
+                var expected = this.ExpectedNames.ToArray();
+                var found = expected.ToDictionary(static expected => expected, static _ => ImmutableArray.CreateBuilder<IdentifierNameSyntax>(), StringComparer.Ordinal);
 
                 foreach (var tree in this.Compilation.SyntaxTrees)
-                    foreach (var identifier in tree.GetRoot(cancellationToken).DescendantNodes().OfType<IdentifierNameSyntax>())
-                        if (found.TryGetValue(identifier.Identifier.ValueText, out var uses))
-                            uses.Add(identifier);
+                {
+                    var spansByName = UsesPerTree.GetValue(tree, static _ => new ConcurrentDictionary<string, ImmutableArray<TextSpan>>(StringComparer.Ordinal));
+                    var root = FindSpans(tree, spansByName, expected, cancellationToken);
+
+                    foreach (var expectedName in expected)
+                    {
+                        var spans = spansByName[expectedName];
+
+                        if (spans.IsEmpty)
+                            continue;
+
+                        root ??= tree.GetRoot(cancellationToken);
+
+                        foreach (var span in spans)
+                            if (root.FindNode(span, getInnermostNodeForTie: true) is IdentifierNameSyntax identifier)
+                                found[expectedName].Add(identifier);
+                    }
+                }
 
                 foreach (var uses in found)
                     this.UsesByName[uses.Key] = uses.Value.ToImmutable();
@@ -596,6 +661,36 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 
                 return this.UsesByName[name];
             }
+        }
+
+        /// <summary>
+        /// Per file, where each name that was asked for is used.
+        /// </summary>
+        // Spans only, so the syntax of the file isn't kept alive by this.
+        private static readonly ConditionalWeakTable<SyntaxTree, ConcurrentDictionary<string, ImmutableArray<TextSpan>>> UsesPerTree = new();
+
+        /// <summary>
+        /// Searches a file for the names it hasn't been searched for yet, in one pass, and keeps where it uses each. Gives
+        /// the root of the file where it was searched, else <see langword="null"/>.
+        /// </summary>
+        private static SyntaxNode? FindSpans(SyntaxTree tree, ConcurrentDictionary<string, ImmutableArray<TextSpan>> spansByName, string[] names,
+            CancellationToken cancellationToken)
+        {
+            var missing = names.Where(name => !spansByName.ContainsKey(name)).ToDictionary(static name => name, static _ => ImmutableArray.CreateBuilder<TextSpan>(), StringComparer.Ordinal);
+
+            if (missing.Count is 0)
+                return null;
+
+            var root = tree.GetRoot(cancellationToken);
+
+            foreach (var identifier in root.DescendantNodes().OfType<IdentifierNameSyntax>())
+                if (missing.TryGetValue(identifier.Identifier.ValueText, out var spans))
+                    spans.Add(identifier.Span);
+
+            foreach (var spans in missing)
+                spansByName.TryAdd(spans.Key, spans.Value.ToImmutable());
+
+            return root;
         }
     }
 
@@ -882,7 +977,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             ? method
                 .WithParameterList(parameters.WithTrailingTrivia(SyntaxFactory.Space))
                 .WithBody(body.WithoutTrivia().WithTrailingTrivia(property.GetTrailingTrivia()))
-                .WithAdditionalAnnotations(Formatter.Annotation)
+                .WithAdditionalAnnotations(CodeFixSupport.FormatAnnotation)
             : null;
     }
 

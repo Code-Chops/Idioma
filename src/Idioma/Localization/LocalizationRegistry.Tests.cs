@@ -99,7 +99,7 @@ public sealed partial class LocalizationRegistryTests
         where TContract : class, IRegistryBrandTexts
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var brand = Internals.GeneratedCode.FindSet<TContract>(0, 1)?.Brand
+        var brand = Internals.GeneratedCode.GetSet<TContract>(0, 1)?.Brand
             ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
 
         return brand;
@@ -301,7 +301,7 @@ public sealed partial class LocalizationRegistryTests
 
         // Assert: nothing of the sets of the whole app, in the given order.
         registry.AllSets.ShouldBe([english, dutch]);
-        registry.SetLanguages.ShouldBe(["en", "nl"], ignoreOrder: true);
+        registry.SetLanguages.ShouldBe(["en", "nl"]);
         LocalizationRegistry.Create([]).AllSets.ShouldBeEmpty();
     }
 
@@ -344,7 +344,7 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
-    public void Find_AskedTwiceForOneContract_ShouldGiveSameSetAmongSetsOfOtherContracts()
+    public void GetByCulture_AskedTwiceForOneContract_ShouldGiveSameSetAmongSetsOfOtherContracts()
     {
         // Arrange: the sets of a contract are found once per language and kept.
         var dutch = new RegistryLocalizationNl();
@@ -353,10 +353,10 @@ public sealed partial class LocalizationRegistryTests
         var culture = CultureInfo.GetCultureInfo("nl-NL");
 
         // Act & Assert
-        registry.FindSet<IRegistryLocalization>(culture).ShouldBeSameAs(replacement);
-        registry.FindSet<IRegistryLocalization>(culture).ShouldBeSameAs(replacement);
-        registry.FindSet<IRegistryTierLocalization>(culture).ShouldBeOfType<RegistryTierDefaultLocalizationNl>();
-        registry.FindSet<IRegistryOtherLocalization>(culture).ShouldBeNull();
+        registry.GetByCulture<IRegistryLocalization>(culture).ShouldBeSameAs(replacement);
+        registry.GetByCulture<IRegistryLocalization>(culture).ShouldBeSameAs(replacement);
+        registry.GetByCulture<IRegistryTierLocalization>(culture).ShouldBeOfType<RegistryTierDefaultLocalizationNl>();
+        registry.GetByCulture<IRegistryOtherLocalization>(culture).ShouldBeNull();
     }
 
     [Test]
@@ -367,11 +367,11 @@ public sealed partial class LocalizationRegistryTests
         var chinese = new RegistryConfiguredLocalization("ZH-hans");
 
         // Act
-        var registry = LocalizationRegistry.Create([belgian, chinese]);
+        var registry = LocalizationRegistry.Create([chinese, belgian]);
 
-        // Assert: found in any letter case, listed in one.
-        registry.SetLanguages.ShouldBe(["nl-BE", "zh-Hans"], ignoreOrder: true);
-        registry.FindSet<ILocalizationSet>(CultureInfo.GetCultureInfo("nl-BE")).ShouldBeSameAs(belgian);
+        // Assert: found in any letter case, listed in one, in ordinal order whatever order the sets registered in.
+        registry.SetLanguages.ShouldBe(["nl-BE", "zh-Hans"]);
+        registry.GetByCulture<ILocalizationSet>(CultureInfo.GetCultureInfo("nl-BE")).ShouldBeSameAs(belgian);
     }
 
     [Test]
@@ -386,13 +386,13 @@ public sealed partial class LocalizationRegistryTests
         var invalid = new RegistryConfiguredLocalization(languageCode);
 
         // Act & Assert: such a set would be filed under a language no culture reaches.
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(invalid)).Message.ShouldContain($"\"{languageCode}\"");
+        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(invalid)).Message.ShouldContain($"'{languageCode}'");
         Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterDefaults(invalid));
         Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Create([invalid]));
     }
 
     [Test]
-    public void Find_ShouldWalkUpToNeutralCulture()
+    public void GetByCulture_ShouldWalkUpToNeutralCulture()
     {
         // Arrange
         var english = new RegistryLocalizationEn();
@@ -401,39 +401,25 @@ public sealed partial class LocalizationRegistryTests
 
         // Act & Assert: nl-BE resolves through nl, en-GB through en; the invariant culture and an unknown language
         // yield null.
-        registry.FindSet<IRegistryLocalization>(Culture("nl-BE")).ShouldBeSameAs(dutch);
-        registry.FindSet<IRegistryLocalization>(Culture("en-GB")).ShouldBeSameAs(english);
-        registry.FindSet<IRegistryLocalization>(Culture("de-DE")).ShouldBeNull();
-        registry.FindSet<IRegistryLocalization>(CultureInfo.InvariantCulture).ShouldBeNull();
+        registry.GetByCulture<IRegistryLocalization>(Culture("nl-BE")).ShouldBeSameAs(dutch);
+        registry.GetByCulture<IRegistryLocalization>(Culture("en-GB")).ShouldBeSameAs(english);
+        registry.GetByCulture<IRegistryLocalization>(Culture("de-DE")).ShouldBeNull();
+        registry.GetByCulture<IRegistryLocalization>(CultureInfo.InvariantCulture).ShouldBeNull();
     }
 
     [Test]
-    public void Find_ForRegionWithInvariantParent_ShouldFallBackByName()
+    public void GetByCulture_ForRegionWithInvariantParent_ShouldFallBackByName()
     {
         // Arrange
         var dutch = new RegistryLocalizationNl();
         var registry = LocalizationRegistry.Create([new RegistryLocalizationEn(), dutch]);
 
         // Act & Assert: under invariant globalization nl-BE has no parent to walk to, and nl still serves it.
-        registry.FindSet<IRegistryLocalization>(new RegistryInvariantParentCulture("nl-BE")).ShouldBeSameAs(dutch);
+        registry.GetByCulture<IRegistryLocalization>(new RegistryInvariantParentCulture("nl-BE")).ShouldBeSameAs(dutch);
     }
 
     [Test]
-    public void FindByLanguage_ShouldMatchLanguageCodeWithoutCultureWalk()
-    {
-        // Arrange
-        var dutch = new RegistryLocalizationNl();
-        var registry = LocalizationRegistry.Create([dutch]);
-
-        // Act & Assert: the code in any letter case; a specific culture name is not walked up; a contract no set of the
-        // language implements yields nothing.
-        registry.FindByLanguage(typeof(IRegistryLocalization), "NL").ShouldBeSameAs(dutch);
-        registry.FindByLanguage(typeof(IRegistryLocalization), "nl-BE").ShouldBeNull();
-        registry.FindByLanguage(typeof(IRegistryOtherLocalization), "nl").ShouldBeNull();
-    }
-
-    [Test]
-    public void Find_ShouldLetLastSetWinPerContractAndLanguage()
+    public void GetByCulture_ShouldLetLastSetWinPerContractAndLanguage()
     {
         // Arrange
         var first = new RegistryLocalizationNl();
@@ -446,33 +432,33 @@ public sealed partial class LocalizationRegistryTests
 
         // Assert: the last set wins for its contract, and a contract only an earlier set implements still finds that
         // one.
-        registry.FindSet<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(last);
-        withOther.FindSet<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(first);
-        withOther.FindSet<IRegistryOtherLocalization>(Culture("nl")).ShouldBeSameAs(other);
+        registry.GetByCulture<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(last);
+        withOther.GetByCulture<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(first);
+        withOther.GetByCulture<IRegistryOtherLocalization>(Culture("nl")).ShouldBeSameAs(other);
     }
 
     [Test]
-    public void Find_ShouldServeEveryContractSetImplements()
+    public void GetByCulture_ShouldServeEveryContractSetImplements()
     {
         // Arrange
         var combined = new RegistryCombinedLocalizationNl();
         var registry = LocalizationRegistry.Create([combined]);
 
         // Act & Assert
-        registry.FindSet<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(combined);
-        registry.FindSet<IRegistryOtherLocalization>(Culture("nl")).ShouldBeSameAs(combined);
-        registry.FindSet(typeof(IRegistryOtherLocalization), Culture("nl")).ShouldBeSameAs(combined);
+        registry.GetByCulture<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(combined);
+        registry.GetByCulture<IRegistryOtherLocalization>(Culture("nl")).ShouldBeSameAs(combined);
+        registry.GetByCulture(typeof(IRegistryOtherLocalization), Culture("nl")).ShouldBeSameAs(combined);
     }
 
     [Test]
-    public void Find_AndCreate_ShouldThrowForNullArguments()
+    public void GetByCulture_AndCreate_ShouldThrowForNullArguments()
     {
         // Arrange
         var registry = LocalizationRegistry.Create([]);
 
         // Act & Assert
-        Should.Throw<ArgumentNullException>(() => registry.FindSet(null!, CultureInfo.InvariantCulture));
-        Should.Throw<ArgumentNullException>(() => registry.FindSet(typeof(IRegistryLocalization), null!));
+        Should.Throw<ArgumentNullException>(() => registry.GetByCulture(null!, CultureInfo.InvariantCulture));
+        Should.Throw<ArgumentNullException>(() => registry.GetByCulture(typeof(IRegistryLocalization), null!));
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.Create(null!));
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.Create([null!])).ParamName.ShouldBe("sets");
     }

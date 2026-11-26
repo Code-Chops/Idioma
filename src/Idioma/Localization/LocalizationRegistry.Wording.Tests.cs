@@ -35,6 +35,17 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
+    /// A set a text is declared with whose language code is null at run time, which the build has no record of because
+    /// the code isn't a constant.
+    /// </summary>
+    private sealed class SetWithoutLanguageCode : ISetLocalization
+    {
+        public string LocalizationLanguageCode => null!;
+        public string Greeting => "Hello";
+        public string Farewell => "Goodbye";
+    }
+
+    /// <summary>
     /// A Dutch set that gives no greeting, as a member that hands on a value that's null at run time.
     /// </summary>
     private sealed class SetWithoutGreetingLocalizationNl : ISetLocalization
@@ -277,7 +288,7 @@ public sealed class LocalizationRegistryWordingTests
     /// <summary>
     /// The text of <see cref="ISetRegisteredLocalization"/>, read as a property of a generated class reads it.
     /// </summary>
-    private static string RegisteredGreeting => GeneratedCode.FindSet<ISetRegisteredLocalization>(0, 1)?.Greeting
+    private static string RegisteredGreeting => GeneratedCode.GetSet<ISetRegisteredLocalization>(0, 1)?.Greeting
         ?? GeneratedCode.ResolveWording<ISetRegisteredLocalization, SetRegisteredLocalizationEn>(0, 1, "Greeting", static set => set.Greeting);
 
     /// <summary>
@@ -305,7 +316,7 @@ public sealed class LocalizationRegistryWordingTests
     /// <summary>
     /// The text of <see cref="ISetStaleLocalization"/>, read as a property of a generated class reads it.
     /// </summary>
-    private static string StaleGreeting => GeneratedCode.FindSet<ISetStaleLocalization>(0, 1)?.Greeting
+    private static string StaleGreeting => GeneratedCode.GetSet<ISetStaleLocalization>(0, 1)?.Greeting
         ?? GeneratedCode.ResolveWording<ISetStaleLocalization, SetStaleLocalizationEn>(0, 1, "Greeting", static set => set.Greeting);
 
     /// <summary>
@@ -335,10 +346,10 @@ public sealed class LocalizationRegistryWordingTests
     /// </summary>
     private static class KeptTexts
     {
-        public static string Checkout => GeneratedCode.FindSet<ISetKeptLocalization>(0, 2)?.Checkout
+        public static string Checkout => GeneratedCode.GetSet<ISetKeptLocalization>(0, 2)?.Checkout
             ?? WordCheckout();
 
-        public static string Total(decimal amount) => GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2)?.Total(amount)
+        public static string Total(decimal amount) => GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2)?.Total(amount)
             ?? WordTotal(amount);
 
         public static string WordCheckout() => GeneratedCode.ResolveWording<ISetKeptLocalization, SetKeptLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
@@ -373,10 +384,10 @@ public sealed class LocalizationRegistryWordingTests
     /// </summary>
     private static class ProvidedTexts
     {
-        public static string Total(decimal amount) => GeneratedCode.FindSetForValues<ISetProvidedLocalization>(0, 2)?.Total(amount)
+        public static string Total(decimal amount) => GeneratedCode.GetSetForValues<ISetProvidedLocalization>(0, 2)?.Total(amount)
             ?? WordTotal(amount);
 
-        public static string Summary(decimal amount) => GeneratedCode.FindSetForValues<ISetProvidedLocalization>(1, 2)?.Summary(amount)
+        public static string Summary(decimal amount) => GeneratedCode.GetSetForValues<ISetProvidedLocalization>(1, 2)?.Summary(amount)
             ?? WordSummary(amount);
 
         public static string WordTotal(decimal amount) => GeneratedCode.ResolveWording<ISetProvidedLocalization, SetProvidedLocalizationEn, decimal>(0, 2, "Total", static (set, amount) => set.Total(amount), amount);
@@ -413,10 +424,10 @@ public sealed class LocalizationRegistryWordingTests
     /// </summary>
     private static class ShowingTexts
     {
-        public static string Hint => GeneratedCode.FindSet<ISetShowingLocalization>(0, 2)?.Hint
+        public static string Hint => GeneratedCode.GetSet<ISetShowingLocalization>(0, 2)?.Hint
             ?? GeneratedCode.ResolveWording<ISetShowingLocalization, SetShowingLocalizationEn>(0, 2, "Hint", static set => set.Hint);
 
-        public static string Summary => GeneratedCode.FindSet<ISetShowingLocalization>(1, 2)?.Summary
+        public static string Summary => GeneratedCode.GetSet<ISetShowingLocalization>(1, 2)?.Summary
             ?? GeneratedCode.ResolveWording<ISetShowingLocalization, SetShowingLocalizationEn>(1, 2, "Summary", static set => set.Summary);
     }
 
@@ -583,6 +594,7 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void Word_ForCultureWithoutSet_ShouldCreateNoSecondDefaultSetWhereTheRegisteredOneWordsIt()
     {
         // Arrange: a registry without languages, as in a host that declares none, with the English set registered and
@@ -652,6 +664,20 @@ public sealed class LocalizationRegistryWordingTests
         property.Message.ShouldContain("'en'");
         method.Message.ShouldContain(nameof(SetCountedLocalizationEn));
         method.Message.ShouldContain("'MissingItems' of 'ISetCountedLocalization'");
+    }
+
+    [Test]
+    public void Word_WhereDeclaredSetGivesNullLanguageCode_ShouldThrowNamingTheSet()
+    {
+        // Arrange: a registry without a set of the contract, so the text falls back to the set it was declared with.
+        var registry = LocalizationRegistry.Create([]);
+
+        // Act
+        var exception = Should.Throw<InvalidOperationException>(() => Word<ISetLocalization, SetWithoutLanguageCode>(registry, Culture("fr-FR"), "Greeting", static set => set.Greeting));
+
+        // Assert: the set and its code are named, rather than a null key deep in the lookup.
+        exception.Message.ShouldContain(nameof(SetWithoutLanguageCode));
+        exception.Message.ShouldContain("gives null as its");
     }
 
     [Test]
@@ -1131,9 +1157,9 @@ public sealed class LocalizationRegistryWordingTests
         // Assert: kept with the culture of English, and not for the generated class to call without its scope.
         wording.ShouldBe("3 items");
         resolved.SetsForValues.ShouldBe([null, null]);
-        resolved.FindFallback(0).ShouldNotBeNull().Set.ShouldBeSameAs(english);
-        resolved.FindFallback(0)!.Culture.ShouldNotBeNull().Name.ShouldBe("en");
-        resolved.FindFallback(1).ShouldBeNull();
+        resolved.GetFallback(0).ShouldNotBeNull().Set.ShouldBeSameAs(english);
+        resolved.GetFallback(0)!.Culture.ShouldNotBeNull().Name.ShouldBe("en");
+        resolved.GetFallback(1).ShouldBeNull();
     }
 
     [Test]
@@ -1192,13 +1218,13 @@ public sealed class LocalizationRegistryWordingTests
         resolved.Sets.ShouldBe([set]);
         resolved.SetsForValues.ShouldBe([null]);
         resolved.FallbackSets.ShouldBe([null]);
-        resolved.FindFallback(-1).ShouldBeNull();
-        resolved.FindFallback(1).ShouldBeNull();
+        resolved.GetFallback(-1).ShouldBeNull();
+        resolved.GetFallback(1).ShouldBeNull();
     }
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void FindSet_ShouldGiveKeptSetAfterTextWasWordedOnceAndNoneBefore()
+    public void GetSet_ShouldGiveKeptSetAfterTextWasWordedOnceAndNoneBefore()
     {
         // Arrange: a contract no other test uses, with its Dutch set in the sets of the whole app.
         using var _ = new CulturesScope("nl-NL");
@@ -1206,32 +1232,32 @@ public sealed class LocalizationRegistryWordingTests
         LocalizationRegistry.Register(dutch);
 
         // Act & Assert: none before the text is worded, for a property and for a text that takes values.
-        GeneratedCode.FindSet<ISetKeptLocalization>(0, 2).ShouldBeNull();
-        GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
+        GeneratedCode.GetSet<ISetKeptLocalization>(0, 2).ShouldBeNull();
+        GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
 
         KeptTexts.WordCheckout().ShouldBe("Afrekenen");
-        GeneratedCode.FindSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(dutch);
-        GeneratedCode.FindSet<ISetKeptLocalization>(1, 2).ShouldBeNull();
+        GeneratedCode.GetSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(dutch);
+        GeneratedCode.GetSet<ISetKeptLocalization>(1, 2).ShouldBeNull();
 
         KeptTexts.WordTotal(1.5m).ShouldBe("Totaal: 1,50");
-        GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2).ShouldBeSameAs(dutch);
+        GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeSameAs(dutch);
 
         // Kept per culture: an English reader has none yet, and gets the set the text was declared with.
         using (new CulturesScope("en-US"))
         {
-            GeneratedCode.FindSet<ISetKeptLocalization>(0, 2).ShouldBeNull();
+            GeneratedCode.GetSet<ISetKeptLocalization>(0, 2).ShouldBeNull();
             KeptTexts.Checkout.ShouldBe("Checkout");
-            GeneratedCode.FindSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(GeneratedCode.GetDefaultSet<SetKeptLocalizationEn>());
+            GeneratedCode.GetSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(GeneratedCode.GetDefaultSet<SetKeptLocalizationEn>());
         }
 
-        GeneratedCode.FindSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(dutch);
+        GeneratedCode.GetSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(dutch);
         KeptTexts.Checkout.ShouldBe("Afrekenen");
         KeptTexts.Total(1.5m).ShouldBe("Totaal: 1,50");
     }
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void FindSetForValues_WithCurrentUICultureProviderGivingCultureThreadDoesNotHave_ShouldGiveNone()
+    public void GetSetForValues_WithCurrentUICultureProviderGivingCultureThreadDoesNotHave_ShouldGiveNone()
     {
         // Arrange: an American thread, and a set kept for a Dutch reader and for an American one.
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
@@ -1249,15 +1275,23 @@ public sealed class LocalizationRegistryWordingTests
             // no set is given, however often the text was worded. A property formats nothing, so it reads its set.
             total.ShouldBe("Totaal: 1.234,50");
             totalAgain.ShouldBe("Totaal: 1.234,50");
-            GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
-            GeneratedCode.FindSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(dutch);
+            GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
+            GeneratedCode.GetSet<ISetKeptLocalization>(0, 2).ShouldBeSameAs(dutch);
         }
 
         // A provider that gives the cultures the thread has needs no scope, so the kept set is given.
         using (new ProvidedCultureScope(CultureInfo.CurrentCulture))
         {
             KeptTexts.Total(1234.5m).ShouldBe("Total: 1,234.50");
-            GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2).ShouldBeSameAs(GeneratedCode.GetDefaultSet<SetKeptLocalizationEn>());
+            GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeSameAs(GeneratedCode.GetDefaultSet<SetKeptLocalizationEn>());
+        }
+
+        // A culture object of the same name that formats alike, as the one request localization gives a thread, needs
+        // no scope either.
+        using (new ProvidedCultureScope(new CultureInfo("en-US", useUserOverride: false)))
+        {
+            GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeSameAs(GeneratedCode.GetDefaultSet<SetKeptLocalizationEn>());
+            KeptTexts.Total(1234.5m).ShouldBe("Total: 1,234.50");
         }
 
         // A culture of the same name that formats a number its own way is another culture to format for.
@@ -1266,7 +1300,7 @@ public sealed class LocalizationRegistryWordingTests
 
         using (new ProvidedCultureScope(ownAmerican))
         {
-            GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
+            GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
             KeptTexts.Total(1234.5m).ShouldBe("Total: 1 234.50");
         }
 
@@ -1274,7 +1308,7 @@ public sealed class LocalizationRegistryWordingTests
         using (new CulturesScope(uiCulture: "en-US", culture: "nl-NL"))
         using (new ProvidedCultureScope("en-US"))
         {
-            GeneratedCode.FindSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
+            GeneratedCode.GetSetForValues<ISetKeptLocalization>(1, 2).ShouldBeNull();
             KeptTexts.Total(1234.5m).ShouldBe("Total: 1,234.50");
         }
 
@@ -1327,12 +1361,12 @@ public sealed class LocalizationRegistryWordingTests
         // Act: unregistered, then registered, and read twice each time, so that the second read finds a kept set.
         var before = RegisteredGreeting;
         var beforeAgain = RegisteredGreeting;
-        var keptBefore = GeneratedCode.FindSet<ISetRegisteredLocalization>(0, 1);
+        var keptBefore = GeneratedCode.GetSet<ISetRegisteredLocalization>(0, 1);
 
         var dutch = new SetRegisteredLocalizationNl();
         LocalizationRegistry.Register(dutch);
 
-        var keptAfterRegistration = GeneratedCode.FindSet<ISetRegisteredLocalization>(0, 1);
+        var keptAfterRegistration = GeneratedCode.GetSet<ISetRegisteredLocalization>(0, 1);
         var after = RegisteredGreeting;
         var afterAgain = RegisteredGreeting;
 
@@ -1344,7 +1378,7 @@ public sealed class LocalizationRegistryWordingTests
         keptAfterRegistration.ShouldBeNull();
         after.ShouldBe("Hallo");
         afterAgain.ShouldBe("Hallo");
-        GeneratedCode.FindSet<ISetRegisteredLocalization>(0, 1).ShouldBeSameAs(dutch);
+        GeneratedCode.GetSet<ISetRegisteredLocalization>(0, 1).ShouldBeSameAs(dutch);
     }
 
     [Test]
@@ -1354,17 +1388,17 @@ public sealed class LocalizationRegistryWordingTests
         // Arrange: an English reader, whose text keeps the set it was declared with.
         using var _ = new CulturesScope("en-US");
         StaleGreeting.ShouldBe("Hello");
-        var keptBefore = GeneratedCode.FindSet<ISetStaleLocalization>(0, 1).ShouldNotBeNull();
+        var keptBefore = GeneratedCode.GetSet<ISetStaleLocalization>(0, 1).ShouldNotBeNull();
 
         // Act: a set registers that rewords the text.
         var rewording = new SetStaleRewordedLocalizationEn();
         LocalizationRegistry.Register(rewording);
 
         // Assert
-        GeneratedCode.FindSet<ISetStaleLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetSet<ISetStaleLocalization>(0, 1).ShouldBeNull();
         StaleGreeting.ShouldBe("Hi");
         StaleGreeting.ShouldBe("Hi");
-        GeneratedCode.FindSet<ISetStaleLocalization>(0, 1).ShouldBeSameAs(rewording);
+        GeneratedCode.GetSet<ISetStaleLocalization>(0, 1).ShouldBeSameAs(rewording);
         keptBefore.ShouldBeSameAs(GeneratedCode.GetDefaultSet<SetStaleLocalizationEn>());
     }
 
@@ -1641,8 +1675,83 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     [Test]
+    [NotInParallel]
+    public void WordingScope_WhereDefaultCulturesOfProcessChange_ShouldSetCulturesItWasGiven()
+    {
+        // Arrange: a thread that sets no culture itself, so it follows the default cultures of the process. Its context
+        // is one no other code uses, so no other scope switched from it. The defaults hold for the whole process, so no
+        // other test runs next to this one.
+        var american = Culture("en-US");
+        var dutch = Culture("nl-NL");
+        var german = Culture("de-DE");
+        var defaultUICulture = CultureInfo.DefaultThreadCurrentUICulture;
+        var defaultCulture = CultureInfo.DefaultThreadCurrentCulture;
+        var ownContext = new AsyncLocal<object?>();
+        CultureInfo? uiCultureForDutch = null;
+        CultureInfo? cultureForDutch = null;
+        CultureInfo? uiCultureForAmerican = null;
+        CultureInfo? cultureForAmerican = null;
+
+        // Act
+        try
+        {
+            CultureInfo.DefaultThreadCurrentUICulture = american;
+            CultureInfo.DefaultThreadCurrentCulture = american;
+
+            var thread = new Thread(() =>
+            {
+                ownContext.Value = new object();
+
+                // A Dutch text with American values, which changes only the UI culture. Then the default format
+                // becomes German, so the same text changes the culture for values too.
+                using (new WordingScope(dutch, valuesCulture: american))
+                {
+                }
+
+                CultureInfo.DefaultThreadCurrentCulture = german;
+
+                using (new WordingScope(dutch, valuesCulture: american))
+                {
+                    uiCultureForDutch = CultureInfo.CurrentUICulture;
+                    cultureForDutch = CultureInfo.CurrentCulture;
+                }
+
+                // An American text with Dutch values, which changes only the culture for values. Then the default UI
+                // culture becomes German, so the same text changes the UI culture too.
+                using (new WordingScope(american, valuesCulture: dutch))
+                {
+                }
+
+                CultureInfo.DefaultThreadCurrentUICulture = german;
+
+                using (new WordingScope(american, valuesCulture: dutch))
+                {
+                    uiCultureForAmerican = CultureInfo.CurrentUICulture;
+                    cultureForAmerican = CultureInfo.CurrentCulture;
+                }
+            });
+
+            using (ExecutionContext.SuppressFlow())
+                thread.Start();
+
+            thread.Join();
+        }
+        finally
+        {
+            CultureInfo.DefaultThreadCurrentUICulture = defaultUICulture;
+            CultureInfo.DefaultThreadCurrentCulture = defaultCulture;
+        }
+
+        // Assert: the cultures each scope was given, not the new default.
+        uiCultureForDutch.ShouldBeSameAs(dutch);
+        cultureForDutch.ShouldBeSameAs(american);
+        uiCultureForAmerican.ShouldBeSameAs(american);
+        cultureForAmerican.ShouldBeSameAs(dutch);
+    }
+
+    [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void FindReaderCulture_ShouldGiveCultureOfScopeElseOfProviderElseOfThread()
+    public void GetReaderCulture_ShouldGiveCultureOfScopeElseOfProviderElseOfThread()
     {
         // Arrange
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
@@ -1651,26 +1760,26 @@ public sealed class LocalizationRegistryWordingTests
         var german = Culture("de-DE");
 
         // Act & Assert: without a provider, the thread's UI culture, which a scope sets.
-        WordingScope.FindReaderCulture(out var provided).ShouldBeSameAs(american);
+        WordingScope.GetReaderCulture(out var provided).ShouldBeSameAs(american);
         provided.ShouldBeNull();
 
         using (new ProvidedCultureScope(dutch))
         {
             // The provider's culture, which is the culture to format values for too.
-            WordingScope.FindReaderCulture(out provided).ShouldBeSameAs(dutch);
+            WordingScope.GetReaderCulture(out provided).ShouldBeSameAs(dutch);
             provided.ShouldBeSameAs(dutch);
 
             // Inside a scope, its culture, and the scope set the thread's format already.
             using (new WordingScope(german, valuesCulture: dutch))
             {
-                WordingScope.FindReaderCulture(out provided).ShouldBeSameAs(german);
+                WordingScope.GetReaderCulture(out provided).ShouldBeSameAs(german);
                 provided.ShouldBeNull();
             }
         }
 
         using (new ProvidedCultureScope(name: null))
         {
-            WordingScope.FindReaderCulture(out provided).ShouldBeSameAs(american);
+            WordingScope.GetReaderCulture(out provided).ShouldBeSameAs(american);
             provided.ShouldBeNull();
         }
     }

@@ -75,7 +75,7 @@ public sealed partial class LocalizationSetsPartTests
         text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
         text.ShouldContain("    string Delegates(System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
-        text.ShouldContain("public static string @event(string @class, int @int) => FindSetForValues<IShopLocalization>(");
+        text.ShouldContain("public static string @event(string @class, int @int) => GetSetForValues<IShopLocalization>(");
         text.ShouldContain(")?.@event(@class, @int) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, string, int>(");
         text.ShouldContain(", \"event\", static (set, @class, @int) => set.@event(@class, @int), @class, @int);");
     }
@@ -121,9 +121,9 @@ public sealed partial class LocalizationSetsPartTests
         const string methods = """
             public string Paired(string set, string set_) => set + set_;
             public string Valued(string values, int values_) => values + values_;
-            public string ResolveWording(string FindSet, string FindSetForValues) => FindSet + FindSetForValues;
-            public string FindSetForValues(string ResolveWording) => ResolveWording;
-            public string FindSet => "Find";
+            public string ResolveWording(string GetSet, string GetSetForValues) => GetSet + GetSetForValues;
+            public string GetSetForValues(string ResolveWording) => ResolveWording;
+            public string GetSet => "Find";
             public string GetKeyedValue(string ResolveKeyedWording) => ResolveKeyedWording;
             public string Name => "Name";
             public string Named(string Name) => Name;

@@ -12,7 +12,9 @@ namespace Benchmarks;
 [CategoriesColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByParams)]
 [HideColumns("Median", "RatioSD", "Alloc Ratio")]
-[SimpleJob(launchCount: 1, warmupCount: 5, iterationCount: 15)]
+// Three launches, because the time of a lookup varies from one process to the next more than within one, and the
+// error of a single launch doesn't show that.
+[SimpleJob(launchCount: 3, warmupCount: 5, iterationCount: 15)]
 public class TextLookup
 {
     private const string Checkout = "Checkout";

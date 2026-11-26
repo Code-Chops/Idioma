@@ -6,8 +6,9 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 internal static partial class LocalizationContractSource
 {
-    // The namespaces the file of a contract imports, for what the method that gives a text by its key names (AppendGet).
-    private static readonly string[] ImportedNamespaces = ["System", "System.Collections.Generic", "System.Collections.Immutable", "System.Diagnostics.CodeAnalysis"];
+    // The namespaces the file of a contract imports, for what the method that gives a text by its key names (AppendGet),
+    // and for the attributes that mark generated code (GeneratedFile.ImportedCodeAttributes).
+    private static readonly string[] ImportedNamespaces = ["System", "System.Collections.Immutable", .. GeneratedFile.CodeAttributeNamespaces];
 
     /// <summary>
     /// What the parts of a contract's file are written from: the contract, the sets it links to, and the names the
@@ -82,6 +83,7 @@ internal static partial class LocalizationContractSource
         {
             sb.AppendLine($$"""
 
+                {{GeneratedFile.ImportedCodeAttributes}}
                 file static class TextsByValue<TContract>
                 {
                 """);
@@ -92,7 +94,7 @@ internal static partial class LocalizationContractSource
         if (contract.HasTexts)
             AppendTextKeys(sb, file);
 
-        if (contract.HasTexts && !contract.DefaultSetListsContract)
+        if (contract is { HasTexts: true, DefaultSetListsContract: false })
             AppendDefaultSetAsContract(sb, file);
 
         if (contract.HasTexts && texts.Any(static text => text.IsObsoleteAsError))
@@ -124,6 +126,7 @@ internal static partial class LocalizationContractSource
             /// <summary>
             /// Implements <see cref="{{name}}"/> for <see cref="{{file.ClassName}}"/>, which doesn't list it yet (LOC204), so that the texts compile.
             /// </summary>
+            {{GeneratedFile.ImportedCodeAttributes}}
             {{(contract.Members.Any(static member => member.IsObsoleteAsError) ? "[Obsolete] " : "")}}file sealed class {{file.DefaultSet}} : {{PackageNames.LocalizationSet}}, {{name}}
             {
                 private readonly {{file.ClassName}} set = new();
@@ -227,6 +230,7 @@ internal static partial class LocalizationContractSource
             /// Each set is registered automatically, so there's nothing to register.
             /// </summary>
             [{{marker}}]
+            {{GeneratedFile.ImportedGeneratedCodeAttribute}}
             {{accessibility}} interface {{name}}
             {
             """);

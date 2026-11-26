@@ -461,8 +461,8 @@ internal readonly record struct SetLanguageCode(
 /// parameters of a text that takes values, which is a method. A property has none.
 /// </summary>
 /// <remarks>
-/// A text marked <c>[Obsolete]</c> or <c>[Experimental]</c> carries the attribute as the generated member repeats it
-/// (<see cref="Marks"/>), so that code showing the text is told. <see cref="IsObsoleteAsError"/> says whether naming it
+/// A text marked <c>[Obsolete]</c>, <c>[Experimental]</c> or <c>[StringSyntax]</c> carries the attribute as the
+/// generated member repeats it (<see cref="Marks"/>), so that code showing the text is told. <see cref="IsObsoleteAsError"/> says whether naming it
 /// is an error that no pragma turns off (<c>CS0619</c>), and <see cref="SuppressedDiagnostics"/> holds what naming it
 /// reports besides <c>CS0612</c> and <c>CS0618</c>, which the generated file turns off.
 /// </remarks>

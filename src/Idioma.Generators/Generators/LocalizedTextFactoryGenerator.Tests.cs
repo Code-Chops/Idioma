@@ -228,8 +228,8 @@ public sealed class LocalizedTextFactoryGeneratorTests
 
         // Assert
         text.ShouldContain("public static string Inline(string en)");
-        text.ShouldContain("private static readonly string[] Languages = [\"en\"];");
-        text.ShouldContain("return CodeChops.Idioma.Internals.GeneratedCode.FindLanguageIndex(Languages) switch");
+        text.ShouldContain("internal static readonly string[] Languages = [\"en\"];");
+        text.ShouldContain("return CodeChops.Idioma.Internals.GeneratedCode.GetLanguageIndex(Languages) switch");
         text.ShouldContain("_ => en ?? throw new System.ArgumentNullException(nameof(en)),");
         text.ShouldNotContain("1 =>");
     }
@@ -242,7 +242,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
 
         // Assert
         text.ShouldContain("Inline(string en, string zhHans, string @is)");
-        text.ShouldContain("private static readonly string[] Languages = [\"en\", \"zh-Hans\", \"is\"];");
+        text.ShouldContain("internal static readonly string[] Languages = [\"en\", \"zh-Hans\", \"is\"];");
         text.ShouldContain("1 => zhHans ?? throw new System.ArgumentNullException(nameof(zhHans)),");
         text.ShouldContain("2 => @is ?? throw new System.ArgumentNullException(nameof(@is)),");
         text.ShouldContain("_ => en ?? throw new System.ArgumentNullException(nameof(en)),");
@@ -267,7 +267,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         // Assert: a language reads alike in both places, however the attribute writes it. The parameter is what the
         // name of a set of the language ends in, in camelCase: nlBe next to ShopLocalizationNlBe.
         text.ShouldContain($"Inline(string en, string {parameter})");
-        text.ShouldContain($"private static readonly string[] Languages = [\"en\", \"{code}\"];");
+        text.ShouldContain($"internal static readonly string[] Languages = [\"en\", \"{code}\"];");
         text.ShouldContain($"1 => {parameter} ?? throw new System.ArgumentNullException(nameof({parameter})),");
         text.ShouldContain($"<param name=\"{parameter}\">The wording in <c>{code}</c>.</param>");
         SupportedLanguages.ToTypeSuffix(code).ShouldBe(suffix);

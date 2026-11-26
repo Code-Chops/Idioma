@@ -7,14 +7,25 @@
 #
 # Push main together with the tag of its version: between a push of main and the release, a visitor's demo still gets
 # the package published before.
+#
+# With IDIOMA_PACKED=true, it packs nothing and takes the package that is in artifacts/ already. The publish workflow
+# runs it so on the package it pushes, which another job packed.
 
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 
-(cd "$root" && dotnet pack src/Idioma/Idioma.csproj -c Release -o artifacts -warnaserror)
 version="$(cd "$root" && dotnet msbuild src/Idioma/Idioma.csproj -getProperty:Version)"
+
+if [ "${IDIOMA_PACKED:-}" = "true" ]; then
+  if [ ! -f "$root/artifacts/CodeChops.Idioma.$version.nupkg" ]; then
+    echo "IDIOMA_PACKED is true, but artifacts/ holds no CodeChops.Idioma.$version.nupkg to test." >&2
+    exit 1
+  fi
+else
+  (cd "$root" && dotnet pack src/Idioma/Idioma.csproj -c Release -o artifacts -warnaserror)
+fi
 
 # A copy of the demos next to a nuget.config that knows the packed package by a relative path, which also works in Git
 # Bash on Windows, and takes the package from there alone. It has a packages folder of its own. So a

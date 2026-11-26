@@ -11,15 +11,45 @@ public sealed partial class LocalizationSetsPartTests
         // Arrange & Act
         var text = ContractText(Run(GreetingSets));
 
-        // Assert: an arm per text, by its name. A text that takes values takes each from the values passed.
-        text.ShouldContain("public static string GetTextByKey(string key, params ReadOnlySpan<object?> values) => TryGetTextByKey(key, out var text, values) ? text : throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\");");
-        text.ShouldContain("public static bool TryGetTextByKey(string key, [NotNullWhen(true)] out string? text, params ReadOnlySpan<object?> values)");
-        text.ShouldContain("            \"Checkout\" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Checkout, key, values),");
-        text.ShouldContain("            \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\"), GetKeyedValue<string>(key, values, 1, 2, \"shop\")),");
-        text.ShouldContain("            null => throw CreateUnknownKeyException<IShopLocalization>(key, \"ShopLocalization\"),");
-        text.ShouldContain("            _ => null,");
+        // Assert: an arm per text, by its name. A text that takes values takes each from the values passed. A key no
+        // text has gives null, and only a null key throws.
+        text.ShouldContain("public static string? GetTextByKey(string key, params ReadOnlySpan<object?> values) => key switch");
+        text.ShouldContain("        \"Checkout\" => ResolveKeyedWording<IShopLocalization>(ShopLocalization.Checkout, key, values),");
+        text.ShouldContain("        \"ItemsInCart\" => ShopLocalization.ItemsInCart(GetKeyedValue<int>(key, values, 0, 2, \"count\", acceptsNull: true), GetKeyedValue<string>(key, values, 1, 2, \"shop\", acceptsNull: true)),");
+        text.ShouldContain("        null => throw CreateNullKeyException<IShopLocalization>(key),");
+        text.ShouldContain("        _ => null,");
+        text.ShouldNotContain("TryGetTextByKey");
         text.ShouldContain("public static ImmutableArray<string> TextKeys => TextKeysOf<IShopLocalization>.Keys;");
         text.ShouldContain("    internal static readonly ImmutableArray<string> Keys = [\"Checkout\", \"Greeting\", \"ItemsInCart\"];");
+    }
+
+    [Test]
+    public void MethodThatGivesTextByKey_ShouldAcceptNullOnlyForParameterThatMayBeNull()
+    {
+        // Arrange: with nullable annotations, a string that isn't nullable next to one that is, a nullable value type,
+        // and a type of another namespace.
+        const string source = """
+            #nullable enable
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Note(string name, string? note, int? count, System.Uri link) => $"{name}: {note} {count} {link}";
+            }
+            """;
+
+        // Act
+        var text = ContractText(Run(source));
+
+        // Assert
+        text.ShouldContain("GetKeyedValue<string>(key, values, 0, 4, \"name\", acceptsNull: false)");
+        text.ShouldContain("GetKeyedValue<string?>(key, values, 1, 4, \"note\", acceptsNull: true)");
+        text.ShouldContain("GetKeyedValue<int?>(key, values, 2, 4, \"count\", acceptsNull: true)");
+        text.ShouldContain("GetKeyedValue<System.Uri>(key, values, 3, 4, \"link\", acceptsNull: false)");
     }
 
     [Test]
@@ -55,9 +85,9 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void MethodThatGivesTextByKey_ShouldCompileWhateverTheTextsAreNamedOrTake()
     {
-        // Arrange: texts named like the parameters of the method, like what it declares and calls, and like a
-        // keyword, in a namespace with a part named System. One takes a value of a type of another namespace, and one
-        // a value that may be null.
+        // Arrange: texts named like the parameters of the method, like what it declares and calls, like a member it no
+        // longer has, and like a keyword, in a namespace with a part named System. One takes a value of a type of
+        // another namespace, and one a value that may be null.
         const string source = """
             #nullable enable
             using CodeChops.Idioma;
@@ -80,8 +110,8 @@ public sealed partial class LocalizationSetsPartTests
                     public string @event => "Event";
                     public string ResolveKeyedWording => "Keyed text";
                     public string GetKeyedValue => "Keyed value";
-                    public string CreateUnknownKeyException => "Unknown";
-                    public string NotNullWhen => "Not null when";
+                    public string CreateNullKeyException => "Null key";
+                    public string TryGetTextByKey => "Try get";
                     public string ImmutableArray => "Immutable array";
                     public string TextKeysOf => "Text keys of";
                     public string Status(OrderStatus status, string? note) => $"{status}: {note}";
@@ -89,11 +119,12 @@ public sealed partial class LocalizationSetsPartTests
 
                 public static class Usage
                 {
-                    public static string Key => OptionLocalization.GetTextByKey("key");
-                    public static string Event => OptionLocalization.GetTextByKey("event");
-                    public static string Text => OptionLocalization.TryGetTextByKey("text", out var text) ? text : "";
+                    public static string? Key => OptionLocalization.GetTextByKey("key");
+                    public static string? Event => OptionLocalization.GetTextByKey("event");
+                    public static string Text => OptionLocalization.GetTextByKey("text") ?? "";
+                    public static string TryGet => OptionLocalization.TryGetTextByKey;
                     public static int Keys => OptionLocalization.TextKeys.Length;
-                    public static string Status => OptionLocalization.GetTextByKey("Status", OrderStatus.Pending, null);
+                    public static string? Status => OptionLocalization.GetTextByKey("Status", OrderStatus.Pending, null);
                 }
             }
             """;
@@ -158,7 +189,6 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    [Arguments("TryGetTextByKey", "the generated method 'ShopLocalization.TryGetTextByKey', which gives a text by its key")]
     [Arguments("TextKeys", "the generated property 'ShopLocalization.TextKeys', which lists the key of every text")]
     public void TextNamedLikeAnotherMemberForKeys_ShouldReportLOC300(string name, string taken)
     {

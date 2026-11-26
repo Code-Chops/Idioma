@@ -109,14 +109,7 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
         if (operation is ILocalFunctionOperation or INameOfOperation || (operation is IAnonymousFunctionOperation && !runsLambdas))
             return null;
 
-        var isText = operation switch
-        {
-            IPropertyReferenceOperation { Property: { IsStatic: true } property } => IsTextOfGeneratedClass(property),
-            IInvocationOperation { TargetMethod: var method } => IsTextMethod(method, text),
-            _ => false,
-        };
-
-        if (isText)
+        if (IsTextRead(operation, text))
             return operation;
 
         // How the parts of the expression run: what a part of a query of LINQ gives is enumerated when the query is,
@@ -160,6 +153,24 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
                       && returned.ConstructedFrom.ContainingNamespace?.ToDisplayString() is "System.Collections.Generic" or "System.Linq";
 
         return isQuery;
+    }
+
+    /// <summary>
+    /// Whether an operation reads a text itself: a text of a generated class, or a call of a method that gives one
+    /// (<see cref="IsTextMethod"/>).
+    /// </summary>
+    /// <param name="operation">The operation.</param>
+    /// <param name="text">The class <c>LocalizedText</c>.</param>
+    internal static bool IsTextRead(IOperation operation, INamedTypeSymbol text)
+    {
+        var isText = operation switch
+        {
+            IPropertyReferenceOperation { Property: { IsStatic: true } property } => IsTextOfGeneratedClass(property),
+            IInvocationOperation { TargetMethod: var method } => IsTextMethod(method, text),
+            _ => false,
+        };
+
+        return isText;
     }
 
     /// <summary>

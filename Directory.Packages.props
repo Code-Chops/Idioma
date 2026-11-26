@@ -9,7 +9,6 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
     <!-- Testing packages -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="TUnit" Version="1.76.28" />
     <!-- Only for the test that an ambient scope of this library can give texts their culture. The package doesn't depend on it. -->

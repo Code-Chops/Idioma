@@ -605,11 +605,17 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The attributes <c>[Obsolete]</c> and <c>[Experimental]</c> of a text, as the generated member repeats them, or
-    /// <see langword="null"/> when it has neither, with their arguments as constants. The file of the generated class
-    /// imports <c>System</c>, as for every type of the framework it names, and not the namespace of
-    /// <c>[Experimental]</c>, which it writes in full.
+    /// The attributes <c>[Obsolete]</c>, <c>[Experimental]</c> and <c>[StringSyntax]</c> of a text, as the generated
+    /// member repeats them, or <see langword="null"/> when it has none of them, with their arguments as constants. The
+    /// file of the generated class imports <c>System</c>, as for every type of the framework it names, and not the
+    /// namespace of the other two, which it writes in full.
     /// </summary>
+    /// <remarks>
+    /// <c>[Obsolete]</c> and <c>[Experimental]</c> tell the code that shows the text. <c>[StringSyntax]</c> tells it what
+    /// the wording is, such as a composite format whose placeholders an attribute fills in. That one keeps the analyzer
+    /// from reporting the placeholders in every language (<c>LOC403</c>). Only its first argument is repeated, which a
+    /// property can be given alone.
+    /// </remarks>
     private static string? ReadMarks(ISymbol text)
     {
         var marks = new StringBuilder();
@@ -621,11 +627,24 @@ internal static partial class LocalizationDiscovery
                 { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } => "Obsolete",
                 { Name: "ExperimentalAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
                     => "System.Diagnostics.CodeAnalysis.Experimental",
+                { Name: "StringSyntaxAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
+                    when attribute.ConstructorArguments is [{ Kind: TypedConstantKind.Primitive, Value: string syntax }]
+                    => $"System.Diagnostics.CodeAnalysis.StringSyntax({SymbolDisplay.FormatLiteral(syntax, quote: true)})",
                 _ => null,
             };
 
             if (name is null || attribute.ConstructorArguments.Any(static argument => argument.Kind is TypedConstantKind.Error))
                 continue;
+
+            // Written whole, with its one argument.
+            if (name.StartsWith("System.Diagnostics.CodeAnalysis.StringSyntax(", StringComparison.Ordinal))
+            {
+                if (marks.Length > 0)
+                    marks.Append(' ');
+
+                marks.Append($"[{name}]");
+                continue;
+            }
 
             var arguments = attribute.ConstructorArguments.Select(static argument => argument.ToCSharpString())
                 .Concat(attribute.NamedArguments.Select(static argument => $"{argument.Key} = {argument.Value.ToCSharpString()}"));

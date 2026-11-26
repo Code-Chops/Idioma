@@ -36,16 +36,6 @@ public static partial class LocalizationSetsPart
     /// </summary>
     public const string SuggestedDeclarationProperty = "SuggestedDeclaration";
 
-    // Shared with LocalizedTextFactoryGenerator and UnnamedLanguageAnalyzer, which report [Localized] and
-    // LocalizedText.Inline in an assembly without languages: all say that the attribute is missing.
-#pragma warning disable RS1019 // Diagnostic Id is already used by another analyzer
-    private static readonly DiagnosticDescriptor NoLanguagesDeclaredRule = Error(
-        NoLanguagesDeclaredDiagnosticId,
-        "Localization set in an assembly without languages",
-        "'{0}' is a localization set, but this assembly declares no languages. Add [assembly: SupportedLanguages(\"en\", \"nl\")] with your languages, the default first.",
-        "The generator writes the contract from the default-language set and holds the other sets to it, so it needs to know the languages. A set that rewords a library's set, or adds a language to its contract, needs no declaration.");
-#pragma warning restore RS1019
-
     private static readonly DiagnosticDescriptor CannotExtendRule = Error(
         CannotExtendDiagnosticId,
         "Default-language set the generator can't use",
@@ -102,7 +92,7 @@ public static partial class LocalizationSetsPart
         ReservedTextNameDiagnosticId,
         "Text named like the generated class or its method",
         "'{0}' has a text named '{1}', like {2}. Rename the text.",
-        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey or TryGetTextByKey either, because the generated class gets a method of each name, which gives a text by its key. The same holds for TextKeys, the property that lists the key of every text. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value, and for GetText, the extension method that gives a value its text.");
+        "In C#, a member can't have the name of its own class, so no text can have the name of the generated class. No text can be named GetTextByKey either, because the generated class gets a method of that name, which gives a text by its key. The same holds for TextKeys, the property that lists the key of every text. In a set of the texts of an enum, the same holds for GetTextByValue, the method that gives the text of an enum value, and for GetText, the extension method that gives a value its text.");
 
     private static readonly DiagnosticDescriptor UndeclaredTextRule = Error(
         UndeclaredTextDiagnosticId,
@@ -128,7 +118,7 @@ public static partial class LocalizationSetsPart
         {
             var rule = finding.Rule switch
             {
-                LocalizationSetsRule.NoLanguagesDeclared => NoLanguagesDeclaredRule,
+                LocalizationSetsRule.NoLanguagesDeclared => SharedRules.NoLanguagesDeclared,
                 LocalizationSetsRule.CannotExtend => CannotExtendRule,
                 LocalizationSetsRule.MissingLanguage => MissingLanguageRule,
                 LocalizationSetsRule.UnlistedLanguage => UnlistedLanguageRule,

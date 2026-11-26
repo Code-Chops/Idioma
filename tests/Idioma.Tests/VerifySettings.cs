@@ -25,6 +25,11 @@ public static class VerifySettings
             builder.Length = length;
         });
 
+        // Generated code names the version of the package in [GeneratedCode], which every release raises. A snapshot names
+        // it by a placeholder, so that a release changes no snapshot.
+        var version = typeof(Generators.LocalizationGenerator).Assembly.GetName().Version!.ToString(3);
+        VerifierSettings.AddScrubber(builder => builder.Replace($"GeneratedCode(\"CodeChops.Idioma\", \"{version}\")", "GeneratedCode(\"CodeChops.Idioma\", \"{PackageVersion}\")"));
+
         // Snapshots live next to the test file: <TestFileName>.<Method>.verified.<ext>, keyed on the test file's name
         // rather than the class name, so they nest under the test file in the IDE.
         DerivePathInfo(

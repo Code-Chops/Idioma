@@ -67,11 +67,45 @@ public sealed class CannotExtendCodeFixProvider : CodeFixProvider
         if (declaration.TypeParameterList is not null)
             return null;
 
-        // A class that isn't abstract can't hold an abstract member, so such a set gets no fix.
-        if (declaration.Modifiers.Any(SyntaxKind.AbstractKeyword) && !type.GetMembers().Any(static member => member.IsAbstract))
+        // A class that isn't abstract can't hold an abstract member, nor inherit one it doesn't override, so such a set
+        // gets no fix.
+        if (declaration.Modifiers.Any(SyntaxKind.AbstractKeyword) && !LeavesAbstractMember(type))
             return RemoveModifier(solution, declaration, type, SyntaxKind.AbstractKeyword);
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether a class has an abstract member without an implementation: one it declares, or one of a class it derives
+    /// from that neither it nor a class in between overrides. Without <see langword="abstract"/>, such a class doesn't
+    /// compile (<c>CS0534</c>).
+    /// </summary>
+    private static bool LeavesAbstractMember(INamedTypeSymbol type)
+    {
+        // What the class and the classes it derives from override, as each is reached from the class up.
+        var overridden = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member.IsAbstract && !overridden.Contains(member.OriginalDefinition))
+                    return true;
+
+                var overrides = member switch
+                {
+                    IMethodSymbol method => method.OverriddenMethod,
+                    IPropertySymbol property => property.OverriddenProperty,
+                    IEventSymbol @event => @event.OverriddenEvent,
+                    _ => (ISymbol?)null,
+                };
+
+                if (overrides is not null)
+                    overridden.Add(overrides.OriginalDefinition);
+            }
+        }
+
+        return false;
     }
 
     private static CodeAction RemoveModifier(Solution solution, TypeDeclarationSyntax declaration, INamedTypeSymbol type, SyntaxKind modifier)

@@ -93,7 +93,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
 
         var error = GeneratorTestHelper.CompileWithGenerators(source).ShouldHaveSingleItem();
         error.Id.ShouldBe("CS0535");
-        error.GetMessage(System.Globalization.CultureInfo.InvariantCulture).ShouldContain("Cart");
+        error.GetMessage(CultureInfo.InvariantCulture).ShouldContain("Cart");
     }
 
     [Test]

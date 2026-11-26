@@ -6,16 +6,24 @@ namespace CodeChops.Idioma;
 /// </summary>
 internal static class CultureName
 {
-    // Far more than the languages of an app and its libraries, which are the only codes passed in today. A code beyond
-    // it is looked up every time, so a caller that passes codes from outside can't grow Cultures without end. That
-    // doesn't cap memory with ICU, because CultureInfo.GetCultureInfo keeps every culture it creates.
+    // Far more than the languages of an app and the cultures of its users. A code beyond it is looked up every time, so
+    // codes from outside, such as the culture names of a request header, can't grow Cultures without end. That doesn't
+    // cap memory with ICU, because CultureInfo.GetCultureInfo keeps every culture it creates.
     private const int MaxCulturesKept = 1024;
 
     /// <summary>
     /// The culture of each code, or <see langword="null"/> for a code without one. The cultures are kept, because
-    /// finding out that a code has no culture throws an exception. Under invariant globalization, that's every code.
+    /// finding out that a code has no culture throws an exception. Under invariant globalization, that's every code,
+    /// unless <c>PredefinedCulturesOnly</c> is off.
     /// </summary>
     private static ConcurrentDictionary<string, CultureInfo?> Cultures { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether <see cref="Cultures"/> holds <see cref="MaxCulturesKept"/> cultures, so no more are kept.
+    /// </summary>
+    // Cultures are never removed, so this is set once. A code past the limit then skips Cultures.Count, which takes all
+    // of the dictionary's locks. A thread that doesn't see it set yet reads Count once more, which is harmless.
+    private static bool HasKeptMaxCultures { get; set; }
 
     /// <summary>
     /// Returns whether a code is a valid language code. The parts are separated by hyphens. The first part must be two
@@ -51,13 +59,16 @@ internal static class CultureName
     }
 
     /// <summary>
-    /// Returns the culture a code names, or <see langword="null"/>. The result is <see langword="null"/> when the code
-    /// isn't valid. It's also <see langword="null"/> under invariant globalization, where only the invariant culture
-    /// exists.
+    /// Returns the culture a code names, or <see langword="null"/> when there's none:
+    /// <list type="bullet">
+    /// <item>The code isn't valid.</item>
+    /// <item>This machine has no culture for it. Under invariant globalization, that's every code, unless
+    /// <c>PredefinedCulturesOnly</c> is off.</item>
+    /// </list>
     /// </summary>
     /// <exception cref="ArgumentException">When <paramref name="code"/> is null, empty, or white space.</exception>
     // With ICU, nearly every valid code has a culture, even a made-up one such as qq or nl-US.
-    public static CultureInfo? FindCulture(string code)
+    public static CultureInfo? GetCulture(string code)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
 
@@ -73,8 +84,13 @@ internal static class CultureName
             culture = null;
         }
 
+        if (HasKeptMaxCultures)
+            return culture;
+
         if (Cultures.Count < MaxCulturesKept)
             Cultures.TryAdd(code, culture);
+        else
+            HasKeptMaxCultures = true;
 
         return culture;
     }

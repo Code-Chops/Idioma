@@ -13,6 +13,40 @@ internal static class GeneratedFile
     public const string ObsoleteWarnings = "CS0612, CS0618";
 
     /// <summary>
+    /// The version of the package, which <see cref="CodeAttributes"/> names as the version of the tool.
+    /// </summary>
+    // The assembly version of the generator, which Directory.Build.props sets to that of the package.
+    private static string Version { get; } = typeof(GeneratedFile).Assembly.GetName().Version is { } version ? version.ToString(3) : "0.0.0";
+
+    /// <summary>
+    /// The attributes that mark generated code for the tools that read it: <c>[GeneratedCode]</c>, with the version of
+    /// the package, and <c>[ExcludeFromCodeCoverage]</c>, which keeps it out of a report of code coverage. Written on a
+    /// type the generator writes whole, and on each member of the generated class of a set, which is partial. So a
+    /// member the user writes in that class counts as their own.
+    /// </summary>
+    public static string CodeAttributes { get; } = $"[System.CodeDom.Compiler.GeneratedCode(\"{PackageNames.Assembly}\", \"{Version}\"), System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]";
+
+    /// <summary>
+    /// The namespaces of <see cref="CodeAttributes"/>, which a file imports where it writes them by their names alone
+    /// (<see cref="ImportedCodeAttributes"/>).
+    /// </summary>
+    public static readonly string[] CodeAttributeNamespaces = ["System.CodeDom.Compiler", "System.Diagnostics.CodeAnalysis"];
+
+    /// <summary>
+    /// <see cref="CodeAttributes"/> by their names alone, for a file that imports their namespaces
+    /// (<see cref="CodeAttributeNamespaces"/>). That's a file with types in the user's namespace. There, a full name
+    /// starting with <c>System</c> would bind to a part of that namespace named <c>System</c>, as in
+    /// <c>Acme.System.Shop</c>.
+    /// </summary>
+    public static string ImportedCodeAttributes { get; } = $"[GeneratedCode(\"{PackageNames.Assembly}\", \"{Version}\"), ExcludeFromCodeCoverage]";
+
+    /// <summary>
+    /// <c>[GeneratedCode]</c> alone, by its name alone, for an interface, which <c>[ExcludeFromCodeCoverage]</c> can't
+    /// mark.
+    /// </summary>
+    public static string ImportedGeneratedCodeAttribute { get; } = $"[GeneratedCode(\"{PackageNames.Assembly}\", \"{Version}\")]";
+
+    /// <summary>
     /// <see cref="ObsoleteWarnings"/>, followed by what naming the sets a file names reports besides
     /// (<see cref="DiscoveredLocalization.SuppressedDiagnostics"/>), as a pragma lists them.
     /// </summary>

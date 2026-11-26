@@ -66,7 +66,7 @@ public static class LocalizationRegistrationPart
     /// </summary>
     internal const string IdiomaApplicationProperty = "build_property.IdiomaApplication";
 
-    private const string RegistrarNamespace = PackageNames.Namespace + ".Generated";
+    internal const string RegistrarNamespace = PackageNames.Namespace + ".Generated";
 
     /// <summary>
     /// The name of the pipeline step that holds the registrar to write, for a test to read it.
@@ -111,7 +111,7 @@ public static class LocalizationRegistrationPart
     private static readonly DiagnosticDescriptor InvalidLanguageCodeRule = new(
         id: InvalidLanguageCodeDiagnosticId,
         title: "LocalizationLanguageCode that isn't a culture name",
-        messageFormat: "'{0}' gives \"{1}\" as its LocalizationLanguageCode, which isn't a culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
+        messageFormat: "'{0}' gives '{1}' as its LocalizationLanguageCode, which isn't a culture name, so registering the set throws when the app starts. Return a culture name such as en or en-GB.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -349,7 +349,7 @@ public static class LocalizationRegistrationPart
     /// The name of an assembly's registrar: <c>LocalizationRegistrar_My_App</c> for <c>My-App</c>. Built from the
     /// assembly's name, so that an app referencing several libraries can name each one's registrar unambiguously.
     /// </summary>
-    private static string GetRegistrarName(string? assemblyName)
+    internal static string GetRegistrarName(string? assemblyName)
     {
         var name = $"LocalizationRegistrar_{CodeEscaping.ToIdentifierPart(assemblyName)}";
         return name;
@@ -448,6 +448,7 @@ public static class LocalizationRegistrationPart
 
         sb.AppendLine($$"""
                 /// </summary>
+                {{GeneratedFile.CodeAttributes}}
                 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
                 {{accessibility}} static class {{registrar.Name}}
                 {
@@ -535,6 +536,7 @@ public static class LocalizationRegistrationPart
                 /// The localization sets of this assembly itself. This class is outside the namespace above, so a set's name is
                 /// resolved from the global namespace, not from that namespace first.
                 /// </summary>
+                {{GeneratedFile.CodeAttributes}}
                 file static class {{OwnSetsName}}
                 {
                     internal static void Register()

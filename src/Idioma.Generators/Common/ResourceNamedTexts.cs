@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using Microsoft.CodeAnalysis.Text;
 
 namespace CodeChops.Idioma.Generators;
 
@@ -19,19 +21,30 @@ namespace CodeChops.Idioma.Generators;
 /// Read by the arguments' names, so any attribute that follows .NET's convention counts. The name of the text may be
 /// written as <see langword="nameof"/> or as a string.
 /// </para>
+/// <para>
+/// An IDE asks again on every edit, with a new compilation. Each file is searched once, for the attributes that may name
+/// a text, and what it holds is kept with its syntax tree, which an edit of another file leaves as it was. So an edit
+/// searches only the file it changes. Only the attributes that may name the text asked for are bound.
+/// </para>
 /// </remarks>
 internal sealed class ResourceNamedTexts
 {
     /// <summary>
-    /// Per compilation, what its attributes name, read the first time it's asked for.
+    /// Per compilation, what was asked of it and the answer.
     /// </summary>
-    // An analyzer asks only for a text with a placeholder, which few have, so most compilations are never read.
     private static readonly ConditionalWeakTable<Compilation, ResourceNamedTexts> PerCompilation = new();
+
+    /// <summary>
+    /// Per file, the attributes that may name a text, found the first time any compilation asks.
+    /// </summary>
+    // Spans and names only, so the syntax of the file isn't kept alive by this.
+    private static readonly ConditionalWeakTable<SyntaxTree, NamingAttributes> PerTree = new();
 
     private static readonly string[] DisplayNameArguments = ["Name", "ShortName", "Description", "Prompt", "GroupName"];
 
     private readonly Compilation _compilation;
-    private Names? _names;
+    // By the full name of the generated class, which no two types of a compilation share.
+    private readonly ConcurrentDictionary<(string GeneratedClass, string Text, bool ErrorMessagesOnly), bool> _answers = new();
 
     private ResourceNamedTexts(Compilation compilation)
     {
@@ -48,8 +61,7 @@ internal sealed class ResourceNamedTexts
     /// </summary>
     public bool IsErrorMessage(INamedTypeSymbol generatedClass, string text, CancellationToken cancellationToken)
     {
-        var isErrorMessage = this.Read(cancellationToken).ErrorMessages.TryGetValue(generatedClass, out var texts) && texts.Contains(text);
-        return isErrorMessage;
+        return this.Names(generatedClass, text, errorMessagesOnly: true, cancellationToken);
     }
 
     /// <summary>
@@ -57,8 +69,7 @@ internal sealed class ResourceNamedTexts
     /// </summary>
     public bool IsNamed(INamedTypeSymbol generatedClass, string text, CancellationToken cancellationToken)
     {
-        var isNamed = this.Read(cancellationToken).All.TryGetValue(generatedClass, out var texts) && texts.Contains(text);
-        return isNamed;
+        return this.Names(generatedClass, text, errorMessagesOnly: false, cancellationToken);
     }
 
     /// <summary>
@@ -74,108 +85,204 @@ internal sealed class ResourceNamedTexts
         return generatedClass;
     }
 
-    private Names Read(CancellationToken cancellationToken)
+    private bool Names(INamedTypeSymbol generatedClass, string text, bool errorMessagesOnly, CancellationToken cancellationToken)
     {
-        // Two threads may each read it, and one of them is kept.
-        if (Volatile.Read(ref this._names) is { } names)
-            return names;
+        var question = (generatedClass.ToDisplayString(), text, errorMessagesOnly);
 
-        Interlocked.CompareExchange(ref this._names, ReadNames(this._compilation, cancellationToken), comparand: null);
-        return this._names!;
+        if (this._answers.TryGetValue(question, out var known))
+            return known;
+
+        var names = this.Find(generatedClass, text, errorMessagesOnly, cancellationToken);
+
+        this._answers.TryAdd(question, names);
+
+        return names;
     }
 
-    private static Names ReadNames(Compilation compilation, CancellationToken cancellationToken)
+    private bool Find(INamedTypeSymbol generatedClass, string text, bool errorMessagesOnly, CancellationToken cancellationToken)
     {
-        var all = new Dictionary<INamedTypeSymbol, HashSet<string>>(SymbolEqualityComparer.Default);
-        var errorMessages = new Dictionary<INamedTypeSymbol, HashSet<string>>(SymbolEqualityComparer.Default);
-
-        foreach (var tree in compilation.SyntaxTrees)
+        foreach (var tree in this._compilation.SyntaxTrees)
         {
+            var attributes = GetNamingAttributes(tree, cancellationToken);
+
+            if (attributes.Entries.IsEmpty)
+                continue;
+
+            SyntaxNode? root = null;
             SemanticModel? model = null;
 
-            // An attribute stands on a declaration or a parameter, so a body need not be walked.
-            foreach (var attribute in tree.GetRoot(cancellationToken)
-                         .DescendantNodes(static node => node is not (BlockSyntax or ArrowExpressionClauseSyntax or EqualsValueClauseSyntax))
-                         .OfType<AttributeSyntax>())
+            foreach (var entry in attributes.Entries)
             {
-                if (attribute.ArgumentList is not { Arguments.Count: > 1 } arguments)
+                // By the name it gives first, which binds nothing. A name the syntax doesn't give, such as a constant,
+                // may be any.
+                if ((errorMessagesOnly && !entry.IsErrorMessage) || (entry.Text is not null && !String.Equals(entry.Text, text, StringComparison.Ordinal)))
                     continue;
 
-                // By the names of its arguments first, which binds nothing: nearly every attribute has none of them.
-                TypeSyntax? errorMessageType = null;
-                TypeSyntax? resourceType = null;
-                ExpressionSyntax? errorMessageName = null;
-                List<ExpressionSyntax>? displayNames = null;
+                root ??= tree.GetRoot(cancellationToken);
 
-                foreach (var argument in arguments.Arguments)
+                if (root.FindNode(entry.Span).FirstAncestorOrSelf<AttributeSyntax>() is not { } attribute
+                    || ReadArguments(attribute) is not { } arguments)
                 {
-                    switch (argument.NameEquals?.Name.Identifier.ValueText)
-                    {
-                        case "ErrorMessageResourceType" when argument.Expression is TypeOfExpressionSyntax typeOf:
-                            errorMessageType = typeOf.Type;
-                            break;
-                        case "ResourceType" when argument.Expression is TypeOfExpressionSyntax typeOf:
-                            resourceType = typeOf.Type;
-                            break;
-                        case "ErrorMessageResourceName":
-                            errorMessageName = argument.Expression;
-                            break;
-                        case { } name when DisplayNameArguments.Contains(name, StringComparer.Ordinal):
-                            (displayNames ??= []).Add(argument.Expression);
-                            break;
-                    }
+                    continue;
                 }
 
-                if (errorMessageType is not null && errorMessageName is not null)
-                {
-                    model ??= compilation.GetSemanticModel(tree);
-                    Add(errorMessageType, errorMessageName, model, errorMessages, all, cancellationToken);
-                }
+                model ??= this._compilation.GetSemanticModel(tree);
 
-                if (resourceType is not null && displayNames is not null)
-                {
-                    model ??= compilation.GetSemanticModel(tree);
+                var (type, names) = entry.IsErrorMessage
+                    ? (arguments.ErrorMessageType, arguments.ErrorMessageName is { } errorMessageName ? [errorMessageName] : default(ImmutableArray<ExpressionSyntax>))
+                    : (arguments.ResourceType, arguments.DisplayNames);
 
-                    foreach (var displayName in displayNames)
-                        Add(resourceType, displayName, model, errorMessages: null, all, cancellationToken);
-                }
+                if (type is not null && !names.IsDefaultOrEmpty && Binds(type, names, model, generatedClass, text, cancellationToken))
+                    return true;
             }
         }
 
-        return new Names(all, errorMessages);
-
-        static void Add(TypeSyntax type, ExpressionSyntax name, SemanticModel model, Dictionary<INamedTypeSymbol, HashSet<string>>? errorMessages,
-            Dictionary<INamedTypeSymbol, HashSet<string>> all, CancellationToken cancellationToken)
-        {
-            // A string, or nameof, which the compiler gives as a string too.
-            if (model.GetTypeInfo(type, cancellationToken).Type is not INamedTypeSymbol named
-                || model.GetConstantValue(name, cancellationToken) is not { HasValue: true, Value: string text })
-            {
-                return;
-            }
-
-            AddTo(all, named, text);
-
-            if (errorMessages is not null)
-                AddTo(errorMessages, named, text);
-        }
-
-        static void AddTo(Dictionary<INamedTypeSymbol, HashSet<string>> texts, INamedTypeSymbol type, string text)
-        {
-            if (!texts.TryGetValue(type, out var names))
-                texts.Add(type, names = new HashSet<string>(StringComparer.Ordinal));
-
-            names.Add(text);
-        }
+        return false;
     }
 
     /// <summary>
-    /// Per generated class, the names of the texts attributes name, and of those named as an error message.
+    /// Whether an attribute's type argument binds to the generated class, and one of the names it gives to the text.
     /// </summary>
-    private sealed class Names(Dictionary<INamedTypeSymbol, HashSet<string>> all, Dictionary<INamedTypeSymbol, HashSet<string>> errorMessages)
+    private static bool Binds(TypeSyntax type, ImmutableArray<ExpressionSyntax> names, SemanticModel model, INamedTypeSymbol generatedClass, string text,
+        CancellationToken cancellationToken)
     {
-        public Dictionary<INamedTypeSymbol, HashSet<string>> All { get; } = all;
+        if (!SymbolEqualityComparer.Default.Equals(model.GetTypeInfo(type, cancellationToken).Type, generatedClass))
+            return false;
 
-        public Dictionary<INamedTypeSymbol, HashSet<string>> ErrorMessages { get; } = errorMessages;
+        // A string, or nameof, which the compiler gives as a string too.
+        foreach (var name in names)
+            if (model.GetConstantValue(name, cancellationToken) is { HasValue: true, Value: string named } && String.Equals(named, text, StringComparison.Ordinal))
+                return true;
+
+        return false;
     }
+
+    /// <summary>
+    /// The attributes of a file that may name a text, read once per syntax tree.
+    /// </summary>
+    private static NamingAttributes GetNamingAttributes(SyntaxTree tree, CancellationToken cancellationToken)
+    {
+        if (PerTree.TryGetValue(tree, out var known))
+            return known;
+
+        var found = ReadNamingAttributes(tree, cancellationToken);
+
+        // Another thread may have read it in the meantime, and gives the same.
+        try
+        {
+            PerTree.Add(tree, found);
+        }
+        catch (ArgumentException)
+        {
+        }
+
+        return found;
+    }
+
+    private static NamingAttributes ReadNamingAttributes(SyntaxTree tree, CancellationToken cancellationToken)
+    {
+        var entries = ImmutableArray.CreateBuilder<NamingAttribute>();
+
+        // An attribute stands on a declaration or a parameter, so a body need not be walked.
+        foreach (var attribute in tree.GetRoot(cancellationToken)
+                     .DescendantNodes(static node => node is not (BlockSyntax or ArrowExpressionClauseSyntax or EqualsValueClauseSyntax))
+                     .OfType<AttributeSyntax>())
+        {
+            if (ReadArguments(attribute) is not { } arguments)
+                continue;
+
+            if (arguments is { ErrorMessageType: not null, ErrorMessageName: { } errorMessageName })
+                entries.Add(new NamingAttribute(attribute.Span, IsErrorMessage: true, ReadNamedText(errorMessageName)));
+
+            if (arguments is { ResourceType: not null, DisplayNames.IsDefaultOrEmpty: false })
+                foreach (var displayName in arguments.DisplayNames)
+                    entries.Add(new NamingAttribute(attribute.Span, IsErrorMessage: false, ReadNamedText(displayName)));
+        }
+
+        return new NamingAttributes(entries.ToImmutable());
+    }
+
+    /// <summary>
+    /// The arguments of an attribute that name a text, by their names, which binds nothing: nearly every attribute has
+    /// none of them. <see langword="null"/> for an attribute without them.
+    /// </summary>
+    private static ResourceArguments? ReadArguments(AttributeSyntax attribute)
+    {
+        if (attribute.ArgumentList is not { Arguments.Count: > 1 } arguments)
+            return null;
+
+        TypeSyntax? errorMessageType = null;
+        TypeSyntax? resourceType = null;
+        ExpressionSyntax? errorMessageName = null;
+        ImmutableArray<ExpressionSyntax>.Builder? displayNames = null;
+
+        foreach (var argument in arguments.Arguments)
+        {
+            switch (argument.NameEquals?.Name.Identifier.ValueText)
+            {
+                case "ErrorMessageResourceType" when argument.Expression is TypeOfExpressionSyntax typeOf:
+                    errorMessageType = typeOf.Type;
+                    break;
+                case "ResourceType" when argument.Expression is TypeOfExpressionSyntax typeOf:
+                    resourceType = typeOf.Type;
+                    break;
+                case "ErrorMessageResourceName":
+                    errorMessageName = argument.Expression;
+                    break;
+                case { } name when DisplayNameArguments.Contains(name, StringComparer.Ordinal):
+                    (displayNames ??= ImmutableArray.CreateBuilder<ExpressionSyntax>()).Add(argument.Expression);
+                    break;
+            }
+        }
+
+        if ((errorMessageType is null || errorMessageName is null) && (resourceType is null || displayNames is null))
+            return null;
+
+        return new ResourceArguments(errorMessageType, errorMessageName, resourceType, displayNames?.ToImmutable() ?? default);
+    }
+
+    /// <summary>
+    /// The name of a text as the syntax gives it: a string, or the last name in <c>nameof(...)</c>. <see langword="null"/>
+    /// where only the compiler can tell, as for a constant.
+    /// </summary>
+    private static string? ReadNamedText(ExpressionSyntax name)
+    {
+        var text = name switch
+        {
+            LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.StringLiteralExpression) => literal.Token.ValueText,
+            InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" }, ArgumentList.Arguments: [{ Expression: var named }] } => named switch
+            {
+                MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+                SimpleNameSyntax simple => simple.Identifier.ValueText,
+                _ => null,
+            },
+            _ => null,
+        };
+
+        return text;
+    }
+
+    /// <summary>
+    /// The arguments of an attribute that name a text: the type and the name of an error message, and the type and
+    /// the names of a display name.
+    /// </summary>
+    private sealed record ResourceArguments(
+        TypeSyntax? ErrorMessageType,
+        ExpressionSyntax? ErrorMessageName,
+        TypeSyntax? ResourceType,
+        ImmutableArray<ExpressionSyntax> DisplayNames);
+
+    /// <summary>
+    /// The attributes of one file that may name a text.
+    /// </summary>
+    private sealed class NamingAttributes(ImmutableArray<NamingAttribute> entries)
+    {
+        public ImmutableArray<NamingAttribute> Entries { get; } = entries;
+    }
+
+    /// <summary>
+    /// An attribute that may name a text: where it's written, whether it names an error message or a display name, and
+    /// the name of the text as the syntax gives it, if it does.
+    /// </summary>
+    private readonly record struct NamingAttribute(TextSpan Span, bool IsErrorMessage, string? Text);
 }
