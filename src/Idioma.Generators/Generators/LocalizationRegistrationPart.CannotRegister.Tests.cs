@@ -44,6 +44,38 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
+    [Arguments("private static readonly string Code = \"de\"; public string LocalizationLanguageCode => Code;")]
+    [Arguments("public string LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"SHOP_LANGUAGE\") ?? \"de\";")]
+    public void SetWithLanguageCodeThatIsNoConstant_ReportsLOC208AndIsLeftOut(string languageCode)
+    {
+        // Arrange & Act: the registry files a set under the language the build records for it, without creating it.
+        // The sibling shows that the rest of the assembly still registers.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public sealed class ShopWording : ILocalizationSet, IShopLocalization
+            {
+                {{languageCode}}
+                public string Checkout => "Zur Kasse";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert
+        var run = result.Results.ShouldHaveSingleItem();
+        var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
+        diagnostic.Id.ShouldBe("LOC208");
+        diagnostic.GetMessage().ShouldBe("'TestApp.ShopWording' can't be registered automatically because its LocalizationLanguageCode isn't a constant the build can read, so its texts won't be found. Fix that, or mark it [ExcludeFromLocalizationDiscovery] and pass an instance to LocalizationRegistry.Register.");
+        var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
+        text.ShouldContain("new TestApp.ShopLocalizationNl()");
+        text.ShouldNotContain("new TestApp.ShopWording(");
+    }
+
+    [Test]
     [Arguments("public ShopLocalizationDe(string wording = \"Zur Kasse\") { }")]
     [Arguments("public ShopLocalizationDe(params string[] wordings) { }")]
     [Arguments("public ShopLocalizationDe(string wording = \"Zur Kasse\") { } public ShopLocalizationDe() { }")]

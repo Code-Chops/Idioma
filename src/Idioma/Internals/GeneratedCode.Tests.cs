@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using CodeChops.Idioma.Internals;
 using CodeChops.Idioma.Tests.TestHelpers;
 
@@ -84,8 +86,10 @@ public sealed class GeneratedCodeTests
         public string CulturesOf(string name) => $"{name}: {this.Cultures}";
     }
 
+    // As the source generator writes a text that takes values.
     private static string CulturesOf(string name) =>
-        GeneratedCode.ResolveWording<ICulturesLocalization, CulturesLocalizationEn, string>(1, 2, "CulturesOf", static (set, name) => set.CulturesOf(name), name);
+        GeneratedCode.GetLocalizationSetForValues<ICulturesLocalization>(1, 2, out var culture)?.CulturesOf(name)
+        ?? GeneratedCode.ResolveWording<ICulturesLocalization, CulturesLocalizationEn, string>(1, 2, culture, "CulturesOf", static (set, name) => set.CulturesOf(name), name);
 
     /// <summary>
     /// A type a string converts to in code, which a value passed by a key doesn't.
@@ -122,7 +126,7 @@ public sealed class GeneratedCodeTests
         // emission in the same commit.
         typeof(GeneratedCode).FullName.ShouldBe("CodeChops.Idioma.Internals.GeneratedCode");
         members.Distinct(StringComparer.Ordinal).ShouldBe(
-            ["GetLanguageIndex", "GetSet", "GetSetForValues", "ResolveWording", "RecordMemberTexts", "RegisterEnumTexts", "GetEnumText", "ResolveKeyedWording", "GetKeyedValue", "CreateNullKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
+            ["GetLanguageIndex", "GetLocalizationSet", "GetLocalizationSetForValues", "ResolveWording", "RecordMemberTexts", "RegisterEnumTexts", "GetEnumText", "ResolveKeyedWording", "GetKeyedValue", "CreateNullKeyException", "RegisterLanguages", "RecordSet", "RegisterSets"],
             ignoreOrder: true);
     }
 
@@ -145,19 +149,26 @@ public sealed class GeneratedCodeTests
     }
 
     /// <summary>
-    /// An enum that only the test of the order of two assemblies registers texts for.
+    /// An enum that only the test of the app's texts over a library's registers texts for.
     /// </summary>
     private enum OrderedStatus
     {
         Open,
     }
 
-    [Test]
-    public void GetEnumText_ShouldGiveTheTextOfTheAssemblyWhoseSetsRegisteredLastWhicheverRegisteredItsTextsFirst()
+    /// <summary>
+    /// An enum that only the test of two libraries registers texts for.
+    /// </summary>
+    private enum LibraryStatus
     {
-        // Arrange: the sets of this assembly registered as it started, as an app's own sets do after those of the
-        // libraries it references. Those of the assembly of Uri never did. Its texts come later, as a library's may when
-        // it loads after the app started.
+        Open,
+    }
+
+    [Test]
+    public void GetEnumText_ShouldGiveTheTextOfTheAppWhicheverRegisteredItsTextsFirst()
+    {
+        // Arrange: this assembly is the app, as it registered the languages. The assembly of Uri stands for a library,
+        // whose texts come later, as a library's may when it loads after the app started.
         GeneratedCode.RegisterEnumTexts<OrderedStatus, GeneratedCodeTests>(static _ => "of the app");
         GeneratedCode.RegisterEnumTexts<OrderedStatus, Uri>(static _ => "of a library");
 
@@ -165,8 +176,75 @@ public sealed class GeneratedCodeTests
         var text = GeneratedCode.GetEnumText(OrderedStatus.Open);
 
         // Assert
-        LocalizationRegistry.GetSetsRegisteredAt(typeof(GeneratedCodeTests).Assembly).ShouldBeGreaterThan(0);
         text.ShouldBe("of the app");
+    }
+
+    [Test]
+    public void GetEnumText_OfTwoLibraries_ShouldGiveTheTextRegisteredLast()
+    {
+        // Arrange: the assemblies of Uri and of string stand for two libraries, neither of them the app.
+        GeneratedCode.RegisterEnumTexts<LibraryStatus, Uri>(static _ => "of the first library");
+        GeneratedCode.RegisterEnumTexts<LibraryStatus, string>(static _ => "of the second library");
+
+        // Act
+        var text = GeneratedCode.GetEnumText(LibraryStatus.Open);
+
+        // Assert
+        text.ShouldBe("of the second library");
+    }
+
+    /// <summary>
+    /// An enum that only the test of a library that loads after the app started registers texts for.
+    /// </summary>
+    private enum LaterStatus
+    {
+        Open,
+    }
+
+    /// <summary>
+    /// A library with a set, which registers its sets when its code first runs, as one an app loads lazily does.
+    /// </summary>
+    private static byte[] LaterLibrary { get; } = GeneratorTestHelper.EmitLibraryWithGenerators("LaterLibrary", """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en")]
+
+        namespace LaterLibrary;
+
+        public class LaterLocalizationEn : ILocalizationSet, ILaterLocalization
+        {
+            public string Title => "Later";
+        }
+        """);
+
+    [Test]
+    // Alone, because the library's sets are registered with those of the whole app until its context unloads.
+    [NotInParallel]
+    public void GetEnumText_ShouldGiveTheTextOfTheAppOverThatOfALibraryThatLoadedLater()
+    {
+        // Arrange: the app's texts, and then those of a library that loaded and registered its sets after the app.
+        GeneratedCode.RegisterEnumTexts<LaterStatus, GeneratedCodeTests>(static _ => "of the app");
+
+        var context = new AssemblyLoadContext("LaterLibrary", isCollectible: true);
+        var library = context.LoadFromStream(new MemoryStream(LaterLibrary));
+        RuntimeHelpers.RunModuleConstructor(library.ManifestModule.ModuleHandle);
+
+        var register = typeof(GeneratedCode).GetMethod(nameof(GeneratedCode.RegisterEnumTexts))!
+            .MakeGenericMethod(typeof(LaterStatus), library.GetType("LaterLibrary.ILaterLocalization")!);
+        register.Invoke(null, [(Func<LaterStatus, string>)(static _ => "of a library")]);
+
+        try
+        {
+            // Act
+            var text = GeneratedCode.GetEnumText(LaterStatus.Open);
+
+            // Assert
+            text.ShouldBe("of the app");
+        }
+        finally
+        {
+            context.Unload();
+        }
     }
 
     [Test]
@@ -187,7 +265,7 @@ public sealed class GeneratedCodeTests
     }
 
     [Test]
-    public void GetWording_ShouldHaveAnOverloadPerNumberOfValuesUpToEight()
+    public void GetWording_ShouldHaveAnOverloadWithoutValuesAndOneWithThem()
     {
         // Arrange & Act
         var typeParameters = typeof(GeneratedCode)
@@ -195,8 +273,9 @@ public sealed class GeneratedCodeTests
             .Where(static method => method.Name is nameof(GeneratedCode.ResolveWording))
             .Select(static method => method.GetGenericArguments().Length);
 
-        // Assert: the contract and the set of the default language, and then a type per value (LOC400 allows 8).
-        typeParameters.ShouldBe([2, 3, 4, 5, 6, 7, 8, 9, 10], ignoreOrder: true);
+        // Assert: the contract and the set of the default language, and then the type of the values, which is a tuple
+        // for more than one. So a text takes any number of values.
+        typeParameters.ShouldBe([2, 3], ignoreOrder: true);
     }
 
     [Test]
@@ -429,7 +508,7 @@ public sealed class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act: as a property of the class the source generator writes calls it.
-        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, "Checkout", static set => set.Checkout);
+        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, null, "Checkout", static set => set.Checkout);
 
         // Assert
         wording.ShouldBe("Checkout");
@@ -443,42 +522,29 @@ public sealed class GeneratedCodeTests
         const string name = "Anna";
 
         // Act: as a method of the class the source generator writes calls it.
-        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);
+        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, null, "Greeting", static (set, name) => set.Greeting(name), name);
 
         // Assert
         wording.ShouldBe("Hello, Anna!");
     }
 
     [Test]
-    public void GetWording_WithTwoToEightValues_ShouldHandThemToTheSetInOrder()
+    public void GetWording_WithSeveralValues_ShouldHandThemToTheSetInOrder()
     {
         // Arrange
         using var _ = new CulturesScope("en-US");
 
-        // Act: an overload per number of values, up to the most a text takes.
-        var two = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string>(
-            2, 3, "Joined", static (set, a, b) => set.Joined([a, b]), "1", "2");
-        var three = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string>(
-            2, 3, "Joined", static (set, a, b, c) => set.Joined([a, b, c]), "1", "2", "3");
-        var four = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string>(
-            2, 3, "Joined", static (set, a, b, c, d) => set.Joined([a, b, c, d]), "1", "2", "3", "4");
-        var five = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string>(
-            2, 3, "Joined", static (set, a, b, c, d, e) => set.Joined([a, b, c, d, e]), "1", "2", "3", "4", "5");
-        var six = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string, string>(
-            2, 3, "Joined", static (set, a, b, c, d, e, f) => set.Joined([a, b, c, d, e, f]), "1", "2", "3", "4", "5", "6");
-        var seven = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string, string, string>(
-            2, 3, "Joined", static (set, a, b, c, d, e, f, g) => set.Joined([a, b, c, d, e, f, g]), "1", "2", "3", "4", "5", "6", "7");
-        var eight = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string, string, string, string, string, string, string, int>(
-            2, 3, "Joined", static (set, a, b, c, d, e, f, g, h) => set.Joined([a, b, c, d, e, f, g, h.ToString(CultureInfo.InvariantCulture)]), "1", "2", "3", "4", "5", "6", "7", 8);
+        // Act: the values as one tuple, as the source generator writes them, also beyond the seven a tuple holds
+        // before it nests the rest.
+        var two = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, (string, string)>(
+            2, 3, null, "Joined", static (set, values) => set.Joined([values.Item1, values.Item2]), ("1", "2"));
+        var nine = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, (string, string, string, string, string, string, string, string, int)>(
+            2, 3, null, "Joined", static (set, values) => set.Joined([values.Item1, values.Item2, values.Item3, values.Item4, values.Item5, values.Item6, values.Item7, values.Item8, values.Item9.ToString(CultureInfo.InvariantCulture)]),
+            ("1", "2", "3", "4", "5", "6", "7", "8", 9));
 
         // Assert
         two.ShouldBe("1+2");
-        three.ShouldBe("1+2+3");
-        four.ShouldBe("1+2+3+4");
-        five.ShouldBe("1+2+3+4+5");
-        six.ShouldBe("1+2+3+4+5+6");
-        seven.ShouldBe("1+2+3+4+5+6+7");
-        eight.ShouldBe("1+2+3+4+5+6+7+8");
+        nine.ShouldBe("1+2+3+4+5+6+7+8+9");
     }
 
     [Test]
@@ -556,15 +622,15 @@ public sealed class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act
-        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(7, 3, "Checkout", static set => set.Checkout);
-        var negative = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(-1, 3, "Checkout", static set => set.Checkout);
+        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(7, 3, null, "Checkout", static set => set.Checkout);
+        var negative = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(-1, 3, null, "Checkout", static set => set.Checkout);
 
         // Assert: worded, and no set is kept or read outside the texts.
         wording.ShouldBe("Checkout");
         negative.ShouldBe("Checkout");
-        GeneratedCode.GetSet<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
-        GeneratedCode.GetSet<IGeneratedCodeLocalization>(-1, 3).ShouldBeNull();
-        GeneratedCode.GetSetForValues<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IGeneratedCodeLocalization>(7, 3, out var _).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IGeneratedCodeLocalization>(-1, 3, out var _).ShouldBeNull();
+        GeneratedCode.GetLocalizationSetForValues<IGeneratedCodeLocalization>(7, 3, out var _).ShouldBeNull();
     }
 
     [Test]
@@ -586,14 +652,14 @@ public sealed class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert: asking for a kept set creates none.
-        GeneratedCode.GetSet<ILazyLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<ILazyLocalization>(0, 1, out var _).ShouldBeNull();
         LazyLocalizationEn.Created.ShouldBe(0);
 
         // The first text that needs the set creates it, and every text after it reads the same one.
-        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
-        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
+        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
+        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
         LazyLocalizationEn.Created.ShouldBe(1);
-        GeneratedCode.GetSet<ILazyLocalization>(0, 1).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
+        GeneratedCode.GetLocalizationSet<ILazyLocalization>(0, 1, out var _).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
     }
 
     [Test]
@@ -603,18 +669,18 @@ public sealed class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert: asking for a kept set creates none, so the generated class is there for every text.
-        GeneratedCode.GetSet<IThrowingLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IThrowingLocalization>(0, 1, out var _).ShouldBeNull();
         ThrowingLocalizationEn.Created.ShouldBe(0);
 
         // What needs the set says which set threw, with the set's own exception inside, and so does every read after
         // it, which tries again.
-        var first = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, "Checkout", static set => set.Checkout));
-        var second = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, "Checkout", static set => set.Checkout));
+        var first = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout));
+        var second = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout));
 
         first.Message.ShouldContain(nameof(ThrowingLocalizationEn));
         first.InnerException.ShouldBeOfType<FormatException>().Message.ShouldBe("No shop name.");
         second.Message.ShouldBe(first.Message);
         ThrowingLocalizationEn.Created.ShouldBe(2);
-        GeneratedCode.GetSet<IThrowingLocalization>(0, 1).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IThrowingLocalization>(0, 1, out var _).ShouldBeNull();
     }
 }

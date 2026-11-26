@@ -274,7 +274,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         text.ShouldContain($"public interface {contract}{Environment.NewLine}");
         text.ShouldContain($"public static partial class {texts}");
-        text.ShouldContain($"public static string Checkout => GetSet<{contract}>(0, 1)?.Checkout ?? ResolveWording<{contract}, {className}>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain($"public static string Checkout => GetLocalizationSet<{contract}>(0, 1, out var culture)?.Checkout ?? ResolveWording<{contract}, {className}>(0, 1, culture, \"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
@@ -300,7 +300,7 @@ public sealed partial class LocalizationSetsPartTests
             """));
 
         // Assert
-        text.ShouldContain("public static string Checkout => GetSet<IShopLocalization>(0, 1)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain("public static string Checkout => GetLocalizationSet<IShopLocalization>(0, 1, out var culture)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, culture, \"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
@@ -340,11 +340,11 @@ public sealed partial class LocalizationSetsPartTests
         string Contract(string set) => generated.Single(source => String.Equals(source.HintName, $"{set}.Localization.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("namespace TestApp.Orders;");
-        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, culture, \"Checkout\",");
         Contract("TestApp.Orders.ShopEn").ShouldContain("namespace TestApp.Orders;");
-        Contract("TestApp.Orders.ShopEn").ShouldContain("ResolveWording<IShop, ShopEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Orders.ShopEn").ShouldContain("ResolveWording<IShop, ShopEn>(0, 1, culture, \"Checkout\",");
         Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("namespace TestApp.Billing;");
-        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, culture, \"Checkout\",");
     }
 
     [Test]
@@ -505,7 +505,7 @@ public sealed partial class LocalizationSetsPartTests
         var generated = result.Results.ShouldHaveSingleItem().GeneratedSources;
         var text = generated.Single(source => source.HintName is "ShopLocalizationEn.Localization.g.cs").SourceText.ToString();
         text.ShouldNotContain("namespace ");
-        text.ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, culture, \"Checkout\", static set => set.Checkout);");
         generated.Single(source => source.HintName is "LocalizationSets.g.cs").SourceText.ToString().ShouldContain("LocalizationSetAttribute(\"IShopLocalization\", \"en\")");
     }
 
@@ -526,7 +526,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         text.ShouldContain("public interface IShopLocalization");
         text.ShouldContain("public static partial class ShopLocalization");
-        text.ShouldNotContain("GetSet<");
+        text.ShouldNotContain("GetLocalizationSet<");
         text.ShouldNotContain("ResolveWording<");
     }
 

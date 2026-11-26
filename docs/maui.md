@@ -100,4 +100,4 @@ foreach (var language in LocalizationRegistry.SupportedLanguages)
 
 An app without Shell creates its first page in its own way. Give the window that page instead of `AppShell`.
 
-Dates and numbers keep the format of the device, because the provider changes only the language of the texts. A value inside a text with parameters is formatted that way too.
+Dates and numbers keep the format of the device, because the provider changes only the language of the texts. A text of a set with parameters is the exception. It formats its values for the chosen language, because the set's method runs in the provider's culture. A value in an inline text keeps the format of the device ([details](advanced-topics.md#texts-with-parameters)).

@@ -185,11 +185,11 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void SetDerivedFromSetOfProjectReferencedAsCompilation_RegistersAsOverride()
+    public void SetDerivedFromSetOfProjectReferencedAsCompilation_ReportsLOC208UntilItRepeatsTheLanguageCode()
     {
         // Arrange: an IDE hands a generator a project of the same solution as its compilation, where a build hands over
         // the assembly. The LocalizationLanguageCode the library's set implements then has syntax, in a tree of that other
-        // compilation, which this one has no semantic model for.
+        // compilation, which this one has no semantic model for. Either way, the build can't read it.
         var library = GeneratorTestHelper.CompileProjectWithGenerators("RegionalLibrary", """
             using CodeChops.Idioma;
 
@@ -215,8 +215,8 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """);
 
-        // Act
-        var result = Run("""
+        // Act: the app's rewording, and then the same with the code repeated as a constant.
+        var inherited = Run("""
             namespace TestApp;
 
             public sealed class MyGridLocalizationEnGb : RegionalLibrary.GridLocalizationEnGb
@@ -225,8 +225,28 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """, library);
 
-        // Assert: the registrar is written as a build writes it.
-        var text = GeneratedText(result);
+        var repeated = Run("""
+            using CodeChops.Idioma;
+
+            namespace TestApp;
+
+            public sealed class MyGridLocalizationEnGb : RegionalLibrary.GridLocalizationEnGb, ILocalizationSet
+            {
+                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
+
+                public override string Colour => "Hue";
+            }
+            """, library);
+
+        // Assert: the registry files a set under the code the build records, so the first isn't registered, and the
+        // registrar of the second is written as a build writes it.
+        var run = inherited.Results.ShouldHaveSingleItem();
+        run.Exception.ShouldBeNull();
+        run.Diagnostics.ShouldContain(static diagnostic => diagnostic.Id == "LOC208" && diagnostic.GetMessage().Contains("isn't a constant the build can read", StringComparison.Ordinal));
+        run.GeneratedSources.ShouldNotContain(static source => source.SourceText.ToString().Contains("new TestApp.MyGridLocalizationEnGb()", StringComparison.Ordinal));
+
+        var text = GeneratedText(repeated);
+        text.ShouldContain("RecordSet<TestApp.MyGridLocalizationEnGb>(\"en-GB\"");
         text.ShouldContain("RegisterSets(asDefaults: false,");
         text.ShouldContain("new TestApp.MyGridLocalizationEnGb()");
         text.ShouldNotContain("RegisterSets(asDefaults: true");

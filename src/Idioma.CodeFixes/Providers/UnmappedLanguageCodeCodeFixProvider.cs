@@ -44,7 +44,7 @@ public sealed class UnmappedLanguageCodeCodeFixProvider : CodeFixProvider
             return;
 
         var partModel = semanticModel.Compilation.GetSemanticModel(part.SyntaxTree);
-        var added = SyntaxFactory.SimpleBaseType(GetSetInterface(partModel, baseList.SpanStart));
+        var added = SyntaxFactory.SimpleBaseType(GetLocalizationSetInterface(partModel, baseList.SpanStart));
         var solution = document.Project.Solution;
 
         foreach (var diagnostic in context.Diagnostics)
@@ -74,7 +74,7 @@ public sealed class UnmappedLanguageCodeCodeFixProvider : CodeFixProvider
     /// <c>ILocalizationSet</c> as the code at a position can name it: by its name alone where that binds to the
     /// interface, and else by its full name.
     /// </summary>
-    private static TypeSyntax GetSetInterface(SemanticModel semanticModel, int position)
+    private static TypeSyntax GetLocalizationSetInterface(SemanticModel semanticModel, int position)
     {
         var simpleName = SyntaxFactory.IdentifierName(SupportedLanguages.SetInterface);
 

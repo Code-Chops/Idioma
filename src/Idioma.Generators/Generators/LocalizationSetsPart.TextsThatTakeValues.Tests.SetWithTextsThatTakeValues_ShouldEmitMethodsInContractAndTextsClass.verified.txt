@@ -36,7 +36,7 @@ public static partial class ShopLocalization
     /// </list>
     /// </remarks>
     [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
-    public static string Checkout => GetSet<IShopLocalization>(0, 3)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 3, "Checkout", static set => set.Checkout);
+    public static string Checkout => GetLocalizationSet<IShopLocalization>(0, 3, out var culture)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 3, culture, "Checkout", static set => set.Checkout);
 
     /// <inheritdoc cref="ShopLocalizationEn.Greeting"/>
     /// <remarks>
@@ -47,7 +47,7 @@ public static partial class ShopLocalization
     /// </list>
     /// </remarks>
     [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
-    public static string Greeting(string name) => GetSetForValues<IShopLocalization>(1, 3)?.Greeting(name) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);
+    public static string Greeting(string name) => GetLocalizationSetForValues<IShopLocalization>(1, 3, out var culture)?.Greeting(name) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, string>(1, 3, culture, "Greeting", static (set, name) => set.Greeting(name), name);
 
     /// <summary>
     /// 1 item in your cart at {shop} / {count} items in your cart at {shop}
@@ -60,7 +60,7 @@ public static partial class ShopLocalization
     /// </list>
     /// </remarks>
     [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
-    public static string ItemsInCart(int count, string shop) => GetSetForValues<IShopLocalization>(2, 3)?.ItemsInCart(count, shop) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, int, string>(2, 3, "ItemsInCart", static (set, count, shop) => set.ItemsInCart(count, shop), count, shop);
+    public static string ItemsInCart(int count, string shop) => GetLocalizationSetForValues<IShopLocalization>(2, 3, out var culture)?.ItemsInCart(count, shop) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, (int, string)>(2, 3, culture, "ItemsInCart", static (set, values) => set.ItemsInCart(values.Item1, values.Item2), (count, shop));
 
     /// <summary>
     /// The text with a key, or <see langword="null"/> for an unknown key. The key is the name of the text, such as <c>"Checkout"</c>.

@@ -27,7 +27,7 @@ public sealed partial class LocalizationRegistry
     /// <param name="culture">The reader's culture.</param>
     /// <param name="valuesCulture">
     /// The culture to format values for, or <see langword="null"/> to format them as the thread does
-    /// (<see cref="WordingScope.GetReaderCulture"/>).
+    /// (<see cref="WordingScope.GetReaderCulture(out CultureInfo)"/>).
     /// </param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="select">Gives the text as a set of the contract words it, with its values where it takes any.</param>
@@ -56,11 +56,9 @@ public sealed partial class LocalizationRegistry
 
         TContract? set = null;
 
-        if (showsCulture && this.GetWording(lookup, name, select, out set, out var isToldByRecord) is { } wording)
+        if (showsCulture && this.GetWording(lookup, name, select, out set) is { } wording)
         {
-            if (isToldByRecord)
-                resolved?.Keep(text, set!, forProperty: true, forValues: true);
-
+            resolved?.Keep(text, set!, forProperty: true, forValues: true);
             return wording;
         }
 
@@ -75,9 +73,9 @@ public sealed partial class LocalizationRegistry
         var entersScope = takesValues || showsCulture;
 
         if (appDefaultLanguage is not null
-            && this.WordInLanguage(appDefaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isToldByRecord, out var isServed) is { } appDefaultWording)
+            && this.WordInLanguage(appDefaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out var isServed) is { } appDefaultWording)
         {
-            if (isToldByRecord && mayKeep)
+            if (mayKeep)
                 this.KeepSet(resolved, text, set!, appDefaultLanguage, showsCulture, takesValues, isServed);
 
             return appDefaultWording;
@@ -93,9 +91,9 @@ public sealed partial class LocalizationRegistry
         var defaultSet = recordedLanguage is null ? getDefaultSet() : null;
         var defaultLanguage = recordedLanguage ?? ReadLanguageCode(defaultSet!);
 
-        if (this.WordInLanguage(defaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isToldByRecord, out isServed) is { } rewording)
+        if (this.WordInLanguage(defaultLanguage, lookup, valuesCulture, entersScope, name, select, out set, out isServed) is { } rewording)
         {
-            if (isToldByRecord && mayKeep)
+            if (mayKeep)
                 this.KeepSet(resolved, text, set!, defaultLanguage, showsCulture, takesValues, isServed);
 
             return rewording;
@@ -166,23 +164,20 @@ public sealed partial class LocalizationRegistry
     /// <param name="name">The name of the text.</param>
     /// <param name="select">Gives the text as a set of the contract words it.</param>
     /// <param name="set">The set that gave the wording.</param>
-    /// <param name="isToldByRecord">Whether the same set words the text on every call (<see cref="GetWording"/>).</param>
     /// <param name="isServed">Whether the language serves the reader's culture, so that no scope is needed.</param>
     // Through the culture of the language where there is one, so that a text falling back to a language shows what a
     // user of it sees: zh-TW reaches a set for zh-Hant, its parent culture, which the name alone (zh-TW, then zh) walks
     // past. By name where there is none, as under invariant globalization. The registry keeps both per language.
     private string? WordInLanguage<TContract>(string language, CultureLookup reader, CultureInfo? valuesCulture, bool entersScope,
-        string name, Func<TContract, string?> select, out TContract? set, out bool isToldByRecord, out bool isServed)
+        string name, Func<TContract, string?> select, out TContract? set, out bool isServed)
         where TContract : class
     {
         var languageLookup = this.ResolveLanguage(language);
         isServed = reader.IsServedBy(language);
 
-        // Entered per lookup, not per set. Where the build has no record of a set, the registry compares its wording
-        // with that of the set it derives from, and that comparison only holds where both are worded in one culture.
         using var scope = entersScope && !isServed ? EnterLanguage(languageLookup.Culture, valuesCulture) : default;
 
-        var wording = this.GetWording(languageLookup, name, select, out set, out isToldByRecord);
+        var wording = this.GetWording(languageLookup, name, select, out set);
         return wording;
     }
 
@@ -206,8 +201,8 @@ public sealed partial class LocalizationRegistry
 /// position, and asks that set for its wording, without a lookup.
 /// </summary>
 /// <remarks>
-/// A set is kept only where it words the text on every call, because the build's record told it, without comparing
-/// wordings (<see cref="LocalizationRegistry.Word"/>). A set that needs no scope to word the text is kept for the
+/// The set found for a text words it on every call, so it's kept, unless a set before it gave <see langword="null"/>
+/// at run time (<see cref="LocalizationRegistry.Word"/>). A set that needs no scope to word the text is kept for the
 /// generated class to call. A method that needs a scope of the language its text falls back to is kept with the
 /// culture of that language. Any other text finds its wording anew on each call.
 /// </remarks>

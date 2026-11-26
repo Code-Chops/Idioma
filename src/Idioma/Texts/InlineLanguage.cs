@@ -30,7 +30,7 @@ internal static class InlineLanguage
 
     /// <summary>
     /// The position, among an assembly's languages, of the one a text shows for the reader's culture
-    /// (<see cref="WordingScope.GetReaderCulture"/>).
+    /// (<see cref="WordingScope.GetReaderCulture(out CultureInfo)"/>).
     /// </summary>
     /// <param name="languages">The languages of the assembly, each a culture name, the default first.</param>
     public static int IndexOfShownLanguage(string[] languages)

@@ -9,7 +9,6 @@ A public method of the default-language set that returns a `string` is a text wi
 - takes no parameters
 - is generic
 - shares its name with another method of the set
-- takes more than eight parameters
 - has a parameter that is passed by reference, is `params`, has a default value, or is `dynamic`
 - has a parameter of a type the generated class can't pass on, such as a pointer or a span
 - has the name of an enum member, in a [set of an enum](../enums.md#a-set-of-the-enum), where the text of a member is a property

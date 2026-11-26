@@ -164,6 +164,19 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
+    /// A text with more values than a tuple holds before it nests the rest. The generated class hands them on as one.
+    /// </summary>
+    public sealed class DigitsLocalizationEn : ILocalizationSet, IDigitsLocalization
+    {
+        public string Digits(int a, int b, int c, int d, int e, int f, int g, int h, int i) => $"Digits: {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}";
+    }
+
+    public sealed class DigitsLocalizationNl : ILocalizationSet, IDigitsLocalization
+    {
+        public string Digits(int a, int b, int c, int d, int e, int f, int g, int h, int i) => $"Cijfers: {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}";
+    }
+
+    /// <summary>
     /// A helper next to the generated texts: the generated class is partial.
     /// </summary>
     public static partial class GeneratedLocalization
@@ -263,6 +276,20 @@ namespace CodeChops.Idioma.Tests
             GeneratedLocalization.Dear(Salutation.Madam).ShouldBe("Geachte mevrouw");
             GeneratedLocalization.Dear(Salutation.Unknown).ShouldBe("Geachte klant");
             GeneratedLocalization.DeliveredOn(new DateOnly(2026, 11, 15)).ShouldBe("Bezorgd op 2026-11-15");
+        }
+
+        [Test]
+        public void GeneratedTextThatTakesNineValues_ShouldHandEachToTheSetOfTheCulture()
+        {
+            // Arrange & Act & Assert: the first read looks the set up, and the next one calls the set kept for it.
+            using (new UICultureScope("nl-NL"))
+            {
+                DigitsLocalization.Digits(1, 2, 3, 4, 5, 6, 7, 8, 9).ShouldBe("Cijfers: 1, 2, 3, 4, 5, 6, 7, 8, 9");
+                DigitsLocalization.Digits(9, 8, 7, 6, 5, 4, 3, 2, 1).ShouldBe("Cijfers: 9, 8, 7, 6, 5, 4, 3, 2, 1");
+            }
+
+            using (new UICultureScope("en-US"))
+                DigitsLocalization.Digits(1, 2, 3, 4, 5, 6, 7, 8, 9).ShouldBe("Digits: 1, 2, 3, 4, 5, 6, 7, 8, 9");
         }
 
         [Test]

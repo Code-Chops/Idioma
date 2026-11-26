@@ -164,8 +164,7 @@ public sealed partial class LocalizationRegistrationPartTests
     [Arguments("public string LocalizationLanguageCode => \"en-GB\";")]
     [Arguments("public string LocalizationLanguageCode => \"EN\";")]
     [Arguments("public string LocalizationLanguageCode => \"zh-Hans-CN\";")]
-    [Arguments("public string LocalizationLanguageCode => System.Globalization.CultureInfo.CurrentUICulture.Name;")]
-    public void SetWithLanguageCodeThatIsCultureNameOrNoConstant_ReportsNothing(string languageCode)
+    public void SetWithLanguageCodeThatIsCultureName_ReportsNothing(string languageCode)
     {
         // Arrange & Act
         var result = Run($$"""

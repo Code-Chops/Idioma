@@ -132,8 +132,9 @@ public sealed partial class LocalizationRegistrationPartTests
     public void SetWhoseNameGivesNoDeclaredLongCode_RecordsWhatTheBuildReads(string attribute, string languageCode, string? recorded)
     {
         // Arrange & Act: a set implementing its code records it where it's a constant, so that the registry needn't
-        // create the set to file it. One the build can't read gets no record. Without nl-BE declared, the name gives 'be'.
-        var text = GeneratedText(Run($$"""
+        // create the set to file it. One the build can't read gets no record, and doesn't register (LOC208). Without
+        // nl-BE declared, the name gives 'be'.
+        var run = Run($$"""
             using CodeChops.Idioma;
 
             {{attribute}}
@@ -150,13 +151,21 @@ public sealed partial class LocalizationRegistrationPartTests
                 {{languageCode}}
                 public string Checkout => "Afrekenen";
             }
-            """));
+            """).Results.ShouldHaveSingleItem();
 
         // Assert
+        var text = String.Concat(run.GeneratedSources.Select(static source => source.SourceText.ToString()));
+
         if (recorded is null)
+        {
             text.ShouldNotContain("RecordSet");
+            text.ShouldNotContain("ShopLocalizationNlBe()");
+            run.Diagnostics.ShouldContain(static diagnostic => diagnostic.Id == "LOC208");
+        }
         else
+        {
             text.ShouldContain(recorded);
+        }
     }
 
     [Test]

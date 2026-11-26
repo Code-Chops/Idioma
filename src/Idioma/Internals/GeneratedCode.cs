@@ -112,10 +112,11 @@ public static class GeneratedCode
     /// <para>
     /// The set that words a text without parameters for the current UI culture, or <see langword="null"/> where none
     /// is kept yet. A property of the generated class reads its wording from it, and words the text with
-    /// <see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/> otherwise:
+    /// <see cref="ResolveWording{TContract, TDefaultSet}(int, int, CultureInfo, string, Func{TContract, string})"/>
+    /// otherwise:
     /// <code>
-    /// GetSet&lt;IShopLocalization&gt;(1, 3)?.Checkout
-    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, "Checkout", static set => set.Checkout)
+    /// GetLocalizationSet&lt;IShopLocalization&gt;(1, 3, out var culture)?.Checkout
+    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, culture, "Checkout", static set => set.Checkout)
     /// </code>
     /// </para>
     /// </summary>
@@ -126,16 +127,20 @@ public static class GeneratedCode
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
     /// <param name="text">The position of the text among the texts of its generated class.</param>
     /// <param name="count">The number of texts the generated class has.</param>
+    /// <param name="providedCulture">
+    /// What the provider answered, or <see langword="null"/> where it wasn't asked or gave none. Pass it to
+    /// <c>ResolveWording</c>, so that the provider, which may read a request or a user's profile, is asked once per text.
+    /// </param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? GetSet<TContract>(int text, int count)
+    public static TContract? GetLocalizationSet<TContract>(int text, int count, out CultureInfo? providedCulture)
         where TContract : class
     {
         CultureInfo culture;
-        CultureInfo? provided = null;
-        var isAsked = false;
+        providedCulture = null;
 
-        // Inside a text being worded, its culture, which a provider would otherwise override. Without a provider that
-        // culture is the thread's, so the scope isn't read.
+        // As WordingScope.GetReaderCulture gives it, written out: every text of a generated class asks here, and the
+        // call cost more than this in WebAssembly's interpreter. Inside a text being worded, its culture, which a
+        // provider would otherwise override. Without a provider that culture is the thread's, so the scope isn't read.
         if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
         {
             culture = CultureInfo.CurrentUICulture;
@@ -146,19 +151,13 @@ public static class GeneratedCode
         }
         else
         {
-            provided = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
-            isAsked = true;
-            culture = provided ?? CultureInfo.CurrentUICulture;
+            providedCulture = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
+            culture = providedCulture ?? CultureInfo.CurrentUICulture;
         }
 
         var sets = ResolvedSets<TContract>.Get(culture, count).Sets;
+
         var set = (uint)text < (uint)sets.Length ? sets[text] : null;
-
-        // ResolveWording words the text next, and takes this answer rather than ask the provider again, which may read
-        // a request or a user's profile.
-        if (set is null && isAsked)
-            WordingScope.KeepProvidedCulture(provided);
-
         return set;
     }
 
@@ -171,8 +170,8 @@ public static class GeneratedCode
     /// kept yet. A method of the generated class calls the set's method with its values, and words the text with
     /// <c>ResolveWording</c> otherwise:
     /// <code>
-    /// GetSetForValues&lt;IShopLocalization&gt;(2, 3)?.Greeting(name)
-    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, "Greeting", static (set, name) => set.Greeting(name), name)
+    /// GetLocalizationSetForValues&lt;IShopLocalization&gt;(2, 3, out var culture)?.Greeting(name)
+    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, culture, "Greeting", static (set, name) => set.Greeting(name), name)
     /// </code>
     /// </para>
     /// </summary>
@@ -184,43 +183,36 @@ public static class GeneratedCode
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
     /// <param name="text">The position of the text among the texts of its generated class.</param>
     /// <param name="count">The number of texts the generated class has.</param>
+    /// <param name="providedCulture">
+    /// What the provider answered, or <see langword="null"/> where it wasn't asked or gave none. Pass it to
+    /// <c>ResolveWording</c>, so that the provider is asked once per text.
+    /// </param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? GetSetForValues<TContract>(int text, int count)
+    public static TContract? GetLocalizationSetForValues<TContract>(int text, int count, out CultureInfo? providedCulture)
         where TContract : class
     {
         CultureInfo culture;
+        providedCulture = null;
 
+        // Written out, as in GetLocalizationSet.
         if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
         {
             culture = CultureInfo.CurrentUICulture;
         }
         else if (WordingScope.Current is { } entered)
         {
-            // Inside a text being worded, which set the thread's cultures for its own.
             culture = entered;
         }
         else
         {
-            var provided = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
+            providedCulture = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
 
-            // The method must run in the provided culture, which takes a scope where the thread has another, or one of its
-            // name that formats values otherwise (CultureFormats).
-            // ResolveWording enters it, with this answer of the provider.
-            if (provided is not null && (!CultureFormats.AreAlike(provided, CultureInfo.CurrentCulture) || !provided.Equals(CultureInfo.CurrentUICulture)))
-            {
-                WordingScope.KeepProvidedCulture(provided);
+            // The method must run in the provided culture, which takes a scope where the thread has another, or one of
+            // its name that formats values otherwise (CultureFormats). ResolveWording enters it.
+            if (providedCulture is not null && (!CultureFormats.AreAlike(providedCulture, CultureInfo.CurrentCulture) || !providedCulture.Equals(CultureInfo.CurrentUICulture)))
                 return null;
-            }
 
-            culture = provided ?? CultureInfo.CurrentUICulture;
-
-            var keptSets = ResolvedSets<TContract>.Get(culture, count).SetsForValues;
-            var keptSet = (uint)text < (uint)keptSets.Length ? keptSets[text] : null;
-
-            if (keptSet is null)
-                WordingScope.KeepProvidedCulture(provided);
-
-            return keptSet;
+            culture = providedCulture ?? CultureInfo.CurrentUICulture;
         }
 
         var sets = ResolvedSets<TContract>.Get(culture, count).SetsForValues;
@@ -235,7 +227,7 @@ public static class GeneratedCode
     /// </para>
     /// <para>
     /// The wording of a text of a localization contract for the current UI culture, for a text whose set
-    /// <see cref="GetSet{TContract}"/> doesn't hold. It finds the set that words the text, and keeps it where the same
+    /// <see cref="GetLocalizationSet{TContract}"/> doesn't hold. It finds the set that words the text, and keeps it where the same
     /// set words the text on every call.
     /// </para>
     /// </summary>
@@ -250,6 +242,7 @@ public static class GeneratedCode
     /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
     /// <param name="text">The position of the text among the texts of its generated class.</param>
     /// <param name="count">The number of texts the generated class has.</param>
+    /// <param name="providedCulture">What <see cref="GetLocalizationSet{TContract}"/> gave as the provider's answer.</param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="selector">Picks the text from a set.</param>
     /// <exception cref="InvalidOperationException">
@@ -257,14 +250,20 @@ public static class GeneratedCode
     /// language, such as an empty one where a value is missing. Also when the constructor of that set throws, or it has
     /// no language code (<c>LOC208</c>).
     /// </exception>
+    // A property is never kept as a fallback, so there's none to look for. LocalizationRegistry.KeepSet says why.
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet>(int text, int count, string name, Func<TContract, string?> selector)
+    public static string ResolveWording<TContract, TDefaultSet>(int text, int count, CultureInfo? providedCulture, string name,
+        Func<TContract, string?> selector)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
+        Debug.Assert(name is not null);
         Debug.Assert(selector is not null);
 
-        var wording = Wording<TContract, TDefaultSet>.Of(text, count, name, selector);
+        var culture = WordingScope.GetReaderCulture(providedCulture);
+        var resolved = ResolvedSets<TContract>.Get(culture, count);
+
+        var wording = LookUp<TContract, TDefaultSet>(culture, providedCulture, resolved, text, name, selector, takesValues: false);
         return wording;
     }
 
@@ -274,169 +273,93 @@ public static class GeneratedCode
     /// </para>
     /// <para>
     /// The wording of a text of a localization contract that takes values, for the current UI culture, for a text whose
-    /// set <see cref="GetSetForValues{TContract}"/> doesn't give. There's an overload per number of values.
+    /// set <see cref="GetLocalizationSetForValues{TContract}"/> doesn't give. The values come as one: the value itself for a text
+    /// with one parameter, and a tuple of them for more:
+    /// <code>
+    /// ResolveWording&lt;IShopLocalization, ShopLocalizationEn, (string, int)&gt;(2, 3, culture, "Order",
+    ///     static (set, values) => set.Order(values.Item1, values.Item2), (name, count))
+    /// </code>
     /// </para>
     /// </summary>
     /// <remarks>
     /// <para>
     /// The set's method runs in the culture the text is worded for. Where
     /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/> gives a culture, the values are formatted for that
-    /// culture too. A text takes at most 8 values (<c>LOC400</c>).
+    /// culture too.
     /// </para>
     /// <para>
     /// The text falls back as a text without parameters does
-    /// (<see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/>).
+    /// (<see cref="ResolveWording{TContract, TDefaultSet}(int, int, CultureInfo, string, Func{TContract, string})"/>).
+    /// </para>
+    /// <para>
+    /// A set that words the text on every call is worded in the scope it needs, without a lookup. That's a scope of the
+    /// language the text falls back to (<see cref="ResolvedSets{TContract}.FallbackSets"/>), or of a provider's culture
+    /// the thread doesn't have. Any other text is looked up in the registry (<see cref="LocalizationRegistry.Word"/>),
+    /// which keeps its set where the same set words it on every call.
     /// </para>
     /// </remarks>
     /// <typeparam name="TContract">
-    /// The contract (interface) the text belongs to. Every registered set implementing it provides the text.
+    /// The contract the text belongs to. Every registered set implementing it provides the text.
     /// </typeparam>
     /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
-    /// <typeparam name="TValue1">The type of the first value.</typeparam>
+    /// <typeparam name="TValues">The type of the value, or the tuple of the values.</typeparam>
     /// <param name="text">The position of the text among the texts of its generated class.</param>
     /// <param name="count">The number of texts the generated class has.</param>
+    /// <param name="providedCulture">What <see cref="GetLocalizationSetForValues{TContract}"/> gave as the provider's answer.</param>
     /// <param name="name">The name of the text, such as <c>Greeting</c>.</param>
     /// <param name="selector">
     /// Picks the text from a set of the contract, with the values. It's handed those values, so it holds none itself
     /// and one delegate serves every call.
     /// </param>
-    /// <param name="value1">The first value.</param>
+    /// <param name="values">The value, or the tuple of the values.</param>
     /// <exception cref="InvalidOperationException">
     /// When every set gives <see langword="null"/> as the wording. Also when the constructor of the set of the default
     /// language throws, or that set has no language code (<c>LOC208</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1>(
-        int text, int count, string name,
-        Func<TContract, TValue1, string?> selector,
-        TValue1 value1)
+    public static string ResolveWording<TContract, TDefaultSet, TValues>(int text, int count, CultureInfo? providedCulture, string name,
+        Func<TContract, TValues, string?> selector, TValues values)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
+        Debug.Assert(name is not null);
         Debug.Assert(selector is not null);
 
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1),
-            static (set, call) => call.selector(set, call.value1));
+        var culture = WordingScope.GetReaderCulture(providedCulture);
+        var resolved = ResolvedSets<TContract>.Get(culture, count);
+        var setsForValues = resolved.SetsForValues;
 
+        // The set kept for the text, which the generated class couldn't call itself, because a provider gives a culture
+        // the thread doesn't have. Its method runs in a scope of that culture.
+        if ((uint)text < (uint)setsForValues.Length && setsForValues[text] is { } kept)
+        {
+            using var scope = new WordingScope(culture, providedCulture);
+
+            if (selector(kept, values) is { } keptWording)
+                return keptWording;
+        }
+        else if (resolved.GetFallback(text) is { } fallback)
+        {
+            // A method formats its values as it runs, so it runs in a scope wherever a text with values does. Where the
+            // language has no culture on this machine, that's the scope of the reader, as in the lookup.
+            using var scope = new WordingScope(fallback.Culture ?? culture, providedCulture);
+
+            if (selector(fallback.Set, values) is { } fallbackWording)
+                return fallbackWording;
+        }
+
+        var wording = LookUpWithValues<TContract, TDefaultSet, TValues>(culture, providedCulture, resolved, text, name, selector, values);
         return wording;
     }
 
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, string?> selector,
-        TValue1 value1, TValue2 value2)
+    // A method of its own, because C# creates the closure over a method's parameters as that method starts, also where
+    // the lambda is never reached. In ResolveWording, a text kept as a fallback would allocate it on every call.
+    private static string LookUpWithValues<TContract, TDefaultSet, TValues>(CultureInfo culture, CultureInfo? providedCulture,
+        ResolvedSets<TContract> resolved, int text, string name, Func<TContract, TValues, string?> selector, TValues values)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2),
-            static (set, call) => call.selector(set, call.value1, call.value2));
-
-        return wording;
-    }
-
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, TValue3, string?> selector,
-        TValue1 value1, TValue2 value2, TValue3 value3)
-        where TContract : class
-        where TDefaultSet : class, ILocalizationSet, TContract, new()
-    {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3),
-            static (set, call) => call.selector(set, call.value1, call.value2, call.value3));
-
-        return wording;
-    }
-
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, string?> selector,
-        TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4)
-        where TContract : class
-        where TDefaultSet : class, ILocalizationSet, TContract, new()
-    {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4),
-            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4));
-
-        return wording;
-    }
-
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, string?> selector,
-        TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5)
-        where TContract : class
-        where TDefaultSet : class, ILocalizationSet, TContract, new()
-    {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5),
-            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5));
-
-        return wording;
-    }
-
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, string?> selector,
-        TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6)
-        where TContract : class
-        where TDefaultSet : class, ILocalizationSet, TContract, new()
-    {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5, value6),
-            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5, call.value6));
-
-        return wording;
-    }
-
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, string?> selector,
-        TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7)
-        where TContract : class
-        where TDefaultSet : class, ILocalizationSet, TContract, new()
-    {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5, value6, value7),
-            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5, call.value6, call.value7));
-
-        return wording;
-    }
-
-    /// <inheritdoc cref="ResolveWording{TContract, TDefaultSet, TValue1}(int, int, string, Func{TContract, TValue1, string}, TValue1)"/>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8>(
-        int text, int count, string name,
-        Func<TContract, TValue1, TValue2, TValue3, TValue4, TValue5, TValue6, TValue7, TValue8, string?> selector,
-        TValue1 value1, TValue2 value2, TValue3 value3, TValue4 value4, TValue5 value5, TValue6 value6, TValue7 value7, TValue8 value8)
-        where TContract : class
-        where TDefaultSet : class, ILocalizationSet, TContract, new()
-    {
-        Debug.Assert(selector is not null);
-
-        var wording = Wording<TContract, TDefaultSet>.OfValues(text, count, name, (selector, value1, value2, value3, value4, value5, value6, value7, value8),
-            static (set, call) => call.selector(set, call.value1, call.value2, call.value3, call.value4, call.value5, call.value6, call.value7, call.value8));
-
+        var wording = LookUp<TContract, TDefaultSet>(culture, providedCulture, resolved, text, name, set => selector(set, values), takesValues: true);
         return wording;
     }
 
@@ -444,104 +367,26 @@ public static class GeneratedCode
     /// Words a text of a contract for the reader of this thread, from the sets of the whole app. Every
     /// <c>ResolveWording</c> ends here.
     /// </summary>
-    /// <remarks>
-    /// A text with parameters whose set is kept is worded by that set in the scope it needs, without a lookup. That's a
-    /// scope of the language the text falls back to (<see cref="ResolvedSets{TContract}.FallbackSets"/>), or of a
-    /// provider's culture the thread doesn't have. Any other text is looked up in the registry
-    /// (<see cref="LocalizationRegistry.Word"/>), which keeps its set where the same set words it on every call.
-    /// </remarks>
-    /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
-    /// <typeparam name="TDefaultSet">The contract's set of the default language.</typeparam>
-    // A class of its own, so that a call infers the type of the values from the tuple it passes.
-    private static class Wording<TContract, TDefaultSet>
+    private static string LookUp<TContract, TDefaultSet>(CultureInfo culture, CultureInfo? providedCulture, ResolvedSets<TContract> resolved,
+        int text, string name, Func<TContract, string?> select, bool takesValues)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        /// <summary>
-        /// The wording of a text without parameters.
-        /// </summary>
-        // A property is never kept as a fallback, so there's none to look for. LocalizationRegistry.KeepSet says why.
-        public static string Of(int text, int count, string name, Func<TContract, string?> select)
-        {
-            Debug.Assert(name is not null);
+        var lookup = resolved.Lookup;
 
-            var culture = WordingScope.GetReaderCulture(out var providedCulture, takesKept: true);
-            var resolved = ResolvedSets<TContract>.Get(culture, count);
+        var wording = lookup.Registry.Word(
+            lookup,
+            culture,
+            valuesCulture: providedCulture,
+            name,
+            select,
+            defaultSetType: typeof(TDefaultSet),
+            getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
+            takesValues,
+            resolved,
+            text);
 
-            var wording = LookUp(culture, providedCulture, resolved, text, name, select, takesValues: false);
-            return wording;
-        }
-
-        /// <summary>
-        /// The wording of a text with parameters.
-        /// </summary>
-        /// <typeparam name="TCall">The selector of the text and the values it was called with, as a tuple.</typeparam>
-        /// <param name="text">The position of the text among the texts of its generated class.</param>
-        /// <param name="count">The number of texts the generated class has.</param>
-        /// <param name="name">The name of the text.</param>
-        /// <param name="call">The selector and the values.</param>
-        /// <param name="word">
-        /// Hands a set the values through the selector. A static lambda, so it holds nothing and allocates nothing.
-        /// </param>
-        public static string OfValues<TCall>(int text, int count, string name, TCall call, Func<TContract, TCall, string?> word)
-        {
-            Debug.Assert(name is not null);
-
-            var culture = WordingScope.GetReaderCulture(out var providedCulture, takesKept: true);
-            var resolved = ResolvedSets<TContract>.Get(culture, count);
-            var setsForValues = resolved.SetsForValues;
-
-            // The set kept for the text, which the generated class couldn't call itself, because a provider gives a
-            // culture the thread doesn't have. Its method runs in a scope of that culture.
-            if ((uint)text < (uint)setsForValues.Length && setsForValues[text] is { } kept)
-            {
-                using var scope = new WordingScope(culture, providedCulture);
-
-                if (word(kept, call) is { } keptWording)
-                    return keptWording;
-            }
-            else if (resolved.GetFallback(text) is { } fallback)
-            {
-                // A method formats its values as it runs, so it runs in a scope wherever a text with values does. Where
-                // the language has no culture on this machine, that's the scope of the reader, as in the lookup.
-                using var scope = new WordingScope(fallback.Culture ?? culture, providedCulture);
-
-                if (word(fallback.Set, call) is { } fallbackWording)
-                    return fallbackWording;
-            }
-
-            var wording = LookUpWithValues(culture, providedCulture, resolved, text, name, call, word);
-            return wording;
-        }
-
-        // A method of its own, because C# creates the closure over a method's parameters as that method starts, also
-        // where the lambda is never reached. In OfValues, a text kept as a fallback would allocate it on every call.
-        private static string LookUpWithValues<TCall>(CultureInfo culture, CultureInfo? providedCulture, ResolvedSets<TContract> resolved,
-            int text, string name, TCall call, Func<TContract, TCall, string?> word)
-        {
-            var wording = LookUp(culture, providedCulture, resolved, text, name, set => word(set, call), takesValues: true);
-            return wording;
-        }
-
-        private static string LookUp(CultureInfo culture, CultureInfo? providedCulture, ResolvedSets<TContract> resolved,
-            int text, string name, Func<TContract, string?> select, bool takesValues)
-        {
-            var lookup = resolved.Lookup;
-
-            var wording = lookup.Registry.Word(
-                lookup,
-                culture,
-                valuesCulture: providedCulture,
-                name,
-                select,
-                defaultSetType: typeof(TDefaultSet),
-                getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
-                takesValues,
-                resolved,
-                text);
-
-            return wording;
-        }
+        return wording;
     }
 
     /// <summary>
@@ -585,10 +430,14 @@ public static class GeneratedCode
     /// </para>
     /// </summary>
     /// <remarks>
-    /// Where two assemblies register texts of one enum, those of the assembly whose sets registered later give them,
-    /// whichever registered its texts first. An app's registrar registers the sets of the assemblies it references
-    /// first, and its own last. So the app wins over a library it references, and a library over one it references.
-    /// Of two that registered no sets, the later registration wins.
+    /// <para>
+    /// Where the app registers texts of an enum, its texts give them, also when a library registers texts of that enum
+    /// later, such as one the app loads lazily. The app is the assembly that registered the languages
+    /// (<see cref="RegisterLanguages"/>).
+    /// </para>
+    /// <para>
+    /// Between two libraries, the texts registered last give them.
+    /// </para>
     /// </remarks>
     /// <typeparam name="TEnum">The enum.</typeparam>
     /// <typeparam name="TContract">The contract of the set, which tells the assembly that holds it.</typeparam>
@@ -624,8 +473,9 @@ public static class GeneratedCode
         if (EnumTexts<TEnum>.Chosen is not { } chosen)
             return null;
 
-        // Chosen again after a registration since, which may change which one wins.
-        if (chosen.Count != LocalizationRegistry.RegistrationCount)
+        // Chosen again where a registration came or went since, or the app registered its languages, which may change
+        // which one wins.
+        if (!chosen.IsCurrent)
             chosen = EnumTexts<TEnum>.Choose();
 
         var text = chosen.GetText?.Invoke(value);
@@ -661,35 +511,32 @@ public static class GeneratedCode
             if (assembly.IsCollectible && !typeof(TEnum).IsCollectible && Interlocked.Exchange(ref Forgets, value: 1) is 0)
                 CollectibleAssemblies.AddForgetter(static context => Forget(context));
 
-            LocalizationRegistry.CountRegistration();
             Choose();
         }
 
         /// <summary>
-        /// Chooses the registration that gives the texts: that of the assembly whose sets registered last, and of two
-        /// alike, the later one.
+        /// Chooses the registration that gives the texts: the app's last one, or else the last one. The app's wins also
+        /// over that of a library that loaded later.
         /// </summary>
         public static ChosenTexts Choose()
         {
-            // Counted before the registrations are read, so that one that comes in meanwhile makes the next read choose
-            // again.
-            var count = LocalizationRegistry.RegistrationCount;
+            // Read once, so that the choice holds what it was made from. A registration that comes in meanwhile makes the
+            // next read choose again (ChosenTexts.IsCurrent).
+            var registered = Registered;
+            var application = LocalizationRegistry.ApplicationAssembly;
 
-            Func<TEnum, string>? getText = null;
-            var latest = -1L;
+            Registration? last = null;
+            Registration? lastOfApplication = null;
 
-            foreach (var registration in Registered)
+            foreach (var registration in registered)
             {
-                var at = LocalizationRegistry.GetSetsRegisteredAt(registration.Assembly);
+                last = registration;
 
-                if (at >= latest)
-                {
-                    getText = registration.GetText;
-                    latest = at;
-                }
+                if (ReferenceEquals(registration.Assembly, application))
+                    lastOfApplication = registration;
             }
 
-            var chosen = new ChosenTexts(count, getText);
+            var chosen = new ChosenTexts(registered, application, (lastOfApplication ?? last)?.GetText);
             Chosen = chosen;
 
             return chosen;
@@ -708,19 +555,27 @@ public static class GeneratedCode
         /// <summary>
         /// A registration: the assembly of the set, and what gives a value its text.
         /// </summary>
-        private sealed class Registration(Assembly assembly, Func<TEnum, string> getText)
+        public sealed class Registration(Assembly assembly, Func<TEnum, string> getText)
         {
             public Assembly Assembly { get; } = assembly;
             public Func<TEnum, string> GetText { get; } = getText;
         }
 
         /// <summary>
-        /// The registration that wins, and the count of registrations it was chosen at.
+        /// The registration that wins, with the registrations and the app it was chosen from.
         /// </summary>
-        public sealed class ChosenTexts(int count, Func<TEnum, string>? getText)
+        public sealed class ChosenTexts(ImmutableArray<Registration> registered, Assembly? application, Func<TEnum, string>? getText)
         {
-            public int Count { get; } = count;
             public Func<TEnum, string>? GetText { get; } = getText;
+
+            private ImmutableArray<Registration> From { get; } = registered;
+            private Assembly? Application { get; } = application;
+
+            /// <summary>
+            /// Whether the choice still holds: no registration came or went since, and the app is the one it was made
+            /// for. Compared by reference, because the registrations are replaced as a whole.
+            /// </summary>
+            public bool IsCurrent => this.From == Registered && ReferenceEquals(this.Application, LocalizationRegistry.ApplicationAssembly);
         }
     }
 
@@ -840,18 +695,27 @@ public static class GeneratedCode
     /// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages]</see> declares. Only the first call
     /// counts, so an application loaded later, such as the app a test project tests, can't change them.
     /// </para>
+    /// <para>
+    /// That first call also tells which assembly is the app. Its texts of an enum win over those of every library
+    /// (<see cref="RegisterEnumTexts{TEnum, TContract}"/>).
+    /// </para>
     /// </summary>
+    /// <param name="registrar">The registrar of the application, which tells its assembly.</param>
     /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>en-GB</c>.</param>
     /// <param name="otherLanguages">The other languages, each a culture name.</param>
     /// <exception cref="ArgumentException">
     /// When a language isn't a culture name, such as an empty string or <c>en_GB</c>. Pass a culture name such as
     /// <c>en</c> or <c>en-GB</c>. Also when a language is listed twice, as <c>en</c> and <c>EN</c> are.
     /// </exception>
-    /// <exception cref="ArgumentNullException">When a language is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentNullException">
+    /// When <paramref name="registrar"/> or a language is <see langword="null"/>.
+    /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RegisterLanguages(string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
+    public static void RegisterLanguages(Type registrar, string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
     {
-        LocalizationRegistry.RegisterLanguages(defaultLanguage, otherLanguages);
+        ArgumentNullException.ThrowIfNull(registrar);
+
+        LocalizationRegistry.RegisterLanguages(registrar.Assembly, defaultLanguage, otherLanguages);
     }
 
     /// <summary>

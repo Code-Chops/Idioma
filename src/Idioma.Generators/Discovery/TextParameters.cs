@@ -8,11 +8,6 @@ namespace CodeChops.Idioma.Generators;
 internal static class TextParameters
 {
     /// <summary>
-    /// The most values a text takes, as the overloads of <c>GeneratedCode.ResolveWording</c> take them.
-    /// </summary>
-    public const int MaxValues = 8;
-
-    /// <summary>
     /// What <c>LOC400</c> says of a text written as a method without parameters
     /// (<see cref="IsTextWithoutParameters"/>), as the clause of its message.
     /// </summary>
@@ -113,11 +108,6 @@ internal static class TextParameters
     {
         if (method.IsGenericMethod)
             return "it's generic";
-
-        // The generated class words the text through an overload per number of values (GeneratedCode), which takes
-        // each value as its own type.
-        if (method.Parameters.Length > MaxValues)
-            return $"it takes {method.Parameters.Length} values, and a text takes at most {MaxValues}";
 
         if (!HasNameOfItsOwn(method))
             return "its set has another method of that name, and a text is told from the others by its name";

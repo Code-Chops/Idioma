@@ -23,7 +23,7 @@ namespace CodeChops.Idioma.Generated
             if (System.Threading.Interlocked.Exchange(ref registered, 1) is 1)
                 return;
 
-            CodeChops.Idioma.Internals.GeneratedCode.RegisterLanguages("nl", "en");
+            CodeChops.Idioma.Internals.GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), "nl", "en");
             RegisterReferenced("SetsLibrary", static () => CodeChops.Idioma.Generated.LocalizationRegistrar_SetsLibrary.Register());
         }
 

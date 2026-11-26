@@ -124,22 +124,9 @@ internal readonly ref struct WordingScope
     /// culture, not as the thread formats them. Inside a scope it's <see langword="null"/>, because the scope set the
     /// thread's format already.
     /// </param>
-    /// <param name="takesKept">
-    /// Whether to take the provider's answer that <see cref="KeepProvidedCulture"/> kept, in place of asking again.
-    /// </param>
-    public static CultureInfo GetReaderCulture(out CultureInfo? providedCulture, bool takesKept = false)
+    public static CultureInfo GetReaderCulture(out CultureInfo? providedCulture)
     {
         providedCulture = null;
-
-        // Taken once, also where it isn't used, so that no later text finds it.
-        var hasKept = takesKept && HasKeptProvided;
-        var kept = hasKept ? KeptProvided : null;
-
-        if (hasKept)
-        {
-            HasKeptProvided = false;
-            KeptProvided = null;
-        }
 
         // Without a provider, a scope's culture is the thread's UI culture, so the scope isn't read.
         if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
@@ -148,30 +135,28 @@ internal readonly ref struct WordingScope
         if (Current is { } entered)
             return entered;
 
-        providedCulture = hasKept ? kept : LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
+        providedCulture = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
 
         var culture = providedCulture ?? CultureInfo.CurrentUICulture;
         return culture;
     }
 
-    // What the provider answered when a text looked for its kept set and found none. The text is worded right after,
-    // on this thread, and takes the answer from here. So the provider, which may read a request or a user's profile,
-    // is asked once per text.
-    [ThreadStatic]
-    private static bool HasKeptProvided;
-
-    [ThreadStatic]
-    private static CultureInfo? KeptProvided;
-
     /// <summary>
-    /// Keeps the provider's answer for the text that is worded next on this thread
-    /// (<see cref="GetReaderCulture"/>).
+    /// The culture a text follows on this thread, as <see cref="GetReaderCulture(out CultureInfo)"/> gives it, where
+    /// that was asked already and gave <paramref name="providedCulture"/>. The provider isn't asked again, because it
+    /// may read a request or a user's profile.
     /// </summary>
-    /// <param name="providedCulture">What the provider gave, which may be <see langword="null"/>.</param>
-    public static void KeepProvidedCulture(CultureInfo? providedCulture)
+    /// <param name="providedCulture">What <see cref="GetReaderCulture(out CultureInfo)"/> gave as the provider's answer.</param>
+    public static CultureInfo GetReaderCulture(CultureInfo? providedCulture)
     {
-        KeptProvided = providedCulture;
-        HasKeptProvided = true;
+        if (LocalizationRegistry.CurrentUICultureProvider is null)
+            return CultureInfo.CurrentUICulture;
+
+        if (Current is { } entered)
+            return entered;
+
+        var culture = providedCulture ?? CultureInfo.CurrentUICulture;
+        return culture;
     }
 
     public void Dispose()

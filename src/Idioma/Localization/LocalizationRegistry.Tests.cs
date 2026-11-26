@@ -66,24 +66,6 @@ public sealed partial class LocalizationRegistryTests
         }
     }
 
-    private interface IRegistryFlakyCodedLocalization : ILocalizationSet;
-
-    /// <summary>
-    /// The same, for a set that gives its language itself, which the registry creates to file it under its language.
-    /// </summary>
-    private sealed class RegistryFlakyCodedLocalization : IRegistryFlakyCodedLocalization
-    {
-        public static int FailuresLeft;
-
-        public RegistryFlakyCodedLocalization()
-        {
-            if (Interlocked.Decrement(ref FailuresLeft) >= 0)
-                throw new TimeoutException("The settings aren't loaded yet.");
-        }
-
-        string ILocalizationSet.LocalizationLanguageCode => "nl";
-    }
-
     /// <summary>
     /// The one text of the contracts below, which a set reads while it's created.
     /// </summary>
@@ -99,8 +81,8 @@ public sealed partial class LocalizationRegistryTests
         where TContract : class, IRegistryBrandTexts
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var brand = Internals.GeneratedCode.GetSet<TContract>(0, 1)?.Brand
-            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
+        var brand = Internals.GeneratedCode.GetLocalizationSet<TContract>(0, 1, out var culture)?.Brand
+            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, culture, "Brand", static set => set.Brand);
 
         return brand;
     }
@@ -142,52 +124,6 @@ public sealed partial class LocalizationRegistryTests
         private readonly string _brand = ReadsOwnText ? ReadBrand<IRegistrySelfReadingDefaultLocalization, RegistrySelfReadingDefaultLocalizationEn>() : "Shop";
 
         public string Brand => this._brand;
-    }
-
-    private interface IRegistrySelfReadingCodedLocalization : ILocalizationSet, IRegistryBrandTexts;
-
-    private sealed class RegistrySelfReadingCodedLocalizationEn : IRegistrySelfReadingCodedLocalization
-    {
-        public string Brand => "Shop";
-    }
-
-    /// <summary>
-    /// The same, for a set that gives its language itself, which the registry creates when it's built.
-    /// </summary>
-    private sealed class RegistrySelfReadingCodedLocalization : IRegistrySelfReadingCodedLocalization
-    {
-        [ThreadStatic]
-        public static bool ReadsOwnText;
-
-        private readonly string _brand = ReadsOwnText ? ReadBrand<IRegistrySelfReadingCodedLocalization, RegistrySelfReadingCodedLocalizationEn>() : "Winkel";
-
-        public string Brand => this._brand;
-
-        string ILocalizationSet.LocalizationLanguageCode => "nl";
-    }
-
-    private interface IRegistryReadLocalization : ILocalizationSet, IRegistryBrandTexts;
-
-    private sealed class RegistryReadLocalizationEn : IRegistryReadLocalization
-    {
-        public string Brand => "Shop";
-    }
-
-    private sealed class RegistryReadLocalizationNl : IRegistryReadLocalization
-    {
-        public string Brand => "Winkel";
-    }
-
-    private interface IRegistryReaderLocalization : ILocalizationSet, IRegistryBrandTexts;
-
-    /// <summary>
-    /// A set that gives its language itself, with a field initializer that reads a text of another contract.
-    /// </summary>
-    private sealed class RegistryReaderCodedLocalization : IRegistryReaderLocalization
-    {
-        public string Brand { get; } = ReadBrand<IRegistryReadLocalization, RegistryReadLocalizationEn>();
-
-        string ILocalizationSet.LocalizationLanguageCode => "nl";
     }
 
     /// <summary>

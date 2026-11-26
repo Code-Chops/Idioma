@@ -160,6 +160,7 @@ A set can't be registered automatically, so its texts won't be found. This is a 
 - a parameterless constructor
 - no `required` members
 - a language code: the end of its name, starting with a capital, such as `En`, or an implementation of `ILocalizationSet.LocalizationLanguageCode` (see [language codes](../language-codes.md) for a longer code such as `EnGb`)
+- a `LocalizationLanguageCode` that returns a constant, if it has one, because the registry files a set under its language without creating it. A code read at run time doesn't count, and neither does one the set inherits from a set of another assembly.
 - a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
 - no `[Obsolete]` marked as an error, because generated code can't name such a class
 

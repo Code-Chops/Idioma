@@ -56,11 +56,6 @@ namespace CodeChops.Idioma.CodeFixes;
 [Shared]
 public sealed class PlaceholderCodeFixProvider : CodeFixProvider
 {
-    /// <summary>
-    /// The most values a text takes (<c>LOC400</c>).
-    /// </summary>
-    private const int MaxValues = 8;
-
     private const string EquivalenceKey = "FillInPlaceholders";
 
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [PlaceholderAnalyzer.PlaceholderDiagnosticId];
@@ -276,7 +271,7 @@ public sealed class PlaceholderCodeFixProvider : CodeFixProvider
             foreach (var wording in FindWordings(language) ?? [])
                 FillIn(wording, Count);
 
-        return count is > 0 and <= MaxValues
+        return count > 0
             ? (property, semanticModel) => ParameterList(Enumerable.Range(0, count).Select(number =>
                 (AnnotationsEnabled(property, semanticModel) ? "object?" : "object", $"arg{number}")))
             : null;

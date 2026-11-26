@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
 namespace CodeChops.Idioma;
@@ -32,43 +31,14 @@ public sealed partial class LocalizationRegistry
     // so that the registry knows which texts a set rewords without calling it (GetWording).
     private static ConcurrentDictionary<Type, RecordedSet> RecordedSets { get; } = new();
 
-    // How many times the generated code registered sets, which orders the assemblies (SetsRegisteredAt).
-    private static long SetsRegistered;
-
     /// <summary>
-    /// Per assembly, when its sets were last registered by the generated code, as a number that grows with each
-    /// registration (<see cref="RegistrationCount"/>). An app's registrar registers the sets of the assemblies it
-    /// references first, and its own last. So of two assemblies that give an enum of a third one its texts, the one
-    /// whose sets registered later is the app, or the assembly nearer to it
+    /// The assembly of the app, whose registrar registered the languages first (<see cref="RegisterLanguages"/>), or
+    /// <see langword="null"/> before that. Its texts of an enum win over those of every library
     /// (<see cref="Internals.GeneratedCode.RegisterEnumTexts{TEnum, TContract}"/>).
     /// </summary>
-    // Weak, so that an assembly that can be unloaded isn't held here.
-    private static ConditionalWeakTable<Assembly, StrongBox<long>> SetsRegisteredAt { get; } = new();
-
-    /// <summary>
-    /// How often anything was registered or forgotten that may change which registration of the texts of an enum
-    /// wins. A reader that kept the winner checks it against this.
-    /// </summary>
-    internal static int RegistrationCount => Volatile.Read(ref _registrationCount);
+    internal static Assembly? ApplicationAssembly => Volatile.Read(ref _applicationAssembly);
     // ReSharper disable once InconsistentNaming
-    private static int _registrationCount;
-
-    /// <summary>
-    /// When the generated code last registered the sets of an assembly, or 0 where it never did.
-    /// </summary>
-    internal static long GetSetsRegisteredAt(Assembly assembly)
-    {
-        var at = SetsRegisteredAt.TryGetValue(assembly, out var registered) ? Volatile.Read(ref registered.Value) : 0;
-        return at;
-    }
-
-    /// <summary>
-    /// Counts a registration or a forgotten one that may change which registration of the texts of an enum wins.
-    /// </summary>
-    internal static void CountRegistration()
-    {
-        Interlocked.Increment(ref _registrationCount);
-    }
+    private static Assembly? _applicationAssembly;
 
     /// <summary>
     /// Forgets what the assemblies of a context that unloads registered (<see cref="CollectibleAssemblies"/>): their
@@ -82,7 +52,6 @@ public sealed partial class LocalizationRegistry
 
         // ReSharper disable once HeapView.CanAvoidClosure - Once per context that unloads.
         ImmutableInterlocked.Update(ref Registered, registered => registered.Without(context));
-        CountRegistration();
     }
 
     /// <summary>
@@ -173,17 +142,23 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// Sets the app's <see cref="SupportedLanguages"/>, for <see cref="Internals.GeneratedCode.RegisterLanguages"/>.
-    /// Only the first call counts.
+    /// Sets the app's <see cref="SupportedLanguages"/>, for <see cref="Internals.GeneratedCode.RegisterLanguages"/>, and
+    /// records the <paramref name="application"/> they come from as the app (<see cref="ApplicationAssembly"/>). Only
+    /// the first call counts.
     /// </summary>
-    internal static void RegisterLanguages(string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
+    internal static void RegisterLanguages(Assembly application, string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
     {
+        ArgumentNullException.ThrowIfNull(application);
+
         // Checked as a registry of your own checks its languages, and here rather than at the first text shown.
         var languages = ToCultureNames(defaultLanguage, otherLanguages);
 
         // The app's own registrar runs before any assembly it loads, and calls this before the registrars of the
-        // assemblies it references, so the first call is the app's. The swap gives a new registry instance, so that a
-        // cache a consumer keys on it drops wording resolved before.
+        // assemblies it references, so the first call is the app's. The texts of an enum chosen before are chosen again
+        // with the app's first (GeneratedCode.GetEnumText).
+        Interlocked.CompareExchange(ref _applicationAssembly, application, comparand: null);
+
+        // The swap gives a new registry instance, so that a cache a consumer keys on it drops wording resolved before.
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes the languages, a struct, is left to the JIT under ReadyToRun.
         ImmutableInterlocked.Update(
             ref Registered,
@@ -208,7 +183,7 @@ public sealed partial class LocalizationRegistry
 
         CollectibleAssemblies.Watch(typeof(TSet).Assembly);
 
-        // A set registered before its record is filed under the language of its name, and compared by wording, until
+        // A set registered before its record is filed under the language of its name, and words every text itself, until
         // the lookup tables are built again. So the registrations are swapped for a copy, which builds them anew.
         if (!RecordedSets.TryAdd(typeof(TSet), new RecordedSet(languageCode, ownTexts)))
         {
@@ -338,13 +313,19 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// Adds sets that the registry creates when a text of their contract is first shown, for
     /// <see cref="Internals.GeneratedCode.RegisterSets"/>. Each is filed under the language the build recorded for its
-    /// type, or under the one it gives once it's created, for a set that implements
-    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/>.
+    /// type (<see cref="RecordSet"/>), without creating it.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// When a set has no language: the build recorded none for it, and its name gives none.
+    /// </exception>
     // Not created here, because this runs in a module initializer, before Main. A set whose constructor throws there
     // takes the app down where nothing can catch it, also an app that never shows the set's texts. Created when the
     // first text of its contract is shown, it throws from there, where the app can log it, and only for the texts of
     // its contract.
+    //
+    // The build registers only a set whose language it records (LOC208), so the registry never creates a set to file
+    // it. A set without a record, which only code written by hand registers here, takes the language its name gives, as
+    // its LocalizationLanguageCode does.
     internal static void RegisterSets(ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets, bool asDefaults)
     {
         var entries = new Registration[sets.Length];
@@ -354,30 +335,17 @@ public sealed partial class LocalizationRegistry
             ArgumentNullException.ThrowIfNull(type, nameof(sets));
             ArgumentNullException.ThrowIfNull(create, nameof(sets));
 
-            // The type's own record alone. A set whose LocalizationLanguageCode the build couldn't read is recorded
-            // without a code, and the code of a set it derives from isn't its own.
-            var language = RecordedSets.TryGetValue(type, out var recorded) ? recorded.LanguageCode : null;
-            entries[i] = Registration.ToCreate(type, create, language);
+            entries[i] = Registration.ToCreate(type, create, ILocalizationSet.GetLanguageCode(type));
             CollectibleAssemblies.Watch(type.Assembly);
         }
 
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
         ImmutableInterlocked.Update(ref Registered, registered => registered.With(entries, asDefaults));
-
-        // Noted per assembly after the sets are in, in the order the registrars run.
-        foreach (var entry in entries)
-        {
-            var at = Interlocked.Increment(ref SetsRegistered);
-            SetsRegisteredAt.AddOrUpdate(entry.Type.Assembly, new StrongBox<long>(at));
-        }
-
-        CountRegistration();
     }
 
     /// <summary>
     /// A registered set, with the language it had when it registered. A set the registry creates itself is created
-    /// when a text of its contract is first shown. Where the build recorded no language for it, it's created when the
-    /// registry is built, to read its language.
+    /// when a text of its contract is first shown.
     /// </summary>
     // A class, for the reason ContractSet is one. As a tuple, it left nine methods of ImmutableArray to the JIT at the
     // start of every app.
@@ -385,7 +353,7 @@ public sealed partial class LocalizationRegistry
     {
         private readonly Lazy<ILocalizationSet> _set;
 
-        private Registration(Type type, Lazy<ILocalizationSet> set, string? language)
+        private Registration(Type type, Lazy<ILocalizationSet> set, string language)
         {
             this.Type = type;
             this._set = set;
@@ -395,10 +363,9 @@ public sealed partial class LocalizationRegistry
         public Type Type { get; }
 
         /// <summary>
-        /// The language the set registered with, or <see langword="null"/> for a set the registry has yet to create that
-        /// gives its language itself.
+        /// The language the set registered with.
         /// </summary>
-        public string? Language { get; }
+        public string Language { get; }
 
         /// <summary>
         /// The set, which is created at the first read. A set whose constructor threw is created again at the next read,
@@ -421,7 +388,7 @@ public sealed partial class LocalizationRegistry
         // PublicationOnly keeps no exception, so a failed constructor runs again at the next read. Two threads may each
         // create the set, and the first one to finish gives every text its instance, as for the set of a default
         // language (GeneratedCode.DefaultSet).
-        public static Registration ToCreate(Type type, Func<ILocalizationSet> create, string? language)
+        public static Registration ToCreate(Type type, Func<ILocalizationSet> create, string language)
         {
             var registration = new Registration(type, new Lazy<ILocalizationSet>(() => CreateSet(type, create), LazyThreadSafetyMode.PublicationOnly), language);
             return registration;
@@ -438,11 +405,6 @@ public sealed partial class LocalizationRegistry
     // it on as it is.
     [ThreadStatic]
     private static InvalidOperationException? ThrownForSetNeedingItself;
-
-    /// <summary>
-    /// Whether this thread is creating a set, so that what runs now is the set's constructor or a field initializer.
-    /// </summary>
-    private static bool IsCreatingSet => SetsBeingCreated is { Count: > 0 };
 
     /// <summary>
     /// Creates a set the registry registered by its type, and says which set it was if its constructor throws.
@@ -518,16 +480,10 @@ public sealed partial class LocalizationRegistry
         {
             var registrations = this.Defaults.AddRange(this.Overrides);
 
-            // Building may create a set to read its language, which is consumer code, so nothing is held meanwhile and
-            // two threads may build at once. The first one done gives the registry every reader gets, so that a cache
-            // a consumer keys on the instance sees one.
-            var created = CreateOfRegistrations(registrations, this.Languages);
-
-            // Built for a text that the constructor of a set reads, while this thread builds the registry that creates
-            // the set to read its language. The set can't be created again meanwhile, so this registry couldn't file
-            // it. It serves that one text and isn't kept, so that the registry every reader gets has the set filed.
-            if (IsCreatingSet)
-                return created;
+            // Building reads the language code of each set that exists, which is consumer code, so nothing is held
+            // meanwhile and two threads may build at once. The first one done gives the registry every reader gets, so
+            // that a cache a consumer keys on the instance sees one.
+            var created = Create(registrations, this.Languages);
 
             return Interlocked.CompareExchange(ref this._registry, created, comparand: null) ?? created;
         }
@@ -539,45 +495,25 @@ public sealed partial class LocalizationRegistry
         {
             var tier = asDefaults ? this.Defaults : this.Overrides;
 
-            // Moved to the end rather than kept in place, so the last registration wins; matched on type and language
-            // so that registering again (a second service provider, a test) can't grow the list without bound. On the
-            // language each set registered with: a set whose code was recorded only after it registered
-            // (RecordSet) is kept once next to a later registration of its type, and no more than once.
-            // In one pass, with the entries by their type: removing each entry from the tier by itself took the
-            // square of the number of sets, 22 ms for 2,000 of them (measured 2026-11-19).
-            var entriesByType = new Dictionary<Type, List<Registration>>(entries.Length);
+            // The last registration of each type and language, in the order they came. So a set registered again moves
+            // to the end and wins, and registering again (a second service provider, a test) can't grow the list without
+            // bound. Matched on the language each set registered with: a set whose code was recorded only after it
+            // registered (RecordSet) is kept once next to a later registration of its type, and no more than once.
+            // Walked once, from the end: removing each entry from the tier by itself took the square of the number of
+            // sets, 22 ms for 2,000 of them (measured 2026-11-19).
+            var kept = new Registration[tier.Length + entries.Length];
+            var start = kept.Length;
+            var seen = new HashSet<Registration>(kept.Length, SameTypeAndLanguage.Instance);
 
-            foreach (var entry in entries)
-            {
-                var type = entry.Type;
+            for (var i = entries.Length - 1; i >= 0; i--)
+                if (seen.Add(entries[i]))
+                    kept[--start] = entries[i];
 
-                if (!entriesByType.TryGetValue(type, out var ofType))
-                    entriesByType.Add(type, ofType = new List<Registration>(capacity: 1));
+            for (var i = tier.Length - 1; i >= 0; i--)
+                if (seen.Add(tier[i]))
+                    kept[--start] = tier[i];
 
-                // A later entry of a type and language takes the place of an earlier one.
-                var index = IndexOfLanguage(ofType, entry.Language);
-
-                if (index < 0)
-                    ofType.Add(entry);
-                else
-                    ofType[index] = entry;
-            }
-
-            var added = ImmutableArray.CreateBuilder<Registration>(tier.Length + entries.Length);
-
-            foreach (var existing in tier)
-                if (!entriesByType.TryGetValue(existing.Type, out var ofType) || IndexOfLanguage(ofType, existing.Language) < 0)
-                    added.Add(existing);
-
-            foreach (var entry in entries)
-            {
-                var ofType = entriesByType[entry.Type];
-
-                if (ReferenceEquals(ofType[IndexOfLanguage(ofType, entry.Language)], entry))
-                    added.Add(entry);
-            }
-
-            tier = added.ToImmutable();
+            tier = ImmutableArray.Create(kept, start, kept.Length - start);
 
             var registrations = asDefaults
                 ? new Registrations(tier, this.Overrides, this.Languages)
@@ -586,15 +522,28 @@ public sealed partial class LocalizationRegistry
             return registrations;
         }
 
-        // A set the registry has yet to create, and that gives its language itself, has none yet. Registered again, it
-        // takes the place of the earlier registration of its type that has none either.
-        private static int IndexOfLanguage(List<Registration> registrations, string? language)
+        /// <summary>
+        /// Tells registrations of the same type and language apart from the others, the language in any letter case.
+        /// </summary>
+        private sealed class SameTypeAndLanguage : IEqualityComparer<Registration>
         {
-            for (var index = 0; index < registrations.Count; index++)
-                if (String.Equals(registrations[index].Language, language, StringComparison.OrdinalIgnoreCase))
-                    return index;
+            public static SameTypeAndLanguage Instance { get; } = new();
 
-            return -1;
+            public bool Equals(Registration? x, Registration? y)
+            {
+                var areSame = x is not null
+                              && y is not null
+                              && x.Type == y.Type
+                              && String.Equals(x.Language, y.Language, StringComparison.OrdinalIgnoreCase);
+
+                return areSame;
+            }
+
+            public int GetHashCode(Registration registration)
+            {
+                var hash = (registration.Type.GetHashCode() * 31) + StringComparer.OrdinalIgnoreCase.GetHashCode(registration.Language);
+                return hash;
+            }
         }
 
         /// <summary>

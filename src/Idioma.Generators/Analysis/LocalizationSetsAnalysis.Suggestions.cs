@@ -47,7 +47,7 @@ internal sealed partial record LocalizationSetsAnalysis
     /// implements the contract.
     /// </summary>
     /// <param name="setName">The name of the set to add.</param>
-    /// <param name="setInterface">What the set lists before its contract (<see cref="GetSetInterface"/>).</param>
+    /// <param name="setInterface">What the set lists before its contract (<see cref="GetLocalizationSetInterface"/>).</param>
     /// <param name="contract">The contract as the namespace of the new set names it.</param>
     /// <param name="code">The language the set is for.</param>
     /// <param name="namespace">The namespace of the new set: that of the contract.</param>
@@ -87,7 +87,7 @@ internal sealed partial record LocalizationSetsAnalysis
     /// or <c>ILocalizationSet&lt;OrderStatus&gt;</c> for a set of the texts of an enum. The enum stands by its name
     /// alone where it lies in the namespace of the set, and by its full name elsewhere.
     /// </summary>
-    private static string GetSetInterface(DiscoveredLocalization defaultSet)
+    private static string GetLocalizationSetInterface(DiscoveredLocalization defaultSet)
     {
         if (defaultSet.OfContract.Enums.Length is 0)
             return SupportedLanguages.SetInterface;

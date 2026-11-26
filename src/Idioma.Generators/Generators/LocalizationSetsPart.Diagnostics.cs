@@ -104,7 +104,7 @@ public static partial class LocalizationSetsPart
         UnsupportedTextDiagnosticId,
         "Method that can't be a text",
         "'{0}.{1}' is a public method that returns a string, which makes it a text with parameters, but {2}. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].",
-        "A public method of a default-language set that returns a string and takes parameters is a text with parameters. The generated class gets a method with the same name and parameters. It passes the values to the set of the user's language. That only works for a method that isn't generic, has a name no other method in its set has, and takes at most 8 parameters, each by value and without a default. A method without parameters is no text, because a text without parameters is a property.");
+        "A public method of a default-language set that returns a string and takes parameters is a text with parameters. The generated class gets a method with the same name and parameters. It passes the values to the set of the user's language. That only works for a method that isn't generic, has a name no other method in its set has, and takes each parameter by value and without a default. A method without parameters is no text, because a text without parameters is a property.");
 
     private static DiagnosticDescriptor Error(string id, string title, string message, string description)
     {

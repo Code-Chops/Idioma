@@ -178,6 +178,10 @@ internal static partial class LocalizationDiscovery
         var unmappedLanguageCode = languageCode.Mapping.Unmapped;
         var constructor = FindConstructorCalledWithoutArguments(type, semanticModel, cancellationToken);
         var language = GetLanguage(type, languageCode, recordedCode, reader, cancellationToken, out var invalidLanguageCode, out var unknownLanguageCode);
+        var recordedLanguageCode = declaresLanguageCode ? ReadImplementedLanguageCode(languageCode, reader, cancellationToken) : recordedCode ?? GetNameLanguage(type.Name);
+
+        // Not for a constant that is no culture name, which LOC207 reports as an error.
+        var hasUnreadableLanguageCode = declaresLanguageCode && recordedLanguageCode is null && invalidLanguageCode is null;
         var location = DiagnosticLocation.From(type.Locations[0]);
         var depth = GetDepth(type, ancestors);
         var enums = listsLocalizationSet ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
@@ -190,7 +194,7 @@ internal static partial class LocalizationDiscovery
             IsOverride: IsOverride(type),
             Depth: depth,
             UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
-            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguageCode: declaresLanguageCode || recordedCode is not null),
+            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguageCode: declaresLanguageCode || recordedCode is not null, hasUnreadableLanguageCode),
             IsObsoleteAsError: IsObsoleteAsError(type),
             SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(type)),
             HasPublicParameterlessConstructor: Enumerable.Any(type.InstanceConstructors, static candidate => candidate is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }),
@@ -212,7 +216,7 @@ internal static partial class LocalizationDiscovery
             Language: language,
             // Not for a LocalizationLanguageCode the build can't read: such a set has a language, which only the run time knows.
             NameGivesNoLanguage: language is null && invalidLanguageCode is null && !declaresLanguageCode && unmappedLanguageCode is null,
-            RecordedLanguageCode: declaresLanguageCode ? ReadImplementedLanguageCode(languageCode, reader, cancellationToken) : recordedCode ?? GetNameLanguage(type.Name),
+            RecordedLanguageCode: recordedLanguageCode,
             // Only for a set deriving from another: the registry asks it of such a set alone, and a set deriving from
             // none would list every text, in every language, in the generated code.
             OwnTexts: new EquatableArray<string>(depth > 0 ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
@@ -655,7 +659,12 @@ internal static partial class LocalizationDiscovery
     /// Whether the set implements <c>LocalizationLanguageCode</c>, or the build records a code for it
     /// (<see cref="FindRecordedLanguageCode(INamedTypeSymbol, ImmutableArray{SourceAncestor}, bool)"/>).
     /// </param>
-    private static string? GetRegistrationProblem(INamedTypeSymbol type, IMethodSymbol? constructor, bool hasLanguageCode)
+    /// <param name="hasUnreadableLanguageCode">
+    /// Whether the set implements <c>LocalizationLanguageCode</c> with something other than a constant the build can
+    /// read, such as a value read at run time, or an implementation in another assembly.
+    /// </param>
+    private static string? GetRegistrationProblem(INamedTypeSymbol type, IMethodSymbol? constructor, bool hasLanguageCode,
+        bool hasUnreadableLanguageCode)
     {
         // Naming it is an error (CS0619), which no pragma turns off.
         if (IsObsoleteAsError(type))
@@ -672,8 +681,19 @@ internal static partial class LocalizationDiscovery
         if (!EndsInTwoLetterSuffix(type.Name) && !hasLanguageCode)
             return NoLanguageCodeProblem;
 
+        // The registry files a set under the language the build records for it, without creating it. Creating it to
+        // ask its language ran its constructor while the registry was being built.
+        if (hasUnreadableLanguageCode)
+            return UnreadableLanguageCodeProblem;
+
         return null;
     }
+
+    /// <summary>
+    /// Why a set whose language code the build can't read can't be registered, as the clause of the <c>LOC208</c>
+    /// message.
+    /// </summary>
+    internal const string UnreadableLanguageCodeProblem = "its LocalizationLanguageCode isn't a constant the build can read";
 
     /// <summary>
     /// Why a set without a language code can't be registered, as the clause of the <c>LOC208</c> message.

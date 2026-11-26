@@ -306,14 +306,14 @@ public sealed partial class LocalizationRegistry
     internal bool HoldsCollectibleSets { get; }
 
     private LocalizationRegistry(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages,
-        FrozenDictionary<string, LanguageSets> setsByLanguage)
+        FrozenDictionary<string, LanguageSets> setsByLanguage, bool holdsCollectibleSets)
     {
         ArgumentNullException.ThrowIfNull(setsByLanguage);
 
         this.SetRegistrations = registrations;
         this.AppLanguages = appLanguages;
         this.SetsByLanguage = setsByLanguage;
-        this.HoldsCollectibleSets = registrations.Any(static registration => registration.Type.IsCollectible);
+        this.HoldsCollectibleSets = holdsCollectibleSets;
         // Sorted, because a frozen dictionary gives its keys in an order of its own, which a reader can't rely on.
         this.SetLanguages = setsByLanguage.Keys.Sort(StringComparer.Ordinal);
     }
@@ -433,121 +433,80 @@ public sealed partial class LocalizationRegistry
     /// <exception cref="InvalidOperationException">
     /// When a set has no language code, or one that isn't a culture name.
     /// </exception>
-    // Each set's LocalizationLanguageCode is read once, here. It's consumer code, and every lookup afterwards goes by
-    // the language the set is filed under.
+    // Each set's LocalizationLanguageCode is read here, as it registers. It's consumer code, and every lookup afterwards
+    // goes by the language the set is filed under.
     private static LocalizationRegistry Create(IEnumerable<ILocalizationSet> sets, ImmutableArray<string> appLanguages)
     {
         ArgumentNullException.ThrowIfNull(sets);
 
         var registrations = ImmutableArray.CreateBuilder<Registration>();
-        var languages = new List<string>();
 
         foreach (var set in sets)
         {
             ArgumentNullException.ThrowIfNull(set, nameof(sets));
-
-            var registration = Registration.Of(set);
-            registrations.Add(registration);
-            languages.Add(registration.Language!);
+            registrations.Add(Registration.Of(set));
         }
 
-        var ordered = registrations.ToImmutable();
-        return Create(ordered, ordered, languages, unfiled: [], appLanguages);
+        return Create(registrations.ToImmutable(), appLanguages);
     }
 
     /// <summary>
-    /// The registry of the whole app (<see cref="Current"/>), built again with every registration. Each set is filed
-    /// under the language it registered with, without creating it where the build recorded that language.
+    /// The language a registered set is filed under: the one it registered with, or the one it gives now where it
+    /// exists already.
     /// </summary>
-    // A set is created here only where its language can't be told without it, such as a set whose
-    // LocalizationLanguageCode the build couldn't read because it isn't a constant. A set that exists already, such as
-    // one registered as an instance, has its code read again. A set whose code is no culture name any more is filed
-    // under the language it registered with, because it would otherwise fail every text of the app, far from what
-    // changed its code. A set that can't be filed, because creating it or reading its code throws, fails only the texts
-    // of its contract (LanguageSets.Of), and is tried again there.
-    private static LocalizationRegistry CreateOfRegistrations(ImmutableArray<Registration> registrations,
-        ImmutableArray<string> appLanguages)
+    // Read again for a set that exists, such as one registered as an instance: the code of a set recorded after it
+    // registered (RecordSet) is the recorded one from then on. A code that is no culture name any more, or that throws,
+    // keeps the set under the language it registered with. It would otherwise fail every text of the app, far from what
+    // changed its code.
+    private static string GetFilingLanguage(Registration registration)
     {
-        var filed = ImmutableArray.CreateBuilder<Registration>(registrations.Length);
-        var languages = new List<string>(registrations.Length);
-        var unfiled = ImmutableArray.CreateBuilder<Registration>();
+        if (!registration.IsCreated)
+            return registration.Language;
 
-        foreach (var registration in registrations)
-        {
-            if (GetFilingLanguage(registration) is { } language)
-            {
-                filed.Add(registration);
-                languages.Add(language);
-            }
-            else
-            {
-                unfiled.Add(registration);
-            }
-        }
-
-        return Create(registrations, filed.ToImmutable(), languages, unfiled.ToImmutable(), appLanguages);
-    }
-
-    /// <summary>
-    /// The language a registered set is filed under, or <see langword="null"/> when creating it, or reading its code,
-    /// throws.
-    /// </summary>
-    private static string? GetFilingLanguage(Registration registration)
-    {
         try
         {
-            // Read again for a set that exists, and not taken from its registration: the code of a set recorded after it
-            // registered (RecordSet) is the recorded one from then on.
-            if (registration.IsCreated)
-            {
-                var set = registration.Set;
-                return set.LocalizationLanguageCode is { } current && CultureName.IsValid(current)
-                    ? current
-                    : registration.Language ?? ReadLanguageCode(set);
-            }
-
-            // The build's record of the type itself. A set whose LocalizationLanguageCode the build couldn't read is
-            // recorded without a code, and the code of a set it derives from isn't its own.
-            var recorded = RecordedSets.TryGetValue(registration.Type, out var record) ? record.LanguageCode : null;
-
-            return registration.Language ?? recorded ?? ReadLanguageCode(registration.Set);
+            return registration.Set.LocalizationLanguageCode is { } current && CultureName.IsValid(current)
+                ? current
+                : registration.Language;
         }
         catch (Exception)
         {
-            return null;
+            return registration.Language;
         }
     }
 
     /// <summary>
-    /// A registry of sets in the order they apply, of which <paramref name="filed"/> each have the language to file them
-    /// under, at the same place in <paramref name="languages"/>. Within a language they keep that order, so a later set
-    /// wins. The others are <paramref name="unfiled"/>.
+    /// A registry of sets in the order they apply, each filed under its language (<see cref="GetFilingLanguage"/>),
+    /// without creating it. Within a language they keep that order, so a later set wins. The registry of the whole app
+    /// (<see cref="Current"/>) is built here again after every registration.
     /// </summary>
-    private static LocalizationRegistry Create(ImmutableArray<Registration> registrations, ImmutableArray<Registration> filed,
-        List<string> languages, ImmutableArray<Registration> unfiled, ImmutableArray<string> appLanguages)
+    private static LocalizationRegistry Create(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages)
     {
         var byLanguage = new Dictionary<string, List<Registration>>(StringComparer.OrdinalIgnoreCase);
 
-        for (var index = 0; index < filed.Length; index++)
+        foreach (var registration in registrations)
         {
-            var language = CultureName.Normalize(languages[index]);
+            var language = CultureName.Normalize(GetFilingLanguage(registration));
 
             if (!byLanguage.TryGetValue(language, out var list))
                 byLanguage[language] = list = [];
 
-            list.Add(filed[index]);
+            list.Add(registration);
         }
+
+        var holdsCollectibleSets = registrations.Any(static registration => registration.Type.IsCollectible);
 
         // Filled first and then frozen, not frozen through selectors. That overload is a generic method over
         // KeyValuePair, a struct, so ReadyToRun can't compile it outside the framework and every app would JIT it.
         var languageSets = new Dictionary<string, LanguageSets>(byLanguage.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var pair in byLanguage)
-            languageSets[pair.Key] = new LanguageSets([.. pair.Value], unfiled);
+            languageSets[pair.Key] = new LanguageSets([.. pair.Value], holdsCollectibleSets);
 
         var registry = new LocalizationRegistry(
             registrations: registrations,
             appLanguages: appLanguages,
-            setsByLanguage: languageSets.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
+            setsByLanguage: languageSets.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            holdsCollectibleSets: holdsCollectibleSets);
 
         return registry;
     }

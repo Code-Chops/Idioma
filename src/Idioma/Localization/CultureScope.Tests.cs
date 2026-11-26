@@ -131,64 +131,34 @@ public sealed class CultureScopeTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void UseCulture_DisposedBeforeAScopeInsideIt_ShouldNotComeBackWhenThatScopeEnds()
+    public void UseCulture_DisposedBeforeAScopeInsideIt_ShouldEndThatScopeToo()
     {
         // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread.
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
         using var provider = new ProvidedCultureScope("en-US");
-        var outer = LocalizationRegistry.UseCulture(Dutch);
-        var inner = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB"));
+        var outer = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB"));
+        var inner = LocalizationRegistry.UseCulture(Dutch);
 
-        // Act: the outer scope ends first.
+        // Act: the outer scope ends first, and the inner one ends after it.
         outer.Dispose();
-        var insideInner = CultureInfo.CurrentUICulture.Name;
-        var totalInsideInner = GeneratedLocalization.Total(1234.5m);
+        var uiCultureAfterOuter = CultureInfo.CurrentUICulture.Name;
+        var cultureAfterOuter = CultureInfo.CurrentCulture.Name;
+        var totalAfterOuter = GeneratedLocalization.Total(1234.5m);
 
         inner.Dispose();
 
-        // Assert: the inner scope holds until it ends, and then nothing of the outer one is left.
-        insideInner.ShouldBe("en-GB");
-        totalInsideInner.ShouldBe("Total: 1,234.50");
+        // Assert: nothing of either scope is left once the outer one ends, and ending the inner one changes nothing.
+        uiCultureAfterOuter.ShouldBe("en-US");
+        cultureAfterOuter.ShouldBe("en-US");
+        totalAfterOuter.ShouldBe("Total: 1,234.50");
+        CultureScope.Current.ShouldBeNull();
         CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
-        CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
         GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
     }
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void UseCulture_OutermostOfThreeDisposedFirst_ShouldLeaveTheInnermostEndingInTheMiddleOne()
-    {
-        // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread.
-        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-        using var provider = new ProvidedCultureScope("en-US");
-        var outermost = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB"));
-        var middle = LocalizationRegistry.UseCulture(Dutch);
-        var innermost = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-BE"));
-
-        // Act: the outermost scope ends first, so the innermost one is still directly inside the middle one.
-        outermost.Dispose();
-        var insideInnermost = CultureInfo.CurrentUICulture.Name;
-
-        innermost.Dispose();
-        var uiCultureInsideMiddle = CultureInfo.CurrentUICulture.Name;
-        var cultureInsideMiddle = CultureInfo.CurrentCulture.Name;
-        var totalInsideMiddle = GeneratedLocalization.Total(1234.5m);
-
-        middle.Dispose();
-
-        // Assert: the innermost scope ends back in the middle one, and the middle one ends back outside every scope.
-        insideInnermost.ShouldBe("nl-BE");
-        uiCultureInsideMiddle.ShouldBe("nl-NL");
-        cultureInsideMiddle.ShouldBe("nl-NL");
-        totalInsideMiddle.ShouldBe("Totaal: 1.234,50");
-        CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
-        CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
-        GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
-    }
-
-    [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
-    public void UseCulture_MiddleOfThreeDisposedFirst_ShouldLeaveTheInnermostEndingInTheOutermostOne()
+    public void UseCulture_MiddleOfThreeDisposedFirst_ShouldEndTheInnermostTooAndLeaveTheOutermost()
     {
         // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread.
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
@@ -197,22 +167,22 @@ public sealed class CultureScopeTests
         var middle = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB"));
         var innermost = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-BE"));
 
-        // Act: the middle scope ends first.
+        // Act: the middle scope ends first, then the innermost one, and then the outermost one.
         middle.Dispose();
-        var insideInnermost = CultureInfo.CurrentUICulture.Name;
-
-        innermost.Dispose();
         var uiCultureInsideOutermost = CultureInfo.CurrentUICulture.Name;
         var cultureInsideOutermost = CultureInfo.CurrentCulture.Name;
         var totalInsideOutermost = GeneratedLocalization.Total(1234.5m);
 
+        innermost.Dispose();
+        var uiCultureAfterInnermost = CultureInfo.CurrentUICulture.Name;
+
         outermost.Dispose();
 
-        // Assert: the innermost scope ends back in the outermost one, and nothing of the middle one is left.
-        insideInnermost.ShouldBe("nl-BE");
+        // Assert: back in the outermost scope once the middle one ends, and outside every scope once that one ends.
         uiCultureInsideOutermost.ShouldBe("nl-NL");
         cultureInsideOutermost.ShouldBe("nl-NL");
         totalInsideOutermost.ShouldBe("Totaal: 1.234,50");
+        uiCultureAfterInnermost.ShouldBe("nl-NL");
         CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
         CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
         GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");

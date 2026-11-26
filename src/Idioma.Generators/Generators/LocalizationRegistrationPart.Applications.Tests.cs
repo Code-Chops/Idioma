@@ -33,7 +33,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: every language, the default first, and before the referenced registrars, as only the first
         // registration counts, and a referenced application (the app a test project tests) must not get there first.
-        text.IndexOf("GeneratedCode.RegisterLanguages(\"nl\", \"en\");", StringComparison.Ordinal)
+        text.IndexOf("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl\", \"en\");", StringComparison.Ordinal)
             .ShouldBeLessThan(text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
 
         return Verify(text);
@@ -54,7 +54,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: internal, because a host referencing this application registers its own languages first.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.ShouldContain("GeneratedCode.RegisterLanguages(\"nl-BE\", \"en\");");
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl-BE\", \"en\");");
     }
 
     [Test]
@@ -87,7 +87,7 @@ public sealed partial class LocalizationRegistrationPartTests
             """, client));
 
         // Assert: the client's registrar is internal, as it has nothing the server must register.
-        text.ShouldContain("GeneratedCode.RegisterLanguages(\"en\", \"nl\");");
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"en\", \"nl\");");
         text.ShouldNotContain("LanguagesClient");
     }
 
@@ -198,7 +198,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: as for an application built as an executable.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.ShouldContain("GeneratedCode.RegisterLanguages(\"nl\", \"en\");");
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl\", \"en\");");
     }
 
     [Test]
@@ -218,7 +218,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: as for an application built as an executable.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.IndexOf("GeneratedCode.RegisterLanguages(\"nl\", \"en\");", StringComparison.Ordinal)
+        text.IndexOf("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl\", \"en\");", StringComparison.Ordinal)
             .ShouldBeLessThan(text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
     }
 

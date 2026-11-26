@@ -117,8 +117,8 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         string[] members = ["string Caption { get; }", "string Delivered { get; }", "string Pending { get; }", "string Shipped { get; }"];
         members.Select(member => text.IndexOf(member, StringComparison.Ordinal)).ShouldBeInOrder();
-        text.ShouldContain("public static string Caption => GetSet<IOrderStatusLocalization>(0, 4)?.Caption");
-        text.ShouldContain("public static string Shipped => GetSet<IOrderStatusLocalization>(3, 4)?.Shipped");
+        text.ShouldContain("public static string Caption => GetLocalizationSet<IOrderStatusLocalization>(0, 4, out var culture)?.Caption");
+        text.ShouldContain("public static string Shipped => GetLocalizationSet<IOrderStatusLocalization>(3, 4, out var culture)?.Shipped");
     }
 
     [Test]
@@ -445,7 +445,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         errors.ShouldBeEmpty();
-        ContractText(Run(source)).ShouldContain("public static string GetTextByValue => GetSet<IShopLocalization>(");
+        ContractText(Run(source)).ShouldContain("public static string GetTextByValue => GetLocalizationSet<IShopLocalization>(");
     }
 
     [Test]
@@ -498,7 +498,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         errors.ShouldBeEmpty();
-        ContractText(Run(source)).ShouldContain("public static string GetText => GetSet<IShopLocalization>(");
+        ContractText(Run(source)).ShouldContain("public static string GetText => GetLocalizationSet<IShopLocalization>(");
     }
 
     [Test]

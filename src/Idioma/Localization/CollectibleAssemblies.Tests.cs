@@ -51,7 +51,7 @@ public sealed class CollectibleAssembliesTests
     public void Plugin_WhoseContextUnloads_ShouldBeLetGo()
     {
         // Arrange & Act: the plugin registers as its code first runs, and shows each kind of text.
-        var (texts, context) = ReadTextsOfPluginAndUnload();
+        var (texts, _, context) = ReadTextsOfPluginAndUnload(readAfterUnload: false);
 
         for (var i = 0; i < 20 && context.IsAlive; i++)
         {
@@ -65,22 +65,46 @@ public sealed class CollectibleAssembliesTests
         LocalizationRegistry.Sets.ShouldNotContain(set => set.GetType().Assembly.IsCollectible);
     }
 
+    [Test]
+    [NotInParallel]
+    public void Plugin_WhoseTextsAreReadAfterItsContextUnloads_ShouldBeLetGo()
+    {
+        // Arrange & Act: code of the plugin can still run until its context is collected, and then reads the registry
+        // without the plugin's sets.
+        var (_, textsAfterUnload, context) = ReadTextsOfPluginAndUnload(readAfterUnload: true);
+
+        for (var i = 0; i < 20 && context.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        // Assert
+        textsAfterUnload.ShouldNotBeNullOrEmpty();
+        context.IsAlive.ShouldBeFalse();
+    }
+
     // Not inlined, so that nothing of the plugin is left on the stack of the test.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static (string Texts, WeakReference Context) ReadTextsOfPluginAndUnload()
+    private static (string Texts, string? TextsAfterUnload, WeakReference Context) ReadTextsOfPluginAndUnload(bool readAfterUnload)
     {
         var context = new PluginContext();
         var assembly = context.LoadFromStream(new MemoryStream(Plugin));
         var read = assembly.GetType("UnloadedPlugin.Texts")!.GetMethod("Read")!;
 
         string texts;
+        string? textsAfterUnload = null;
 
         using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-NL")))
+        {
             texts = (string)read.Invoke(null, null)!;
+            context.Unload();
 
-        context.Unload();
+            if (readAfterUnload)
+                textsAfterUnload = (string)read.Invoke(null, null)!;
+        }
 
-        return (texts, new WeakReference(context));
+        return (texts, textsAfterUnload, new WeakReference(context));
     }
 
     /// <summary>

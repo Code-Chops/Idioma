@@ -214,6 +214,11 @@ public sealed partial class LocalizationRegistry
         public ResolvedSets<TContract> GetResolvedSets<TContract>(int count)
             where TContract : class
         {
+            // Not kept for a plugin's contract in a registry that doesn't hold its sets, as after the plugin unloaded: this
+            // registry isn't built anew when the plugin goes, so it would hold the plugin (CollectibleAssemblies).
+            if (typeof(TContract).IsCollectible && !this.Registry.HoldsCollectibleSets)
+                return new ResolvedSets<TContract>(this, count);
+
             var resolved = this.ResolvedByContract.TryGetValue(typeof(TContract), out var known)
                 ? known
                 : this.ResolvedByContract.GetOrAdd(typeof(TContract), new ResolvedSets<TContract>(this, count));
@@ -246,85 +251,41 @@ public sealed partial class LocalizationRegistry
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="select">Gives the text as a set of the contract words it.</param>
     /// <param name="set">The set that gave the wording, or <see langword="null"/> when none did.</param>
-    /// <param name="isToldByRecord">
-    /// Whether the build's record alone told which set words the text, without comparing wordings. The same set then
-    /// words the text on every call, so a caller may keep it.
-    /// </param>
     // Which texts a set words itself comes from the build's record of its class (RecordSet), not from reflection, which
-    // the trimmer can't see. A set the build has no record of, such as a nested one registered by hand, is compared by
-    // wording instead: it gives way where it words the text as the set it derives from does. A set deriving from no
-    // other set of its name, or a regional set deriving from no set of its language, gives way to nothing, as it
-    // inherits none of its texts.
-    // A set is asked for its wording only once it's known to give it, or where only its wording can tell. A British set
-    // that leaves a text to the English one isn't called for that text at all. Called anyway, a text that a wording
-    // shows was worded twice per level for a British user.
-    internal string? GetWording<TContract>(CultureLookup lookup, string name, Func<TContract, string?> select,
-        out TContract? set, out bool isToldByRecord)
+    // the trimmer can't see. A set the build has no record of, such as a nested one registered by hand, words every text
+    // itself. A set deriving from no other set of its name, or a regional set deriving from no set of its language,
+    // gives way to nothing, as it inherits none of its texts.
+    // Only the set that gives the wording is called. A British set that leaves a text to the English one isn't called
+    // for that text at all. Called anyway, a text that a wording shows was worded twice per level for a British user.
+    internal string? GetWording<TContract>(CultureLookup lookup, string name, Func<TContract, string?> select, out TContract? set)
         where TContract : class
     {
         var contract = typeof(TContract);
         ContractSet? found = null;
-        string? wording = null;
-        var isWorded = false;
-
-        set = null;
-        isToldByRecord = true;
 
         foreach (var sets in lookup.Levels)
         {
             var candidates = sets.Of(contract);
-            ILocalizationSet? basis = null;
-            string? basisWording = null;
 
+            // Past the first name with a set of the contract, a less specific name words the text only where the set
+            // found so far derives from one of its sets and leaves the text to it. A name it derives from no set of is
+            // passed over.
             if (found is not null)
             {
-                basis = GetBase(candidates, found.Set);
-
-                if (basis is null)
+                if (GetBase(candidates, found.Set) is not { } basis)
                     continue;
 
-                var wordsItself = found.WordsItselfOver(basis.GetType(), name);
-
-                if (wordsItself is null)
-                {
-                    isToldByRecord = false;
-
-                    if (!isWorded)
-                    {
-                        wording = select((TContract)found.Set);
-                        isWorded = true;
-                    }
-
-                    basisWording = select((TContract)basis);
-                    wordsItself = !String.Equals(basisWording, wording, StringComparison.Ordinal);
-                }
-
-                if (wordsItself is true)
+                if (found.WordsItselfOver(basis.GetType(), name))
                     break;
             }
 
-            // Null only before the first name with a set of the contract: a basis is one of the candidates.
-            if (GetLevelSet(candidates, name, select, out var levelWording, out var isLevelWorded, ref isToldByRecord) is not { } level)
-                continue;
-
-            found = level;
-            wording = levelWording;
-            isWorded = isLevelWorded;
-
-            // The basis was worded to compare it, so where it's the set of this name too, its wording is that one.
-            if (!isWorded && basisWording is not null && ReferenceEquals(level.Set, basis))
-            {
-                wording = basisWording;
-                isWorded = true;
-            }
+            if (GetLevelSet(candidates, name) is { } level)
+                found = level;
         }
 
-        if (found is null)
-            return null;
+        set = (TContract?)found?.Set;
 
-        set = (TContract)found.Set;
-
-        return isWorded ? wording : select(set);
+        return set is null ? null : select(set);
     }
 
     /// <summary>
@@ -334,51 +295,17 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <param name="candidates">The sets of the contract for the name.</param>
     /// <param name="name">The name of the text.</param>
-    /// <param name="select">Gives the text as a set of the contract words it.</param>
-    /// <param name="wording">The set's wording, where telling the set took it.</param>
-    /// <param name="isWorded">
-    /// Whether <paramref name="wording"/> holds the set's wording. It doesn't where the build's record told the set, so
-    /// that a set a less specific name overrides isn't called at all.
-    /// </param>
-    /// <param name="isToldByRecord">Set to <see langword="false"/> where a wording was compared to tell the set.</param>
-    private static ContractSet? GetLevelSet<TContract>(ContractSet[] candidates, string name, Func<TContract, string?> select,
-        out string? wording, out bool isWorded, ref bool isToldByRecord)
-        where TContract : class
+    private static ContractSet? GetLevelSet(ContractSet[] candidates, string name)
     {
-        wording = null;
-        isWorded = false;
-
         // Ends at the latest at the candidate deriving from no other, as no class derives from itself.
         for (var i = candidates.Length - 1; i >= 0; i--)
         {
             var candidate = candidates[i];
-            var (set, basis) = candidate;
 
-            // A set deriving from no other words every text itself. Told here, without a call, because nearly every
-            // lookup ends at such a set, and in WebAssembly's interpreter a call cost every text about 40 ns.
-            if (basis is null)
+            // A set deriving from no other words every text itself. Told without a call, because nearly every lookup
+            // ends at such a set, and in WebAssembly's interpreter a call cost every text about 40 ns.
+            if (candidate.Basis is null || candidate.WordsItselfOverBasis(name))
                 return candidate;
-
-            // Asked of the build's record first, so that a set that leaves the text as it is isn't called at all.
-            var wordsItself = candidate.WordsItselfOverBasis(name);
-            if (wordsItself is false)
-                continue;
-
-            if (wordsItself is true)
-                return candidate;
-
-            // No record: only the wording tells, so it's kept for the caller.
-            isToldByRecord = false;
-
-            var candidateWording = select((TContract)set);
-
-            if (String.Equals(select((TContract)basis), candidateWording, StringComparison.Ordinal))
-                continue;
-
-            wording = candidateWording;
-            isWorded = true;
-
-            return candidate;
         }
 
         return null;
@@ -445,17 +372,11 @@ public sealed partial class LocalizationRegistry
             this.Records = [.. records];
         }
 
-        public void Deconstruct(out ILocalizationSet set, out ILocalizationSet? basis)
-        {
-            set = this.Set;
-            basis = this.Basis;
-        }
-
         /// <summary>
         /// Whether the set words a text itself rather than leaving it to <see cref="Basis"/>, for a set that has one.
         /// See <see cref="WordsItselfOver"/>.
         /// </summary>
-        public bool? WordsItselfOverBasis(string name)
+        public bool WordsItselfOverBasis(string name)
         {
             var wordsItself = this.WordsItselfOver(this.BasisType!, name);
             return wordsItself;
@@ -463,14 +384,11 @@ public sealed partial class LocalizationRegistry
 
         /// <summary>
         /// Whether the set words a text itself rather than leaving it to a set of the given class it derives from, as
-        /// the build recorded it: the set's class, or a class between it and that one, words the text.
-        /// <see langword="null"/> where one of those classes has no record, such as a nested one the build didn't see.
+        /// the build recorded it: the set's class, or a class between it and that one, words the text. Also where one
+        /// of those classes has no record, such as a nested one the build didn't see, because it may word every text.
         /// </summary>
-        public bool? WordsItselfOver(Type basisType, string name)
+        public bool WordsItselfOver(Type basisType, string name)
         {
-            if (name.Length is 0)
-                return null;
-
             var classes = this.Classes;
             var records = this.Records;
 
@@ -479,15 +397,12 @@ public sealed partial class LocalizationRegistry
                 if (classes[i] == basisType)
                     return false;
 
-                if (records[i] is not { } recorded)
-                    return null;
-
-                if (recorded.Words(name))
+                if (records[i] is not { } recorded || recorded.Words(name))
                     return true;
             }
 
             // Not a class the set derives from.
-            return null;
+            return true;
         }
     }
 
@@ -496,14 +411,16 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     // A language holds the sets of every contract of the app, and a text needs only those of its own: found once per
     // contract and kept, so that a lookup does not test every set of the language against the contract, on every text
-    // of every render. Never dropped, as a registry never changes: a registration builds a new one.
-    internal sealed class LanguageSets(ImmutableArray<Registration> registrations, ImmutableArray<Registration> unfiled)
+    // of every render. Never dropped, as a registry never changes: a registration builds a new one. A plugin's contract
+    // is the exception: kept only by a registry that holds the plugin's sets, because only that one is built anew when
+    // the plugin unloads.
+    internal sealed class LanguageSets(ImmutableArray<Registration> registrations, bool holdsCollectibleSets)
     {
         private ImmutableArray<Registration> Registrations { get; } = registrations;
 
-        // The sets of the registry that couldn't be filed under a language, because creating one, or reading its code,
-        // threw. Every language holds them, so that every text of their contracts tries them again.
-        private ImmutableArray<Registration> Unfiled { get; } = unfiled;
+        // Whether the registry holds a plugin's sets (LocalizationRegistry.HoldsCollectibleSets). One that doesn't keeps
+        // nothing for a plugin's contract, because it isn't built anew when the plugin goes.
+        private bool HoldsCollectibleSets { get; } = holdsCollectibleSets;
 
         // Never written to once added, so an array is as safe here as an immutable one.
         private ConcurrentDictionary<Type, ContractSet[]> ByContract { get; } = new();
@@ -518,6 +435,9 @@ public sealed partial class LocalizationRegistry
         /// </exception>
         public ContractSet[] Of(Type contract)
         {
+            if (contract.IsCollectible && !this.HoldsCollectibleSets)
+                return this.Get(contract);
+
             var contractSets = this.ByContract.TryGetValue(contract, out var known)
                 ? known
                 : this.ByContract.GetOrAdd(contract, static (contract, languageSets) => languageSets.Get(contract), this);
@@ -529,10 +449,6 @@ public sealed partial class LocalizationRegistry
         // throws fails the texts of its own contract alone.
         private ContractSet[] Get(Type contract)
         {
-            foreach (var registration in this.Unfiled)
-                if (contract.IsAssignableFrom(registration.Type))
-                    Refile(registration);
-
             var implementing = this.Registrations.Where(registration => contract.IsAssignableFrom(registration.Type)).ToImmutableArray();
             var found = new ContractSet[implementing.Length];
 
@@ -546,17 +462,5 @@ public sealed partial class LocalizationRegistry
 
             return found;
         }
-    }
-
-    /// <summary>
-    /// Tries again to file a set the registry couldn't file under a language when it was built: creates it, and reads
-    /// its code. Throws while either does. Otherwise the registry is built again at the next read, with the set filed
-    /// under its language.
-    /// </summary>
-    private static void Refile(Registration registration)
-    {
-        _ = ReadLanguageCode(registration.Set);
-
-        ImmutableInterlocked.Update(ref Registered, static registered => registered.Copy());
     }
 }

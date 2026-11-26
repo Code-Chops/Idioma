@@ -95,7 +95,7 @@ public static class LocalizationRegistrationPart
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Sets are registered automatically, by generated code that creates an instance of each. That needs a top-level class with a parameterless constructor, and a language code. The code is the end of the class name, starting with a capital (two letters, as in ShopLocalizationNl, or a longer code that [assembly: SupportedLanguages] lists, as in ShopLocalizationEnGb), or an implementation of ILocalizationSet.LocalizationLanguageCode. Without this warning, a set that can't be registered would silently leave its texts in their default language. A nested or file-local set is reported only when it rewords another assembly's texts.",
+        description: "Sets are registered automatically, by generated code that creates an instance of each. That needs a top-level class with a parameterless constructor, and a language code. The code is the end of the class name, starting with a capital (two letters, as in ShopLocalizationNl, or a longer code that [assembly: SupportedLanguages] lists, as in ShopLocalizationEnGb), or an implementation of ILocalizationSet.LocalizationLanguageCode that returns a constant. The build reads that constant, because the registry files a set under its language without creating it. Without this warning, a set that can't be registered would silently leave its texts in their default language. A nested or file-local set is reported only when it rewords another assembly's texts.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmappedLanguageCodeRule = new(
@@ -465,12 +465,13 @@ public static class LocalizationRegistrationPart
 
             """);
 
-        // Before the referenced registrars: only the first registration of languages counts, so a referenced application
-        // (the app a test project tests) must not get there first.
+        // Before the referenced registrars: only the first registration of languages counts, and it tells which assembly
+        // is the app, whose texts of an enum win. So a referenced application (the app a test project tests) must not get
+        // there first.
         if (registrar.Languages.Length > 0)
         {
             var languages = String.Join(", ", registrar.Languages.Select(static language => SymbolDisplay.FormatLiteral(language, quote: true)));
-            sb.AppendLine($"            {PackageNames.GeneratedCode}.RegisterLanguages({languages});");
+            sb.AppendLine($"            {PackageNames.GeneratedCode}.RegisterLanguages(typeof({registrar.Name}), {languages});");
         }
 
         // Each call inside a lambda of its own: the runtime loads the referenced assembly when it compiles the method that

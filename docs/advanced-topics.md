@@ -179,8 +179,6 @@ A set is registered by its type, and created when a text of its contract is firs
 - A text that needs the set throws an `InvalidOperationException` that names the set, with the set's own exception inside.
 - The next text of that contract creates the set again. So a constructor that failed once, such as on a setting that wasn't loaded yet, doesn't fail its texts for good.
 
-A set whose `LocalizationLanguageCode` the build can't read is created earlier, at the first text of your app, because only the set itself can tell its language. That's a code that isn't a constant, or one the set inherits from a set of another assembly.
-
 A set that can't be registered automatically gets build warning `LOC208`, such as a set without a parameterless constructor. [LOC208](build-errors/LOC2XX-sets.md#loc208) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC502](build-errors/LOC5XX-inline-texts-and-attributes.md#loc502).
 
 A nested, generic, or file-local class with your own texts isn't recognized, so its language is reported as missing (`LOC201`). Make it a top-level class that isn't generic.

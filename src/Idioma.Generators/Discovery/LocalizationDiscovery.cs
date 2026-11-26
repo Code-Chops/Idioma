@@ -372,9 +372,15 @@ internal static partial class LocalizationDiscovery
     /// parameterless constructor that is not public, which <c>GeneratedCode.GetDefaultSet</c> asks for
     /// (<c>where TSet : new()</c>).
     /// </summary>
+    // Not a language code the build can't read, which keeps the set from registering, but not from being created. A
+    // default-language set with such a code gets LOC200 for its language instead (ReportDefaultSetsOfAnotherLanguage).
     public static string? GetCreationProblem(DiscoveredLocalization set)
     {
-        var problem = set.RegistrationProblem
+        var registrationProblem = String.Equals(set.RegistrationProblem, UnreadableLanguageCodeProblem, StringComparison.Ordinal)
+            ? null
+            : set.RegistrationProblem;
+
+        var problem = registrationProblem
                ?? (set.HasPublicParameterlessConstructor ? null : "it has no public parameterless constructor");
 
         return problem;

@@ -56,26 +56,46 @@ internal static partial class LocalizationContractSource
                 sb.AppendLine($"    {marks}");
 
             // A text is worded on every read, by the set of the user's language. The package keeps that set per
-            // culture and per position (GetSet), so a read is a call of the set's own member. Where no set is kept
+            // culture and per position (GetLocalizationSet), so a read is a call of the set's own member. Where no set is kept
             // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
             // comment gives (ResolveWording), which also creates the set of the default language when a text first
             // needs it. Both are called with a type argument, so that no text can stand before them: a name with a type
-            // argument is not looked for among the texts.
+            // argument is not looked for among the texts. The first hands the second the culture the provider gave, so
+            // that the provider, which may read a request, is asked once per text. That local is named apart from the
+            // parameters.
+            var culture = GetNameApartFrom(member, "culture");
+
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetSet<{name}>({i}, {texts.Length})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetLocalizationSet<{name}>({i}, {texts.Length}, out var {culture})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {culture}, {nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
             // A text that takes values hands them to the set's method. On the path that finds the wording, the set is
             // picked by a function that is handed the values and holds none itself: one function then serves every
-            // call. Its parameters repeat the names of the method's, which they shadow, and the set is named apart
-            // from them.
-            var types = String.Join(", ", member.Parameters.Select(parameter => ContractTypeNames.RenderType(parameter.Type, contract.Namespace)));
+            // call. A single value is handed on as it is, with the function's parameter named as the method's. More are
+            // handed on as a tuple. The set and the tuple are named apart from the parameters.
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
+            string valuesType, selector, values;
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {types}>({i}, {texts.Length}, {nameLiteral}, static ({set}, {arguments}) => {set}.{memberName}({arguments}), {arguments});");
+            if (member.Parameters.Length is 1)
+            {
+                valuesType = ContractTypeNames.RenderType(member.Parameters[0].Type, contract.Namespace);
+                selector = $"static ({set}, {arguments}) => {set}.{memberName}({arguments})";
+                values = arguments;
+            }
+            else
+            {
+                var tuple = GetNameApartFrom(member, "values");
+                var items = String.Join(", ", member.Parameters.Select((_, index) => $"{tuple}.Item{index + 1}"));
+
+                valuesType = $"({String.Join(", ", member.Parameters.Select(parameter => ContractTypeNames.RenderType(parameter.Type, contract.Namespace)))})";
+                selector = $"static ({set}, {tuple}) => {set}.{memberName}({items})";
+                values = $"({arguments})";
+            }
+
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetLocalizationSetForValues<{name}>({i}, {texts.Length}, out var {culture})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {valuesType}>({i}, {texts.Length}, {culture}, {nameLiteral}, {selector}, {values});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,

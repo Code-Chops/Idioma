@@ -271,7 +271,6 @@ public sealed class PlaceholderCodeFixProviderTests
     [Test]
     [Arguments("""public virtual string Greeting(string name) => $"Hello, {name}!";""", """public string Greeting(string name) => "Hallo, {1}!";""")]
     [Arguments("public virtual string Greeting => \"\"\"Hello, {0}!\"\"\";", DutchGreeting)]
-    [Arguments("""public virtual string Greeting => "Hello, {8}!";""", DutchGreeting)]
     [Arguments(EnglishGreeting, """public string Greeting { get; set; } = "Hallo, {0}!";""")]
     [Arguments(EnglishGreeting, """
         private readonly string arg0 = "Hallo";
@@ -285,8 +284,8 @@ public sealed class PlaceholderCodeFixProviderTests
         // Act
         var fixes = await FixAsync(source);
 
-        // Assert: a number without a parameter, a raw string, a ninth value, a property with a setter, and a name the
-        // text already uses.
+        // Assert: a number without a parameter, a raw string, a property with a setter, and a name the text already
+        // uses.
         (await GeneratorTestHelper.AnalyzeAsync(new PlaceholderAnalyzer(), source, [])).ShouldContain(diagnostic => diagnostic.Id == "LOC403");
         fixes.ShouldBeEmpty();
     }

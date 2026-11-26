@@ -368,7 +368,7 @@ internal sealed partial record LocalizationSetsAnalysis
             }
 
             var setName = $"{baseName}{SupportedLanguages.ToTypeSuffix(code)}";
-            var (suggestion, newSet) = SuggestSet(setName, GetSetInterface(set), contractName, code, set.Namespace, set.IsPublic, implementers.Prepend(set));
+            var (suggestion, newSet) = SuggestSet(setName, GetLocalizationSetInterface(set), contractName, code, set.Namespace, set.IsPublic, implementers.Prepend(set));
 
             findings.Add(new LocalizationSetsFinding(
                 LocalizationSetsRule.MissingLanguage,
