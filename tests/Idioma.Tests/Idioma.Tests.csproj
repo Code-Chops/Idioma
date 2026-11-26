@@ -1,9 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The tests of CodeChops.Idioma, on every supported runtime.
-  -->
-
   <PropertyGroup>
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <IsTestProject>true</IsTestProject>
@@ -32,14 +28,12 @@
     <PackageReference Include="TUnit" />
     <PackageReference Include="Verify" />
     <PackageReference Include="Verify.TUnit" />
-    <!-- Direct references only to pin the VerifyTests-organization transitives (see Directory.Packages.props). -->
     <PackageReference Include="DiffEngine" />
     <PackageReference Include="EmptyFiles" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Idioma\Idioma.csproj" />
-    <!-- Both: an analyzer for the fixtures in LocalizationGenerator.GeneratedSets.Tests.cs, and a reference for the tests of the generator itself. -->
     <ProjectReference Include="..\..\src\Idioma.Generators\Idioma.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     <ProjectReference Include="..\..\src\Idioma.CodeFixes\Idioma.CodeFixes.csproj" />
   </ItemGroup>

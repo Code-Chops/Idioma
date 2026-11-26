@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Texts for any .NET app, Blazor or not. The package has no dependencies, and must keep none. Two checks hold it to
-    that: the pack fails when the package would name one (the target CheckPackageDependencies below), and
-    tests/Idioma.Tests fails when the assembly references anything but the framework (PackageIndependenceTests).
-  -->
-
   <PropertyGroup Label="Main">
     <!-- One framework: the package depends on nothing framework-specific, so a newer runtime uses this build as is.
          The tests run on every supported runtime (see Idioma.Tests.csproj). -->
@@ -13,14 +7,8 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
-  <!--
-    Packages are produced by `dotnet pack` only, never on build: with GeneratePackageOnBuild set, NuGet's Pack target
-    no longer depends on Build, so `dotnet pack` would pack whatever outputs happen to be on disk.
-  -->
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <!-- The version is in Directory.Build.props, for the generator and the code fixes too. -->
-    <!-- Starts and ends on the lines of its tags, and stands at the margin: the package shows it space for space. -->
     <PackageReleaseNotes>Basic setup</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, inline texts, or an attribute on a type or its members. A missing translation, or one that never uses a value the original shows, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT. In preview, so the API can still change between versions.</Description>
@@ -36,7 +24,6 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- Symbols go into a separate .snupkg, with the sources that are not in git (generated code) embedded. -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -51,7 +38,7 @@
     <!-- The license file is packed next to the license expression for its closing sentence on generated code. -->
     <None Include="..\..\LICENSE" Pack="true" PackagePath="" Visible="false" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="false" />
-    <!-- The README is packed by the target WritePackageReadme below, which links it to the tag of this version. -->
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="false" />
     <!-- The generator ships in the package's analyzers folder. A literal path, not a glob: a glob evaluates before
          the generator builds and would silently pack nothing, where a missing file fails the pack. -->
     <None Include="..\Idioma.Generators\bin\$(Configuration)\netstandard2.0\CodeChops.Idioma.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
@@ -68,13 +55,7 @@
   </ItemGroup>
 
   <!--
-    The public API, as PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt list it. A change that the files don't list is
-    a build error (RS0016 for an addition, RS0017 for a removal or a changed signature). At each release, the lines of
-    Unshipped move to Shipped. The files list the types in Internals too. Only generated code calls them, but that code
-    is compiled into every library built with the package, and an app runs those libraries with its own version of it.
-    So a change to such a type breaks the libraries built with an earlier version, and belongs in a new major version,
-    or below 1.0 in a new minor version. The build of an app reports each library built with another such version
-    (LOC702).
+    The public API, as PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt list it.
   -->
   <ItemGroup Label="PublicApi">
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
@@ -86,60 +67,6 @@
     <!-- Only built before this project, for the pack: a build runs no code fix. -->
     <ProjectReference Include="..\Idioma.CodeFixes\Idioma.CodeFixes.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
-
-  <!--
-    The README of the package links to the details as they were when it was released: the pages under docs/ at the
-    tag of its version (v and the version), where the README of the repository links to main. A package stays on
-    nuget.org as it was published, while main moves on, so a link to main would show the details of a later version.
-    The tag is there by the time the package is: only a run on that tag publishes (publish.yml). The demos stay linked
-    on main, as they fetch the latest package, which the demos on main are written for.
-
-    The badge that opens a codespace is packed as a plain link: nuget.org shows images of a few hosts only, and
-    github.com/codespaces is not among them. The NuGet badge is left out, because nuget.org shows the version itself.
-    The CI badge is left out too, because it shows the state of main, not that of the package. So is the status badge,
-    because it links to the page of the package on nuget.org, where it would show.
-  -->
-  <Target Name="WritePackageReadme" BeforeTargets="_GetPackageFiles">
-    <PropertyGroup>
-      <PackageReadmePath>$(IntermediateOutputPath)README.md</PackageReadmePath>
-      <PackageReadmeText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../../README.md').Replace('/blob/main/docs/', '/blob/v$(Version)/docs/').Replace('[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)]', '[Open in GitHub Codespaces]').Replace('[![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)', '').Replace('[![CI](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml)', '').Replace('[![Status](https://img.shields.io/badge/status-preview-orange)](https://www.nuget.org/packages/CodeChops.Idioma)', ''))</PackageReadmeText>
-    </PropertyGroup>
-
-    <!-- A README that links to the details in another way would be packed with its links still on main. -->
-    <Error Condition="!$(PackageReadmeText.Contains('/blob/v$(Version)/docs/')) Or $(PackageReadmeText.Contains('/main/docs/'))"
-           Text="README.md links to docs/ in a way this target does not turn into a link to the tag v$(Version): link to it as https://github.com/Code-Chops/Idioma/blob/main/docs/..., or adjust the target WritePackageReadme." />
-
-    <!-- An image this target does not know would show on nuget.org as a broken one, or not at all. -->
-    <Error Condition="$(PackageReadmeText.Contains('!['))"
-           Text="README.md shows an image, and nuget.org shows images of a few hosts only (https://learn.microsoft.com/nuget/nuget-org/package-readme-on-nuget-org#allowed-domains-for-images-and-badges): have the target WritePackageReadme pack it as text, as it does the Codespaces badge, or let it pass an image of an allowed host." />
-
-    <!-- Escaped, so that the text is written as it stands: a semicolon in it would otherwise start a new line. -->
-    <WriteLinesToFile File="$(PackageReadmePath)" Lines="$([MSBuild]::Escape($(PackageReadmeText)))" Overwrite="true" WriteOnlyWhenDifferent="true" />
-
-    <ItemGroup>
-      <None Include="$(PackageReadmePath)" Pack="true" PackagePath="" Visible="false" />
-    </ItemGroup>
-  </Target>
-
-  <!--
-    The doc comments link to the details at the tag as well (SupportedLanguagesAttribute links to docs/build-errors.md):
-    they ship in the XML file of the package, which an IDE shows from for as long as that version is installed. The
-    compiler writes the file with the links as the sources have them, on main, and this target turns them before the
-    file is copied to the output folder, where the pack takes it from. Only a file that still links to main is written,
-    so a build that compiles nothing leaves it alone.
-  -->
-  <Target Name="LinkDocCommentsToTag" AfterTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true' And '$(DocumentationFile)' != '' And Exists('$(DocumentationFile)')">
-    <PropertyGroup>
-      <DocCommentsText>$([System.IO.File]::ReadAllText('$(DocumentationFile)'))</DocCommentsText>
-      <DocCommentsTextAtTag>$(DocCommentsText.Replace('/blob/main/docs/', '/blob/v$(Version)/docs/'))</DocCommentsTextAtTag>
-    </PropertyGroup>
-
-    <!-- A doc comment that links to the details in another way would ship with its link still on main. -->
-    <Error Condition="$(DocCommentsTextAtTag.Contains('/main/docs/'))"
-           Text="A doc comment links to docs/ in a way this target does not turn into a link to the tag v$(Version): link to it as https://github.com/Code-Chops/Idioma/blob/main/docs/..., or adjust the target LinkDocCommentsToTag." />
-
-    <WriteLinesToFile Condition="$(DocCommentsText.Contains('/blob/main/docs/'))" File="$(DocumentationFile)" Lines="$([MSBuild]::Escape($(DocCommentsTextAtTag)))" Overwrite="true" />
-  </Target>
 
   <!--
     Fails the pack when the package would name a dependency: a package, a project that is packed along, or a shared

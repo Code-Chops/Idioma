@@ -1,9 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The source generator and analyzers of CodeChops.Idioma, packed into its analyzers folder (see Idioma.csproj).
-  -->
-
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
