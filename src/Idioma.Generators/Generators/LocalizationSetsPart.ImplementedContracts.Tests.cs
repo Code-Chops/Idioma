@@ -132,10 +132,10 @@ public sealed partial class LocalizationSetsPartTests
             }
             """);
 
-        // Assert: no language is read from its name, and neither the texts nor the recorded sets name it.
+        // Assert: no language is read from its name, and neither the texts nor the listed sets name it.
         DiagnosticIds(result).ShouldBeEmpty();
         ContractText(result).ShouldNotContain(name);
-        RecordedSets(result).ShouldNotContain(name);
+        ProvidedSets(result).ShouldNotContain(name);
     }
 
     [Test]

@@ -1,5 +1,6 @@
 namespace CodeChops.Idioma.Generators;
 
+/// <inheritdoc cref="LocalizationSetsAnalysis"/>
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
@@ -53,7 +54,7 @@ internal sealed partial record LocalizationSetsAnalysis
         // has sets or not.
         foreach (var reference in references)
         {
-            if (!reference.HasInlineTexts || reference.Languages.Length is 0)
+            if (!reference.HasStandaloneTexts || reference.Languages.Length is 0)
                 continue;
 
             // Such a text falls back as any text does: to this assembly's default language where the library has it, and

@@ -35,7 +35,7 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
-    /// A set a text is declared with whose language code is null at run time, which the build has no record of because
+    /// A set a text is declared with whose language code is null at run time, which the build doesn't describe because
     /// the code isn't a constant.
     /// </summary>
     private sealed class SetWithoutLanguageCode : ISetLocalization
@@ -55,17 +55,17 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
-    /// Records the sets of this fixture that derive from another, as the generated registrar records a set the build
-    /// found (<c>RecordSet</c>). So the registry knows which texts each words itself.
+    /// Describes the sets of this fixture that derive from another, as the generated registrar describes a set the build
+    /// found (<c>DescribeSet</c>). So the registry knows which texts each words itself.
     /// </summary>
     static LocalizationRegistryWordingTests()
     {
-        LocalizationRegistry.RecordSet<SetRewordedLocalizationEn>("en", ["Greeting"]);
-        LocalizationRegistry.RecordSet<SetSecondRewordedLocalizationEn>("en", ["Farewell"]);
-        LocalizationRegistry.RecordSet<SetBritishLocalization>("en-GB", ["Farewell"]);
-        LocalizationRegistry.RecordSet<SetTraditionalChineseLocalization>("zh-Hant", ["Farewell"]);
-        LocalizationRegistry.RecordSet<SetTaiwaneseLocalization>("zh-Hant-TW", []);
-        LocalizationRegistry.RecordSet<SetRewordedChineseLocalization>("zh", ["Greeting"]);
+        LocalizationRegistry.DescribeSet<SetRewordedLocalizationEn>("en", ["Greeting"]);
+        LocalizationRegistry.DescribeSet<SetSecondRewordedLocalizationEn>("en", ["Farewell"]);
+        LocalizationRegistry.DescribeSet<SetBritishLocalization>("en-GB", ["Farewell"]);
+        LocalizationRegistry.DescribeSet<SetTraditionalChineseLocalization>("zh-Hant", ["Farewell"]);
+        LocalizationRegistry.DescribeSet<SetTaiwaneseLocalization>("zh-Hant-TW", []);
+        LocalizationRegistry.DescribeSet<SetRewordedChineseLocalization>("zh", ["Greeting"]);
     }
 
     /// <summary>
@@ -77,17 +77,17 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
-    /// The same rewording, which the build has no record of, as a nested set registered by hand.
+    /// The same rewording, which the build doesn't describe, as a nested set registered by hand.
     /// </summary>
-    private sealed class SetUnrecordedRewordingEn : SetLocalizationEn
+    private sealed class SetUndescribedRewordingEn : SetLocalizationEn
     {
         public override string Greeting => "Hi";
     }
 
     /// <summary>
-    /// A British set deriving from the English one and wording one text its own way, which the build has no record of.
+    /// A British set deriving from the English one and wording one text its own way, which the build doesn't describe.
     /// </summary>
-    private sealed class SetUnrecordedBritishLocalization : SetLocalizationEn, ILocalizationSet
+    private sealed class SetUndescribedBritishLocalization : SetLocalizationEn, ILocalizationSet
     {
         string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
@@ -165,10 +165,10 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
-    /// An English set that counts how often its farewell is read, per instance. The tests that use it record the sets
-    /// deriving from it, as the generated registrar records a set the build found (<c>RecordSet</c>).
+    /// An English set that counts how often its farewell is read, per instance. The tests that use it describe the sets
+    /// deriving from it, as the generated registrar describes a set the build found (<c>DescribeSet</c>).
     /// </summary>
-    private class RecordedLocalizationEn : ISetLocalization
+    private class DescribedLocalizationEn : ISetLocalization
     {
         public int FarewellReads { get; private set; }
 
@@ -200,18 +200,18 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     /// <summary>
-    /// An app's rewording of the greeting, recorded as wording that text alone.
+    /// An app's rewording of the greeting, described as wording that text alone.
     /// </summary>
-    private sealed class RecordedRewordedLocalizationEn : RecordedLocalizationEn
+    private sealed class DescribedRewordedLocalizationEn : DescribedLocalizationEn
     {
         public override string Greeting => "Hi";
     }
 
     /// <summary>
-    /// A British set that words the greeting itself, as English does, and the farewell its own way, recorded as wording
+    /// A British set that words the greeting itself, as English does, and the farewell its own way, described as wording
     /// both.
     /// </summary>
-    private sealed class RecordedBritishLocalization : RecordedLocalizationEn, ILocalizationSet
+    private sealed class DescribedBritishLocalization : DescribedLocalizationEn, ILocalizationSet
     {
         string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
@@ -221,9 +221,9 @@ public sealed class LocalizationRegistryWordingTests
 
     /// <summary>
     /// A British set that words the greeting itself and gives none, as a member that hands on a value that's null at
-    /// run time. It's recorded as wording that text.
+    /// run time. It's described as wording that text.
     /// </summary>
-    private sealed class RecordedSilentBritishLocalization : RecordedLocalizationEn, ILocalizationSet
+    private sealed class DescribedSilentBritishLocalization : DescribedLocalizationEn, ILocalizationSet
     {
         string ILocalizationSet.LocalizationLanguageCode => "en-GB";
 
@@ -483,6 +483,35 @@ public sealed class LocalizationRegistryWordingTests
             ?? GeneratedCode.ResolveWording<ISetShowingLocalization, SetShowingLocalizationEn>(1, 2, culture, "Summary", static set => set.Summary);
     }
 
+    /// <summary>
+    /// A contract no other test uses, whose text shows two other texts in Dutch, which its method reads inside
+    /// <see cref="LocalizationRegistry.UseCulture"/>, and then the same two after it. It takes a value, so its method
+    /// runs in a scope of the language it's worded in, also for a culture the app doesn't show.
+    /// </summary>
+    private interface ISetUsingCultureLocalization : ILocalizationSet
+    {
+        string Checkouts(int count);
+    }
+
+    private sealed class SetUsingCultureLocalizationEn : ISetUsingCultureLocalization
+    {
+        public string Checkouts(int count)
+        {
+            string dutch;
+
+            using (LocalizationRegistry.UseCulture(Culture("nl-NL")))
+                dutch = $"{KeptTexts.Checkout} {Cart}";
+
+            return $"{count}: {dutch} / {KeptTexts.Checkout} {Cart}";
+        }
+    }
+
+    /// <summary>
+    /// The text of <see cref="ISetUsingCultureLocalization"/>, read as a method of a generated class reads it.
+    /// </summary>
+    private static string UsingCultureCheckouts(int count) => GeneratedCode.GetLocalizationSetForValues<ISetUsingCultureLocalization>(0, 1, out var culture)?.Checkouts(count)
+        ?? GeneratedCode.ResolveWording<ISetUsingCultureLocalization, SetUsingCultureLocalizationEn, int>(0, 1, culture, "Checkouts", static (set, count) => set.Checkouts(count), count);
+
     private interface ISetFlagLocalization : ILocalizationSet
     {
         string Flagged(int value);
@@ -507,17 +536,32 @@ public sealed class LocalizationRegistryWordingTests
         public override string Name => "en US";
     }
 
+    /// <summary>
+    /// An American culture that groups the digits of a number with a space, through its own
+    /// <see cref="CultureInfo.GetFormat(Type)"/>, as a culture of a derived class can format.
+    /// </summary>
+    private sealed class SpacedAmericanCulture() : CultureInfo("en-US")
+    {
+        private NumberFormatInfo Spaced { get; } = new() { NumberGroupSeparator = " " };
+
+        public override object? GetFormat(Type? formatType)
+        {
+            var format = formatType == typeof(NumberFormatInfo) ? this.Spaced : base.GetFormat(formatType);
+            return format;
+        }
+    }
+
     private static CultureInfo Culture(string name) => CultureInfo.GetCultureInfo(name);
 
     /// <summary>
     /// The wording of a text for a reader's culture in a registry, as <c>LocalizationRegistry.Word</c> gives it.
     /// </summary>
     private static string Word<TContract, TDefaultSet>(LocalizationRegistry registry, CultureInfo culture, string name, Func<TContract, string?> select,
-        bool takesValues = false, CultureInfo? valuesCulture = null, ResolvedSets<TContract>? resolved = null, int text = -1)
+        bool takesValues = false, CultureInfo? valuesCulture = null, ResolvedSets<TContract>? resolved = null, int textIndex = -1)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var wording = registry.Word(registry.Resolve(culture), culture, valuesCulture, name, select, typeof(TDefaultSet), static () => GeneratedCode.GetDefaultSet<TDefaultSet>(), takesValues, resolved, text);
+        var wording = registry.Word(registry.Resolve(culture), culture, valuesCulture, name, select, typeof(TDefaultSet), static () => GeneratedCode.GetDefaultSet<TDefaultSet>(), takesValues, resolved, textIndex);
         return wording;
     }
 
@@ -548,10 +592,10 @@ public sealed class LocalizationRegistryWordingTests
     private static ResolvedSets<ISetLocalization> ResolveGreetingAndFarewell(LocalizationRegistry registry, string cultureName)
     {
         var culture = Culture(cultureName);
-        var resolved = new ResolvedSets<ISetLocalization>(registry.Resolve(culture), count: 2);
+        var resolved = new ResolvedSets<ISetLocalization>(registry.Resolve(culture), textCount: 2);
 
-        Word<ISetLocalization, SetLocalizationEn>(registry, culture, "Greeting", static set => set.Greeting, resolved: resolved, text: 0);
-        Word<ISetLocalization, SetLocalizationEn>(registry, culture, "Farewell", static set => set.Farewell, resolved: resolved, text: 1);
+        Word<ISetLocalization, SetLocalizationEn>(registry, culture, "Greeting", static set => set.Greeting, resolved: resolved, textIndex: 0);
+        Word<ISetLocalization, SetLocalizationEn>(registry, culture, "Farewell", static set => set.Farewell, resolved: resolved, textIndex: 1);
 
         return resolved;
     }
@@ -650,8 +694,8 @@ public sealed class LocalizationRegistryWordingTests
     public void Word_ForCultureWithoutSet_ShouldCreateNoSecondDefaultSetWhereTheRegisteredOneWordsIt()
     {
         // Arrange: a registry without languages, as in a host that declares none, with the English set registered and
-        // recorded, as the generated registrar records it.
-        LocalizationRegistry.RecordSet<CountedLocalizationEn>("en", []);
+        // described, as the generated registrar describes it.
+        LocalizationRegistry.DescribeSet<CountedLocalizationEn>("en", []);
         var registry = LocalizationRegistry.Create([new CountedLocalizationEn()]);
         var created = CountedLocalizationEn.Created;
 
@@ -682,9 +726,9 @@ public sealed class LocalizationRegistryWordingTests
     public void ResolvedSets_WhereSetOfTheCultureGivesNull_ShouldNotKeepTheSetFoundAfterIt()
     {
         // Arrange: a British set that gives null for the greeting, which it words itself, next to the English set.
-        LocalizationRegistry.RecordSet<RecordedSilentBritishLocalization>(null, ["Greeting"]);
-        var english = new RecordedLocalizationEn();
-        var registry = LocalizationRegistry.Create([english, new RecordedSilentBritishLocalization()], "en", "nl");
+        LocalizationRegistry.DescribeSet<DescribedSilentBritishLocalization>(null, ["Greeting"]);
+        var english = new DescribedLocalizationEn();
+        var registry = LocalizationRegistry.Create([english, new DescribedSilentBritishLocalization()], "en", "nl");
 
         // Act
         var resolved = ResolveGreetingAndFarewell(registry, "en-GB");
@@ -755,12 +799,12 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     [Test]
-    public void Word_ForRegionTheBuildHasNoRecordOf_ShouldGiveEveryTextTheRegionalWording()
+    public void Word_ForRegionTheBuildDidNotDescribe_ShouldGiveEveryTextTheRegionalWording()
     {
-        // Arrange: the English set, a British set the build has no record of, and an app's rewording of English.
-        var registry = LocalizationRegistry.Create([new SetLocalizationEn(), new SetUnrecordedBritishLocalization(), new SetRewordedLocalizationEn()], "en", "nl");
+        // Arrange: the English set, a British set the build doesn't describe, and an app's rewording of English.
+        var registry = LocalizationRegistry.Create([new SetLocalizationEn(), new SetUndescribedBritishLocalization(), new SetRewordedLocalizationEn()], "en", "nl");
 
-        // Act & Assert: without a record, the British set may word every text, so it does. The rewording of English
+        // Act & Assert: without a description, the British set may word every text, so it does. The rewording of English
         // doesn't reach the greeting the British set inherits. Other English cultures get it.
         Greeting(registry, "en-GB").ShouldBe("Hello");
         Farewell(registry, "en-GB").ShouldBe("Cheerio");
@@ -800,12 +844,12 @@ public sealed class LocalizationRegistryWordingTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void Word_ForRecordedRegion_ShouldKeepWordingItsClassWordsThoughItMatchesItsLanguage()
+    public void Word_ForDescribedRegion_ShouldKeepWordingItsClassWordsThoughItMatchesItsLanguage()
     {
-        // Arrange: recorded as the build records them, so the registry knows which texts each set words itself.
-        LocalizationRegistry.RecordSet<RecordedRewordedLocalizationEn>(null, ["Greeting"]);
-        LocalizationRegistry.RecordSet<RecordedBritishLocalization>(null, ["Farewell", "Greeting"]);
-        var registry = LocalizationRegistry.Create([new RecordedLocalizationEn(), new RecordedBritishLocalization(), new RecordedRewordedLocalizationEn()], "en", "nl");
+        // Arrange: described as the build describes them, so the registry knows which texts each set words itself.
+        LocalizationRegistry.DescribeSet<DescribedRewordedLocalizationEn>(null, ["Greeting"]);
+        LocalizationRegistry.DescribeSet<DescribedBritishLocalization>(null, ["Farewell", "Greeting"]);
+        var registry = LocalizationRegistry.Create([new DescribedLocalizationEn(), new DescribedBritishLocalization(), new DescribedRewordedLocalizationEn()], "en", "nl");
 
         // Act & Assert: the British set words the greeting itself, so the English rewording doesn't reach it, though
         // its wording matches the English one. Compared by wording, it would show "Hi".
@@ -816,18 +860,18 @@ public sealed class LocalizationRegistryWordingTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void Word_ForRecordedRewording_ShouldNotReadTextItLeavesAsItWas()
+    public void Word_ForDescribedRewording_ShouldNotReadTextItLeavesAsItWas()
     {
         // Arrange
-        LocalizationRegistry.RecordSet<RecordedRewordedLocalizationEn>(null, ["Greeting"]);
-        var english = new RecordedLocalizationEn();
-        var rewording = new RecordedRewordedLocalizationEn();
+        LocalizationRegistry.DescribeSet<DescribedRewordedLocalizationEn>(null, ["Greeting"]);
+        var english = new DescribedLocalizationEn();
+        var rewording = new DescribedRewordedLocalizationEn();
         var registry = LocalizationRegistry.Create([english, rewording], "en");
 
         // Act
         var farewell = Farewell(registry, "en-US");
 
-        // Assert: the record says the rewording leaves the farewell as it was, so only the English set is read.
+        // Assert: the description says the rewording leaves the farewell as it was, so only the English set is read.
         farewell.ShouldBe("Goodbye");
         rewording.FarewellReads.ShouldBe(0);
         english.FarewellReads.ShouldBe(1);
@@ -1121,7 +1165,7 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     [Test]
-    public void ResolvedSets_ShouldKeepSetTheRecordTells()
+    public void ResolvedSets_ShouldKeepSetTheDescriptionTells()
     {
         // Arrange: sets that derive from no other set, so each words every text itself.
         var dutch = new SetLocalizationNl();
@@ -1138,12 +1182,12 @@ public sealed class LocalizationRegistryWordingTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void ResolvedSets_ShouldKeepSetPerTextWhereRecordTellsWhichSetWordsIt()
+    public void ResolvedSets_ShouldKeepSetPerTextWhereDescriptionTellsWhichSetWordsIt()
     {
-        // Arrange: a rewording the build recorded as wording the greeting alone.
-        LocalizationRegistry.RecordSet<RecordedRewordedLocalizationEn>(null, ["Greeting"]);
-        var english = new RecordedLocalizationEn();
-        var rewording = new RecordedRewordedLocalizationEn();
+        // Arrange: a rewording the build described as wording the greeting alone.
+        LocalizationRegistry.DescribeSet<DescribedRewordedLocalizationEn>(null, ["Greeting"]);
+        var english = new DescribedLocalizationEn();
+        var rewording = new DescribedRewordedLocalizationEn();
         var registry = LocalizationRegistry.Create([english, rewording], "en");
 
         // Act
@@ -1155,10 +1199,10 @@ public sealed class LocalizationRegistryWordingTests
     }
 
     [Test]
-    public void ResolvedSets_ShouldKeepSetTheBuildHasNoRecordOfForEveryText()
+    public void ResolvedSets_ShouldKeepSetTheBuildDidNotDescribeForEveryText()
     {
-        // Arrange: a rewording the build has no record of, so the registry can't tell which texts it rewords.
-        var rewording = new SetUnrecordedRewordingEn();
+        // Arrange: a rewording the build doesn't describe, so the registry can't tell which texts it rewords.
+        var rewording = new SetUndescribedRewordingEn();
         var registry = LocalizationRegistry.Create([new SetLocalizationEn(), rewording], "en");
 
         // Act
@@ -1186,7 +1230,8 @@ public sealed class LocalizationRegistryWordingTests
         Greeting(registry, "nl-NL").ShouldBe("Hello");
         resolved.Sets.ShouldBe([null, null]);
         resolved.SetsForValues.ShouldBe([null, null]);
-        resolved.FallbackSets.ShouldBe([null, null]);
+        resolved.GetFallback(0).ShouldBeNull();
+        resolved.GetFallback(1).ShouldBeNull();
     }
 
     [Test]
@@ -1203,7 +1248,8 @@ public sealed class LocalizationRegistryWordingTests
         // Assert
         resolved.Sets.ShouldBe([english, english]);
         resolved.SetsForValues.ShouldBe([null, null]);
-        resolved.FallbackSets.ShouldBe([null, null]);
+        resolved.GetFallback(0).ShouldBeNull();
+        resolved.GetFallback(1).ShouldBeNull();
     }
 
     [Test]
@@ -1213,11 +1259,11 @@ public sealed class LocalizationRegistryWordingTests
         var english = new SetCountedLocalizationEn();
         var registry = LocalizationRegistry.Create([english, new SetCountedLocalizationNl()], "en", "nl");
         var german = Culture("de-DE");
-        var resolved = new ResolvedSets<ISetCountedLocalization>(registry.Resolve(german), count: 2);
+        var resolved = new ResolvedSets<ISetCountedLocalization>(registry.Resolve(german), textCount: 2);
 
         // Act
         var wording = Word<ISetCountedLocalization, SetCountedLocalizationEn>(registry, german, "Items", static set => set.Items(3),
-            takesValues: true, resolved: resolved, text: 0);
+            takesValues: true, resolved: resolved, textIndex: 0);
 
         // Assert: kept with the culture of English, and not for the generated class to call without its scope.
         wording.ShouldBe("3 items");
@@ -1233,16 +1279,17 @@ public sealed class LocalizationRegistryWordingTests
         // Arrange: a Dutch set whose method gives null, as one that hands on a value read at run time can.
         var registry = LocalizationRegistry.Create([new SetCountedLocalizationEn(), new SetCountedLocalizationNl()], "en", "nl");
         var dutch = Culture("nl-NL");
-        var resolved = new ResolvedSets<ISetCountedLocalization>(registry.Resolve(dutch), count: 2);
+        var resolved = new ResolvedSets<ISetCountedLocalization>(registry.Resolve(dutch), textCount: 2);
 
         // Act
         var wording = Word<ISetCountedLocalization, SetCountedLocalizationEn>(registry, dutch, "Items",
-            static set => set is SetCountedLocalizationNl ? null : set.Items(3), takesValues: true, resolved: resolved, text: 0);
+            static set => set is SetCountedLocalizationNl ? null : set.Items(3), takesValues: true, resolved: resolved, textIndex: 0);
 
         // Assert: the text falls back to English for this read alone. Kept, English would word it on every later
         // read, also once the Dutch set gives a wording.
         wording.ShouldBe("3 items");
-        resolved.FallbackSets.ShouldBe([null, null]);
+        resolved.GetFallback(0).ShouldBeNull();
+        resolved.GetFallback(1).ShouldBeNull();
     }
 
     [Test]
@@ -1261,7 +1308,8 @@ public sealed class LocalizationRegistryWordingTests
         british.SetsForValues.ShouldBe([defaultSet, defaultSet]);
         french.Sets.ShouldBe([null, null]);
         french.SetsForValues.ShouldBe([null, null]);
-        french.FallbackSets.ShouldBe([null, null]);
+        french.GetFallback(0).ShouldBeNull();
+        french.GetFallback(1).ShouldBeNull();
     }
 
     [Test]
@@ -1269,20 +1317,20 @@ public sealed class LocalizationRegistryWordingTests
     {
         // Arrange
         var registry = LocalizationRegistry.Create([]);
-        var resolved = new ResolvedSets<ISetLocalization>(registry.Resolve(Culture("en-US")), count: 1);
+        var resolved = new ResolvedSets<ISetLocalization>(registry.Resolve(Culture("en-US")), textCount: 1);
         var set = new SetLocalizationEn();
 
         // Act: positions no generated class passes, and one kept for a property alone.
-        resolved.Keep(text: -1, set, forProperty: true, forValues: true);
-        resolved.Keep(text: 1, set, forProperty: true, forValues: true);
-        resolved.Keep(text: 0, set, forProperty: true, forValues: false);
-        resolved.KeepFallback(text: -1, set, Culture("en"));
-        resolved.KeepFallback(text: 1, set, Culture("en"));
+        resolved.Keep(textIndex: -1, set, forProperty: true, forValues: true);
+        resolved.Keep(textIndex: 1, set, forProperty: true, forValues: true);
+        resolved.Keep(textIndex: 0, set, forProperty: true, forValues: false);
+        resolved.KeepFallback(textIndex: -1, set, Culture("en"));
+        resolved.KeepFallback(textIndex: 1, set, Culture("en"));
 
         // Assert
         resolved.Sets.ShouldBe([set]);
         resolved.SetsForValues.ShouldBe([null]);
-        resolved.FallbackSets.ShouldBe([null]);
+        resolved.GetFallback(0).ShouldBeNull();
         resolved.GetFallback(-1).ShouldBeNull();
         resolved.GetFallback(1).ShouldBeNull();
     }
@@ -1367,6 +1415,24 @@ public sealed class LocalizationRegistryWordingTests
         {
             GeneratedCode.GetLocalizationSetForValues<ISetKeptLocalization>(1, 2, out var _).ShouldBeNull();
             KeptTexts.Total(1234.5m).ShouldBe("Total: 1 234.50");
+        }
+
+        // So is a culture of the same name that formats a number through its own GetFormat, though its NumberFormat is
+        // that of its name.
+        using (new ProvidedCultureScope(new SpacedAmericanCulture()))
+        {
+            GeneratedCode.GetLocalizationSetForValues<ISetKeptLocalization>(1, 2, out var _).ShouldBeNull();
+            KeptTexts.Total(1234.5m).ShouldBe("Total: 1 234.50");
+        }
+
+        // So is a culture of the same name with a list separator of its own, because a method may read it.
+        var listingAmerican = (CultureInfo)Culture("en-US").Clone();
+        listingAmerican.TextInfo.ListSeparator = "|";
+
+        using (new ProvidedCultureScope(listingAmerican))
+        {
+            GeneratedCode.GetLocalizationSetForValues<ISetKeptLocalization>(1, 2, out var _).ShouldBeNull();
+            KeptTexts.Total(1234.5m).ShouldBe("Total: 1,234.50");
         }
 
         // A thread whose UI culture is the provided one, and whose culture for values is another.
@@ -1847,5 +1913,57 @@ public sealed class LocalizationRegistryWordingTests
             WordingScope.GetReaderCulture(out provided).ShouldBeSameAs(american);
             provided.ShouldBeNull();
         }
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void GeneratedText_WhoseSetShowsTextsInsideUseCulture_ShouldShowThemInItsCultureAlsoWithCurrentUICultureProvider()
+    {
+        // Arrange: a German reader of an app that shows English and Dutch, so the text falls back to English. Its method
+        // shows two texts inside UseCulture for Dutch, and the same two after it.
+        LocalizationRegistry.Register(new SetUsingCultureLocalizationEn(), new SetKeptLocalizationNl());
+
+        // Act: with the German culture on the thread, and with an American thread whose provider gives it. Twice each,
+        // so that the second text is worded by the set kept for it.
+        string[] onThread;
+        using (new CulturesScope(uiCulture: "de-DE"))
+            onThread = [UsingCultureCheckouts(2), UsingCultureCheckouts(2)];
+
+        string[] provided;
+        using (new CulturesScope(uiCulture: "en-US"))
+        using (new ProvidedCultureScope("de-DE"))
+            provided = [UsingCultureCheckouts(2), UsingCultureCheckouts(2)];
+
+        // Assert: Dutch inside UseCulture, which wins over the language the text falls back to, as it wins over the
+        // provider. Then English again.
+        onThread.ShouldAllBe(wording => wording == "2: Afrekenen Winkelwagen / Checkout Cart");
+        provided.ShouldAllBe(wording => wording == "2: Afrekenen Winkelwagen / Checkout Cart");
+    }
+
+    [Test]
+    public void WordingScope_TakingTurnsBetweenCulturesInOneContext_ShouldCopyTheContextOnlyTheFirstTimeForEach()
+    {
+        // Arrange: an American thread whose texts take turns between two scopes. An example is a text that falls back
+        // to British English next to one that formats its values for a Dutch user as well.
+        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
+        var british = Culture("en-GB");
+        var dutch = Culture("nl-NL");
+
+        // Act: per 10,000 turns, after the first ones, which switched to each.
+        var allocated = GeneratedSetsTests.Allocated(() =>
+        {
+            using (new WordingScope(british, valuesCulture: null))
+            {
+            }
+
+            using (new WordingScope(british, valuesCulture: dutch))
+            {
+            }
+
+            return british;
+        }) / 10_000;
+
+        // Assert: nothing, because each turn restores a context kept from the first.
+        allocated.ShouldBe(0);
     }
 }

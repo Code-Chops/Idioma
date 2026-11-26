@@ -22,7 +22,7 @@ internal static class ReferencedLocalizationReader
             var sets = ImmutableArray.CreateBuilder<ProvidedLocalizationSet>();
             var setsOfEnums = ImmutableArray.CreateBuilder<ReferencedSetOfEnum>();
             var read = new HashSet<string>(StringComparer.Ordinal);
-            var hasInlineTexts = false;
+            var hasStandaloneTexts = false;
 
             foreach (var attribute in assembly.GetAttributes())
             {
@@ -38,9 +38,9 @@ internal static class ReferencedLocalizationReader
                     if (read.Add(contract) && ReadSetOfEnum(assembly, contract, compilation) is { } setOfEnum)
                         setsOfEnums.Add(setOfEnum);
                 }
-                else if (String.Equals(name, PackageNames.InlineTextsAttribute, StringComparison.Ordinal))
+                else if (String.Equals(name, PackageNames.StandaloneTextsAttribute, StringComparison.Ordinal))
                 {
-                    hasInlineTexts = true;
+                    hasStandaloneTexts = true;
                 }
             }
 
@@ -52,7 +52,7 @@ internal static class ReferencedLocalizationReader
                     assembly.Identity.Name,
                     new EquatableArray<string>(languages),
                     new EquatableArray<ProvidedLocalizationSet>(sets.ToImmutable()),
-                    hasInlineTexts,
+                    hasStandaloneTexts,
                     new EquatableArray<ReferencedSetOfEnum>(setsOfEnums.ToImmutable())));
             }
         }

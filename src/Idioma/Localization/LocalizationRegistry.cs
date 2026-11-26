@@ -70,31 +70,6 @@ public sealed partial class LocalizationRegistry
     public static string? DefaultLanguage => SupportedLanguages is [var defaultLanguage, ..] ? defaultLanguage : null;
 
     /// <summary>
-    /// Whether one of your app's languages serves a culture. That's so when the culture, or a culture it falls back to,
-    /// is that language or a region of it. For example, <c>en</c> serves <c>en-GB</c>, and <c>zh-TW</c> serves
-    /// <c>zh-Hant-TW</c>. A culture that no language serves gets the wording in <see cref="DefaultLanguage"/>, for every
-    /// text.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// It follows the same fallback order as a text, so it agrees with the wording a user sees. A Blazor WebAssembly app
-    /// can use it to make its default language the UI culture of a user whose language it doesn't have.
-    /// </para>
-    /// <para>
-    /// It's <see langword="true"/> for every culture where <see cref="SupportedLanguages"/> is empty, because each text
-    /// then shows the wording of the culture itself.
-    /// </para>
-    /// </remarks>
-    /// <param name="culture">The culture, such as the user's.</param>
-    public static bool IsServed(CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        var isServed = Current.Resolve(culture).ShowsCulture;
-        return isServed;
-    }
-
-    /// <summary>
     /// A function that gives the user's culture, for an app that keeps it somewhere other than
     /// <see cref="CultureInfo.CurrentUICulture"/>. Every text then shows the wording for the culture it returns.
     /// <see langword="null"/> by default, which leaves texts on <see cref="CultureInfo.CurrentUICulture"/>.
@@ -127,30 +102,6 @@ public sealed partial class LocalizationRegistry
     public static Func<CultureInfo?>? CurrentUICultureProvider { get; set; }
 
     /// <summary>
-    /// Makes a culture the one every text follows until the scope is disposed, such as the culture of an email's
-    /// recipient. Wrap the block that reads the texts: <c>using (LocalizationRegistry.UseCulture(dutch)) { ... }</c>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The culture chooses the wording and formats dates and numbers, and it wins over
-    /// <see cref="CurrentUICultureProvider"/>. The scope follows your code across an <see langword="await"/>. See
-    /// <see cref="CultureScope"/>.
-    /// </para>
-    /// <para>
-    /// Entering a scope copies the execution context. So wrap a block of texts, not each text.
-    /// </para>
-    /// </remarks>
-    /// <param name="culture">The culture texts follow inside the scope.</param>
-    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
-    public static CultureScope UseCulture(CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        var scope = new CultureScope(culture);
-        return scope;
-    }
-
-    /// <summary>
     /// The sets of your whole app, in the order they apply: every set that registered itself, and every set you
     /// registered. For one contract and language, a later set wins for every text it changes.
     /// </summary>
@@ -180,6 +131,123 @@ public sealed partial class LocalizationRegistry
     /// a set whose code is <c>EN-gb</c>. The languages are in ordinal order, so <c>en</c> comes before <c>en-GB</c>.
     /// </remarks>
     public static ImmutableArray<string> RegisteredLanguages => Current.SetLanguages;
+
+    /// <summary>
+    /// The sets of this registry, in the order they apply. <see cref="Sets"/> gives those of <see cref="Current"/>.
+    /// Reading this property creates every set that isn't created yet.
+    /// </summary>
+    internal ImmutableArray<ILocalizationSet> AllSets
+    {
+        get
+        {
+            // Built once all could be created. A constructor that throws runs again at the next read.
+            if (field is { IsDefault: false } sets)
+                return sets;
+
+            sets = [.. this.SetRegistrations.Select(static registration => registration.Set)];
+            field = sets;
+
+            return sets;
+        }
+    }
+
+    /// <summary>
+    /// The registered sets, in the order they apply, each created when a text of its contract is first shown.
+    /// </summary>
+    private ImmutableArray<Registration> SetRegistrations { get; }
+
+    /// <summary>
+    /// The languages this registry has at least one set for, each written as culture names are, in ordinal order.
+    /// <see cref="RegisteredLanguages"/> gives those of <see cref="Current"/>.
+    /// </summary>
+    internal ImmutableArray<string> SetLanguages { get; }
+
+    /// <summary>
+    /// The languages a text read from this registry shows, the default language first. In <see cref="Current"/>, these
+    /// are your app's <see cref="SupportedLanguages"/>. In a registry a test creates, they're the languages passed to
+    /// <see cref="Create(IEnumerable{ILocalizationSet}, string, ReadOnlySpan{string})"/>. Empty when none were given.
+    /// </summary>
+    /// <remarks>
+    /// A culture none of these languages serves gets the wording in the first of them, for every text. A registry
+    /// without languages shows every language it has a set for. There, a culture without wording gets each text's own
+    /// default language.
+    /// </remarks>
+    // Internal: for Current it repeats SupportedLanguages, and only a test creates a registry with other languages.
+    internal ImmutableArray<string> AppLanguages { get; }
+
+    /// <summary>
+    /// The registered sets of each language in <see cref="SetLanguages"/>, matched in any letter case.
+    /// </summary>
+    private FrozenDictionary<string, SetsOfLanguage> SetsByLanguage { get; }
+
+    /// <summary>
+    /// Whether a set of an assembly that can be unloaded is registered here, such as a plugin's. A thread then keeps
+    /// nothing of this registry as its last lookup. No other thread could let go of that when the plugin unloads, and
+    /// the registry holds the plugin's sets (<see cref="CollectibleAssemblies"/>).
+    /// </summary>
+    internal bool HoldsCollectibleSets { get; }
+
+    private LocalizationRegistry(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages,
+        FrozenDictionary<string, SetsOfLanguage> setsByLanguage, bool holdsCollectibleSets)
+    {
+        ArgumentNullException.ThrowIfNull(setsByLanguage);
+
+        this.SetRegistrations = registrations;
+        this.AppLanguages = appLanguages;
+        this.SetsByLanguage = setsByLanguage;
+        this.HoldsCollectibleSets = holdsCollectibleSets;
+        // Sorted, because a frozen dictionary gives its keys in an order of its own, which a reader can't rely on.
+        this.SetLanguages = setsByLanguage.Keys.Sort(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Whether one of your app's languages serves a culture. That's so when the culture, or a culture it falls back to,
+    /// is that language or a region of it. For example, <c>en</c> serves <c>en-GB</c>, and <c>zh-TW</c> serves
+    /// <c>zh-Hant-TW</c>. A culture that no language serves gets the wording in <see cref="DefaultLanguage"/>, for every
+    /// text.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It follows the same fallback order as a text, so it agrees with the wording a user sees. A Blazor WebAssembly app
+    /// can use it to make its default language the UI culture of a user whose language it doesn't have.
+    /// </para>
+    /// <para>
+    /// It's <see langword="true"/> for every culture where <see cref="SupportedLanguages"/> is empty, because each text
+    /// then shows the wording of the culture itself.
+    /// </para>
+    /// </remarks>
+    /// <param name="culture">The culture, such as the user's.</param>
+    public static bool IsServed(CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var isServed = Current.Resolve(culture).ShowsCulture;
+        return isServed;
+    }
+
+    /// <summary>
+    /// Makes a culture the one every text follows until the scope is disposed, such as the culture of an email's
+    /// recipient. Wrap the block that reads the texts: <c>using (LocalizationRegistry.UseCulture(dutch)) { ... }</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The culture chooses the wording and formats dates and numbers, and it wins over
+    /// <see cref="CurrentUICultureProvider"/>. The scope follows your code across an <see langword="await"/>. See
+    /// <see cref="CultureScope"/>.
+    /// </para>
+    /// <para>
+    /// Entering a scope copies the execution context. So wrap a block of texts, not each text.
+    /// </para>
+    /// </remarks>
+    /// <param name="culture">The culture texts follow inside the scope.</param>
+    /// <exception cref="ArgumentNullException">When <paramref name="culture"/> is <see langword="null"/>.</exception>
+    public static CultureScope UseCulture(CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var scope = new CultureScope(culture);
+        return scope;
+    }
 
     /// <summary>
     /// The set implementing <typeparamref name="TContract"/> for a culture, or else for its parent culture
@@ -248,74 +316,6 @@ public sealed partial class LocalizationRegistry
     {
         var culture = CultureScope.Current ?? provider();
         return culture;
-    }
-
-    /// <summary>
-    /// The sets of this registry, in the order they apply. <see cref="Sets"/> gives those of <see cref="Current"/>.
-    /// Reading this property creates every set that isn't created yet.
-    /// </summary>
-    internal ImmutableArray<ILocalizationSet> AllSets
-    {
-        get
-        {
-            // Built once all could be created. A constructor that throws runs again at the next read.
-            if (field is { IsDefault: false } sets)
-                return sets;
-
-            sets = [.. this.SetRegistrations.Select(static registration => registration.Set)];
-            field = sets;
-
-            return sets;
-        }
-    }
-
-    /// <summary>
-    /// The registered sets, in the order they apply, each created when a text of its contract is first shown.
-    /// </summary>
-    private ImmutableArray<Registration> SetRegistrations { get; }
-
-    /// <summary>
-    /// The languages this registry has at least one set for, each written as culture names are, in ordinal order.
-    /// <see cref="RegisteredLanguages"/> gives those of <see cref="Current"/>.
-    /// </summary>
-    internal ImmutableArray<string> SetLanguages { get; }
-
-    /// <summary>
-    /// The languages a text read from this registry shows, the default language first. In <see cref="Current"/>, these
-    /// are your app's <see cref="SupportedLanguages"/>. In a registry a test creates, they're the languages passed to
-    /// <see cref="Create(IEnumerable{ILocalizationSet}, string, ReadOnlySpan{string})"/>. Empty when none were given.
-    /// </summary>
-    /// <remarks>
-    /// A culture none of these languages serves gets the wording in the first of them, for every text. A registry
-    /// without languages shows every language it has a set for. There, a culture without wording gets each text's own
-    /// default language.
-    /// </remarks>
-    // Internal: for Current it repeats SupportedLanguages, and only a test creates a registry with other languages.
-    internal ImmutableArray<string> AppLanguages { get; }
-
-    /// <summary>
-    /// The registered sets of each language in <see cref="SetLanguages"/>, matched in any letter case.
-    /// </summary>
-    private FrozenDictionary<string, LanguageSets> SetsByLanguage { get; }
-
-    /// <summary>
-    /// Whether a set of an assembly that can be unloaded is registered here, such as a plugin's. A thread then keeps
-    /// nothing of this registry as its last lookup. No other thread could let go of that when the plugin unloads, and
-    /// the registry holds the plugin's sets (<see cref="CollectibleAssemblies"/>).
-    /// </summary>
-    internal bool HoldsCollectibleSets { get; }
-
-    private LocalizationRegistry(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages,
-        FrozenDictionary<string, LanguageSets> setsByLanguage, bool holdsCollectibleSets)
-    {
-        ArgumentNullException.ThrowIfNull(setsByLanguage);
-
-        this.SetRegistrations = registrations;
-        this.AppLanguages = appLanguages;
-        this.SetsByLanguage = setsByLanguage;
-        this.HoldsCollectibleSets = holdsCollectibleSets;
-        // Sorted, because a frozen dictionary gives its keys in an order of its own, which a reader can't rely on.
-        this.SetLanguages = setsByLanguage.Keys.Sort(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -451,17 +451,22 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// The language a registered set is filed under: the one it registered with, or the one it gives now where it
-    /// exists already.
+    /// The language a registered set is filed under. A set that exists already is filed under the code it gives now.
+    /// A set yet to be created is filed under the language the build described for its type, or else the language it
+    /// registered with.
     /// </summary>
-    // Read again for a set that exists, such as one registered as an instance: the code of a set recorded after it
-    // registered (RecordSet) is the recorded one from then on. A code that is no culture name any more, or that throws,
+    // Read again for a set that exists, such as one registered as an instance: the code of a set described after it
+    // registered (DescribeSet) is the described one from then on. A code that is no culture name any more, or that throws,
     // keeps the set under the language it registered with. It would otherwise fail every text of the app, far from what
     // changed its code.
+    //
+    // A set yet to be created took the language of its name when it registered before its description, such as gb for
+    // ShopLocalizationEnGb. Its description is read again here, without creating it, so that the registry DescribeSet
+    // builds anew files it under en-GB.
     private static string GetFilingLanguage(Registration registration)
     {
         if (!registration.IsCreated)
-            return registration.Language;
+            return GetDescribedLanguageCode(registration.Type) ?? registration.Language;
 
         try
         {
@@ -498,14 +503,14 @@ public sealed partial class LocalizationRegistry
 
         // Filled first and then frozen, not frozen through selectors. That overload is a generic method over
         // KeyValuePair, a struct, so ReadyToRun can't compile it outside the framework and every app would JIT it.
-        var languageSets = new Dictionary<string, LanguageSets>(byLanguage.Count, StringComparer.OrdinalIgnoreCase);
+        var setsByLanguage = new Dictionary<string, SetsOfLanguage>(byLanguage.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var pair in byLanguage)
-            languageSets[pair.Key] = new LanguageSets([.. pair.Value], holdsCollectibleSets);
+            setsByLanguage[pair.Key] = new SetsOfLanguage([.. pair.Value], holdsCollectibleSets);
 
         var registry = new LocalizationRegistry(
             registrations: registrations,
             appLanguages: appLanguages,
-            setsByLanguage: languageSets.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            setsByLanguage: setsByLanguage.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
             holdsCollectibleSets: holdsCollectibleSets);
 
         return registry;

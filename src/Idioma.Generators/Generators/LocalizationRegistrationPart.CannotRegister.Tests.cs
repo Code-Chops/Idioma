@@ -48,7 +48,7 @@ public sealed partial class LocalizationRegistrationPartTests
     [Arguments("public string LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"SHOP_LANGUAGE\") ?? \"de\";")]
     public void SetWithLanguageCodeThatIsNoConstant_ReportsLOC208AndIsLeftOut(string languageCode)
     {
-        // Arrange & Act: the registry files a set under the language the build records for it, without creating it.
+        // Arrange & Act: the registry files a set under the language the build describes it with, without creating it.
         // The sibling shows that the rest of the assembly still registers.
         var result = Run($$"""
             {{ShopContract}}
@@ -126,7 +126,7 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """);
 
-        // Assert: not registered, and its language recorded for when it's registered by hand.
+        // Assert: not registered, and its language described for when it's registered by hand.
         var run = result.Results.ShouldHaveSingleItem();
         run.Diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC208");
         var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
@@ -230,7 +230,7 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """);
 
-        // Assert: its language is recorded for when it's registered by hand.
+        // Assert: its language is described for when it's registered by hand.
         var run = result.Results.ShouldHaveSingleItem();
         run.Diagnostics.ShouldBeEmpty();
         var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();

@@ -8,14 +8,14 @@ namespace CodeChops.Idioma.Generators;
 /// assembly by reflection. A set in the same assembly as its contract is registered as a default, and a set
 /// rewording something of another assembly wins over the defaults, because load order is not registration order. An
 /// app's override must win over the library it rewords even when the library loads later. Within a tier a set comes
-/// after the sets it derives from, so it wins over them. Before that it records what the build read about each set
-/// (<c>GeneratedCode.RecordSet</c>). That's the language of each set that doesn't implement <c>LocalizationLanguageCode</c>, so that
+/// after the sets it derives from, so it wins over them. Before that it describes each set as the build read it
+/// (<c>GeneratedCode.DescribeSet</c>). That's the language of each set that doesn't implement <c>LocalizationLanguageCode</c>, so that
 /// the run time never reads a set's name, and the constant of each set that implements it, so that the registry needn't
 /// create the set to file it. A renamed type, as an obfuscator leaves it, keeps its language. So does a set
 /// named after a longer code, such as <c>ShopLocalizationEnGb</c>, whose last two letters alone would give <c>gb</c>.
 /// For a set deriving from another, it's also the texts its own class words, so that the registry knows which texts
 /// the set rewords without calling it. It also writes the texts of the assembly's members marked <c>[Localized]</c>
-/// (<see cref="LocalizedMembersSource"/>), which the registrar records.
+/// (<see cref="LocalizedMembersSource"/>), which the registrar registers.
 /// </summary>
 /// <remarks>
 /// An assembly that nothing uses never loads, so its module initializer never runs, while its sets already count for
@@ -123,12 +123,12 @@ public static class LocalizationRegistrationPart
     /// </summary>
     internal static void Initialize(IncrementalGeneratorInitializationContext context, LocalizationInputs inputs)
     {
-        var languages = inputs.RecordLanguages;
+        var languages = inputs.RegistrarLanguages;
 
         // What the registrar is written from holds no location, so an edit of a wording leaves every step up to the
         // registrar as it was. What is reported comes from the share that holds the locations, which every edit in the
         // file of a set renews.
-        var discovery = inputs.RecordDiscovery;
+        var discovery = inputs.RegistrarDiscovery;
         var reported = inputs.ContractDiscovery;
 
         // Every set, an excluded one included. Discovery finds only classes that implement ILocalizationSet.
@@ -147,9 +147,9 @@ public static class LocalizationRegistrationPart
         // Every set whose language comes from its name, or that derives from another set, an excluded one included.
         // Registered by hand, it must serve the language the build counted it for, and reword what the build saw.
         // Not a set marked [Obsolete] as an error, which no generated code may name (LOC208).
-        var records = allSets.Select(static (sets, _) => new EquatableArray<SetRecord>(sets
-            .Where(static set => (set.RecordedLanguageCode is not null || set.Depth > 0) && !set.IsObsoleteAsError)
-            .Select(static set => new SetRecord(set.MetadataName, set.FullyQualifiedName, set.RecordedLanguageCode, set.OwnTexts))
+        var descriptions = allSets.Select(static (sets, _) => new EquatableArray<SetDescription>(sets
+            .Where(static set => (set.DescribedLanguageCode is not null || set.Depth > 0) && !set.IsObsoleteAsError)
+            .Select(static set => new SetDescription(set.MetadataName, set.FullyQualifiedName, set.DescribedLanguageCode, set.OwnTexts))
             .Distinct()
             .OrderBy(static set => set.MetadataName, StringComparer.Ordinal)
             .ToImmutableArray()));
@@ -218,9 +218,9 @@ public static class LocalizationRegistrationPart
             .Combine(enumsWithSets)
             .Select(static (data, _) => LocalizedMembers.WithoutExtensionsOf(data.Left, data.Right));
 
-        // The class that records those texts, where the assembly has one. Its name alone, so that an edit of a wording
+        // The class that registers those texts, where the assembly has one. Its name alone, so that an edit of a wording
         // rewrites no registrar.
-        var memberTexts = members.Select(static (model, _) => model.HasTexts ? model.RecorderName : null);
+        var memberTexts = members.Select(static (model, _) => model.HasTexts ? model.MemberTextsClassName : null);
 
         // What naming a set marked [Experimental], or [Obsolete] with an id of its own, reports.
         var suppressedDiagnostics = allSets.Select(static (sets, _) => new EquatableArray<string>(sets
@@ -230,14 +230,14 @@ public static class LocalizationRegistrationPart
             .ToImmutableArray()));
 
         var registrar = registrations
-            .Combine(records)
+            .Combine(descriptions)
             .Combine(assembly)
             .Combine(languages)
             .Combine(memberTexts)
             .Combine(suppressedDiagnostics)
             .Select(static (data, _) =>
             {
-                var (((((sets, records), assembly), languages), memberTexts), suppressedDiagnostics) = data;
+                var (((((sets, descriptions), assembly), languages), memberTexts), suppressedDiagnostics) = data;
                 var forwards = sets.Length > 0 || assembly.IsApplication || languages is { Codes.Length: > 0 };
                 // Not without a default language (LOC101): the first valid language must not become the app's default.
                 var appLanguages = assembly.IsApplication && languages is { DefaultLanguage: not null } declared ? declared.Codes : default;
@@ -247,7 +247,7 @@ public static class LocalizationRegistrationPart
                     Sets: sets,
                     ReferencedRegistrars: forwards ? assembly.ReferencedRegistrars : default,
                     Languages: appLanguages,
-                    Records: records,
+                    Descriptions: descriptions,
                     MemberTexts: memberTexts,
                     SuppressedDiagnostics: suppressedDiagnostics);
             })
@@ -334,8 +334,8 @@ public static class LocalizationRegistrationPart
 
         context.RegisterSourceOutput(registrar.WhereItCompiles(compiles), static (context, registrar) =>
         {
-            // Nothing of its own to register or record, and nothing referenced to register first.
-            if (registrar.Sets.Length is 0 && registrar.ReferencedRegistrars.Length is 0 && registrar.Languages.Length is 0 && registrar.Records.Length is 0
+            // Nothing of its own to register or describe, and nothing referenced to register first.
+            if (registrar.Sets.Length is 0 && registrar.ReferencedRegistrars.Length is 0 && registrar.Languages.Length is 0 && registrar.Descriptions.Length is 0
                 && registrar.MemberTexts is null)
             {
                 return;
@@ -424,7 +424,7 @@ public static class LocalizationRegistrationPart
         // assembly ran. Not for the languages of an application: the application that starts registers its own first,
         // so those of one it references never count.
         var accessibility = registrar.Sets.Length > 0 || registrar.MemberTexts is not null ? "public" : "internal";
-        var hasOwnSets = registrar.Sets.Length > 0 || registrar.Records.Length > 0;
+        var hasOwnSets = registrar.Sets.Length > 0 || registrar.Descriptions.Length > 0;
 
         // The pragma also covers a set marked [Obsolete] or [Experimental], which registers for as long as it exists.
         // The warning about naming it is one its author can't act on in generated code, and a build that treats
@@ -444,7 +444,7 @@ public static class LocalizationRegistrationPart
             sb.AppendLine("    /// Registers the app's languages first.");
 
         if (registrar.MemberTexts is not null)
-            sb.AppendLine("    /// Records the texts of this assembly's members marked <c>[Localized]</c> too.");
+            sb.AppendLine("    /// Registers the texts of this assembly's members marked <c>[Localized]</c> too.");
 
         sb.AppendLine($$"""
                 /// </summary>
@@ -545,14 +545,14 @@ public static class LocalizationRegistrationPart
                 """);
 
             // Before the sets register: the registry files a set under the language code it reads from it.
-            foreach (var recorded in registrar.Records)
+            foreach (var description in registrar.Descriptions)
             {
-                var arguments = new StringBuilder(recorded.Code is null ? "null" : SymbolDisplay.FormatLiteral(recorded.Code, quote: true));
+                var arguments = new StringBuilder(description.Code is null ? "null" : SymbolDisplay.FormatLiteral(description.Code, quote: true));
 
-                foreach (var text in recorded.OwnTexts)
+                foreach (var text in description.OwnTexts)
                     arguments.Append(", ").Append(SymbolDisplay.FormatLiteral(text, quote: true));
 
-                sb.AppendLine($"        {PackageNames.GeneratedCode}.RecordSet<{recorded.FullyQualifiedName}>({arguments});");
+                sb.AppendLine($"        {PackageNames.GeneratedCode}.DescribeSet<{description.FullyQualifiedName}>({arguments});");
             }
 
             AppendRegistration(sb, asDefaults: true, registrar.Sets.AsImmutableArray().Where(static set => !set.IsOverride));
@@ -617,7 +617,7 @@ internal readonly record struct UnmappedLanguageCode(
 
 /// <summary>
 /// The registrar to write: its name, the sets it registers, the referenced registrars it calls first, the languages of
-/// an application that declares them, the default first, what it records about the sets, and the class that records
+/// an application that declares them, the default first, how it describes the sets, and the class that registers
 /// the texts of members marked <c>[Localized]</c>, or <see langword="null"/> for an assembly without such a text.
 /// </summary>
 internal readonly record struct Registrar(
@@ -625,16 +625,16 @@ internal readonly record struct Registrar(
     EquatableArray<RegisteredLocalization> Sets,
     EquatableArray<ReferencedRegistrar> ReferencedRegistrars,
     EquatableArray<string> Languages,
-    EquatableArray<SetRecord> Records,
+    EquatableArray<SetDescription> Descriptions,
     string? MemberTexts,
     EquatableArray<string> SuppressedDiagnostics);
 
 /// <summary>
-/// What the registrar records about a set before it registers: the language that comes from its name, or from the name
+/// How the registrar describes a set before it registers: the language that comes from its name, or from the name
 /// of a set it derives from (<c>en-GB</c> for <c>ShopLocalizationEnGb</c>), else <see langword="null"/>; and, for a
-/// set deriving from another, the texts its own class words. The metadata name orders the records.
+/// set deriving from another, the texts its own class words. The metadata name orders the descriptions.
 /// </summary>
-internal readonly record struct SetRecord(
+internal readonly record struct SetDescription(
     string MetadataName,
     string FullyQualifiedName,
     string? Code,

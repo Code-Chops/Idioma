@@ -121,10 +121,10 @@ public sealed partial class LocalizationSetsPartTests
             }
             """);
 
-        // Assert: no LOC201 or LOC202, each code recorded for the assemblies referencing this one, and linked.
+        // Assert: no LOC201 or LOC202, each code listed for the assemblies referencing this one, and linked.
         DiagnosticIds(result).ShouldBeEmpty();
-        RecordedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\")");
-        RecordedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"zh-Hans\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"zh-Hans\")");
         ContractText(result).ShouldContain("ShopLocalizationNlBe.Checkout\">nl-BE</see>");
     }
 
@@ -158,12 +158,12 @@ public sealed partial class LocalizationSetsPartTests
             public sealed class MessagesEsAr : MessagesEs;
             """);
 
-        // Assert: no LOC201 asking for the Arabic set that is there, and each set recorded and linked under its own
+        // Assert: no LOC201 asking for the Arabic set that is there, and each set listed and linked under its own
         // language.
         DiagnosticIds(result).ShouldBeEmpty();
-        var recorded = RecordedSets(result);
-        recorded.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"ar\")");
-        recorded.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"es-AR\")");
+        var provided = ProvidedSets(result);
+        provided.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"ar\")");
+        provided.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"es-AR\")");
         var contract = ContractText(result);
         contract.ShouldContain("MessagesAr.Save\">ar</see>");
         contract.ShouldContain("MessagesEs.Save\">es-AR</see>");
@@ -265,7 +265,7 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void SetDerivedFromLibrarySetNamedAfterLongCode_ShouldServeThatCode()
     {
-        // Arrange: the library declares nl-BE, so its registrar records nl-BE for its set; the app declares only nl.
+        // Arrange: the library declares nl-BE, so its registrar describes its set with nl-BE; the app declares only nl.
         var library = GeneratorTestHelper.CompileLibraryWithGenerators("RegionalLibrary", """
             using CodeChops.Idioma;
 
@@ -296,7 +296,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert: it inherits nl-BE, which nl serves, as at run time; no LOC202 for 'be'.
         DiagnosticIds(result).ShouldNotContain("LOC202", StringComparer.Ordinal);
-        RecordedSets(result).ShouldContain("LocalizationSetAttribute(\"RegionalLibrary.IShopLocalization\", \"nl-BE\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"RegionalLibrary.IShopLocalization\", \"nl-BE\")");
     }
 
     [Test]

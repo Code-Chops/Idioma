@@ -82,22 +82,22 @@ public sealed partial class LocalizationRegistryTests
         var first = new RegistryCountingCulture("nl-NL");
         var other = new RegistryCountingCulture("nl-NL");
 
-        var resolved = ResolvedSets<IRegistryLocalization>.Get(first, count: 1);
+        var resolved = ResolvedSets<IRegistryLocalization>.Get(first, textCount: 1);
         var kept = resolved.Lookup.Culture!;
-        ResolvedSets<IRegistryLocalization>.Get(other, count: 1).ShouldBeSameAs(resolved);
+        ResolvedSets<IRegistryLocalization>.Get(other, textCount: 1).ShouldBeSameAs(resolved);
         var otherReads = other.NameReads;
 
         // Act: the lookup's own culture and the other object in turn.
         for (var i = 0; i < 10; i++)
         {
-            ResolvedSets<IRegistryLocalization>.Get(kept, count: 1).ShouldBeSameAs(resolved);
-            ResolvedSets<IRegistryLocalization>.Get(other, count: 1).ShouldBeSameAs(resolved);
+            ResolvedSets<IRegistryLocalization>.Get(kept, textCount: 1).ShouldBeSameAs(resolved);
+            ResolvedSets<IRegistryLocalization>.Get(other, textCount: 1).ShouldBeSameAs(resolved);
         }
 
         var readsInTurn = other.NameReads - otherReads;
 
         LocalizationRegistry.Register(new RegistryConfiguredLocalization("it"));
-        var afterRegistration = ResolvedSets<IRegistryLocalization>.Get(other, count: 1);
+        var afterRegistration = ResolvedSets<IRegistryLocalization>.Get(other, textCount: 1);
 
         // Assert: told by reference, so the name wasn't read again. A registration drops what the thread kept.
         readsInTurn.ShouldBe(0);

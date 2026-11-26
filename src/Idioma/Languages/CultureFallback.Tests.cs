@@ -7,12 +7,13 @@ public sealed class CultureFallbackTests
 {
     #region Fixture
     /// <summary>
-    /// A culture whose parent is the invariant culture, as every culture's is under invariant globalization with
-    /// <c>PredefinedCulturesOnly</c> off (with it on, the default, no such culture can be created).
+    /// A culture with the parent given. With the invariant culture as its parent, it's what every culture is under
+    /// invariant globalization with <c>PredefinedCulturesOnly</c> off (with it on, the default, no such culture can be
+    /// created).
     /// </summary>
-    private sealed class FallbackInvariantParentCulture(string name) : CultureInfo(name)
+    private sealed class CultureWithParent(string name, CultureInfo parent) : CultureInfo(name)
     {
-        public override CultureInfo Parent => InvariantCulture;
+        public override CultureInfo Parent => parent;
     }
 
     private static string[] Names(CultureInfo culture) => Names(new CultureFallback(culture));
@@ -33,7 +34,7 @@ public sealed class CultureFallbackTests
     public void Names_ShouldFollowParentCultures()
     {
         // Arrange & Act & Assert: a parent that is no prefix of the name (zh-TW falls back to zh-Hant) is followed too.
-        Names(CultureInfo.GetCultureInfo("nl-BE")).ShouldBe(["nl-BE", "nl"]);
+        Names(CultureInfo.GetCultureInfo("en-GB")).ShouldBe(["en-GB", "en"]);
         Names(CultureInfo.GetCultureInfo("zh-TW")).ShouldBe(["zh-TW", "zh-Hant", "zh"]);
         Names(CultureInfo.GetCultureInfo("nl")).ShouldBe(["nl"]);
         Names(CultureInfo.InvariantCulture).ShouldBeEmpty();
@@ -43,9 +44,19 @@ public sealed class CultureFallbackTests
     public void Names_WithInvariantParent_ShouldDropSubtagsByName()
     {
         // Arrange & Act & Assert
-        Names(new FallbackInvariantParentCulture("nl-BE")).ShouldBe(["nl-BE", "nl"]);
-        Names(new FallbackInvariantParentCulture("zh-Hant-TW")).ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
-        Names(new FallbackInvariantParentCulture("nl")).ShouldBe(["nl"]);
+        Names(new CultureWithParent("en-GB", CultureInfo.InvariantCulture)).ShouldBe(["en-GB", "en"]);
+        Names(new CultureWithParent("zh-Hant-TW", CultureInfo.InvariantCulture)).ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
+        Names(new CultureWithParent("nl", CultureInfo.InvariantCulture)).ShouldBe(["nl"]);
+    }
+
+    [Test]
+    public void Names_WithParentWithoutScript_ShouldTryItOnce()
+    {
+        // Arrange
+        var culture = new CultureWithParent("zh-Hant-TW", CultureInfo.GetCultureInfo("zh-TW"));
+
+        // Act & Assert: the parent is the name without its script, which is tried right after the name already.
+        Names(culture).ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
     }
 
     [Test]

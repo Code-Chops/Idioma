@@ -32,16 +32,31 @@ internal readonly ref struct WordingScope
     /// <summary>
     /// The culture of the scope this thread is in, or <see langword="null"/> outside one. Inside one, a text follows
     /// it rather than <see cref="LocalizationRegistry.CurrentUICultureProvider"/>, and the thread's cultures are set
-    /// for it.
+    /// for it. It's also <see langword="null"/> inside a <see cref="CultureScope"/> that the member of the set entered,
+    /// because that scope chooses the culture of the texts the member shows, as it does everywhere else.
     /// </summary>
+    // It's read only where a provider is set, and it reads the culture scope only inside a scope. So a text outside one
+    // reads no AsyncLocal for it.
+    public static CultureInfo? Current => EnteredCulture is { } entered && ReferenceEquals(CultureScope.Innermost, EnteredCultureScope)
+        ? entered
+        : null;
+
     // Per thread, which is enough, because a set words a text in one call and the scope ends before that call returns.
-    // So a scope never spans an await, and AsyncLocal would only cost more.
+    // So a scope never spans an await, and AsyncLocal would only cost more. Code the thread runs while the member of a
+    // set blocks does see the scope, such as a task that Wait runs inline, or a nested message loop. A text there
+    // follows the scope's culture rather than the provider's. That's accepted, because a member that blocks is rare.
     [field: ThreadStatic]
-    public static CultureInfo? Current { get; private set; }
+    private static CultureInfo? EnteredCulture { get; set; }
+
+    // The culture scope the code was in when the scope was entered. Another one is a culture scope that the member of
+    // the set entered, which ends the scope's say over the culture of a text.
+    [field: ThreadStatic]
+    private static CultureScope? EnteredCultureScope { get; set; }
 
     private bool IsEntered { get; }
 
-    private CultureInfo? PreviousEntered { get; }
+    private CultureInfo? PreviousEnteredCulture { get; }
+    private CultureScope? PreviousEnteredCultureScope { get; }
 
     // The execution context from before a culture changed, which puts both cultures back in one step. A culture is an
     // AsyncLocal, so each time one is set, the runtime copies the context with every AsyncLocal in it. That's a few
@@ -51,14 +66,15 @@ internal readonly ref struct WordingScope
     private ExecutionContext? PreviousContext { get; }
 
     /// <summary>
-    /// Per execution context, that context with the cultures a scope switched to, so that the next scope of those
-    /// cultures switches to it by restoring it. Kept as long as the context it was switched from lives.
+    /// Per execution context, the contexts scopes switched to from it, so that the next scope of the same cultures
+    /// switches by restoring one. Kept as long as the context they were switched from lives.
     /// </summary>
-    // Setting a culture copies the context, which cost every text that falls back, or runs in a provider's culture, a
-    // few hundred bytes and most of its time. The texts of one render or request run in one context, and fall back to
-    // one language, so all but the first restore the context the first one made, which copies nothing. A context dies
-    // with its flow, and its switched context with it, so nothing here keeps the values of a request alive.
-    private static ConditionalWeakTable<ExecutionContext, SwitchedContext> SwitchedContexts { get; } = new();
+    // Setting a culture copies the context. Without this table, that would cost every text that falls back, or runs in a
+    // provider's culture, a few hundred bytes and most of its time. The texts of one render or request run in one
+    // context, and switch to a few cultures, so all but the first of each restore the context the first one made, which
+    // copies nothing. A context dies with its flow, and its switched contexts with it, so nothing here keeps the values
+    // of a request alive.
+    private static ConditionalWeakTable<ExecutionContext, SwitchedContexts> SwitchedFrom { get; } = new();
 
     // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
     private CultureInfo? PreviousUICulture { get; }
@@ -92,9 +108,12 @@ internal readonly ref struct WordingScope
             this.PreviousUICulture = changesUiCulture ? uiCulture : null;
             this.PreviousCulture = changesCulture ? currentCulture : null;
 
-            if (previous is not null && SwitchedContexts.TryGetValue(previous, out var switched) && switched.Holds(switchedUiCulture, switchedCulture))
+            // Where the flow is suppressed, there's no context to switch from.
+            var switches = previous is null ? null : SwitchedFrom.GetValue(previous, static _ => new SwitchedContexts());
+
+            if (switches?.Find(switchedUiCulture, switchedCulture) is { } switched)
             {
-                ExecutionContext.Restore(switched.Context);
+                ExecutionContext.Restore(switched);
             }
             else
             {
@@ -104,13 +123,17 @@ internal readonly ref struct WordingScope
                 if (changesCulture)
                     CultureInfo.CurrentCulture = valuesCulture!;
 
-                if (previous is not null && ExecutionContext.Capture() is { } context)
-                    SwitchedContexts.AddOrUpdate(previous, new SwitchedContext(switchedUiCulture, switchedCulture, context));
+                if (switches is not null && ExecutionContext.Capture() is { } context)
+                    switches.Add(new SwitchedContext(switchedUiCulture, switchedCulture, context));
             }
         }
 
-        this.PreviousEntered = Current;
-        Current = culture;
+        this.PreviousEnteredCulture = EnteredCulture;
+        this.PreviousEnteredCultureScope = EnteredCultureScope;
+        EnteredCulture = culture;
+
+        // Only Current reads it, which is read only where a provider is set.
+        EnteredCultureScope = LocalizationRegistry.CurrentUICultureProvider is null ? null : CultureScope.Innermost;
         this.IsEntered = true;
     }
 
@@ -164,7 +187,8 @@ internal readonly ref struct WordingScope
         if (!this.IsEntered)
             return;
 
-        Current = this.PreviousEntered;
+        EnteredCulture = this.PreviousEnteredCulture;
+        EnteredCultureScope = this.PreviousEnteredCultureScope;
 
         // Also undoes an AsyncLocal the member of the set changed, which ends with the scope like the cultures. That
         // holds only for a scope that changed a culture. A scope that changed none captured no context, so such a
@@ -180,6 +204,47 @@ internal readonly ref struct WordingScope
 
         if (this.PreviousCulture is not null)
             CultureInfo.CurrentCulture = this.PreviousCulture;
+    }
+
+    /// <summary>
+    /// The contexts scopes switched to from one execution context, the newest first. A few are kept, because the texts
+    /// of one context may take turns between scopes of a few cultures. An example is a text that falls back to English
+    /// next to one worded in the culture a provider gives.
+    /// </summary>
+    // A context flows to every task started in it, so threads may look up and add at once. An addition replaces the
+    // array, which nothing changes after, so a reader sees a whole one. Two additions at once may lose one of them, which
+    // a later scope adds again.
+    private sealed class SwitchedContexts
+    {
+        private const int Kept = 4;
+
+        private volatile SwitchedContext[] _contexts = [];
+
+        /// <summary>
+        /// The context a scope switched to by setting these cultures, or <see langword="null"/> where none is kept.
+        /// </summary>
+        public ExecutionContext? Find(CultureInfo? uiCulture, CultureInfo? culture)
+        {
+            foreach (var switched in this._contexts)
+                if (switched.Holds(uiCulture, culture))
+                    return switched.Context;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Keeps a context a scope switched to, in place of the oldest where <see cref="Kept"/> are kept already.
+        /// </summary>
+        public void Add(SwitchedContext switched)
+        {
+            var contexts = this._contexts;
+            var added = new SwitchedContext[Math.Min(contexts.Length + 1, Kept)];
+
+            added[0] = switched;
+            Array.Copy(contexts, 0, added, 1, added.Length - 1);
+
+            this._contexts = added;
+        }
     }
 
     /// <summary>

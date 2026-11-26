@@ -14,7 +14,7 @@ namespace CodeChops.Idioma.Generators;
 /// with a <c>TypeInitializationException</c> that names no library.
 /// </para>
 /// <para>
-/// A library records the version of the package it was built with in its reference to the package's assembly, whose
+/// A library stores the version of the package it was built with in its reference to the package's assembly, whose
 /// version is that of the package (Directory.Build.props). A new major version may break it, and below 1.0 so may a new
 /// minor version, as semantic versioning lets anything change there (<see cref="AreCompatible"/>). A version that changed
 /// nothing the library calls is reported all the same.

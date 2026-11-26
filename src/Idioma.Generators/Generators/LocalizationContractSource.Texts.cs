@@ -1,5 +1,6 @@
 namespace CodeChops.Idioma.Generators;
 
+/// <inheritdoc cref="LocalizationContractSource"/>
 internal static partial class LocalizationContractSource
 {
     /// <summary>

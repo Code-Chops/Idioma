@@ -359,18 +359,21 @@ internal static class GeneratorTestHelper
     /// </summary>
     internal static MetadataReference CompileLibrary(string assemblyName, string source)
     {
+        return MetadataReference.CreateFromImage(EmitLibrary(assemblyName, source));
+    }
+
+    /// <summary>
+    /// Compiles <paramref name="source"/>, without the generators, into the image of a library to load and run.
+    /// </summary>
+    internal static byte[] EmitLibrary(string assemblyName, string source)
+    {
         var compilation = CSharpCompilation.Create(
             assemblyName,
             [CSharpSyntaxTree.ParseText(source, ParseOptions)],
             References,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        return Emit(compilation);
-    }
-
-    private static MetadataReference Emit(Compilation compilation)
-    {
-        return MetadataReference.CreateFromImage(EmitImage(compilation));
+        return EmitImage(compilation);
     }
 
     private static byte[] EmitImage(Compilation compilation)

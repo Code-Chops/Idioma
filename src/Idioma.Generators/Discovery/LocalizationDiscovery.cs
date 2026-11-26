@@ -32,9 +32,9 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The name of the pipeline step that holds what discovery found for the registrar (<see cref="Discovery"/>,
-    /// <see cref="DiscoveredTexts.OfRecord"/>), for a test to read it.
+    /// <see cref="DiscoveredTexts.OfRegistrar"/>), for a test to read it.
     /// </summary>
-    internal const string RecordTrackingName = "Discovery.OfRecord";
+    internal const string RegistrarTrackingName = "Discovery.OfRegistrar";
 
     /// <summary>
     /// The member of <c>ILocalizationSet</c> that gives a set its language, which is no text.
@@ -71,7 +71,7 @@ internal static partial class LocalizationDiscovery
     /// sets that reword another assembly's texts, and the partial classes listing <c>ILocalizationSet</c> that no
     /// contract can come from because of their shape. Once as the part of the generator that writes the contracts reads
     /// it (<see cref="DiscoveredTexts.OfContract"/>), and once as the part that writes the registrar reads it
-    /// (<see cref="DiscoveredTexts.OfRecord"/>).
+    /// (<see cref="DiscoveredTexts.OfRegistrar"/>).
     /// </summary>
     // One syntax provider for all of it: a provider re-runs its transform for every class with a base list on every
     // edit, and each pass costs its own walk over them. Nearly every such class is no set, so the transform first asks
@@ -80,7 +80,7 @@ internal static partial class LocalizationDiscovery
     // class by class (ForPart). So an edit that changes only what one part uses leaves the other's pipeline as it was.
     // The registrar's share holds no wording and no location. A location holds the syntax tree of its file, which every
     // edit in that file renews, so a share with one location in it would change with every wording.
-    public static (IncrementalValueProvider<Discovery> OfContract, IncrementalValueProvider<Discovery> OfRecord) Read(
+    public static (IncrementalValueProvider<Discovery> OfContract, IncrementalValueProvider<Discovery> OfRegistrar) Read(
         IncrementalGeneratorInitializationContext context)
     {
         var results = context.SyntaxProvider
@@ -89,9 +89,9 @@ internal static partial class LocalizationDiscovery
             .Select(static (result, _) => result!);
 
         var ofContract = Collect(results.Select(static (result, _) => ForPart(result, DiscoveredTexts.OfContract)), ContractTrackingName);
-        var ofRecord = Collect(results.Select(static (result, _) => ForPart(result, DiscoveredTexts.OfRecord)), RecordTrackingName);
+        var ofRegistrar = Collect(results.Select(static (result, _) => ForPart(result, DiscoveredTexts.OfRegistrar)), RegistrarTrackingName);
 
-        return (ofContract, ofRecord);
+        return (ofContract, ofRegistrar);
     }
 
     /// <summary>
@@ -158,15 +158,15 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The contracts the current compilation generates, worked out once for both parts of the generator, from what the
-    /// registrar's part reads of the sets (<see cref="DiscoveredTexts.OfRecord"/>). That holds everything that decides
+    /// registrar's part reads of the sets (<see cref="DiscoveredTexts.OfRegistrar"/>). That holds everything that decides
     /// where a contract comes from. It holds no wording and no location, so it stays as it was when a wording changes,
     /// and this step doesn't run again. A partial set counts with the base types of all its declarations
     /// (<see cref="Merge"/>).
     /// </summary>
-    public static IncrementalValueProvider<GeneratedContracts> ReadGeneratedContracts(IncrementalValueProvider<Discovery> recordDiscovery,
+    public static IncrementalValueProvider<GeneratedContracts> ReadGeneratedContracts(IncrementalValueProvider<Discovery> registrarDiscovery,
         IncrementalValueProvider<DeclaredLanguages?> languages, IncrementalValueProvider<EquatableArray<ContractBinding>> bindings)
     {
-        var contracts = recordDiscovery
+        var contracts = registrarDiscovery
             .Combine(languages)
             .Combine(bindings)
             .Select(static (data, _) => GetGeneratedContracts(Merge(data.Left.Left.Sets), data.Left.Right, data.Right))
@@ -445,7 +445,7 @@ internal static partial class LocalizationDiscovery
     {
         var forPart = result with { Set = result.Set is { } set ? ForPart(set, texts) : null };
 
-        if (texts is DiscoveredTexts.OfRecord)
+        if (texts is DiscoveredTexts.OfRegistrar)
         {
             forPart = forPart with
             {
@@ -461,7 +461,7 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The share of a set that one part of the generator reads, of what <see cref="DiscoverSet"/> reads for both: the
-    /// texts a contract is written from, with every location, or the names the registrar records, without one. So an
+    /// texts a contract is written from, with every location, or the names the registrar passes on, without one. So an
     /// edit that changes only the other share leaves that part's pipeline as it was.
     /// </summary>
     internal static DiscoveredLocalization ForPart(DiscoveredLocalization set, DiscoveredTexts texts)
@@ -472,7 +472,7 @@ internal static partial class LocalizationDiscovery
             // The registrar's part asks which enums a set holds the texts of (EnumNames), so that an enum doesn't get a
             // second GetText from its [Localized] members, and reads nothing else of its texts. It holds no location
             // either. Every other field of a set is a name or a number, which an edit of a wording leaves as it was.
-            DiscoveredTexts.OfRecord => set with { OfContract = default, Locations = default },
+            DiscoveredTexts.OfRegistrar => set with { OfContract = default, Locations = default },
             _ => set,
         };
 

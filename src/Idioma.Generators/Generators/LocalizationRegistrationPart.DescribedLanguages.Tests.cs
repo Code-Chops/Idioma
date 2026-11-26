@@ -3,7 +3,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed partial class LocalizationRegistrationPartTests
 {
     [Test]
-    public void SetsNamedAfterDeclaredLongCodes_RecordTheirCodesBeforeRegistering()
+    public void SetsNamedAfterDeclaredLongCodes_AreDescribedWithTheirCodesBeforeRegistering()
     {
         // Arrange & Act
         var text = GeneratedText(Run("""
@@ -35,20 +35,20 @@ public sealed partial class LocalizationRegistrationPartTests
             """));
 
         // Assert: before the sets register, as the registry files each under the code it reads from it. A two-letter
-        // code is recorded too, so that the run time never reads a set's name.
-        text.ShouldContain("GeneratedCode.RecordSet<");
+        // code is described too, so that the run time never reads a set's name.
+        text.ShouldContain("GeneratedCode.DescribeSet<");
         text.ShouldContain("ShopLocalizationNlBe>(\"nl-BE\");");
         text.ShouldContain("ShopLocalizationZhHans>(\"zh-Hans\");");
         text.ShouldContain("ShopLocalizationEn>(\"en\");");
-        text.LastIndexOf("RecordSet<", StringComparison.Ordinal)
+        text.LastIndexOf("DescribeSet<", StringComparison.Ordinal)
             .ShouldBeLessThan(text.IndexOf("RegisterSets(asDefaults: true,", StringComparison.Ordinal));
     }
 
     [Test]
-    public void SetDerivingFromAnother_RecordsTheTextsItsOwnClassWords()
+    public void SetDerivingFromAnother_IsDescribedWithTheTextsItsOwnClassWords()
     {
         // Arrange & Act: a regional set overriding a property and a method, an app's rewording implementing a text
-        // explicitly, and a British set implementing its own LocalizationLanguageCode, which the build records no language for.
+        // explicitly, and a British set implementing its own LocalizationLanguageCode, which the build describes with no language.
         var text = GeneratedText(Run("""
             using CodeChops.Idioma;
 
@@ -90,14 +90,14 @@ public sealed partial class LocalizationRegistrationPartTests
             """));
 
         // Assert: by name and in order, and nothing of the texts for a set deriving from none.
-        text.ShouldContain("RecordSet<TestApp.ShopLocalizationEnGb>(\"en-GB\", \"Cart\", \"Greeting\");");
-        text.ShouldContain("RecordSet<TestApp.MyShopLocalizationEn>(\"en\", \"Checkout\");");
-        text.ShouldContain("RecordSet<TestApp.ShopLocalizationBritish>(\"en-GB\", \"Cart\");");
-        text.ShouldContain("RecordSet<TestApp.ShopLocalizationEn>(\"en\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationEnGb>(\"en-GB\", \"Cart\", \"Greeting\");");
+        text.ShouldContain("DescribeSet<TestApp.MyShopLocalizationEn>(\"en\", \"Checkout\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationBritish>(\"en-GB\", \"Cart\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationEn>(\"en\");");
     }
 
     [Test]
-    public void ExcludedSetNamedAfterDeclaredLongCode_RecordsItsCodeWithoutRegistering()
+    public void ExcludedSetNamedAfterDeclaredLongCode_IsDescribedWithItsCodeWithoutRegistering()
     {
         // Arrange & Act: registered by hand, it must serve the language the build counted it for.
         var text = GeneratedText(Run("""
@@ -129,10 +129,10 @@ public sealed partial class LocalizationRegistrationPartTests
     [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";", "ShopLocalizationNlBe>(\"nl-BE\");")]
     [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"SHOP_LANGUAGE\") ?? \"nl-BE\";", null)]
     [Arguments("[assembly: SupportedLanguages(\"en\", \"nl\")]", "", "ShopLocalizationNlBe>(\"be\");")]
-    public void SetWhoseNameGivesNoDeclaredLongCode_RecordsWhatTheBuildReads(string attribute, string languageCode, string? recorded)
+    public void SetWhoseNameGivesNoDeclaredLongCode_IsDescribedWithWhatTheBuildReads(string attribute, string languageCode, string? described)
     {
-        // Arrange & Act: a set implementing its code records it where it's a constant, so that the registry needn't
-        // create the set to file it. One the build can't read gets no record, and doesn't register (LOC208). Without
+        // Arrange & Act: a set implementing its code is described with it where it's a constant, so that the registry needn't
+        // create the set to file it. One the build can't read gets no description, and doesn't register (LOC208). Without
         // nl-BE declared, the name gives 'be'.
         var run = Run($$"""
             using CodeChops.Idioma;
@@ -156,20 +156,20 @@ public sealed partial class LocalizationRegistrationPartTests
         // Assert
         var text = String.Concat(run.GeneratedSources.Select(static source => source.SourceText.ToString()));
 
-        if (recorded is null)
+        if (described is null)
         {
-            text.ShouldNotContain("RecordSet");
+            text.ShouldNotContain("DescribeSet");
             text.ShouldNotContain("ShopLocalizationNlBe()");
             run.Diagnostics.ShouldContain(static diagnostic => diagnostic.Id == "LOC208");
         }
         else
         {
-            text.ShouldContain(recorded);
+            text.ShouldContain(described);
         }
     }
 
     [Test]
-    public void SetNamedAfterTwoLetterCode_RecordsNoLongerCodeItsNameHappensToEndIn()
+    public void SetNamedAfterTwoLetterCode_IsDescribedWithNoLongerCodeItsNameHappensToEndIn()
     {
         // Arrange & Act: "MessagesAr" ends in the letters of EsAr, the suffix of es-AR, but not at a capital, so it is
         // the Arabic set its last two letters say; "MessagesEsAr" is the Argentinian one.
@@ -230,7 +230,7 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void ExcludedSet_RecordsItsLanguageWithoutRegistering()
+    public void ExcludedSet_IsDescribedWithItsLanguageWithoutRegistering()
     {
         // Arrange & Act: registered by hand, it must serve the language the build counted it for.
         var result = Run($$"""

@@ -286,7 +286,7 @@ public sealed class TextParametersAnalyzerTests
     [Test]
     public async Task SetOfContractOfAnotherAssembly_ShouldBeHeldToValuesItsDefaultWordingShows()
     {
-        // Arrange & Act: an app adds German to a library, whose contract records what its English wording shows.
+        // Arrange & Act: an app adds German to a library, whose contract marks what its English wording shows.
         var diagnostics = await AnalyzeAsync("""
             using ShopLibrary;
 
@@ -405,7 +405,7 @@ public sealed class TextParametersAnalyzerTests
     [Test]
     public async Task HandWrittenContract_ShouldHoldEveryLanguageToTheValuesTheDefaultWordingShows()
     {
-        // Arrange & Act: no contract is generated, so nothing records what English shows. It's read from the English
+        // Arrange & Act: no contract is generated, so nothing marks what English shows. It's read from the English
         // set instead, which shows the name and only chooses by the form of address.
         var diagnostics = await AnalyzeAsync("""
             using CodeChops.Idioma;

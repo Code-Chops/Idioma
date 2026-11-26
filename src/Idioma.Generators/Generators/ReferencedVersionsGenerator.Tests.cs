@@ -18,7 +18,7 @@ public sealed class ReferencedVersionsGeneratorTests
 
     /// <summary>
     /// A library built with a version of the package that stands in for another release: an assembly named as the
-    /// package's, with that assembly version, which the library records in its reference to it.
+    /// package's, with that assembly version, which the library stores in its reference to it.
     /// </summary>
     private static MetadataReference LibraryBuiltWith(string version)
     {

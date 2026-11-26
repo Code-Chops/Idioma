@@ -11,7 +11,8 @@ namespace CodeChops.Idioma.Tests;
 public sealed class CollectibleAssembliesTests
 {
     /// <summary>
-    /// A plugin with sets, a text with a value, an inline text, and a text on a member.
+    /// A plugin with sets, a text with a value, an inline text, and a text on a member. It asks for the member's text by
+    /// the type it names and by a <see cref="Type"/>.
     /// </summary>
     private static byte[] Plugin { get; } = GeneratorTestHelper.EmitLibraryWithGenerators("UnloadedPlugin", """
         using CodeChops.Idioma;
@@ -40,7 +41,7 @@ public sealed class CollectibleAssembliesTests
 
         public static class Texts
         {
-            public static string Read() => $"{PluginLocalization.Title}, {PluginLocalization.Greeting("Max")}, {LocalizedText.Inline(en: "Yes", nl: "Ja")}, {LocalizedText.GetTextByMember<Address>(nameof(Address.City))}";
+            public static string Read() => $"{PluginLocalization.Title}, {PluginLocalization.Greeting("Max")}, {LocalizedText.Inline(en: "Yes", nl: "Ja")}, {LocalizedText.GetTextByMember<Address>(nameof(Address.City))}, {LocalizedText.GetTextByMember(typeof(Address), nameof(Address.City))}";
         }
         """);
 
@@ -60,7 +61,7 @@ public sealed class CollectibleAssembliesTests
         }
 
         // Assert
-        texts.ShouldBe("Insteekmodule, Hallo, Max, Ja, Plaats");
+        texts.ShouldBe("Insteekmodule, Hallo, Max, Ja, Plaats, Plaats");
         context.IsAlive.ShouldBeFalse();
         LocalizationRegistry.Sets.ShouldNotContain(set => set.GetType().Assembly.IsCollectible);
     }
@@ -82,6 +83,54 @@ public sealed class CollectibleAssembliesTests
         // Assert
         textsAfterUnload.ShouldNotBeNullOrEmpty();
         context.IsAlive.ShouldBeFalse();
+    }
+
+    [Test]
+    [NotInParallel]
+    public void Plugin_WhoseTypeClosesAGenericSetOfALastingAssembly_ShouldBeLetGo()
+    {
+        // Arrange & Act: the set's type lies in the lasting assembly, and only its type argument in the plugin.
+        var context = RegisterGenericSetOfPluginAndUnload();
+
+        for (var i = 0; i < 20 && context.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        // Assert
+        context.IsAlive.ShouldBeFalse();
+        LocalizationRegistry.Sets.ShouldNotContain(set => set.GetType().IsCollectible);
+    }
+
+    /// <summary>
+    /// A generic set in an assembly that stays loaded, which a plugin's type can close.
+    /// </summary>
+    private static Assembly LastingSets { get; } = new AssemblyLoadContext("LastingSets").LoadFromStream(new MemoryStream(GeneratorTestHelper.EmitLibrary("LastingSets", """
+        using CodeChops.Idioma;
+
+        namespace LastingSets;
+
+        public interface ISetOfPlugin;
+
+        public class SetOf<T> : ILocalizationSet, ISetOfPlugin
+        {
+            string ILocalizationSet.LocalizationLanguageCode => "en";
+        }
+        """)));
+
+    // Not inlined, so that nothing of the plugin is left on the stack of the test.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference RegisterGenericSetOfPluginAndUnload()
+    {
+        var context = new PluginContext();
+        var plugin = context.LoadFromStream(new MemoryStream(GeneratorTestHelper.EmitLibrary("PluginOfGenericSet", "namespace PluginOfGenericSet; public sealed class Thing;")));
+        var setType = LastingSets.GetType("LastingSets.SetOf`1")!.MakeGenericType(plugin.GetType("PluginOfGenericSet.Thing")!);
+
+        LocalizationRegistry.Register((ILocalizationSet)Activator.CreateInstance(setType)!);
+        context.Unload();
+
+        return new WeakReference(context);
     }
 
     // Not inlined, so that nothing of the plugin is left on the stack of the test.

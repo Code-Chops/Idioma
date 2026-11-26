@@ -1,7 +1,7 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes the file that records every set of a public contract in an assembly attribute
+/// Writes the file that lists every set of a public contract in an assembly attribute
 /// (<see cref="ProvidedLocalizationSet"/>), which the build of an assembly referencing this one reads.
 /// </summary>
 internal static class ProvidedSetsSource

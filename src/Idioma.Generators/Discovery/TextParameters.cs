@@ -233,7 +233,7 @@ internal static class TextParameters
     /// <see langword="null"/> where the build can't tell: the contract lies in another assembly, this one declares no
     /// languages, or no set of its default language here implements the text.
     /// </summary>
-    // A generated contract records this on the text ([ShownValue]). A contract written by hand records nothing, so its
+    // A generated contract marks this on the text ([ShownValue]). A contract written by hand marks nothing, so its
     // default-language set is read instead, which the build asks for in the contract's own assembly (LOC201). That set
     // is found among the classes whose name ends in the default language, as nearly every set's does.
     public static bool[]? FindShownByDefaultSet(IMethodSymbol text, Compilation compilation, CancellationToken cancellationToken)

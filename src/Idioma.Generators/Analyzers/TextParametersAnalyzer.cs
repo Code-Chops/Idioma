@@ -17,7 +17,7 @@ namespace CodeChops.Idioma.Generators;
 /// </para>
 /// <para>
 /// A value counts as left out when the method does not use it at all, and only where the default wording shows it,
-/// which the generated contract records on the method (<c>[ShownValue]</c>). For a contract written by hand, it's read
+/// which the generated contract marks on the method (<c>[ShownValue]</c>). For a contract written by hand, it's read
 /// from the default-language set that implements it in the same assembly. A value the default wording only
 /// chooses by, such as a form of address, may mean nothing in a language that makes no such distinction. Each method
 /// of a set that implements a text of a contract is checked, whether it implements the text by its name, implements
@@ -65,7 +65,7 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
         if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizationSet) is not { } localizationSet)
             return;
 
-        // A package without the attribute records no values to hold a set to.
+        // A package without the attribute marks no values to hold a set to.
         var shownValue = context.Compilation.GetTypeByMetadataName(PackageNames.ShownValueAttribute);
 
         // What the default wording of a text of a contract written by hand shows, read once per text for the compilation.
@@ -169,28 +169,28 @@ public sealed class TextParametersAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether the default wording of a text shows the value of a parameter. A generated contract records it on the
+    /// Whether the default wording of a text shows the value of a parameter. A generated contract marks it on the
     /// text (<c>[ShownValue]</c>). For a contract written by hand, it's read from the default-language set that
     /// implements the text in this compilation, if any (<see cref="TextParameters.FindShownByDefaultSet"/>).
     /// </summary>
     private static bool IsShown(IMethodSymbol text, IParameterSymbol parameter, INamedTypeSymbol? shownValue,
         ConcurrentDictionary<IMethodSymbol, bool[]?> shownByHand, Compilation compilation, CancellationToken cancellationToken)
     {
-        var recorded = false;
+        var marked = false;
 
         foreach (var attribute in text.GetAttributes())
         {
             if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, shownValue))
                 continue;
 
-            recorded = true;
+            marked = true;
 
             if (attribute.ConstructorArguments is [{ Value: string name }] && String.Equals(name, parameter.Name, StringComparison.Ordinal))
                 return true;
         }
 
-        // A generated contract records every value its default wording shows, so a value it doesn't record isn't shown.
-        if (recorded || PackageNames.IsGeneratedContract(text.ContainingType))
+        // A generated contract marks every value its default wording shows, so a value it doesn't mark isn't shown.
+        if (marked || PackageNames.IsGeneratedContract(text.ContainingType))
             return false;
 
         var shown = shownByHand.GetOrAdd(text, written => TextParameters.FindShownByDefaultSet(written, compilation, cancellationToken));

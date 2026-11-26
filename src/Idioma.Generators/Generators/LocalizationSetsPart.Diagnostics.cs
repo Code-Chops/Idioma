@@ -1,5 +1,6 @@
 namespace CodeChops.Idioma.Generators;
 
+/// <inheritdoc cref="LocalizationSetsPart"/>
 public static partial class LocalizationSetsPart
 {
     public const string NoLanguagesDeclaredDiagnosticId = "LOC100";

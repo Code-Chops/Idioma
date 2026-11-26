@@ -65,7 +65,7 @@ Expect("inline text, for a culture the provider gives", Orders(), "Bestellingen"
 Expect("the current UI culture after it", CultureInfo.CurrentUICulture.Name, "en");
 LocalizationRegistry.CurrentUICultureProvider = null;
 
-// A text on a member, of the library and of the app. The build wrote each as code, and the app's registrar recorded
+// A text on a member, of the library and of the app. The build wrote each as code, and the app's registrar registered
 // those of the library when the app started, so nothing reads an attribute here. An enum's value gives its text
 // itself: by the attribute of its member, or from a set of the enum.
 (string Culture, string City, string Picked, string Status, string Surname, string Shipped)[] memberCases =

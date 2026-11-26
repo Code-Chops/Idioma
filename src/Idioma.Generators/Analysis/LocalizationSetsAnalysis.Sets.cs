@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace CodeChops.Idioma.Generators;
 
+/// <inheritdoc cref="LocalizationSetsAnalysis"/>
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>

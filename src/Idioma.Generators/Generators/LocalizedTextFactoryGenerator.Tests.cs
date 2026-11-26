@@ -11,7 +11,7 @@ namespace CodeChops.Idioma.Tests;
 /// <summary>
 /// Tests for <see cref="LocalizedTextFactoryGenerator"/>: <c>LocalizedText.Inline</c> gets one required parameter
 /// per language of <c>[assembly: SupportedLanguages]</c>, so leaving one out does not compile, and an invalid language
-/// gets <c>LOC101</c>; an assembly calling it is marked <c>[assembly: InlineTexts]</c>. The attribute
+/// gets <c>LOC101</c>; an assembly calling it is marked <c>[assembly: StandaloneTexts]</c>. The attribute
 /// <c>[Localized]</c> gets the same parameters.
 /// </summary>
 public sealed class LocalizedTextFactoryGeneratorTests
@@ -35,12 +35,12 @@ public sealed class LocalizedTextFactoryGeneratorTests
     /// <summary>
     /// The marker for texts written inline, or <see langword="null"/> when none is emitted.
     /// </summary>
-    private static string? InlineTextsMarker(GeneratorDriverRunResult result)
+    private static string? StandaloneTextsMarker(GeneratorDriverRunResult result)
     {
         var run = result.Results.ShouldHaveSingleItem();
         run.Exception.ShouldBeNull();
 
-        return run.GeneratedSources.SingleOrDefault(source => source.HintName is "InlineTexts.g.cs").SourceText?.ToString();
+        return run.GeneratedSources.SingleOrDefault(source => source.HintName is "StandaloneTexts.g.cs").SourceText?.ToString();
     }
 
     /// <summary>
@@ -229,7 +229,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         // Assert
         text.ShouldContain("public static string Inline(string en)");
         text.ShouldContain("internal static readonly string[] Languages = [\"en\"];");
-        text.ShouldContain("return CodeChops.Idioma.Internals.GeneratedCode.GetLanguageIndex(Languages) switch");
+        text.ShouldContain("return CodeChops.Idioma.Internals.GeneratedCode.GetLanguageIndexForStandaloneText(Languages) switch");
         text.ShouldContain("_ => en ?? throw new System.ArgumentNullException(nameof(en)),");
         text.ShouldNotContain("1 =>");
     }
@@ -345,7 +345,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
 
         // In an app without a default language of its own, it gets the default wording, which is the first.
         var french = LocalizationRegistry.Create([]).Resolve(CultureInfo.GetCultureInfo("fr-FR"));
-        InlineLanguage.IndexOfShownLanguage(["en-GB", "en"], french).ShouldBe(0);
+        StandaloneLanguage.IndexOfShownLanguage(["en-GB", "en"], french).ShouldBe(0);
     }
 
     [Test]
@@ -657,24 +657,24 @@ public sealed class LocalizedTextFactoryGeneratorTests
     [Arguments("public static string Orders => LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
     [Arguments("public static string Orders => CodeChops.Idioma.LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
     [Arguments("public static string Orders => CodeChops.Idioma.LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");")]
-    public void FactoryCalledInCode_ShouldMarkAssemblyAsWritingInlineTexts(string body)
+    public void FactoryCalledInCode_ShouldMarkAssemblyAsWritingStandaloneTexts(string body)
     {
         // Arrange & Act
-        var marker = InlineTextsMarker(Run(Source("\"en\", \"nl\"", body)));
+        var marker = StandaloneTextsMarker(Run(Source("\"en\", \"nl\"", body)));
 
         // Assert
-        marker.ShouldNotBeNull().ShouldContain("[assembly: CodeChops.Idioma.Internals.InlineTextsAttribute]");
+        marker.ShouldNotBeNull().ShouldContain("[assembly: CodeChops.Idioma.Internals.StandaloneTextsAttribute]");
     }
 
     [Test]
-    public void MarkerOfInlineTexts_ShouldLeaveNoWarning()
+    public void MarkerOfStandaloneTexts_ShouldLeaveNoWarning()
     {
-        // Arrange: InlineTextsAttribute is marked [Obsolete] for consumers. A warning about it in generated code is one
-        // the author can't act on, and it stops a build that treats warnings as errors.
+        // Arrange: StandaloneTextsAttribute is marked [Obsolete] for consumers. A warning about it in generated code is
+        // one the author can't act on, and it stops a build that treats warnings as errors.
         var source = Source("\"en\", \"nl\"", "public static string Orders => LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\");");
 
         // Act
-        var marker = InlineTextsMarker(Run(source));
+        var marker = StandaloneTextsMarker(Run(source));
         var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
 
         // Assert
@@ -685,7 +685,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
     [Test]
     [Arguments("using Text = CodeChops.Idioma.LocalizedText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
     [Arguments("using Text = global::CodeChops.Idioma.LocalizedText;", "Text.Inline(en: \"Orders\", nl: \"Bestellingen\")")]
-    public void FactoryCalledThroughAlias_ShouldMarkAssemblyAsWritingInlineTexts(string alias, string call)
+    public void FactoryCalledThroughAlias_ShouldMarkAssemblyAsWritingStandaloneTexts(string alias, string call)
     {
         // Arrange: the name at the call says nothing, so the receiver has to be bound to be known for the text type.
         var source = $$"""
@@ -702,10 +702,10 @@ public sealed class LocalizedTextFactoryGeneratorTests
             """;
 
         // Act
-        var marker = InlineTextsMarker(Run(source));
+        var marker = StandaloneTextsMarker(Run(source));
 
         // Assert
-        marker.ShouldNotBeNull().ShouldContain("[assembly: CodeChops.Idioma.Internals.InlineTextsAttribute]");
+        marker.ShouldNotBeNull().ShouldContain("[assembly: CodeChops.Idioma.Internals.StandaloneTextsAttribute]");
     }
 
     [Test]
@@ -731,13 +731,13 @@ public sealed class LocalizedTextFactoryGeneratorTests
             """);
 
         // Assert
-        InlineTextsMarker(result).ShouldBeNull();
+        StandaloneTextsMarker(result).ShouldBeNull();
     }
 
     [Test]
     [Arguments("Pages/Orders.razor")]
     [Arguments("Views/Orders.cshtml")]
-    public void FactoryCalledInMarkup_ShouldMarkAssemblyAsWritingInlineTexts(string path)
+    public void FactoryCalledInMarkup_ShouldMarkAssemblyAsWritingStandaloneTexts(string path)
     {
         // Arrange & Act: Razor's own generator writes the C# for markup, which no other generator sees.
         var result = GeneratorTestHelper.RunWithAdditionalFiles(
@@ -746,7 +746,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
             (path, """<h1>@(LocalizedText.Inline(en: "Orders", nl: "Bestellingen"))</h1>"""));
 
         // Assert
-        InlineTextsMarker(result).ShouldNotBeNull();
+        StandaloneTextsMarker(result).ShouldNotBeNull();
     }
 
     [Test]
@@ -759,7 +759,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
             ("Pages/Orders.razor", "<h1>@ShopLocalization.Checkout</h1>"));
 
         // Assert
-        InlineTextsMarker(result).ShouldBeNull();
+        StandaloneTextsMarker(result).ShouldBeNull();
     }
 
     [Test]
@@ -778,7 +778,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
             """);
 
         // Assert
-        InlineTextsMarker(result).ShouldBeNull();
+        StandaloneTextsMarker(result).ShouldBeNull();
     }
 
     [Test]
@@ -899,7 +899,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
     [Test]
     public void LibraryWithInternalsVisibleToApp_ShouldNotMakeLocalizedAmbiguous()
     {
-        // Arrange: both assemblies generate the attribute and the class that records their members' texts, and the app
+        // Arrange: both assemblies generate the attribute and the class that registers their members' texts, and the app
         // sees the library's internals.
         var library = GeneratorTestHelper.CompileLibraryWithGenerators("ShopLibrary", """
             using CodeChops.Idioma;
@@ -931,7 +931,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
     {
         // Arrange & Act: this generator marks an assembly for LocalizedText.Inline alone. The file that holds the
         // texts of members marks it for those, so that this generator need not look for them.
-        var marker = InlineTextsMarker(Run(Member("\"en\", \"nl\"", """[Localized(en: "City", nl: "Plaats")]""")));
+        var marker = StandaloneTextsMarker(Run(Member("\"en\", \"nl\"", """[Localized(en: "City", nl: "Plaats")]""")));
 
         // Assert
         marker.ShouldBeNull();

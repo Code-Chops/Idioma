@@ -2,13 +2,13 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// What a referenced assembly says about its languages: those it declares, its sets of public contracts, and whether it
-/// writes texts inline.
+/// writes standalone texts.
 /// </summary>
 internal readonly record struct ReferencedLocalization(
     string AssemblyName,
     EquatableArray<string> Languages,
     EquatableArray<ProvidedLocalizationSet> Sets,
-    bool HasInlineTexts,
+    bool HasStandaloneTexts,
     EquatableArray<ReferencedSetOfEnum> SetsOfEnums);
 
 /// <summary>

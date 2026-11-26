@@ -174,11 +174,11 @@ public interface ILocalizationSet
     {
         ArgumentNullException.ThrowIfNull(setType);
 
-        // Recorded by the generated registrar of the set's assembly, which runs before any of its code. It holds the
+        // Described by the generated registrar of the set's assembly, which runs before any of its code. It holds the
         // language the build read from the name of every set it found, so the name below is read only for a set the
         // build didn't see, such as a nested one that derives from no set it saw.
-        if (LocalizationRegistry.GetRecordedLanguageCode(setType) is { } recorded)
-            return recorded;
+        if (LocalizationRegistry.GetDescribedLanguageCode(setType) is { } described)
+            return described;
 
         // ASCII letters only: culture names are ASCII, so a suffix of other letters would file the set under a language
         // no UI culture resolves through, without a word of warning. The capital marks where the code starts, as the

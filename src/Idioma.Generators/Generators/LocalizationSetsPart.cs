@@ -21,7 +21,7 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 /// <remarks>
 /// <para>
-/// It also records every set of a public contract in an assembly attribute, so that the build of an assembly referencing
+/// It also lists every set of a public contract in an assembly attribute, so that the build of an assembly referencing
 /// this one can tell which languages exist without searching its types, and reports the languages referenced libraries
 /// leave open. The generator sees the compilation before its own output is added, so the interfaces of a set are exactly
 /// the handwritten ones.
@@ -60,7 +60,7 @@ public static partial class LocalizationSetsPart
             .WithTrackingName(AnalysisTrackingName);
 
         // Separate outputs, so that an edit in the file of a set, which renews its location, reports its diagnostics
-        // anew without rewriting the generated code: the contracts and the recorded sets hold no location. The analysis
+        // anew without rewriting the generated code: the contracts and the listed sets hold no location. The analysis
         // itself runs again on such an edit, because it reads the wordings and the locations.
         context.RegisterSourceOutput(analysis.Select(static (analysis, _) => analysis.Findings), Report);
 

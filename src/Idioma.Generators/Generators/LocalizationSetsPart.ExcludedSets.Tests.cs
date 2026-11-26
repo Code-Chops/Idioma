@@ -48,10 +48,10 @@ public sealed partial class LocalizationSetsPartTests
             }
             """);
 
-        // Assert: no LOC201, the language is recorded for the assemblies referencing this one, and the generated text
+        // Assert: no LOC201, the language is listed for the assemblies referencing this one, and the generated text
         // links to its wording.
         DiagnosticIds(result).ShouldBeEmpty();
-        RecordedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl\")");
         ContractText(result).ShouldContain("<see cref=\"ShopLocalizationNl.Checkout\">nl</see>");
     }
 
@@ -86,7 +86,7 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void ExcludedSetNamedAfterListedLongCode_ShouldCountForThatLanguage()
     {
-        // Arrange & Act: registered by hand, it serves nl-BE, as the generated registrar records that code for it too.
+        // Arrange & Act: registered by hand, it serves nl-BE, as the generated registrar describes it with that code too.
         var result = Run("""
             using CodeChops.Idioma;
 
@@ -108,7 +108,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         DiagnosticIds(result).ShouldBeEmpty();
-        RecordedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\")");
     }
 
     [Test]

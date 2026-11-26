@@ -2,7 +2,7 @@ namespace CodeChops.Idioma.Internals;
 
 /// <summary>
 /// <para>
-/// Don't use this attribute directly! It's used by the source generator.
+/// <b>Don't use this attribute directly! It's used by the source generator.</b>
 /// </para>
 /// <para>
 /// Marks an interface as the contract of a set, such as <c>IShopLocalization</c>. The source generator writes this on

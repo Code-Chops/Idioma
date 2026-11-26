@@ -57,9 +57,9 @@ internal static class LocalizedMembers
     public const string ExtensionHolderSuffix = "LocalizedExtensions";
 
     /// <summary>
-    /// The namespace of the class that records an assembly's member texts, which is that of its registrar.
+    /// The namespace of the class that registers an assembly's member texts, which is that of its registrar.
     /// </summary>
-    public const string RecorderNamespace = PackageNames.Namespace + ".Generated";
+    public const string MemberTextsNamespace = PackageNames.Namespace + ".Generated";
 
     /// <summary>
     /// The members marked <c>[Localized]</c> in the current compilation, each as its attribute writes it. A member
@@ -95,7 +95,7 @@ internal static class LocalizedMembers
     /// <summary>
     /// The model without the extension method of an enum that a set of the assembly holds the texts of
     /// (<c>ILocalizationSet&lt;TEnum&gt;</c>). The generated class of that set gives the enum its <c>GetText</c>
-    /// already, and two would make every call ambiguous (<c>CS0121</c>). The texts of its members are still recorded.
+    /// already, and two would make every call ambiguous (<c>CS0121</c>). The texts of its members are still registered.
     /// </summary>
     public static LocalizedMembersModel WithoutExtensionsOf(LocalizedMembersModel model, EquatableArray<string> enumsWithSets)
     {
@@ -110,11 +110,11 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// The name of the class that records an assembly's member texts: <c>LocalizedMembers_My_App</c> for
+    /// The name of the class that registers an assembly's member texts: <c>LocalizedMembers_My_App</c> for
     /// <c>My-App</c>. Built from the assembly's name, as its registrar's is, so that a test project that sees the
     /// internals of the library it tests has a class of another name.
     /// </summary>
-    public static string GetRecorderName(string? assemblyName)
+    public static string GetMemberTextsClassName(string? assemblyName)
     {
         var name = $"LocalizedMembers_{CodeEscaping.ToIdentifierPart(assemblyName)}";
         return name;
@@ -508,10 +508,10 @@ internal static class LocalizedMembers
 
     private static LocalizedMembersModel BuildModel(EquatableArray<LocalizedMember> members, EquatableArray<string> codes, string? assemblyName)
     {
-        var recorderName = GetRecorderName(assemblyName);
+        var memberTextsClassName = GetMemberTextsClassName(assemblyName);
 
         if (codes.Length is 0 || members.Length is 0)
-            return new LocalizedMembersModel(recorderName, codes, default, default);
+            return new LocalizedMembersModel(memberTextsClassName, codes, default, default);
 
         var types = new SortedDictionary<string, List<(LocalizedMember Member, EquatableArray<string> Wordings)>>(StringComparer.Ordinal);
         var seen = new HashSet<(string Type, string? Member)>();
@@ -552,7 +552,7 @@ internal static class LocalizedMembers
             model.Add(new LocalizedType(first.TypeReference, first.TypeKey, first.TypeName, new EquatableArray<LocalizedText>(texts), extension));
         }
 
-        return new LocalizedMembersModel(recorderName, codes, new EquatableArray<LocalizedType>(model.ToImmutable()), new EquatableArray<string>([.. suppressed]));
+        return new LocalizedMembersModel(memberTextsClassName, codes, new EquatableArray<LocalizedType>(model.ToImmutable()), new EquatableArray<string>([.. suppressed]));
     }
 
     /// <summary>
@@ -660,18 +660,18 @@ internal readonly record struct LocalizedMemberEnum(
     bool IsObsoleteAsError);
 
 /// <summary>
-/// The texts to generate for the members of an assembly: the name of the class that records them, the languages, the
+/// The texts to generate for the members of an assembly: the name of the class that registers them, the languages, the
 /// types with their texts, in the order of their full names, and what naming those types and members reports besides
 /// <c>CS0612</c> and <c>CS0618</c>, in the order of the ids (<see cref="LocalizedMember.SuppressedDiagnostics"/>).
 /// </summary>
 internal readonly record struct LocalizedMembersModel(
-    string RecorderName,
+    string MemberTextsClassName,
     EquatableArray<string> Codes,
     EquatableArray<LocalizedType> Types,
     EquatableArray<string> SuppressedDiagnostics)
 {
     /// <summary>
-    /// Whether the assembly has a text to record, and so gets the class that records them.
+    /// Whether the assembly has a text to register, and so gets the class that registers them.
     /// </summary>
     public bool HasTexts => this.Types.Length > 0;
 }

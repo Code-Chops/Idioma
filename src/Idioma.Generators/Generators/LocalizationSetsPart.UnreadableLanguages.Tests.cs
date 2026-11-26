@@ -86,7 +86,7 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void LibrarySetWithUnreadableLanguage_ShouldNotBeReportedAsMissingInApp()
     {
-        // Arrange: the library's build could not read the language of its second set, and records the set as one of a
+        // Arrange: the library's build could not read the language of its second set, and lists the set as one of a
         // language unknown, so that the app's build does not ask for a set the library has.
         var library = GeneratorTestHelper.CompileLibraryWithGenerators("WordingLibrary", """
             using CodeChops.Idioma;
@@ -121,10 +121,10 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetWithUnreadableLanguage_ShouldBeRecordedForOtherAssembliesAsOfLanguageUnknown()
+    public void SetWithUnreadableLanguage_ShouldBeListedForOtherAssembliesAsOfLanguageUnknown()
     {
         // Arrange & Act
-        var recorded = RecordedSets(Run($$"""
+        var provided = ProvidedSets(Run($$"""
             {{Header}}
 
             public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
@@ -142,8 +142,8 @@ public sealed partial class LocalizationSetsPartTests
             """));
 
         // Assert: under what is no culture name, so that a build that does not know it takes it for no language.
-        recorded.ShouldContain("""LocalizationSetAttribute("TestApp.IShopLocalization", "en")""");
-        recorded.ShouldContain("""LocalizationSetAttribute("TestApp.IShopLocalization", "*")""");
+        provided.ShouldContain("""LocalizationSetAttribute("TestApp.IShopLocalization", "en")""");
+        provided.ShouldContain("""LocalizationSetAttribute("TestApp.IShopLocalization", "*")""");
     }
 
     [Test]
@@ -180,10 +180,10 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetWhoseNameGivesNoLanguage_ShouldNotBeRecordedForOtherAssemblies()
+    public void SetWhoseNameGivesNoLanguage_ShouldNotBeListedForOtherAssemblies()
     {
         // Arrange & Act
-        var recorded = RecordedSets(Run($$"""
+        var provided = ProvidedSets(Run($$"""
             {{Header}}
 
             public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
@@ -203,14 +203,14 @@ public sealed partial class LocalizationSetsPartTests
             """));
 
         // Assert: it serves no language, so an assembly referencing this one doesn't take it for a set of any.
-        recorded.ShouldNotContain("\"*\"");
+        provided.ShouldNotContain("\"*\"");
     }
 
     [Test]
     public void LibrarySetWhoseNameGivesNoLanguage_ShouldNotHideLanguageMissingInApp()
     {
         // Arrange: a library that rewords the grid under a name without a language. That set serves no language, so the
-        // library doesn't record it as one of a language unknown.
+        // library doesn't list it as one of a language unknown.
         var rewording = GeneratorTestHelper.CompileLibraryWithGenerators("RewordingLibrary", """
             namespace RewordingLibrary;
 

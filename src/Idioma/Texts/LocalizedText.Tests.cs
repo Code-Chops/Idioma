@@ -87,20 +87,20 @@ namespace CodeChops.Idioma.Tests.Members
     }
 
     /// <summary>
-    /// Types no generated code knows, whose texts a test records by hand. One per test, because a recorded text stays
+    /// Types no generated code knows, whose texts a test registers by hand. One per test, because a registered text stays
     /// for the whole run.
     /// </summary>
-    public sealed class RecordedLater;
+    public sealed class RegisteredLater;
 
-    public sealed class RecordedDutchFirst;
+    public sealed class RegisteredDutchFirst;
 
-    public sealed class RecordedDutchGermanEnglish;
+    public sealed class RegisteredDutchGermanEnglish;
 
-    public sealed class RecordedFrenchGerman;
+    public sealed class RegisteredFrenchGerman;
 
-    public sealed class RecordedWithRegion;
+    public sealed class RegisteredWithRegion;
 
-    public sealed class RecordedShort;
+    public sealed class RegisteredShort;
 }
 #endregion
 
@@ -118,11 +118,11 @@ namespace CodeChops.Idioma.Tests
     {
         #region Fixture
         /// <summary>
-        /// Records the text of a type and of its member <c>Name</c>, as an assembly's generated registrar does.
+        /// Registers the text of a type and of its member <c>Name</c>, as an assembly's generated registrar does.
         /// </summary>
-        private static void Record(Type recorded, string[] languages, string[] own, string[] name)
+        private static void Register(Type registered, string[] languages, string[] own, string[] name)
         {
-            GeneratedCode.RecordMemberTexts(languages, (type, member) => type != recorded
+            GeneratedCode.RegisterMemberTexts(languages, (type, member) => type != registered
                 ? null
                 : member switch
                 {
@@ -466,20 +466,20 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        public void RecordMemberTexts_ShouldAlsoServeAMemberAskedForBefore()
+        public void RegisterMemberTexts_ShouldAlsoServeAMemberAskedForBefore()
         {
             // Arrange: asked for before its assembly registered, as a type of an assembly that loads later is.
             using var _ = new CulturesScope("nl-NL");
-            LocalizedText.GetTextByMember<RecordedLater>("Name").ShouldBeNull();
-            LocalizedText.GetTextOfType<RecordedLater>().ShouldBeNull();
+            LocalizedText.GetTextByMember<RegisteredLater>("Name").ShouldBeNull();
+            LocalizedText.GetTextOfType<RegisteredLater>().ShouldBeNull();
 
             // Act: as an assembly's generated registrar does.
-            Record(typeof(RecordedLater), languages: ["en", "nl"], own: ["Later", "Later (nl)"], name: ["Name", "Naam"]);
+            Register(typeof(RegisteredLater), languages: ["en", "nl"], own: ["Later", "Later (nl)"], name: ["Name", "Naam"]);
 
             // Assert: the member isn't kept as one without a text.
-            LocalizedText.GetTextByMember<RecordedLater>("Name").ShouldBe("Naam");
-            LocalizedText.GetTextOfType<RecordedLater>().ShouldBe("Later (nl)");
-            LocalizedText.GetTextByMember<RecordedLater>("Other").ShouldBeNull();
+            LocalizedText.GetTextByMember<RegisteredLater>("Name").ShouldBe("Naam");
+            LocalizedText.GetTextOfType<RegisteredLater>().ShouldBe("Later (nl)");
+            LocalizedText.GetTextByMember<RegisteredLater>("Other").ShouldBeNull();
             LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
         }
 
@@ -487,16 +487,16 @@ namespace CodeChops.Idioma.Tests
         public void GetTextByMember_OfAssemblyWithLanguagesInAnotherOrder_ShouldGiveTheWordingOfTheCulturesLanguage()
         {
             // Arrange: an assembly whose default language is Dutch, in this app, whose default language is English.
-            Record(typeof(RecordedDutchFirst), languages: ["nl", "en"], own: ["Eerst", "First"], name: ["Naam", "Name"]);
+            Register(typeof(RegisteredDutchFirst), languages: ["nl", "en"], own: ["Eerst", "First"], name: ["Naam", "Name"]);
 
             // Act & Assert: each wording by the place of its language, not by the place of the app's.
             using (new CulturesScope("nl-NL"))
-                LocalizedText.GetTextByMember<RecordedDutchFirst>("Name").ShouldBe("Naam");
+                LocalizedText.GetTextByMember<RegisteredDutchFirst>("Name").ShouldBe("Naam");
 
             using (new CulturesScope("en-US"))
             {
-                LocalizedText.GetTextByMember<RecordedDutchFirst>("Name").ShouldBe("Name");
-                LocalizedText.GetTextOfType<RecordedDutchFirst>().ShouldBe("First");
+                LocalizedText.GetTextByMember<RegisteredDutchFirst>("Name").ShouldBe("Name");
+                LocalizedText.GetTextOfType<RegisteredDutchFirst>().ShouldBe("First");
             }
         }
 
@@ -505,24 +505,24 @@ namespace CodeChops.Idioma.Tests
         {
             // Arrange: this app shows English and Dutch, and its default language is English. One assembly has Dutch,
             // German and English, and another has French and German alone.
-            Record(typeof(RecordedDutchGermanEnglish), languages: ["nl", "de", "en"], own: ["Eerst", "Zuerst", "First"], name: ["Naam", "Namen", "Name"]);
-            Record(typeof(RecordedFrenchGerman), languages: ["fr", "de"], own: ["Premier", "Zuerst"], name: ["Nom", "Namen"]);
+            Register(typeof(RegisteredDutchGermanEnglish), languages: ["nl", "de", "en"], own: ["Eerst", "Zuerst", "First"], name: ["Naam", "Namen", "Name"]);
+            Register(typeof(RegisteredFrenchGerman), languages: ["fr", "de"], own: ["Premier", "Zuerst"], name: ["Nom", "Namen"]);
 
             // Act & Assert: a German user gets the app's default language, though the first assembly has German,
             // because the app's own texts are English for them too. The second assembly has no English, so it gives
             // its first wording.
             using (new CulturesScope("de-DE"))
             {
-                LocalizedText.GetTextByMember<RecordedDutchGermanEnglish>("Name").ShouldBe("Name");
-                LocalizedText.GetTextOfType<RecordedDutchGermanEnglish>().ShouldBe("First");
-                LocalizedText.GetTextByMember<RecordedFrenchGerman>("Name").ShouldBe("Nom");
+                LocalizedText.GetTextByMember<RegisteredDutchGermanEnglish>("Name").ShouldBe("Name");
+                LocalizedText.GetTextOfType<RegisteredDutchGermanEnglish>().ShouldBe("First");
+                LocalizedText.GetTextByMember<RegisteredFrenchGerman>("Name").ShouldBe("Nom");
             }
 
             // A Dutch user, whose culture the app shows, falls back the same way where the assembly lacks Dutch.
             using (new CulturesScope("nl-NL"))
             {
-                LocalizedText.GetTextByMember<RecordedDutchGermanEnglish>("Name").ShouldBe("Naam");
-                LocalizedText.GetTextByMember<RecordedFrenchGerman>("Name").ShouldBe("Nom");
+                LocalizedText.GetTextByMember<RegisteredDutchGermanEnglish>("Name").ShouldBe("Naam");
+                LocalizedText.GetTextByMember<RegisteredFrenchGerman>("Name").ShouldBe("Nom");
             }
         }
 
@@ -530,48 +530,47 @@ namespace CodeChops.Idioma.Tests
         public void GetTextByMember_OfAssemblyWithARegion_ShouldGiveTheRegionItsWordingAndOtherRegionsThatOfTheLanguage()
         {
             // Arrange: an assembly with British English next to English, whose codes are in another letter case.
-            Record(typeof(RecordedWithRegion), languages: ["en", "nl", "EN-gb"], own: ["Color", "Kleur", "Colour"], name: ["Name", "Naam", "Name (GB)"]);
+            Register(typeof(RegisteredWithRegion), languages: ["en", "nl", "EN-gb"], own: ["Color", "Kleur", "Colour"], name: ["Name", "Naam", "Name (GB)"]);
 
             // Act & Assert
             using (new CulturesScope("en-GB"))
-                LocalizedText.GetTextOfType<RecordedWithRegion>().ShouldBe("Colour");
+                LocalizedText.GetTextOfType<RegisteredWithRegion>().ShouldBe("Colour");
 
             using (new CulturesScope("en-US"))
-                LocalizedText.GetTextOfType<RecordedWithRegion>().ShouldBe("Color");
+                LocalizedText.GetTextOfType<RegisteredWithRegion>().ShouldBe("Color");
 
             using (new CulturesScope("nl-BE"))
-                LocalizedText.GetTextOfType<RecordedWithRegion>().ShouldBe("Kleur");
+                LocalizedText.GetTextOfType<RegisteredWithRegion>().ShouldBe("Kleur");
         }
 
         [Test]
         public void GetTextByMember_OfTextWithFewerWordingsThanLanguages_ShouldGiveTheFirstWording()
         {
             // Arrange: code written by hand, because the generator writes a wording per language.
-            Record(typeof(RecordedShort), languages: ["en", "nl"], own: ["Short"], name: ["Name"]);
+            Register(typeof(RegisteredShort), languages: ["en", "nl"], own: ["Short"], name: ["Name"]);
 
             // Act & Assert: no wording at the place of Dutch, so the first one.
             using var _ = new CulturesScope("nl-NL");
-            LocalizedText.GetTextByMember<RecordedShort>("Name").ShouldBe("Name");
-            LocalizedText.GetTextOfType<RecordedShort>().ShouldBe("Short");
+            LocalizedText.GetTextByMember<RegisteredShort>("Name").ShouldBe("Name");
+            LocalizedText.GetTextOfType<RegisteredShort>().ShouldBe("Short");
         }
 
         [Test]
-        public void RecordMemberTexts_WithNull_ShouldThrowArgumentNullException()
+        public void RegisterMemberTexts_WithNull_ShouldThrowArgumentNullException()
         {
             // Arrange & Act & Assert
-            Should.Throw<ArgumentNullException>(() => GeneratedCode.RecordMemberTexts(null!, static (_, _) => null)).ParamName.ShouldBe("languages");
-            Should.Throw<ArgumentNullException>(() => GeneratedCode.RecordMemberTexts(["en"], null!)).ParamName.ShouldBe("find");
+            Should.Throw<ArgumentNullException>(() => GeneratedCode.RegisterMemberTexts(null!, static (_, _) => null)).ParamName.ShouldBe("languages");
+            Should.Throw<ArgumentNullException>(() => GeneratedCode.RegisterMemberTexts(["en"], null!)).ParamName.ShouldBe("find");
         }
 
         [Test]
-        public void LocalizedText_ShouldBeATypeNoCodeCanCreate()
+        public void LocalizedText_ShouldBeStatic()
         {
             // Arrange & Act
-            var constructors = typeof(LocalizedText).GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var type = typeof(LocalizedText);
 
             // Assert: it only hosts the texts that carry their own wording. A text itself is a string.
-            typeof(LocalizedText).IsSealed.ShouldBeTrue();
-            constructors.ShouldHaveSingleItem().IsPrivate.ShouldBeTrue();
+            (type.IsAbstract && type.IsSealed).ShouldBeTrue();
         }
 
         [Test]

@@ -69,7 +69,7 @@ public sealed partial class LocalizationSetsPartTests
         // Arrange & Act
         var text = ContractText(Run(GreetingSets));
 
-        // Assert: the contract repeats the method, which is what holds every language to its parameters, and records
+        // Assert: the contract repeats the method, which is what holds every language to its parameters, and marks
         // on it the values its wording shows. The class hands the values it is called with to the set, on every call.
         text.ShouldContain("    string Greeting(string name);");
         text.ShouldContain("    string ItemsInCart(int count, string shop);");
@@ -81,7 +81,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void ValueShownThroughPatternVariable_ShouldBeRecordedAsShown()
+    public void ValueShownThroughPatternVariable_ShouldBeMarkedAsShown()
     {
         // Arrange & Act: 'n' and 'number' stand for the count as a whole, so the wording shows it. 'length' stands for a
         // part of the name, and nameof reads no value.

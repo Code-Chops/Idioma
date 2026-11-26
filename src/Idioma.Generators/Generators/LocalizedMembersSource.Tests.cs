@@ -236,8 +236,8 @@ public sealed class LocalizedMembersSourceTests
         text.ShouldNotContain("Shop.Domain.Speed.Quick =>");
 
         // The texts pass the languages of LocalizedText.Inline, because the package keeps its last pick for one array.
-        text.ShouldContain("GetLanguageIndex(GeneratedLocalizedText.Languages)");
-        text.ShouldContain("RecordMemberTexts(GeneratedLocalizedText.Languages,");
+        text.ShouldContain("GetLanguageIndexForStandaloneText(GeneratedLocalizedText.Languages)");
+        text.ShouldContain("RegisterMemberTexts(GeneratedLocalizedText.Languages,");
         text.ShouldNotContain("static readonly string[] Languages");
     }
 
@@ -676,7 +676,7 @@ public sealed class LocalizedMembersSourceTests
     }
 
     [Test]
-    public void AssemblyWithMarkedMember_ShouldBeMarkedAsWritingInlineTexts()
+    public void AssemblyWithMarkedMember_ShouldBeMarkedAsWritingStandaloneTexts()
     {
         // Arrange: a text on a member carries its wording itself, as an inline text does, so no app can add a language
         // to it. An assembly that also calls LocalizedText.Inline is marked twice, by two generated files.
@@ -696,13 +696,13 @@ public sealed class LocalizedMembersSourceTests
         var text = Texts(Run(source))!;
 
         // Assert
-        text.ShouldContain("[assembly: CodeChops.Idioma.Internals.InlineTextsAttribute]");
+        text.ShouldContain("[assembly: CodeChops.Idioma.Internals.StandaloneTextsAttribute]");
         GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
         GeneratorTestHelper.GetWarningsWithGenerators(source).ShouldBeEmpty();
     }
 
     [Test]
-    public void Registrar_ShouldBePublicAndRecordTheMemberTexts()
+    public void Registrar_ShouldBePublicAndRegisterTheMemberTexts()
     {
         // Arrange & Act: a library with nothing but a marked member.
         var registrar = Registrar(Run($$"""
@@ -719,7 +719,7 @@ public sealed class LocalizedMembersSourceTests
         // member's text is asked for by its type, which an app can hold before that.
         registrar.ShouldContain("public static class LocalizationRegistrar_TestAssembly");
         registrar.ShouldContain("            LocalizedMembers_TestAssembly.Register();");
-        registrar.ShouldContain("/// Records the texts of this assembly's members marked <c>[Localized]</c> too.");
+        registrar.ShouldContain("/// Registers the texts of this assembly's members marked <c>[Localized]</c> too.");
     }
 
     [Test]
@@ -831,7 +831,7 @@ public sealed class LocalizedMembersSourceTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
         var texts = Texts(Run(source));
 
-        // Assert: the set's, and the member texts are still recorded for GetTextByMember.
+        // Assert: the set's, and the member texts are still registered for GetTextByMember.
         errors.ShouldBeEmpty();
         texts.ShouldNotBeNull().ShouldNotContain("ParcelStatusLocalizedExtensions");
         texts.ShouldContain("\"Gepickt\"");

@@ -32,7 +32,7 @@ public sealed class CultureScope : IDisposable
     // The innermost scope the code that runs now is in. It flows with the code, as the cultures of the thread do, so a
     // scope still holds after an await. Each flow keeps its own: a scope disposed in one, such as the code that started
     // a task, still holds in a task started inside it, whose thread cultures are still the scope's. Read only where a
-    // provider is set: without one, the thread's UI culture is the scope's already.
+    // provider is set, because without one the thread's UI culture is the scope's already.
     private static AsyncLocal<CultureScope?> Entered { get; } = new();
 
     /// <summary>
@@ -40,6 +40,12 @@ public sealed class CultureScope : IDisposable
     /// it rather than <see cref="LocalizationRegistry.CurrentUICultureProvider"/>.
     /// </summary>
     internal static CultureInfo? Current => Entered.Value?.Culture;
+
+    /// <summary>
+    /// The innermost scope the code that runs now is in, or <see langword="null"/> outside every scope. A text being
+    /// worded compares it with the one it was worded in, to see whether the member of its set entered a scope.
+    /// </summary>
+    internal static CultureScope? Innermost => Entered.Value;
 
     private CultureInfo Culture { get; }
 
@@ -93,9 +99,22 @@ public sealed class CultureScope : IDisposable
     /// </para>
     /// <para>
     /// A thread that set no culture itself follows the default cultures of the process, such as
-    /// <see cref="CultureInfo.DefaultThreadCurrentUICulture"/>. It still follows them after the scope, unless the code
-    /// inside the scope set an <see cref="AsyncLocal{T}"/> of its own. Then the scope sets the cultures from before it,
-    /// and the thread keeps them when the defaults change.
+    /// <see cref="CultureInfo.DefaultThreadCurrentUICulture"/>. It still follows them after the scope, unless something
+    /// changed the execution context inside it. Then the scope sets the cultures from before it, and the thread keeps
+    /// them when the defaults change. The context changes in these cases:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>The code inside the scope set an <see cref="AsyncLocal{T}"/>, even one it set back. A logging scope does
+    /// that, such as <c>using (logger.BeginScope(...))</c>, and so does an <see cref="System.Diagnostics.Activity"/>
+    /// that starts and stops.</item>
+    /// <item>The code inside the scope set <see cref="CultureInfo.CurrentUICulture"/> or
+    /// <see cref="CultureInfo.CurrentCulture"/> itself.</item>
+    /// <item>A scope inside this one is still open, because it wasn't disposed first.</item>
+    /// <item>The flow of the execution context is suppressed, as by <see cref="ExecutionContext.SuppressFlow"/>.</item>
+    /// </list>
+    /// <para>
+    /// An <see cref="AsyncLocal{T}"/> set inside an awaited method doesn't count, because the change ends with that
+    /// method.
     /// </para>
     /// </remarks>
     public void Dispose()
@@ -104,8 +123,10 @@ public sealed class CultureScope : IDisposable
         if (!this.IsOpen())
             return;
 
-        // The usual case: nothing changed the context since the scope made it, so the context from before puts back the
-        // cultures and the surrounding scope as they were, also a culture the thread didn't set itself.
+        // Nothing changed the context since the scope made it, so the context from before puts back the cultures and the
+        // surrounding scope as they were, also a culture the thread didn't set itself. Every AsyncLocal the code inside
+        // set makes a new context, even one it set back, such as a logging scope. Then the cultures are set one by one
+        // below.
         if (this.ContextBefore is not null && ReferenceEquals(ExecutionContext.Capture(), this.ContextEntered))
         {
             ExecutionContext.Restore(this.ContextBefore);
@@ -118,7 +139,7 @@ public sealed class CultureScope : IDisposable
     }
 
     /// <summary>
-    /// Whether the code that runs now is in this scope: it's the innermost scope, or one around it.
+    /// Whether the code that runs now is in this scope. That's so when this is the innermost scope or one around it.
     /// </summary>
     private bool IsOpen()
     {

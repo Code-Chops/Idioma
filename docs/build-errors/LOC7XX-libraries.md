@@ -22,7 +22,7 @@ A library you reference has inline texts that lack one of your languages. This i
 warning LOC701: 'Shop' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.
 ```
 
-The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too. That holds even where your app gives an enum of the library its languages with a set of the enum ([Enums](../enums.md#a-set-of-the-enum)). The library's build records only that it has such texts, not which, so the warning can't tell they're covered.
+The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too. That holds even where your app gives an enum of the library its languages with a set of the enum ([Enums](../enums.md#a-set-of-the-enum)). The library's build marks only that it has such texts, not which, so the warning can't tell they're covered.
 
 To accept it, add `LOC701` to `<NoWarn>` in the project file, or put `#pragma warning disable LOC701` around `[assembly: SupportedLanguages]`, where it's reported.
 

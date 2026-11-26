@@ -22,7 +22,7 @@ internal static class PackageNames
 
     public const string GeneratedCode = InternalsNamespace + ".GeneratedCode";
     public const string LocalizationSetAttribute = InternalsNamespace + ".LocalizationSetAttribute";
-    public const string InlineTextsAttribute = InternalsNamespace + ".InlineTextsAttribute";
+    public const string StandaloneTextsAttribute = InternalsNamespace + ".StandaloneTextsAttribute";
     public const string ShownValueAttribute = InternalsNamespace + ".ShownValueAttribute";
 
     /// <summary>

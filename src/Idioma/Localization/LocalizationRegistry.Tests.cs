@@ -45,6 +45,13 @@ public sealed partial class LocalizationRegistryTests
         public RegistryLazyLocalizationNl() => Interlocked.Increment(ref Created);
     }
 
+    private interface IRegistryLateDescribedLocalization : ILocalizationSet;
+
+    /// <summary>
+    /// A set whose name ends in <c>Gb</c>, so it registers under <c>gb</c> until the build describes it as <c>en-GB</c>.
+    /// </summary>
+    private sealed class RegistryLateDescribedLocalizationEnGb : IRegistryLateDescribedLocalization;
+
     private interface IRegistrySteadyLocalization : ILocalizationSet;
 
     private sealed class RegistrySteadyLocalizationNl : IRegistrySteadyLocalization;

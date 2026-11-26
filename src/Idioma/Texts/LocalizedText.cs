@@ -11,7 +11,7 @@ namespace CodeChops.Idioma;
 /// <remarks>
 /// <para>
 /// Start by declaring your languages, the default one first:
-/// <see cref="SupportedLanguagesAttribute">[assembly: SupportedLanguages("en", "nl")]</see>. A text that lacks one of
+/// <c>[assembly: SupportedLanguages("en", "nl")]</c>. A text that lacks one of
 /// them doesn't build. <see cref="SupportedLanguagesAttribute"/> lists the three ways to write a text: a set, an inline
 /// text, and an attribute on a type or a member.
 /// </para>
@@ -26,7 +26,7 @@ namespace CodeChops.Idioma;
 /// </para>
 /// <list type="number">
 /// <item>The wording for the user's UI culture, or else for its parent culture. An <c>en</c> wording serves
-/// <c>en-US</c> and <c>en-GB</c> alike.</item>
+/// <c>en-US</c>, and <c>en-GB</c> too when you list no British wording.</item>
 /// <item>The wording for your app's default language. A culture that none of your app's languages serves starts here,
 /// even for a library's text that has that culture's language. So no screen ends up in two languages.</item>
 /// <item>The wording for the text's own default language, that of the project that wrote it.</item>
@@ -61,14 +61,8 @@ namespace CodeChops.Idioma;
 /// string greeting = ShopTexts.Greeting(customer.Name);
 /// </code>
 /// </example>
-// Not a static class, because the source generator writes Inline as a static extension member on this type, and C#
-// doesn't take a static class there. No code can create one.
-public sealed class LocalizedText
+public static class LocalizedText
 {
-    private LocalizedText()
-    {
-    }
-
     /// <summary>
     /// The text of a member marked <c>[Localized]</c>, by the type that declares it and its name, or
     /// <see langword="null"/> for a member without one.
@@ -84,6 +78,10 @@ public sealed class LocalizedText
     /// <para>
     /// A class without a text for the member gets that of its nearest base class. So an override without
     /// <c>[Localized]</c> keeps the text of the property it overrides. An interface's texts aren't inherited.
+    /// </para>
+    /// <para>
+    /// A type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of the member on
+    /// <c>Page&lt;T&gt;</c>.
     /// </para>
     /// <para>
     /// The string is the wording for the current UI culture at the call. Read it where you show it.
@@ -110,7 +108,8 @@ public sealed class LocalizedText
     /// <see cref="GetTextByMember{T}(string)"/>.
     /// </summary>
     /// <remarks>
-    /// A type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of <c>Page&lt;T&gt;</c>.
+    /// A type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of the member on
+    /// <c>Page&lt;T&gt;</c>.
     /// </remarks>
     /// <param name="type">The type that declares the member, or one that derives from it.</param>
     /// <param name="memberName">The name of the member, in the same letter case.</param>
@@ -131,8 +130,14 @@ public sealed class LocalizedText
     /// <see langword="null"/> for a member without one.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Only the member's name and the type that declares it are read. A <see cref="Type"/> is a member too, and gives
     /// the text <see cref="GetTextOfType(Type)"/> gives.
+    /// </para>
+    /// <para>
+    /// A member of a type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of that member on
+    /// <c>Page&lt;T&gt;</c>.
+    /// </para>
     /// </remarks>
     /// <param name="member">A property, a field, a member of an enum, or a type.</param>
     /// <exception cref="ArgumentNullException">When <paramref name="member"/> is <see langword="null"/>.</exception>
@@ -158,6 +163,9 @@ public sealed class LocalizedText
     /// <remarks>
     /// <para>
     /// A type's own text isn't inherited, so a class doesn't get the text of its base class.
+    /// </para>
+    /// <para>
+    /// A type with type arguments, such as <c>Page&lt;Order&gt;</c>, gives the text of <c>Page&lt;T&gt;</c>.
     /// </para>
     /// <para>
     /// The string is the wording for the current UI culture at the call. Read it where you show it.

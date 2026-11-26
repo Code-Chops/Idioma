@@ -40,8 +40,8 @@ namespace CodeChops.Idioma.Generators;
 /// <item><see cref="Language"/> is always a culture name, or <see langword="null"/> when the build can't read one.
 /// <see cref="NameGivesNoLanguage"/> tells a set without any language from one whose <c>LocalizationLanguageCode</c> the build
 /// can't read.</item>
-/// <item><see cref="RecordedLanguageCode"/> is the code the generated registrar records for it. It's the constant its
-/// <c>LocalizationLanguageCode</c> returns, where the build can read one. For a set that doesn't implement
+/// <item><see cref="DescribedLanguageCode"/> is the code the generated registrar describes it with. It's the constant
+/// its <c>LocalizationLanguageCode</c> returns, where the build can read one. For a set that doesn't implement
 /// <c>LocalizationLanguageCode</c>, it's read from its name, or from that of a set it derives from.</item>
 /// </list>
 /// <para>
@@ -50,7 +50,7 @@ namespace CodeChops.Idioma.Generators;
 /// <list type="bullet">
 /// <item><see cref="Locations"/> holds every source location of the set outside its texts: the set itself, its base
 /// types that bind to nothing, and what is reported about its <c>LocalizationLanguageCode</c>.</item>
-/// <item>The registrar's share of a set holds no location (<see cref="DiscoveredTexts.OfRecord"/>). An edit in the
+/// <item>The registrar's share of a set holds no location (<see cref="DiscoveredTexts.OfRegistrar"/>). An edit in the
 /// set's file gives every location in it a new syntax tree, so a share that held one would change with every
 /// wording.</item>
 /// </list>
@@ -59,7 +59,7 @@ namespace CodeChops.Idioma.Generators;
 /// </para>
 /// <list type="bullet">
 /// <item><see cref="OwnTexts"/> are the texts its own class words, for a set deriving from another. The registrar
-/// records them, and only its part of the generator reads them (<see cref="DiscoveredTexts.OfRecord"/>).</item>
+/// describes them, and only its part of the generator reads them (<see cref="DiscoveredTexts.OfRegistrar"/>).</item>
 /// <item><see cref="EnumNames"/> are the full names of the enums whose members it has a text for, which it lists as
 /// <c>ILocalizationSet&lt;TEnum&gt;</c>.</item>
 /// <item><see cref="OfContract"/> holds what the part of the generator that writes the contracts reads of its texts
@@ -84,7 +84,7 @@ internal readonly record struct DiscoveredLocalization(
     SetLocations Locations,
     string? Language,
     bool NameGivesNoLanguage,
-    string? RecordedLanguageCode,
+    string? DescribedLanguageCode,
     EquatableArray<string> OwnTexts,
     bool ListsLocalizationSet,
     EquatableArray<string> ContractNames,
@@ -107,7 +107,7 @@ internal readonly record struct DiscoveredLocalization(
 
 /// <summary>
 /// Every source location of a set outside its texts, and what is reported at one of them. The registrar's share of a
-/// set holds this empty (<see cref="DiscoveredTexts.OfRecord"/>), so that share stays equal across an edit in the set's
+/// set holds this empty (<see cref="DiscoveredTexts.OfRegistrar"/>), so that share stays equal across an edit in the set's
 /// file.
 /// </summary>
 /// <remarks>
@@ -522,7 +522,7 @@ internal readonly record struct UnregistrableLocalization(
 /// which the generator can't use for its shape (nested, file-local, generic, or abstract): what <c>LOC200</c> reports
 /// when its language is the default language, and no contract it lists is generated from another set. Its language is
 /// <see langword="null"/> when the build can't read it. The registrar's share of it holds no location
-/// (<see cref="DiscoveredTexts.OfRecord"/>): neither where the class is written, nor where its base types are.
+/// (<see cref="DiscoveredTexts.OfRegistrar"/>): neither where the class is written, nor where its base types are.
 /// </summary>
 internal readonly record struct UnextendableSet(
     string MetadataName,
@@ -564,13 +564,13 @@ internal enum DiscoveredTexts
     OfContract,
 
     /// <summary>
-    /// What the registrar records: <see cref="DiscoveredLocalization.OwnTexts"/> alone, which are names.
+    /// What the registrar describes: <see cref="DiscoveredLocalization.OwnTexts"/> alone, which are names.
     /// <see cref="DiscoveredLocalization.OfContract"/> stays empty, so no wording is part of it.
     /// <see cref="DiscoveredLocalization.Locations"/> stays empty too, so no syntax tree is part of it. This share
     /// stays equal across an edit of a wording, and so does every step that reads it alone: the registrar, and the
     /// contracts the compilation generates.
     /// </summary>
-    OfRecord,
+    OfRegistrar,
 }
 
 /// <summary>

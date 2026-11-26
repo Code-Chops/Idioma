@@ -4,10 +4,10 @@ namespace CodeChops.Idioma.Internals;
 
 /// <summary>
 /// <para>
-/// Don't use this attribute directly! It's used by the source generator.
+/// <b>Don't use this attribute directly! It's used by the source generator.</b>
 /// </para>
 /// <para>
-/// Records that the default wording of a text shows a value it takes, such as <c>name</c> in
+/// Marks that the default wording of a text shows a value it takes, such as <c>name</c> in
 /// <c>public string Greeting(string name) => $"Hello, {name}!";</c>. The build of every set implementing the contract
 /// then checks that its method uses the value too (<c>LOC402</c>), also in another assembly. The source generator
 /// writes this on a method of a contract it generates, once for each value the default wording shows.
@@ -28,7 +28,7 @@ public sealed class ShownValueAttribute : Attribute
     public string Parameter { get; }
 
     /// <summary>
-    /// Records a value the default wording shows.
+    /// Marks a value the default wording shows.
     /// </summary>
     /// <param name="parameter">The name of the parameter whose value the default wording shows.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]

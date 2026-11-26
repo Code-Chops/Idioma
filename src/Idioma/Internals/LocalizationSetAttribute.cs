@@ -4,10 +4,10 @@ namespace CodeChops.Idioma.Internals;
 
 /// <summary>
 /// <para>
-/// Don't use this attribute directly! It's used by the source generator.
+/// <b>Don't use this attribute directly! It's used by the source generator.</b>
 /// </para>
 /// <para>
-/// Records that an assembly holds a set of a public contract, and the language the set serves. The build of an app
+/// Marks that an assembly holds a set of a public contract, and the language the set serves. The build of an app
 /// that references the assembly reads these attributes instead of searching the assembly's types. It reports each
 /// language of the app that a contract has no set for (<c>LOC700</c>).
 /// </para>
@@ -37,7 +37,7 @@ public sealed class LocalizationSetAttribute : Attribute
     public string Language { get; }
 
     /// <summary>
-    /// Records a set.
+    /// Marks a set.
     /// </summary>
     /// <param name="contract">The full name of the contract. It's a string, so nothing keeps the type when trimming.</param>
     /// <param name="language">The language the set serves, or <c>*</c> when the build couldn't read it.</param>

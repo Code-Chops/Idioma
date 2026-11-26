@@ -3,7 +3,7 @@ namespace CodeChops.Idioma.Generators;
 /// <summary>
 /// Writes the texts of the members marked <c>[Localized]</c> (<see cref="LocalizedMembers"/>): the
 /// wording of each member per language, as its attribute gives it, and one function that finds
-/// a member's wording by its type and name. The assembly's registrar records that function
+/// a member's wording by its type and name. The assembly's registrar registers that function
 /// (<see cref="LocalizationRegistrationPart"/>, which also writes this file), so
 /// <c>LocalizedText.GetTextByMember</c> finds the text without reading an attribute at run time. For an enum with a
 /// marked member it also writes the extension method that gives a value its text: <c>status.GetText()</c>.
@@ -15,8 +15,8 @@ namespace CodeChops.Idioma.Generators;
 /// (<c>LOC502</c>).
 /// </para>
 /// <para>
-/// The file marks its assembly <c>[assembly: InlineTexts]</c>, because a text on a member carries its wording itself,
-/// as an inline text does. So no assembly referencing this one can add a language to it (<c>LOC701</c>).
+/// The file marks its assembly <c>[assembly: StandaloneTexts]</c>, because a text on a member is a standalone text,
+/// which carries its wording itself. So no assembly referencing this one can add a language to it (<c>LOC701</c>).
 /// </para>
 /// </remarks>
 internal static class LocalizedMembersSource
@@ -27,7 +27,7 @@ internal static class LocalizedMembersSource
     public const string HintName = "LocalizedMembers.g.cs";
 
     /// <summary>
-    /// The class that finds the texts, outside the namespace of the class that records them, at the top level of the
+    /// The class that finds the texts, outside the namespace of the class that registers them, at the top level of the
     /// file.
     /// </summary>
     private const string OwnMembersName = "OwnLocalizedMembers";
@@ -43,8 +43,8 @@ internal static class LocalizedMembersSource
     /// The assembly's languages, the default first, in the class of <c>LocalizedText.Inline</c>. Each text has its
     /// wording in this order.
     /// </summary>
-    // That array, and not one of this file, because the package keeps its last pick for one array (InlineLanguage). With
-    // two, a page that shows inline texts and texts on members in turn picked again for every text.
+    // That array, and not one of this file, because the package keeps its last pick for one array (StandaloneLanguage).
+    // With two, a page that shows inline texts and texts on members in turn picked again for every text.
     // LocalizedTextFactoryGenerator writes that class from the same languages, wherever this file is written.
     private const string LanguagesReference = LocalizedTextFactoryGenerator.ClassName + "." + LocalizedTextFactoryGenerator.LanguagesName;
 
@@ -56,7 +56,7 @@ internal static class LocalizedMembersSource
         // for as long as it has a text.
         var warnings = GeneratedFile.WithSuppressed(GeneratedFile.ObsoleteWarnings, model.SuppressedDiagnostics);
 
-        sb.AppendLine(GeneratedFile.GetHeader(warnings, "Only generated code calls GeneratedCode and applies InlineTexts."));
+        sb.AppendLine(GeneratedFile.GetHeader(warnings, "Only generated code calls GeneratedCode and applies StandaloneTexts."));
         sb.AppendLine();
 
         // The namespaces of the attributes that mark generated code, which stand by their names alone, because a class
@@ -67,21 +67,21 @@ internal static class LocalizedMembersSource
         sb.AppendLine($$"""
 
             // The texts below carry their wording themselves, as an inline text does.
-            [assembly: {{PackageNames.InlineTextsAttribute}}]
+            [assembly: {{PackageNames.StandaloneTextsAttribute}}]
 
-            namespace {{LocalizedMembers.RecorderNamespace}}
+            namespace {{LocalizedMembers.MemberTextsNamespace}}
             {
                 /// <summary>
-                /// Records the texts of this assembly's members marked <c>[Localized]</c>, so that <c>LocalizedText.GetTextByMember</c> finds them.
+                /// Registers the texts of this assembly's members marked <c>[Localized]</c>, so that <c>LocalizedText.GetTextByMember</c> finds them.
                 /// The assembly's registrar calls it.
                 /// </summary>
                 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
                 {{GeneratedFile.ImportedCodeAttributes}}
-                internal static class {{model.RecorderName}}
+                internal static class {{model.MemberTextsClassName}}
                 {
                     internal static void Register()
                     {
-                        {{PackageNames.GeneratedCode}}.RecordMemberTexts({{LanguagesReference}}, static (type, member) => {{OwnMembersName}}.Get(type, member));
+                        {{PackageNames.GeneratedCode}}.RegisterMemberTexts({{LanguagesReference}}, static (type, member) => {{OwnMembersName}}.Get(type, member));
                     }
                 }
             }
@@ -97,7 +97,7 @@ internal static class LocalizedMembersSource
                 /// The wording of a text for the current UI culture. Each text below has its wording in the order of
                 /// <see cref="{{LanguagesReference}}"/>, the languages of this assembly.
                 /// </summary>
-                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.GetLanguageIndex({{LanguagesReference}})];
+                internal static string Word(string[] wordings) => wordings[{{PackageNames.GeneratedCode}}.GetLanguageIndexForStandaloneText({{LanguagesReference}})];
 
                 /// <summary>
                 /// The wording of a member of a type per language, in the order of <see cref="{{LanguagesReference}}"/>, or the type's own for a member that is

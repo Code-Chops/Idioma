@@ -43,11 +43,11 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void Discovery_ShouldReadOnlyTheTextsTheRegistrarRecords()
+    public void Discovery_ShouldReadOnlyTheTextsTheRegistrarDescribes()
     {
-        // Arrange & Act: discovery reads every set again on every edit, in any file. The registrar records the names of
+        // Arrange & Act: discovery reads every set again on every edit, in any file. The registrar passes on the names of
         // the texts a derived set words, and writes nothing from a wording.
-        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RecordTrackingName, """
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RegistrarTrackingName, """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en", "en-GB")]
@@ -77,12 +77,12 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void Discovery_ShouldNotRecordATextThatAMemberOnlyHides()
+    public void Discovery_ShouldLeaveOutATextThatAMemberOnlyHides()
     {
         // Arrange & Act: a member that hides a text words nothing, because the contract calls the member it hides
-        // (LOC302). Recorded, it would keep the registry from a rewording of English. A set that lists the contract again
+        // (LOC302). Passed on, it would keep the registry from a rewording of English. A set that lists the contract again
         // maps the contract to its own member, which then words the text.
-        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RecordTrackingName, """
+        var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Registration(), LocalizationDiscovery.RegistrarTrackingName, """
             using CodeChops.Idioma;
 
             [assembly: SupportedLanguages("en", "en-GB", "en-AU")]

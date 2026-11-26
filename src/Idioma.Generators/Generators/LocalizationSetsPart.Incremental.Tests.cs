@@ -28,7 +28,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void Discovery_ShouldReadTheTextsOfAContractAndNotWhatTheRegistrarRecords()
+    public void Discovery_ShouldReadTheTextsOfAContractAndNotWhatTheRegistrarDescribes()
     {
         // Arrange & Act: discovery reads every set again on every edit, in any file, so it reads what this part writes
         // from and leaves the rest to the part that uses it.
@@ -135,7 +135,7 @@ public sealed partial class LocalizationSetsPartTests
             """);
 
         // Assert: the diagnostic lies in the tree the file has now, where a pragma of that file applies to it, and the
-        // contract and the recorded sets are not written again.
+        // contract and the listed sets are not written again.
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe("LOC201");
         diagnostic.Location.SourceTree.ShouldBeSameAs(edited);

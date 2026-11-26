@@ -112,7 +112,7 @@ public sealed partial class LocalizationSetsPartTests
         return GeneratorTestHelper.Run(LocalizationParts.Sets(), source, references);
     }
 
-    private static string RecordedSets(GeneratorDriverRunResult result)
+    private static string ProvidedSets(GeneratorDriverRunResult result)
     {
         var run = result.Results.ShouldHaveSingleItem();
         run.Exception.ShouldBeNull();
@@ -129,7 +129,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     /// <summary>
-    /// The values the contract records as shown on one of its methods (<c>[ShownValue]</c>), in the order it writes them.
+    /// The values the contract marks as shown on one of its methods (<c>[ShownValue]</c>), in the order it writes them.
     /// </summary>
     private static string[] ShownValues(string contractText, string method)
     {
@@ -438,7 +438,7 @@ public sealed partial class LocalizationSetsPartTests
         // Act
         var result = Run(source);
 
-        // Assert: no other assembly could implement it, so it is not recorded for them.
+        // Assert: no other assembly could implement it, so it is not listed for them.
         var text = ContractText(result);
         text.ShouldContain($"internal interface IShopLocalization{Environment.NewLine}");
         text.ShouldContain("internal static partial class ShopLocalization");
@@ -531,10 +531,10 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public Task SetsOfPublicContract_ShouldBeRecordedForOtherAssemblies()
+    public Task SetsOfPublicContract_ShouldBeListedForOtherAssemblies()
     {
         // Arrange & Act
-        var text = RecordedSets(Run(ShopSets));
+        var text = ProvidedSets(Run(ShopSets));
 
         // Assert
         return Verify(text);

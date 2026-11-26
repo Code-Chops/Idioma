@@ -83,7 +83,7 @@ internal sealed partial record LocalizationSetsAnalysis(
         var contracts = ImmutableArray.CreateBuilder<LocalizationContract>();
         var provided = ImmutableArray.CreateBuilder<ProvidedLocalizationSet>();
 
-        RecordSetsOfContracts(sets.Concat(excludedSets), provided);
+        AddProvidedSets(sets.Concat(excludedSets), provided);
 
         if (languages is not { } declared)
         {
@@ -125,11 +125,11 @@ internal sealed partial record LocalizationSetsAnalysis(
     }
 
     /// <summary>
-    /// Records every set for each public contract it implements, under its language. A set whose language the build
-    /// can't read is recorded under <see cref="ProvidedLocalizationSet.UnreadableLanguage"/>, and a set whose name
+    /// Lists every set for each public contract it implements, under its language. A set whose language the build
+    /// can't read is listed under <see cref="ProvidedLocalizationSet.UnreadableLanguage"/>, and a set whose name
     /// gives no language is left out.
     /// </summary>
-    private static void RecordSetsOfContracts(IEnumerable<DiscoveredLocalization> sets, ImmutableArray<ProvidedLocalizationSet>.Builder provided)
+    private static void AddProvidedSets(IEnumerable<DiscoveredLocalization> sets, ImmutableArray<ProvidedLocalizationSet>.Builder provided)
     {
         foreach (var set in sets)
         {

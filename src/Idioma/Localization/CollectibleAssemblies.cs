@@ -5,8 +5,8 @@ using System.Runtime.Loader;
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Lets an assembly that can be unloaded go when its <see cref="AssemblyLoadContext"/> unloads, such as a plugin's. What
-/// such an assembly registers is forgotten then: its sets, what the build recorded about them, the texts of its
+/// Lets an assembly that can be unloaded go when its <see cref="AssemblyLoadContext"/> unloads, such as a plugin's.
+/// What such an assembly registers is forgotten then: its sets, how the build described them, the texts of its
 /// members, and the texts it gave the values of an enum.
 /// </summary>
 /// <remarks>
@@ -20,6 +20,15 @@ namespace CodeChops.Idioma;
 /// clear that (<see cref="LocalizationRegistry.HoldsCollectibleSets"/>). Under NativeAOT, no assembly can be unloaded,
 /// so nothing here runs.
 /// </para>
+/// <para>
+/// The runtime also raises <see cref="AssemblyLoadContext.Unloading"/> when the process exits, for every context that
+/// can unload and is still alive. It does so before the handlers of <see cref="AppDomain.ProcessExit"/> run, so a
+/// plugin's registrations are forgotten by then. A text of the plugin that such a handler shows gets the wording of its
+/// default language. Examples are a logger that flushes, or a host that stops after <see cref="Environment.Exit"/>.
+/// This can't tell an exit from an unload, because .NET has no flag for an exit that started.
+/// <see cref="Environment.HasShutdownStarted"/> is always <see langword="false"/>, and the default context's own
+/// <see cref="AssemblyLoadContext.Unloading"/> comes after those of the others.
+/// </para>
 /// </remarks>
 internal static class CollectibleAssemblies
 {
@@ -28,7 +37,10 @@ internal static class CollectibleAssemblies
     /// </summary>
     private static ConditionalWeakTable<AssemblyLoadContext, object> Watched { get; } = new();
 
-    private static readonly object Watching = new();
+    /// <summary>
+    /// The value of each context in <see cref="Watched"/>, which only tells that the context is watched.
+    /// </summary>
+    private static readonly object Marker = new();
 
     /// <summary>
     /// What forgets the registrations of a context in a place of its own, such as those of an enum
@@ -44,8 +56,30 @@ internal static class CollectibleAssemblies
         if (!assembly.IsCollectible || AssemblyLoadContext.GetLoadContext(assembly) is not { } context)
             return;
 
-        if (Watched.TryAdd(context, Watching))
+        if (Watched.TryAdd(context, Marker))
             context.Unloading += Forget;
+    }
+
+    /// <summary>
+    /// Watches each context a type belongs to where it can unload: that of its assembly, and those of the types it's
+    /// closed over.
+    /// </summary>
+    /// <remarks>
+    /// A generic type closed over a plugin's type, such as a set <c>SetOf&lt;PluginType&gt;</c>, lies in the assembly
+    /// of its definition. That assembly may stay, so the plugin's context is found through the type arguments.
+    /// </remarks>
+    public static void Watch(Type type)
+    {
+        if (!type.IsCollectible)
+            return;
+
+        Watch(type.Assembly);
+
+        if (type.HasElementType)
+            Watch(type.GetElementType()!);
+        else if (type.IsConstructedGenericType)
+            foreach (var argument in type.GenericTypeArguments)
+                Watch(argument);
     }
 
     /// <summary>
@@ -60,15 +94,32 @@ internal static class CollectibleAssemblies
     }
 
     /// <summary>
-    /// Whether a type lies in an assembly of a context that unloads.
+    /// Whether a type belongs to a context: its assembly lies in it, or a type it's closed over does. Such a type goes
+    /// when the context unloads (<see cref="Watch(Type)"/>).
     /// </summary>
     public static bool IsIn(Type type, AssemblyLoadContext context)
     {
-        return IsIn(type.Assembly, context);
+        if (!type.IsCollectible)
+            return false;
+
+        if (IsIn(type.Assembly, context))
+            return true;
+
+        if (type.HasElementType)
+            return IsIn(type.GetElementType()!, context);
+
+        if (!type.IsConstructedGenericType)
+            return false;
+
+        foreach (var argument in type.GenericTypeArguments)
+            if (IsIn(argument, context))
+                return true;
+
+        return false;
     }
 
     /// <summary>
-    /// Whether an assembly is one of a context that unloads.
+    /// Whether an assembly lies in a context.
     /// </summary>
     public static bool IsIn(Assembly assembly, AssemblyLoadContext context)
     {

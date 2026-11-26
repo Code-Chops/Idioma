@@ -4,6 +4,7 @@ namespace CodeChops.Idioma.Generators;
 // generated in the same compilation, and asks the compiler which generated contract each one will bind to where the
 // name alone can't tell. A plain comment: the compiler merges the XML docs of every partial declaration, and the type's
 // summary lives in LocalizationDiscovery.cs.
+/// <inheritdoc cref="LocalizationDiscovery"/>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
@@ -100,7 +101,7 @@ internal static partial class LocalizationDiscovery
     /// </remarks>
     // The compilation changes on every edit, so the step that binds runs on every edit. It returns at once where no two
     // contracts share a name, which is nearly always, and only then makes a compilation of its own.
-    // The question comes from the share of discovery without locations (DiscoveredTexts.OfRecord), so it stays as it was
+    // The question comes from the share of discovery without locations (DiscoveredTexts.OfRegistrar), so it stays as it was
     // when a wording changes. The share with locations (DiscoveredTexts.OfContract) says where each base type of the
     // question is written, and is read only where there is something to bind.
     public static IncrementalValueProvider<EquatableArray<ContractBinding>> BindContracts(IncrementalGeneratorInitializationContext context,

@@ -313,9 +313,9 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
-        var recorded = RecordedSets(result);
-        recorded.ShouldContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
-        recorded.ShouldNotContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
+        var provided = ProvidedSets(result);
+        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
+        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
         var admin = result.Results.Single().GeneratedSources.Single(source => source.HintName is "Shop.Admin.ShopLocalizationEn.Localization.g.cs");
         admin.SourceText.ToString().ShouldNotContain("ShopLocalizationNl");
     }
@@ -339,9 +339,9 @@ public sealed partial class LocalizationSetsPartTests
         var result = GeneratorTestHelper.RunOverFiles(LocalizationParts.Sets(), TwoShops, dutchSet);
 
         // Assert
-        var recorded = RecordedSets(result);
-        recorded.ShouldContain($"LocalizationSetAttribute(\"{expectedNamespace}.IShopLocalization\", \"nl\")");
-        recorded.ShouldNotContain($"LocalizationSetAttribute(\"{otherNamespace}.IShopLocalization\", \"nl\")");
+        var provided = ProvidedSets(result);
+        provided.ShouldContain($"LocalizationSetAttribute(\"{expectedNamespace}.IShopLocalization\", \"nl\")");
+        provided.ShouldNotContain($"LocalizationSetAttribute(\"{otherNamespace}.IShopLocalization\", \"nl\")");
         DiagnosticIds(result).ShouldBe(["LOC201"]);
     }
 
@@ -356,9 +356,9 @@ public sealed partial class LocalizationSetsPartTests
             "namespace Other;\npublic sealed class ShopLocalizationNl : CodeChops.Idioma.ILocalizationSet, IShopLocalization;");
 
         // Assert
-        var recorded = RecordedSets(result);
-        recorded.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
-        recorded.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
+        var provided = ProvidedSets(result);
+        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
+        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
     }
 
     [Test]

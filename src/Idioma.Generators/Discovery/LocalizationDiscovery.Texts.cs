@@ -5,6 +5,7 @@ namespace CodeChops.Idioma.Generators;
 // The part of LocalizationDiscovery that reads the texts of a set: which members are texts, which it declares or
 // inherits, and their wording, for the doc comments of the generated members. A plain comment: the compiler merges the
 // XML docs of every partial declaration, and the type's summary lives in LocalizationDiscovery.cs.
+/// <inheritdoc cref="LocalizationDiscovery"/>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
@@ -92,7 +93,7 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// The names of the texts a set's own class words, rather than leaving them to the class it derives from. They're
     /// the public string properties and the methods of the shape of a text that it declares, overrides included, and
-    /// the members it implements explicitly. The generated registrar records them for a set deriving from another, so
+    /// the members it implements explicitly. The generated registrar passes them on for a set deriving from another, so
     /// the registry knows which texts the set rewords without calling it.
     /// </summary>
     private static ImmutableArray<string> GetOwnTexts(INamedTypeSymbol type)
@@ -102,7 +103,7 @@ internal static partial class LocalizationDiscovery
         foreach (var member in type.GetMembers())
         {
             // A member that hides a text words nothing, because the contract calls the member it hides (LOC302).
-            // Recorded, it would keep the registry from the wording a rewording of the language gives that text.
+            // Passed on, it would keep the registry from the wording a rewording of the language gives that text.
             if (HidesText(member, type))
                 continue;
 

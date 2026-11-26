@@ -922,11 +922,11 @@ namespace CodeChops.Idioma.Tests
             // Act
             var languages = (SupportedLanguagesAttribute)Attribute.GetCustomAttribute(assembly, typeof(SupportedLanguagesAttribute))!;
             var sets = Attribute.GetCustomAttributes(assembly, typeof(LocalizationSetAttribute)).Cast<LocalizationSetAttribute>().ToArray();
-            var inlineTexts = Attribute.GetCustomAttribute(assembly, typeof(InlineTextsAttribute));
+            var standaloneTexts = Attribute.GetCustomAttribute(assembly, typeof(StandaloneTextsAttribute));
 
             // Assert: what the build of an assembly referencing this one reads.
             languages.Languages.ShouldBe(["en", "nl"]);
-            inlineTexts.ShouldNotBeNull();
+            standaloneTexts.ShouldNotBeNull();
             sets.ShouldContain(set => set.Contract == "CodeChops.Idioma.Tests.GeneratedSets.IGeneratedLocalization" && set.Language == "en");
             sets.ShouldContain(set => set.Contract == "CodeChops.Idioma.Tests.GeneratedSets.IGeneratedLocalization" && set.Language == "nl");
         }

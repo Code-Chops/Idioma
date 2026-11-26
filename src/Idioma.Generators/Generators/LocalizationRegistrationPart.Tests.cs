@@ -238,7 +238,7 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """, library);
 
-        // Assert: the registry files a set under the code the build records, so the first isn't registered, and the
+        // Assert: the registry files a set under the code the build describes it with, so the first isn't registered, and the
         // registrar of the second is written as a build writes it.
         var run = inherited.Results.ShouldHaveSingleItem();
         run.Exception.ShouldBeNull();
@@ -246,7 +246,7 @@ public sealed partial class LocalizationRegistrationPartTests
         run.GeneratedSources.ShouldNotContain(static source => source.SourceText.ToString().Contains("new TestApp.MyGridLocalizationEnGb()", StringComparison.Ordinal));
 
         var text = GeneratedText(repeated);
-        text.ShouldContain("RecordSet<TestApp.MyGridLocalizationEnGb>(\"en-GB\"");
+        text.ShouldContain("DescribeSet<TestApp.MyGridLocalizationEnGb>(\"en-GB\"");
         text.ShouldContain("RegisterSets(asDefaults: false,");
         text.ShouldContain("new TestApp.MyGridLocalizationEnGb()");
         text.ShouldNotContain("RegisterSets(asDefaults: true");
@@ -296,13 +296,13 @@ public sealed partial class LocalizationRegistrationPartTests
             }
             """);
 
-        // Assert: and its record holds its language alone. The base is never registered, so the set rewords nothing,
+        // Assert: and its description holds its language alone. The base is never registered, so the set rewords nothing,
         // and the registry never asks which texts it words itself.
         var text = GeneratedText(result);
         text.ShouldContain("RegisterSets(asDefaults: true,");
         text.ShouldNotContain("RegisterSets(asDefaults: false,");
         text.ShouldNotContain("ShopLocalizationBase");
-        text.ShouldContain("RecordSet<TestApp.ShopLocalizationDe>(\"de\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationDe>(\"de\");");
     }
 
     [Test]

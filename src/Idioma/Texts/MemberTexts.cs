@@ -1,18 +1,19 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
 namespace CodeChops.Idioma;
 
 /// <summary>
 /// Finds the texts of members marked <c>[Localized]</c>: a property, a field, an enum member, or a type. Each assembly
-/// records one function that gives a member's wording per language. This class keeps what those functions find.
+/// registers one function that gives a member's wording per language. This class keeps what those functions find.
 /// Every overload of <c>LocalizedText.GetTextByMember</c> and <c>LocalizedText.GetTextOfType</c> reads from it.
 /// </summary>
 internal static class MemberTexts
 {
     /// <summary>
     /// What finds a member's text: one function per assembly that marks members <c>[Localized]</c>, and the texts
-    /// found so far. Replaced as a whole when an assembly records its function, so that a member looked up before
+    /// found so far. Replaced as a whole when an assembly registers its function, so that a member looked up before
     /// that isn't kept as one without a text.
     /// </summary>
     private static MemberTextSources Sources = new([]);
@@ -67,9 +68,9 @@ internal static class MemberTexts
 
     /// <summary>
     /// Adds the function that finds the texts of an assembly's members.
-    /// <see cref="Internals.GeneratedCode.RecordMemberTexts"/> calls this when the assembly registers.
+    /// <see cref="Internals.GeneratedCode.RegisterMemberTexts"/> calls this when the assembly registers.
     /// </summary>
-    public static void Record(string[] languages, Func<Type, string?, string[]?> find)
+    public static void Register(string[] languages, Func<Type, string?, string[]?> find)
     {
         ArgumentNullException.ThrowIfNull(languages);
         ArgumentNullException.ThrowIfNull(find);
@@ -77,8 +78,9 @@ internal static class MemberTexts
         var finder = new MemberTextFinder(languages, find);
         CollectibleAssemblies.Watch(find.Method.Module.Assembly);
 
-        // A new whole, without the texts found so far: a member looked up before its assembly registered was kept as
-        // one without a text. A lookup that started on the old whole keeps what it finds there, where no one reads it.
+        // A new whole, without the texts found so far, because a member looked up before its assembly registered was
+        // kept as one without a text. A lookup that started on the old whole keeps what it finds there, where no one
+        // reads it.
         MemberTextSources current, next;
 
         do
@@ -91,8 +93,8 @@ internal static class MemberTexts
 
     /// <summary>
     /// Forgets the functions of the assemblies of a context that unloads (<see cref="CollectibleAssemblies"/>). Each
-    /// is also emptied, because a thread may still hold the whole it was part of, through the texts of the last type it
-    /// asked for.
+    /// is also emptied, because the whole it was part of may still be held. The texts of a type the code names hold it
+    /// until that type is asked for again, and so do the texts of the last type a thread asked for.
     /// </summary>
     public static void Forget(AssemblyLoadContext context)
     {
@@ -122,7 +124,7 @@ internal static class MemberTexts
     {
         var texts = TextsOf<T>.Value;
 
-        // Found again when an assembly recorded its texts since: what was found before may lack one of them.
+        // Found again when an assembly registered its texts since, because what was found before may lack one of them.
         if (texts is null || !ReferenceEquals(texts.Sources, Volatile.Read(ref Sources)))
             TextsOf<T>.Value = texts = GetTextsOf(typeof(T));
 
@@ -141,7 +143,7 @@ internal static class MemberTexts
             return last;
 
         // A type found here is kept already, so the field holds on to nothing more. A type that can be unloaded is
-        // never kept, and so never found here.
+        // kept elsewhere, and so never found here.
         if (sources.TextsByType.TryGetValue(type, out var texts))
         {
             LastTextsByType = texts;
@@ -214,7 +216,7 @@ internal static class MemberTexts
         /// </summary>
         public string Word()
         {
-            var index = InlineLanguage.IndexOfShownLanguage(languages);
+            var index = StandaloneLanguage.IndexOfShownLanguage(languages);
 
             // A wording per language, as the generator writes them. Fewer would be code written by hand.
             var wording = wordings[index < wordings.Length ? index : 0];
@@ -234,6 +236,12 @@ internal static class MemberTexts
         /// <c>Page&lt;Order&gt;</c>, has those of its definition, <c>Page&lt;T&gt;</c>.
         /// </summary>
         public ConcurrentDictionary<Type, TypeTexts> TextsByType { get; } = new();
+
+        /// <summary>
+        /// The texts found for each type that can be unloaded, such as a plugin's. Weak, so that such a type still
+        /// unloads with its context. Made when the first such type is asked for, because most apps load none.
+        /// </summary>
+        private ConditionalWeakTable<Type, TypeTexts>? _textsByCollectibleType;
 
         /// <summary>
         /// Asks every function for the member of the type, and then of each class it derives from. A type's own text
@@ -258,9 +266,16 @@ internal static class MemberTexts
         /// </summary>
         public TypeTexts AddTextsOf(Type type)
         {
-            // A type that can be unloaded isn't kept, because the texts found would hold on to it.
+            // A type that can be unloaded is kept weakly, because the texts found would hold on to it otherwise.
             if (type.IsCollectible)
-                return new TypeTexts(this, type);
+            {
+                var textsByCollectibleType = LazyInitializer.EnsureInitialized(
+                    ref this._textsByCollectibleType,
+                    static () => new ConditionalWeakTable<Type, TypeTexts>());
+
+                var collectibleTexts = textsByCollectibleType.GetOrAdd(type, static (type, sources) => new TypeTexts(sources, type), this);
+                return collectibleTexts;
+            }
 
             // A type with type arguments is kept as it's asked for, and not as its definition. A thread's last lookup
             // compares the type it was asked for, so it recognizes such a type only this way. Get finds the texts of
@@ -344,15 +359,14 @@ internal static class MemberTexts
     }
 
     /// <summary>
-    /// Names and the text of each, in places a name's length and three of its characters give. Never changed once
-    /// made.
+    /// Names and the text of each, in places a name's length and three of its characters give. Never changed once made.
     /// </summary>
     private sealed class MemberTable
     {
         public static MemberTable Empty { get; } = new(new string?[8], new MemberText?[8], count: 0);
 
-        // Two arrays, and not one of pairs: an array of a struct of two is code the runtime compiles when the app
-        // starts, where arrays of objects are there already.
+        // Two arrays, and not one of pairs, because an array of a struct of two is code the runtime compiles when the
+        // app starts. Arrays of objects are there already.
         public string?[] Names { get; }
         public MemberText?[] Texts { get; }
         public int Count { get; }

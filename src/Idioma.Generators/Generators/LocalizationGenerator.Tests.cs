@@ -92,7 +92,7 @@ public sealed class LocalizationGeneratorTests
         run.Exception.ShouldBeNull();
         run.Diagnostics.ShouldBeEmpty();
         run.TrackedSteps[LocalizationDiscovery.ContractTrackingName].ShouldHaveSingleItem();
-        run.TrackedSteps[LocalizationDiscovery.RecordTrackingName].ShouldHaveSingleItem();
+        run.TrackedSteps[LocalizationDiscovery.RegistrarTrackingName].ShouldHaveSingleItem();
         run.GeneratedSources.Select(static source => source.HintName).ShouldBe(
             ["TestApp.ShopLocalizationEn.Localization.g.cs", "LocalizationSets.g.cs", "LocalizationRegistrar.g.cs"],
             ignoreOrder: true);
@@ -106,7 +106,7 @@ public sealed class LocalizationGeneratorTests
         var driver = CreateTrackingDriver().RunGenerators(compilation);
         var edited = CSharpSyntaxTree.ParseText(Sets.Replace("=> \"Checkout\"", "=> \"Pay\"", StringComparison.Ordinal), GeneratorTestHelper.ParseOptions);
 
-        // Act: the English wording changes, which the contract shows in its doc comments. The registrar and the recorded
+        // Act: the English wording changes, which the contract shows in its doc comments. The registrar and the listed
         // sets are written from what the registrar's share of discovery holds, which has no wording.
         var run = driver.RunGenerators(compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), edited)).GetRunResult().Results.ShouldHaveSingleItem();
 
@@ -153,7 +153,7 @@ public sealed class LocalizationGeneratorTests
 
         // Assert: the registrar's share of each class is equal to what it was, because it holds no wording and no
         // location. So no step that reads that share alone runs.
-        GetReasons(run, LocalizationDiscovery.RecordTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
+        GetReasons(run, LocalizationDiscovery.RegistrarTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
         GetReasons(run, LocalizationDiscovery.BindingQuestionTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
         GetReasons(run, LocalizationDiscovery.GeneratedContractsTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
         GetReasons(run, LocalizationRegistrationPart.RegistrarTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
@@ -164,7 +164,7 @@ public sealed class LocalizationGeneratorTests
     }
 
     [Test]
-    public void RecordDiscovery_ShouldHoldNoLocation()
+    public void RegistrarDiscovery_ShouldHoldNoLocation()
     {
         // Arrange: a set that can't be registered, a set whose language code is no culture name, a regional set whose
         // LocalizationLanguageCode implements nothing, and a nested class that reads as a default-language set.
@@ -209,7 +209,7 @@ public sealed class LocalizationGeneratorTests
         // Act
         var run = CreateTrackingDriver().RunGenerators(Compile(source)).GetRunResult().Results.ShouldHaveSingleItem();
         var contractDiscovery = (Discovery)run.TrackedSteps[LocalizationDiscovery.ContractTrackingName].Single().Outputs.Single().Value;
-        var recordDiscovery = (Discovery)run.TrackedSteps[LocalizationDiscovery.RecordTrackingName].Single().Outputs.Single().Value;
+        var registrarDiscovery = (Discovery)run.TrackedSteps[LocalizationDiscovery.RegistrarTrackingName].Single().Outputs.Single().Value;
 
         // Assert: the share the diagnostics are reported from holds where each is reported.
         contractDiscovery.Sets.ShouldAllBe(static set => set.Location.Tree != null && set.Locations.BaseTypes.Length > 0);
@@ -218,13 +218,13 @@ public sealed class LocalizationGeneratorTests
         contractDiscovery.UnextendableSets.ShouldHaveSingleItem().Location.Tree.ShouldNotBeNull();
 
         // The registrar's share holds the same sets and base types, and no location at all.
-        recordDiscovery.Sets.Length.ShouldBe(4);
-        recordDiscovery.Sets.ShouldAllBe(static set => set.Locations == default && set.UnresolvedBaseTypes.Length > 0);
-        var unextendable = recordDiscovery.UnextendableSets.ShouldHaveSingleItem();
+        registrarDiscovery.Sets.Length.ShouldBe(4);
+        registrarDiscovery.Sets.ShouldAllBe(static set => set.Locations == default && set.UnresolvedBaseTypes.Length > 0);
+        var unextendable = registrarDiscovery.UnextendableSets.ShouldHaveSingleItem();
         unextendable.Location.ShouldBe(default);
         unextendable.BaseTypeLocations.ShouldBeEmpty();
         unextendable.UnresolvedBaseTypes.ShouldHaveSingleItem().Name.ShouldBe("IAdminLocalization");
-        recordDiscovery.UnnameableOverrides.ShouldBeEmpty();
+        registrarDiscovery.UnnameableOverrides.ShouldBeEmpty();
     }
 
     [Test]
@@ -291,9 +291,9 @@ public sealed class LocalizationGeneratorTests
         var (run, _) = RunAcrossEdit(source, EditWording);
 
         // Assert: the Dutch set still counts for the admin's contract, and the contracts are not worked out again.
-        var recorded = run.GeneratedSources.Single(static generated => generated.HintName is "LocalizationSets.g.cs").SourceText.ToString();
-        recorded.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
-        recorded.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
+        var provided = run.GeneratedSources.Single(static generated => generated.HintName is "LocalizationSets.g.cs").SourceText.ToString();
+        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
+        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
         run.Diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC201"]);
         GetReasons(run, LocalizationDiscovery.BindingQuestionTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
         GetReasons(run, LocalizationDiscovery.GeneratedContractsTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
@@ -302,7 +302,7 @@ public sealed class LocalizationGeneratorTests
     [Test]
     public void AddedText_ShouldRunTheAnalysisAgainAndLeaveTheRegistrar()
     {
-        // Arrange & Act: a text more in both sets. The registrar records no text of a set that derives from none.
+        // Arrange & Act: a text more in both sets. The registrar names no text of a set that derives from none.
         var (run, _) = RunAcrossEdit(Sets, static source => source
             .Replace("public string Checkout => \"Checkout\";", "public string Checkout => \"Checkout\"; public string Cart => \"Cart\";", StringComparison.Ordinal)
             .Replace("public string Checkout => \"Afrekenen\";", "public string Checkout => \"Afrekenen\"; public string Cart => \"Winkelwagen\";", StringComparison.Ordinal));
@@ -324,7 +324,7 @@ public sealed class LocalizationGeneratorTests
             .Replace("\"nl\"", "\"de\"", StringComparison.Ordinal));
 
         // Assert: the contracts are worked out again from the new sets, and are the same ones.
-        GetReasons(run, LocalizationDiscovery.RecordTrackingName).ShouldBe([IncrementalStepRunReason.Modified]);
+        GetReasons(run, LocalizationDiscovery.RegistrarTrackingName).ShouldBe([IncrementalStepRunReason.Modified]);
         GetReasons(run, LocalizationDiscovery.GeneratedContractsTrackingName).ShouldBe([IncrementalStepRunReason.Unchanged]);
         GetReasons(run, LocalizationRegistrationPart.RegistrarTrackingName).ShouldBe([IncrementalStepRunReason.Modified]);
         run.GeneratedSources.Single(static generated => generated.HintName is "LocalizationRegistrar.g.cs").SourceText.ToString().ShouldContain("new TestApp.ShopLocalizationDe()");

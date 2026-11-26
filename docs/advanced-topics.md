@@ -131,7 +131,7 @@ Every language also uses the values the default wording shows (`LOC402`). A Dutc
 - A value the default wording only chooses by, such as `salutation` in a `switch`, doesn't count. So it may go unused in a language that doesn't make that distinction.
 - A variable that a pattern declares for the whole value counts as the value. So `count switch { 1 => "1 item", var n => $"{n} items" }` shows `count`.
 
-The contract records which values the default wording shows. So the check also holds for a set that an app adds to a library's contract. For a contract you wrote by hand, the build reads them from the default-language set in the same assembly.
+The contract marks which values the default wording shows. So the check also holds for a set that an app adds to a library's contract. For a contract you wrote by hand, the build reads them from the default-language set in the same assembly.
 
 What else to know:
 
@@ -172,7 +172,7 @@ Every set is registered automatically. When an app starts, it registers the sets
 
 The source generator writes the code that does this. It's a class named after your assembly, `LocalizationRegistrar_MyApp` for `MyApp`, in the namespace `CodeChops.Idioma.Generated`. The class is public in an assembly that has sets or texts written as attributes, so an app that references the assembly can register them at startup. In any other assembly it's internal. It's hidden from autocomplete, but it's still public API. So a library that tracks its public API, such as with Microsoft's public API analyzers, lists the registrar next to the contract and the generated class of every public set.
 
-The texts of members marked `[Localized]` are recorded the same way, by the same generated code.
+The texts of members marked `[Localized]` are registered the same way, by the same generated code.
 
 A set is registered by its type, and created when a text of its contract is first shown. So a set whose constructor throws doesn't stop your app from starting, and doesn't stop the texts of other contracts, or inline texts and attributes:
 

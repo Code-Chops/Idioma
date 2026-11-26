@@ -3,6 +3,7 @@ namespace CodeChops.Idioma.Generators;
 // The part of LocalizationDiscovery that resolves a class to a set: its shape, the classes it derives from, the
 // contracts it implements, and whether generated code can create it to register it. A plain comment: the compiler
 // merges the XML docs of every partial declaration, and the type's summary lives in LocalizationDiscovery.cs.
+/// <inheritdoc cref="LocalizationDiscovery"/>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
@@ -170,18 +171,18 @@ internal static partial class LocalizationDiscovery
             ? baseType
             : null;
 
-        // The LocalizationLanguageCode of the set once, and the code the build records for a set without one. Its
-        // language, its record, and whether it can register all ask for them.
+        // The LocalizationLanguageCode of the set once, and the code the build describes a set without one with. Its
+        // language, its description, and whether it can register all ask for them.
         var languageCode = ReadSetLanguageCode(type);
         var declaresLanguageCode = languageCode.IsDeclared;
-        var recordedCode = declaresLanguageCode ? null : FindRecordedLanguageCode(type, ancestors, declaresLanguageCode: false);
+        var describedCode = declaresLanguageCode ? null : FindDescribedLanguageCode(type, ancestors, declaresLanguageCode: false);
         var unmappedLanguageCode = languageCode.Mapping.Unmapped;
         var constructor = FindConstructorCalledWithoutArguments(type, semanticModel, cancellationToken);
-        var language = GetLanguage(type, languageCode, recordedCode, reader, cancellationToken, out var invalidLanguageCode, out var unknownLanguageCode);
-        var recordedLanguageCode = declaresLanguageCode ? ReadImplementedLanguageCode(languageCode, reader, cancellationToken) : recordedCode ?? GetNameLanguage(type.Name);
+        var language = GetLanguage(type, languageCode, describedCode, reader, cancellationToken, out var invalidLanguageCode, out var unknownLanguageCode);
+        var describedLanguageCode = declaresLanguageCode ? ReadImplementedLanguageCode(languageCode, reader, cancellationToken) : describedCode ?? GetNameLanguage(type.Name);
 
         // Not for a constant that is no culture name, which LOC207 reports as an error.
-        var hasUnreadableLanguageCode = declaresLanguageCode && recordedLanguageCode is null && invalidLanguageCode is null;
+        var hasUnreadableLanguageCode = declaresLanguageCode && describedLanguageCode is null && invalidLanguageCode is null;
         var location = DiagnosticLocation.From(type.Locations[0]);
         var depth = GetDepth(type, ancestors);
         var enums = listsLocalizationSet ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
@@ -194,7 +195,7 @@ internal static partial class LocalizationDiscovery
             IsOverride: IsOverride(type),
             Depth: depth,
             UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
-            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguageCode: declaresLanguageCode || recordedCode is not null, hasUnreadableLanguageCode),
+            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguageCode: declaresLanguageCode || describedCode is not null, hasUnreadableLanguageCode),
             IsObsoleteAsError: IsObsoleteAsError(type),
             SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(type)),
             HasPublicParameterlessConstructor: Enumerable.Any(type.InstanceConstructors, static candidate => candidate is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }),
@@ -216,7 +217,7 @@ internal static partial class LocalizationDiscovery
             Language: language,
             // Not for a LocalizationLanguageCode the build can't read: such a set has a language, which only the run time knows.
             NameGivesNoLanguage: language is null && invalidLanguageCode is null && !declaresLanguageCode && unmappedLanguageCode is null,
-            RecordedLanguageCode: recordedLanguageCode,
+            DescribedLanguageCode: describedLanguageCode,
             // Only for a set deriving from another: the registry asks it of such a set alone, and a set deriving from
             // none would list every text, in every language, in the generated code.
             OwnTexts: new EquatableArray<string>(depth > 0 ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
@@ -534,7 +535,7 @@ internal static partial class LocalizationDiscovery
     /// <remarks>
     /// An abstract class isn't counted, such as a base that the sets of every language share. It's never registered,
     /// so a set deriving from it rewords no set, and words every text itself. Counted, it would make the registrar
-    /// record every text of every such set (<see cref="DiscoveredLocalization.OwnTexts"/>), which nothing reads.
+    /// name every text of every such set (<see cref="DiscoveredLocalization.OwnTexts"/>), which nothing reads.
     /// </remarks>
     /// <param name="type">The set.</param>
     /// <param name="ancestors">The classes of this assembly it derives from, nearest first, as the start of its chain.</param>
@@ -656,8 +657,8 @@ internal static partial class LocalizationDiscovery
     /// <see langword="null"/> when it calls none.
     /// </param>
     /// <param name="hasLanguageCode">
-    /// Whether the set implements <c>LocalizationLanguageCode</c>, or the build records a code for it
-    /// (<see cref="FindRecordedLanguageCode(INamedTypeSymbol, ImmutableArray{SourceAncestor}, bool)"/>).
+    /// Whether the set implements <c>LocalizationLanguageCode</c>, or the build describes it with a code
+    /// (<see cref="FindDescribedLanguageCode(INamedTypeSymbol, ImmutableArray{SourceAncestor}, bool)"/>).
     /// </param>
     /// <param name="hasUnreadableLanguageCode">
     /// Whether the set implements <c>LocalizationLanguageCode</c> with something other than a constant the build can
@@ -681,7 +682,7 @@ internal static partial class LocalizationDiscovery
         if (!EndsInTwoLetterSuffix(type.Name) && !hasLanguageCode)
             return NoLanguageCodeProblem;
 
-        // The registry files a set under the language the build records for it, without creating it. Creating it to
+        // The registry files a set under the language the build describes it with, without creating it. Creating it to
         // ask its language ran its constructor while the registry was being built.
         if (hasUnreadableLanguageCode)
             return UnreadableLanguageCodeProblem;

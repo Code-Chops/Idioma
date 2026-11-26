@@ -1,12 +1,12 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Picks the language a text that carries its own wording shows for the reader: one written with
-/// <c>LocalizedText.Inline</c>, or with <c>[Localized]</c> on a member.
+/// Picks the language a standalone text shows for the reader. A standalone text carries its own wording instead of a
+/// set's. It's written with <c>LocalizedText.Inline</c>, or with <c>[Localized]</c> on a member.
 /// </summary>
 /// <remarks>
-/// Such a text has a wording for each language of its assembly, the default language first. It shows the first of
-/// these:
+/// A standalone text has a wording for each language of its assembly, the default language first. It shows the first
+/// of these:
 /// <list type="number">
 /// <item>The wording for the reader's culture, or else for a culture it falls back to. A culture none of the app's
 /// languages serves skips this.</item>
@@ -14,11 +14,14 @@ namespace CodeChops.Idioma;
 /// <item>The wording for the assembly's default language.</item>
 /// </list>
 /// </remarks>
-internal static class InlineLanguage
+internal static class StandaloneLanguage
 {
-    // What this thread picked last. A render asks for the same languages and culture text after text, so comparing two
-    // references skips walking the names. An assembly's inline texts and texts on members pass one array, so a render
-    // that shows both in turn still finds its pick here. Per thread, for the reason LocalizationRegistry.LastCulture is.
+    /// <summary>
+    /// What this thread picked last. A render asks for the same languages and culture text after text, so comparing two
+    /// references skips walking the names. All standalone texts of an assembly pass one array, so a render that shows
+    /// inline texts and texts on members in turn still finds its pick here. Per thread, because threads of a server
+    /// render for users of different languages at once.
+    /// </summary>
     [ThreadStatic]
     private static LocalizationRegistry.CultureLookup? LastLookup;
 

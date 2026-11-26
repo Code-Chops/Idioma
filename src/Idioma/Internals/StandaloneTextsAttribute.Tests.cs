@@ -4,15 +4,15 @@ using CodeChops.Idioma.Internals;
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="InlineTextsAttribute"/>: its usage, and the metadata the generators write and read it by.
+/// Tests for <see cref="StandaloneTextsAttribute"/>: its usage, and the metadata the generators write and read it by.
 /// </summary>
-public sealed class InlineTextsAttributeTests
+public sealed class StandaloneTextsAttributeTests
 {
     [Test]
     public void ShouldTargetAssembliesMoreThanOnce()
     {
         // Arrange & Act
-        var usage = typeof(InlineTextsAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
+        var usage = typeof(StandaloneTextsAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
 
         // Assert: two generated files apply it, one for LocalizedText.Inline and one for [Localized].
         usage.ValidOn.ShouldBe(AttributeTargets.Assembly);
@@ -23,10 +23,10 @@ public sealed class InlineTextsAttributeTests
     public void Metadata_ShouldMatchWhatGeneratorsWriteAndRead()
     {
         // Arrange & Act
-        var constructor = typeof(InlineTextsAttribute).GetConstructors().ShouldHaveSingleItem();
+        var constructor = typeof(StandaloneTextsAttribute).GetConstructors().ShouldHaveSingleItem();
 
         // Assert: one generator writes the attribute by this name without arguments, and another matches it by name.
-        typeof(InlineTextsAttribute).FullName.ShouldBe("CodeChops.Idioma.Internals.InlineTextsAttribute");
+        typeof(StandaloneTextsAttribute).FullName.ShouldBe("CodeChops.Idioma.Internals.StandaloneTextsAttribute");
         constructor.GetParameters().ShouldBeEmpty();
     }
 }
