@@ -208,7 +208,7 @@ Show a text of a set by its name, wherever you need it:
 
 ```razor
 <button>
-  @ShopLocalization.Cart
+  @ShopLocalization.Checkout
 </button>
 ```
 
