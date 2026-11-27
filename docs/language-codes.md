@@ -20,7 +20,7 @@ Write each code as .NET names the culture. Danish is `da` and British English is
 
 ## Regional variants
 
-You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. It derives from the English set and overrides those texts. So make them `virtual` in the English set, as in `public virtual string Cart => "Cart";`. There are two ways to add a British set:
+You don't need an `en-US` set. `ShopLocalizationEn` serves `en-US`, `en-GB`, and every other English culture, so a British set holds only the texts that differ. It derives from the English set and overrides those texts. So make them `virtual` in the English set, as in `public virtual string Cart => "Cart";`. A British set can also override a member that the English texts read, such as a `protected virtual` currency symbol. Every English text it inherits then shows with it. There are two ways to add a British set:
 
 - List `en-GB` in `[assembly: SupportedLanguages("en", "nl", "en-GB")]`, and the name is enough:
 

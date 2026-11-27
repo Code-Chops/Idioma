@@ -1,7 +1,7 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Keeps the build from picking up a set or a member. A marked <see cref="ILocalizationSet">set</see> doesn't register
+/// Keeps the build from discovering a set or a member. A marked <see cref="ILocalizationSet">set</see> doesn't register
 /// itself, so it takes effect only once you pass it to
 /// <see cref="LocalizationRegistry.Register(ReadOnlySpan{ILocalizationSet})">LocalizationRegistry.Register</see>. A
 /// marked public property or method of a set, or of a class a set derives from, isn't a text.

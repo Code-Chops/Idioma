@@ -60,11 +60,11 @@ export NUGET_PACKAGES="$work/packages"
 cd "$work"
 
 for demo in *.cs; do
-    # The version packed now, where the demo takes the latest published one.
-    sed -i.bak "s|#:package CodeChops.Idioma@\*|#:package CodeChops.Idioma@$version|" "$demo"
+    # The version packed now, where the demo takes the latest published one, a preview included.
+    sed -i.bak "s|#:package CodeChops.Idioma@\*-\*|#:package CodeChops.Idioma@$version|" "$demo"
 
     if ! grep -q "#:package CodeChops.Idioma@$version" "$demo"; then
-        echo "$demo doesn't take the package as '#:package CodeChops.Idioma@*', so this run can't point it at the packed one." >&2
+        echo "$demo doesn't take the package as '#:package CodeChops.Idioma@*-*', so this run can't point it at the packed one." >&2
         exit 1
     fi
 

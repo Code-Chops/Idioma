@@ -113,7 +113,7 @@ With a set of the enum:
 - **By name.** `GetTextByKey` takes the member's name: `OrderStatusLocalization.GetTextByKey("Shipped")`.
 - **More than one enum.** A set that lists two enums holds the texts of both, and gets a `GetText` for each. Two members with the same name share a text.
 - **Two sets of one enum.** Each gives the enum a `GetText`, so a call that sees both is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
-- **A set and `[Localized]` members.** The set's texts win, in every language. `GetTextByMember` still finds the attributes' texts.
+- **A set and `[Localized]` members.** The set's texts win, in every language. `GetTextByMember` still finds the attributes' texts. A member the set has no text of keeps the text of its `[Localized]`, such as a member that a newer version of a library adds to its enum.
 - **A library's enum.** An app can add a language to a library's set, and reword a text the library made `virtual`. It adds a language to an enum with `[Localized]` members by writing a set of its own. That set's wording then shows wherever `GetText()` is called, also in the library.
 
 With an attribute on each member:

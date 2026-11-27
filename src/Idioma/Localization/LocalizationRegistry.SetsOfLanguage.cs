@@ -8,16 +8,10 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     // A language holds the sets of every contract of the app, and a text needs only those of its own: found once per
     // contract and kept, so that a lookup does not test every set of the language against the contract, on every text
-    // of every render. Never dropped, as a registry never changes: a registration builds a new one. A plugin's contract
-    // is the exception: kept only by a registry that holds the plugin's sets, because only that one is built anew when
-    // the plugin unloads.
-    internal sealed class SetsOfLanguage(ImmutableArray<Registration> registrations, bool holdsCollectibleSets)
+    // of every render. Never dropped, as a registry never changes: a registration builds a new one.
+    internal sealed class SetsOfLanguage(ImmutableArray<Registration> registrations)
     {
         private ImmutableArray<Registration> Registrations { get; } = registrations;
-
-        // Whether the registry holds a plugin's sets (LocalizationRegistry.HoldsCollectibleSets). One that doesn't keeps
-        // nothing for a plugin's contract, because it isn't built anew when the plugin goes.
-        private bool HoldsCollectibleSets { get; } = holdsCollectibleSets;
 
         // Never written to once added, so an array is as safe here as an immutable one.
         private ConcurrentDictionary<Type, ContractSet[]> ByContract { get; } = new();
@@ -32,9 +26,6 @@ public sealed partial class LocalizationRegistry
         /// </exception>
         public ContractSet[] Of(Type contract)
         {
-            if (contract.IsCollectible && !this.HoldsCollectibleSets)
-                return this.Get(contract);
-
             var contractSets = this.ByContract.TryGetValue(contract, out var known)
                 ? known
                 : this.ByContract.GetOrAdd(contract, static (contract, setsOfLanguage) => setsOfLanguage.Get(contract), this);

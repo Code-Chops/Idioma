@@ -7,8 +7,7 @@ namespace CodeChops.Idioma;
 /// <remarks>
 /// <para>
 /// Inside the scope, the culture is both <see cref="CultureInfo.CurrentUICulture"/>, which chooses the wording, and
-/// <see cref="CultureInfo.CurrentCulture"/>, which formats dates and numbers. It also wins over
-/// <see cref="LocalizationRegistry.CurrentUICultureProvider"/>.
+/// <see cref="CultureInfo.CurrentCulture"/>, which formats dates and numbers.
 /// </para>
 /// <para>
 /// The scope follows your code across an <see langword="await"/>. A scope inside another wins until it's disposed.
@@ -31,23 +30,9 @@ public sealed class CultureScope : IDisposable
 {
     // The innermost scope the code that runs now is in. It flows with the code, as the cultures of the thread do, so a
     // scope still holds after an await. Each flow keeps its own: a scope disposed in one, such as the code that started
-    // a task, still holds in a task started inside it, whose thread cultures are still the scope's. Read only where a
-    // provider is set, because without one the thread's UI culture is the scope's already.
+    // a task, still holds in a task started inside it, whose thread cultures are still the scope's. No text reads it,
+    // because the thread's UI culture is the scope's already. It only tells Dispose which scopes are still open.
     private static AsyncLocal<CultureScope?> Entered { get; } = new();
-
-    /// <summary>
-    /// The culture of the scope the code that runs now is in, or <see langword="null"/> outside one. A text follows
-    /// it rather than <see cref="LocalizationRegistry.CurrentUICultureProvider"/>.
-    /// </summary>
-    internal static CultureInfo? Current => Entered.Value?.Culture;
-
-    /// <summary>
-    /// The innermost scope the code that runs now is in, or <see langword="null"/> outside every scope. A text being
-    /// worded compares it with the one it was worded in, to see whether the member of its set entered a scope.
-    /// </summary>
-    internal static CultureScope? Innermost => Entered.Value;
-
-    private CultureInfo Culture { get; }
 
     /// <summary>
     /// The scope this one was entered in, or <see langword="null"/> for one entered outside every scope.
@@ -69,7 +54,6 @@ public sealed class CultureScope : IDisposable
 
     internal CultureScope(CultureInfo culture)
     {
-        this.Culture = culture;
         this.PreviousUICulture = CultureInfo.CurrentUICulture;
         this.PreviousCulture = CultureInfo.CurrentCulture;
 

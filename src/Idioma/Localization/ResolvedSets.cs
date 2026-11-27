@@ -1,14 +1,14 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// The sets found so far for the texts of one contract, for a reader of one culture. A text reads its set here by its
+/// The sets found so far for the texts of one contract, for a user of one culture. A text reads its set here by its
 /// position, and asks that set for its wording, without a lookup.
 /// </summary>
 /// <remarks>
-/// The set found for a text words it on every call, so it's kept, unless a set before it gave <see langword="null"/>
-/// at run time (<see cref="LocalizationRegistry.Word"/>). A set that needs no scope to word the text is kept for the
-/// generated class to call. A set whose method needs a scope of the language its text falls back to is kept with that
-/// language's culture. Any other text finds its wording anew on each call.
+/// The set found for a text words it on every call, so it's kept (<see cref="LocalizationRegistry.Word"/>). A set that
+/// needs no scope to word the text is kept for the generated class to call. A set whose method needs a scope of the
+/// language its text falls back to is kept with that language's culture. Any other text finds its wording anew on each
+/// call.
 /// </remarks>
 /// <typeparam name="TContract">The contract.</typeparam>
 internal sealed class ResolvedSets<TContract>
@@ -20,8 +20,8 @@ internal sealed class ResolvedSets<TContract>
     private static ResolvedSets<TContract>? Last;
 
     // The culture object this thread asked Last for. It may be another object of the same name as the one the lookup
-    // holds, which is the object of the reader who asked first. Read only where the lookup's own culture isn't the one
-    // asked for, so a reader with the lookup's culture pays nothing for it.
+    // holds, which is the object of the caller who asked first. Read only where the lookup's own culture isn't the one
+    // asked for, so a caller with the lookup's culture pays nothing for it.
     [ThreadStatic]
     private static CultureInfo? LastAsked;
 
@@ -30,7 +30,7 @@ internal sealed class ResolvedSets<TContract>
     /// </summary>
     public LocalizationRegistry.CultureLookup Lookup { get; }
 
-    // Each array below is written one reference at a time, so a reader sees a set or none, and either is right.
+    // Each array below is written one reference at a time, so a thread sees a set or none, and either is right.
 
     /// <summary>
     /// Per text without parameters, the set that words it, or <see langword="null"/> where none is kept.
@@ -43,7 +43,7 @@ internal sealed class ResolvedSets<TContract>
     public TContract?[] SetsForValues { get; }
 
     /// <summary>
-    /// Per text with parameters that falls back to a language that doesn't serve the reader's culture, the set that
+    /// Per text with parameters that falls back to a language that doesn't serve the user's culture, the set that
     /// words it there, or <see langword="null"/> where none is kept. Read through <see cref="GetFallback"/>.
     /// </summary>
     // Apart from the sets above, because the set's member must run in a scope of that language. So the generated class
@@ -61,7 +61,7 @@ internal sealed class ResolvedSets<TContract>
     /// <summary>
     /// The sets for a culture, in the registry of the whole app.
     /// </summary>
-    /// <param name="culture">The reader's culture.</param>
+    /// <param name="culture">The user's culture.</param>
     /// <param name="textCount">The number of texts the contract has.</param>
     public static ResolvedSets<TContract> Get(CultureInfo culture, int textCount)
     {
@@ -74,14 +74,10 @@ internal sealed class ResolvedSets<TContract>
 
         last = registry.Resolve(culture).GetResolvedSets<TContract>(textCount);
 
-        // Not for a registry that holds a plugin's sets (LocalizationRegistry.HoldsCollectibleSets).
-        if (!registry.HoldsCollectibleSets)
-        {
-            // Both written on this thread, one after the other. So the culture asked always belongs to the sets next to
-            // it, also where code continues on another thread after an await.
-            Last = last;
-            LastAsked = culture;
-        }
+        // Both written on this thread, one after the other. So the culture asked always belongs to the sets next to it,
+        // also where code continues on another thread after an await.
+        Last = last;
+        LastAsked = culture;
 
         return last;
     }

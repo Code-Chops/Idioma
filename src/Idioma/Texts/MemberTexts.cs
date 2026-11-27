@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.Loader;
 
 namespace CodeChops.Idioma;
 
@@ -76,7 +75,6 @@ internal static class MemberTexts
         ArgumentNullException.ThrowIfNull(find);
 
         var finder = new MemberTextFinder(languages, find);
-        CollectibleAssemblies.Watch(find.Method.Module.Assembly);
 
         // A new whole, without the texts found so far, because a member looked up before its assembly registered was
         // kept as one without a text. A lookup that started on the old whole keeps what it finds there, where no one
@@ -89,32 +87,6 @@ internal static class MemberTexts
             next = new MemberTextSources([.. current.Finders, finder]);
         }
         while (!ReferenceEquals(Interlocked.CompareExchange(ref Sources, next, current), current));
-    }
-
-    /// <summary>
-    /// Forgets the functions of the assemblies of a context that unloads (<see cref="CollectibleAssemblies"/>). Each
-    /// is also emptied, because the whole it was part of may still be held. The texts of a type the code names hold it
-    /// until that type is asked for again, and so do the texts of the last type a thread asked for.
-    /// </summary>
-    public static void Forget(AssemblyLoadContext context)
-    {
-        MemberTextSources current, next;
-
-        do
-        {
-            current = Volatile.Read(ref Sources);
-            var kept = current.Finders.Where(finder => !finder.IsOf(context)).ToArray();
-
-            if (kept.Length == current.Finders.Length)
-                return;
-
-            next = new MemberTextSources(kept);
-        }
-        while (!ReferenceEquals(Interlocked.CompareExchange(ref Sources, next, current), current));
-
-        foreach (var finder in current.Finders)
-            if (finder.IsOf(context))
-                finder.Forget();
     }
 
     /// <summary>
@@ -142,21 +114,54 @@ internal static class MemberTexts
         if (last is not null && ReferenceEquals(last.Type, type) && ReferenceEquals(last.Sources, sources))
             return last;
 
-        // A type found here is kept already, so the field holds on to nothing more. A type that can be unloaded is
-        // kept elsewhere, and so never found here.
-        if (sources.TextsByType.TryGetValue(type, out var texts))
+        if (!sources.TextsByType.TryGetValue(type, out var texts))
         {
-            LastTextsByType = texts;
-            return texts;
+            // Its texts may be registered now, which replaces the sources.
+            if (RegisterAssembliesOf(type))
+                sources = Volatile.Read(ref Sources);
+
+            texts = sources.AddTextsOf(type);
         }
 
-        texts = sources.AddTextsOf(type);
-
-        // The field doesn't hold on to a type that can be unloaded either.
-        if (!type.IsCollectible)
-            LastTextsByType = texts;
-
+        LastTextsByType = texts;
         return texts;
+    }
+
+    /// <summary>
+    /// Registers the texts of the assembly of a type, and of the assemblies of the classes it derives from, where they
+    /// aren't yet. Gives whether that registered something.
+    /// </summary>
+    /// <remarks>
+    /// An assembly registers its texts as its code first runs, in its module initializer. A plugin, or an assembly an
+    /// app loads lazily, may be read through reflection alone before that, as a table that shows the labels of a
+    /// plugin's model does. Its members then had no text. So the module initializer is run here, which the runtime does
+    /// once per module. Called once per type and registration, where the type's texts are first looked up.
+    /// </remarks>
+    // Not under NativeAOT, which runs every module initializer as the app starts, and loads no assembly later.
+    private static bool RegisterAssembliesOf(Type type)
+    {
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            return false;
+
+        var before = Volatile.Read(ref Sources);
+
+        for (var current = type; current is not null && current != typeof(object); current = current.BaseType)
+        {
+            // A module initializer is the consumer's code, and it may throw. So may a type that isn't of the runtime,
+            // which has no module to run. A lookup of a label then finds the texts registered so far, and what the
+            // initializer throws reaches the code of its own assembly when that first runs.
+            try
+            {
+                RuntimeHelpers.RunModuleConstructor(current.Module.ModuleHandle);
+            }
+            catch (Exception)
+            {
+                // Looked up without the texts of this assembly.
+            }
+        }
+
+        var registered = !ReferenceEquals(before, Volatile.Read(ref Sources));
+        return registered;
     }
 
     /// <summary>
@@ -175,35 +180,11 @@ internal static class MemberTexts
     {
         public string[] Languages { get; } = languages;
 
-        // Null once its assembly unloads, so that nothing here holds the assembly's code any more.
-        private volatile Func<Type, string?, string[]?>? _find = find;
-
         /// <summary>
         /// Gives the wording of a member per language, in the order of <see cref="Languages"/>, or
         /// <see langword="null"/> for what has no text.
         /// </summary>
-        public string[]? Get(Type type, string? member)
-        {
-            var wordings = this._find?.Invoke(type, member);
-            return wordings;
-        }
-
-        /// <summary>
-        /// Whether the function lies in an assembly of a context that unloads.
-        /// </summary>
-        public bool IsOf(AssemblyLoadContext context)
-        {
-            var isOf = this._find is { } find && CollectibleAssemblies.IsIn(find.Method.Module.Assembly, context);
-            return isOf;
-        }
-
-        /// <summary>
-        /// Lets go of the function, whose assembly unloads.
-        /// </summary>
-        public void Forget()
-        {
-            this._find = null;
-        }
+        public Func<Type, string?, string[]?> Find { get; } = find;
     }
 
     /// <summary>
@@ -238,12 +219,6 @@ internal static class MemberTexts
         public ConcurrentDictionary<Type, TypeTexts> TextsByType { get; } = new();
 
         /// <summary>
-        /// The texts found for each type that can be unloaded, such as a plugin's. Weak, so that such a type still
-        /// unloads with its context. Made when the first such type is asked for, because most apps load none.
-        /// </summary>
-        private ConditionalWeakTable<Type, TypeTexts>? _textsByCollectibleType;
-
-        /// <summary>
         /// Asks every function for the member of the type, and then of each class it derives from. A type's own text
         /// is asked of the type alone.
         /// </summary>
@@ -254,7 +229,7 @@ internal static class MemberTexts
                 var definition = current.IsConstructedGenericType ? current.GetGenericTypeDefinition() : current;
 
                 foreach (var finder in this.Finders)
-                    if (finder.Get(definition, member) is { Length: > 0 } wordings)
+                    if (finder.Find(definition, member) is { Length: > 0 } wordings)
                         return new MemberText(finder.Languages, wordings);
             }
 
@@ -266,17 +241,6 @@ internal static class MemberTexts
         /// </summary>
         public TypeTexts AddTextsOf(Type type)
         {
-            // A type that can be unloaded is kept weakly, because the texts found would hold on to it otherwise.
-            if (type.IsCollectible)
-            {
-                var textsByCollectibleType = LazyInitializer.EnsureInitialized(
-                    ref this._textsByCollectibleType,
-                    static () => new ConditionalWeakTable<Type, TypeTexts>());
-
-                var collectibleTexts = textsByCollectibleType.GetOrAdd(type, static (type, sources) => new TypeTexts(sources, type), this);
-                return collectibleTexts;
-            }
-
             // A type with type arguments is kept as it's asked for, and not as its definition. A thread's last lookup
             // compares the type it was asked for, so it recognizes such a type only this way. Get finds the texts of
             // the definition.
@@ -307,11 +271,15 @@ internal static class MemberTexts
         public MemberTextSources Sources { get; } = sources;
         public Type Type { get; } = type;
 
-        // Replaced as a whole when a name is added, so that a reader sees the names before it or after it, and never
+        // Replaced as a whole when a name is added, so that a thread sees the names before it or after it, and never
         // half of them. Two threads that add a name at once may lose one, which is then found anew.
         private volatile MemberTable _table = MemberTable.Empty;
 
         private MemberText? _ownText;
+
+        // Volatile, so a thread that sees it set also sees _ownText, which is written before it. Without it, a thread
+        // on ARM64 could see the flag before the text, and take a type with a text for one without. The flag can't be
+        // dropped, because a type without a text keeps null in _ownText.
         private volatile bool _hasOwnText;
 
         /// <summary>
@@ -339,13 +307,8 @@ internal static class MemberTexts
             var names = kept.Names;
             var mask = names.Length - 1;
 
-            // Written out here, because a call costs more than this in WebAssembly's interpreter. MemberTable.Hash is
-            // the same.
-            var length = member.Length;
-            var hash = length is 0 ? 0 : (length * 31) + (member[0] * 7) + (member[length / 2] * 3) + member[length - 1];
-
             // The table is never full, so the search ends at an empty place.
-            for (var place = hash & mask; names[place] is { } name; place = (place + 1) & mask)
+            for (var place = MemberTable.Hash(member) & mask; names[place] is { } name; place = (place + 1) & mask)
                 if (ReferenceEquals(name, member) || String.Equals(name, member, StringComparison.Ordinal))
                     return kept.Texts[place];
 
@@ -409,7 +372,9 @@ internal static class MemberTexts
             texts[place] = text;
         }
 
-        private static int Hash(string name)
+        // Inlined, because a lookup asks here, and a call costs more than this in WebAssembly's interpreter.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int Hash(string name)
         {
             var length = name.Length;
 

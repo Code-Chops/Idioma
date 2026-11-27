@@ -16,13 +16,13 @@ See [a language the library lacks](../libraries-and-apps.md#a-language-the-libra
 
 ## LOC701
 
-A library you reference has inline texts that lack one of your languages. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in your app's default language. Where the library lacks that language too, they see the library's default language. The message names the language they see:
+A library you reference has standalone texts that lack one of your languages. A standalone text is one the library writes with `LocalizedText.Inline` or `[Localized]`, which carries its wording itself. This is a warning. Nothing outside the library can add a language to them, so your users see those texts in your app's default language. Where the library lacks that language too, they see the library's default language. The message names the language they see:
 
 ```text
-warning LOC701: 'Shop' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.
+warning LOC701: 'Shop' has standalone texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.
 ```
 
-The texts a library writes as attributes, with `[Localized]`, count among them, because they carry their wording themselves too. That holds even where your app gives an enum of the library its languages with a set of the enum ([Enums](../enums.md#a-set-of-the-enum)). The library's build marks only that it has such texts, not which, so the warning can't tell they're covered.
+The texts on the members of a library's enum count too, even where your app gives that enum its languages with a set of the enum ([Enums](../enums.md#a-set-of-the-enum)). The library's build marks only that it has standalone texts, not which, so the warning can't tell they're covered.
 
 To accept it, add `LOC701` to `<NoWarn>` in the project file, or put `#pragma warning disable LOC701` around `[assembly: SupportedLanguages]`, where it's reported.
 

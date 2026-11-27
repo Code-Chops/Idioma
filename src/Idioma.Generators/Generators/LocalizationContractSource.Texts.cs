@@ -61,14 +61,10 @@ internal static partial class LocalizationContractSource
             // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
             // comment gives (ResolveWording), which also creates the set of the default language when a text first
             // needs it. Both are called with a type argument, so that no text can stand before them: a name with a type
-            // argument is not looked for among the texts. The first hands the second the culture the provider gave, so
-            // that the provider, which may read a request, is asked once per text. That local is named apart from the
-            // parameters.
-            var culture = GetNameApartFrom(member, "culture");
-
+            // argument is not looked for among the texts.
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetLocalizationSet<{name}>({i}, {texts.Length}, out var {culture})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {culture}, {nameLiteral}, static set => set.{memberName});");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetLocalizationSet<{name}>({i}, {texts.Length})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
@@ -96,7 +92,7 @@ internal static partial class LocalizationContractSource
                 values = $"({arguments})";
             }
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetLocalizationSetForValues<{name}>({i}, {texts.Length}, out var {culture})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {valuesType}>({i}, {texts.Length}, {culture}, {nameLiteral}, {selector}, {values});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetLocalizationSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {valuesType}>({i}, {texts.Length}, {nameLiteral}, {selector}, {values});");
         }
 
         // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
@@ -179,6 +175,16 @@ internal static partial class LocalizationContractSource
                 """);
         }
 
+        // Each text by the name of its class in front, as it stands outside that class. A member marked [Obsolete] as an
+        // error can't be named (CS0619), so its arm names its value, which a parenthesis keeps whole when it's negative.
+        var arms = new StringBuilder();
+
+        foreach (var member in members)
+        {
+            var pattern = member.ObsoleteAsErrorValue is { } value ? $"({type})({value})" : $"{type}.{CodeEscaping.EscapeIdentifier(member.Name)}";
+            arms.AppendLine($"        {pattern} => {NameText(file, texts.First(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal)))},");
+        }
+
         if (lookups.Length > 0)
             lookups.AppendLine();
 
@@ -186,20 +192,35 @@ internal static partial class LocalizationContractSource
                 internal static string Get({{type}} value) => value switch
                 {
             """);
-
-        // Each text by the name of its class in front, as it stands outside that class. A member marked [Obsolete] as an
-        // error can't be named (CS0619), so its arm names its value, which a parenthesis keeps whole when it's negative.
-        foreach (var member in members)
-        {
-            var pattern = member.ObsoleteAsErrorValue is { } value ? $"({type})({value})" : $"{type}.{CodeEscaping.EscapeIdentifier(member.Name)}";
-            lookups.AppendLine($"        {pattern} => {NameText(file, texts.First(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal)))},");
-        }
-
-        lookups.AppendLine($$"""
+        lookups.Append(arms);
+        lookups.AppendLine("""
                     _ => value.ToString(),
                 };
             """);
+
+        // For an enum whose assembly gives it GetText() from the [Localized] of its members, what this set registers
+        // there (AppendEnumTextsRegistration). A value this set has no text of gives null, so that GetText() shows the
+        // [Localized] wording of its member, such as one a newer version of that assembly adds.
+        if (@enum.HasTextsOfItsAssembly)
+        {
+            lookups.AppendLine($$"""
+
+                    internal static string? {{FindName}}({{type}} value) => value switch
+                    {
+                """);
+            lookups.Append(arms);
+            lookups.AppendLine("""
+                        _ => null,
+                    };
+                """);
+        }
     }
+
+    /// <summary>
+    /// The method of <c>TextsByValue</c> that gives the text of a value, or <see langword="null"/> for a value the set
+    /// has no text of.
+    /// </summary>
+    private const string FindName = "Find";
 
     /// <summary>
     /// Writes the members that give a text by its key, which is its name:
@@ -297,7 +318,7 @@ internal static partial class LocalizationContractSource
             """);
 
         foreach (var @enum in contract.Enums.Where(static @enum => @enum.HasTextsOfItsAssembly))
-            sb.AppendLine($"        RegisterEnumTexts<{ContractTypeNames.RenderType(@enum.Type, contract.Namespace)}, {file.ContractName}>({file.TextsName}.{LocalizationSetsAnalysis.LookupName});");
+            sb.AppendLine($"        RegisterEnumTexts<{ContractTypeNames.RenderType(@enum.Type, contract.Namespace)}, {file.ContractName}>(TextsByValue<{file.ContractName}>.{FindName});");
 
         sb.AppendLine("""
                 }

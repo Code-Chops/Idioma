@@ -1,4 +1,4 @@
-using System.Runtime.Loader;
+using System.Reflection;
 
 namespace CodeChops.Idioma;
 
@@ -58,13 +58,14 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// The registered sets and the app's languages, with the registry built from them. It never changes, so a reader
-    /// always sees sets and languages that belong together, and its registry holds exactly these.
+    /// The registered sets, and the app with its languages, with the registry built from them. It never changes, so a
+    /// caller always sees sets, an app and languages that belong together, and its registry holds exactly these.
     /// </summary>
     private sealed class Registrations(
         ImmutableArray<Registration> defaults,
         ImmutableArray<Registration> overrides,
-        ImmutableArray<string> languages)
+        ImmutableArray<string> languages,
+        Assembly? application)
     {
         // Each set with the language it had when it registered, so that a registration can replace an earlier one of
         // the same type and language without calling into the sets, which are consumer code.
@@ -75,6 +76,12 @@ public sealed partial class LocalizationRegistry
         /// The app's languages, the default first. Empty until the app's registrar gives them.
         /// </summary>
         public ImmutableArray<string> Languages { get; } = languages;
+
+        /// <summary>
+        /// The assembly of the app, whose registrar gave the <see cref="Languages"/>, or <see langword="null"/> where
+        /// none did.
+        /// </summary>
+        public Assembly? Application { get; } = application;
 
         /// <summary>
         /// The registry of these sets and languages. Built at the first read, and the same instance from then on.
@@ -110,53 +117,66 @@ public sealed partial class LocalizationRegistry
             tier = ImmutableArray.Create(kept, start, kept.Length - start);
 
             var registrations = asDefaults
-                ? new Registrations(tier, this.Overrides, this.Languages)
-                : new Registrations(this.Defaults, tier, this.Languages);
+                ? new Registrations(tier, this.Overrides, this.Languages, this.Application)
+                : new Registrations(this.Defaults, tier, this.Languages, this.Application);
 
             return registrations;
         }
 
         /// <summary>
-        /// These registrations without the sets of a context that unloads.
+        /// These registrations with the app and its languages.
         /// </summary>
-        public Registrations Without(AssemblyLoadContext context)
+        public Registrations WithApplication(Assembly application, ImmutableArray<string> appLanguages)
         {
-            var defaults = this.Defaults.RemoveAll(registration => CollectibleAssemblies.IsIn(registration.Type, context));
-            var overrides = this.Overrides.RemoveAll(registration => CollectibleAssemblies.IsIn(registration.Type, context));
-
-            var registrations = new Registrations(defaults, overrides, this.Languages);
+            var registrations = new Registrations(this.Defaults, this.Overrides, appLanguages, application);
             return registrations;
         }
 
         /// <summary>
-        /// These registrations with the app's languages.
-        /// </summary>
-        public Registrations WithLanguages(ImmutableArray<string> appLanguages)
-        {
-            var registrations = new Registrations(this.Defaults, this.Overrides, appLanguages);
-            return registrations;
-        }
-
-        /// <summary>
-        /// The same sets and languages, with a registry that is yet to be built.
+        /// The same sets, app and languages, with a registry that is yet to be built.
         /// </summary>
         public Registrations Copy()
         {
-            var copy = new Registrations(this.Defaults, this.Overrides, this.Languages);
+            var copy = new Registrations(this.Defaults, this.Overrides, this.Languages, this.Application);
             return copy;
         }
 
         private LocalizationRegistry CreateRegistry()
         {
-            var registrations = this.Defaults.AddRange(this.Overrides);
+            // Building reads the language code of each set that exists, which is consumer code. A code that reads a
+            // text, or the registry, asks for the registry being built, which built it again, without end, until the
+            // stack overflowed and the process died. Thrown instead, the build files that set under the language it
+            // registered with (GetFilingLanguage).
+            if (IsBuildingRegistry)
+                throw new InvalidOperationException(
+                    $"A set's {nameof(ILocalizationSet)}.{nameof(ILocalizationSet.LocalizationLanguageCode)} reads a text or the registry, which needs the sets of the app that are being built from that code. "
+                    + "Return a culture name without reading a text, such as en-GB.");
 
-            // Building reads the language code of each set that exists, which is consumer code, so nothing is held
-            // meanwhile and two threads may build at once. The first one done gives the registry every reader gets, so
-            // that a cache a consumer keys on the instance sees one.
-            var created = Create(registrations, this.Languages);
+            var registrations = this.Defaults.AddRange(this.Overrides);
+            LocalizationRegistry created;
+
+            // Nothing is held meanwhile, so two threads may build at once. The first one done gives the registry every
+            // caller gets, so that a cache a consumer keys on the instance sees one.
+            IsBuildingRegistry = true;
+
+            try
+            {
+                created = Create(registrations, this.Languages);
+            }
+            finally
+            {
+                IsBuildingRegistry = false;
+            }
 
             return Interlocked.CompareExchange(ref this._registry, created, comparand: null) ?? created;
         }
+
+        /// <summary>
+        /// Whether this thread builds a registry (<see cref="CreateRegistry"/>). Per thread, because a build runs on one,
+        /// and another thread may build at the same time.
+        /// </summary>
+        [ThreadStatic]
+        private static bool IsBuildingRegistry;
 
         /// <summary>
         /// Tells registrations of the same type and language apart from the others, the language in any letter case.

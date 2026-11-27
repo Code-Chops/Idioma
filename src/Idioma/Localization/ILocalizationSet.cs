@@ -34,7 +34,7 @@ namespace CodeChops.Idioma;
 /// Every set is registered automatically. For that, a set must be a class that:
 /// </para>
 /// <list type="bullet">
-/// <item>Is top-level, not generic and not file-local. Otherwise the build doesn't see it as a set, and reports its
+/// <item>Is top-level, not generic and not file-local. Otherwise the build doesn't discover it, and reports its
 /// language as missing (<c>LOC201</c>).</item>
 /// <item>Has a parameterless constructor (<c>LOC208</c>).</item>
 /// </list>
@@ -60,7 +60,7 @@ namespace CodeChops.Idioma;
 /// <c>ShopLocalization.Greeting(customer.Name)</c>. A method without parameters isn't a text. The build checks that:
 /// </para>
 /// <list type="bullet">
-/// <item>Every language takes the parameters of the default set, with the same names (<c>LOC401</c>).</item>
+/// <item>Every language takes the parameters of the default-language set, with the same names (<c>LOC401</c>).</item>
 /// <item>Every language uses every value the default wording shows (<c>LOC402</c>).</item>
 /// <item>The generated class can repeat the method, so it isn't generic (<c>LOC400</c>).</item>
 /// <item>No wording has a placeholder such as <c>{0}</c>, because nothing fills it in (<c>LOC403</c>).</item>
@@ -160,15 +160,22 @@ public interface ILocalizationSet
     string LocalizationLanguageCode => GetLanguageCode(this.GetType());
 
     /// <summary>
-    /// The language a set's name gives it, such as <c>de</c> for <c>ShopLocalizationDe</c>. For the language a set
-    /// actually serves, read <see cref="LocalizationLanguageCode"/>.
+    /// The language the build gave a set's class, such as <c>de</c> for <c>ShopLocalizationDe</c>, or else the language
+    /// its name gives. <see cref="LocalizationLanguageCode"/> gives this, unless the set implements it.
     /// </summary>
+    /// <remarks>
+    /// The build gives each set it finds the language of its name, or the constant its
+    /// <see cref="LocalizationLanguageCode"/> returns. So <c>ShopLocalizationEnGb</c> gets <c>en-GB</c> in an assembly
+    /// that declares <c>en-GB</c>. A class the build didn't see, such as a nested one, gets the language of the nearest
+    /// class it derives from that the build saw. Only a class without such a class takes the last two letters of its
+    /// name.
+    /// </remarks>
     /// <param name="setType">The type of the set.</param>
     /// <exception cref="ArgumentNullException">
     /// When <paramref name="setType"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// When the name doesn't end in a language.
+    /// When neither the build nor the name gives the set a language.
     /// </exception>
     static string GetLanguageCode(Type setType)
     {

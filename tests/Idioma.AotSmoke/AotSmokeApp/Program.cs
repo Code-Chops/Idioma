@@ -57,13 +57,6 @@ var dutchItems = ShopLocalization.ItemsInCart(3, "Idioma");
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en");
 Expect("text read for a Dutch user, shown later", dutchItems, "3 artikelen in je winkelwagen bij Idioma");
 
-// For a culture a provider gives, while the thread has another: the set words the text as for a user of that culture.
-LocalizationRegistry.CurrentUICultureProvider = static () => CultureInfo.GetCultureInfo("nl-NL");
-Expect("text that takes values, for a culture the provider gives", ShopLocalization.ItemsInCart(3, "Idioma"), "3 artikelen in je winkelwagen bij Idioma");
-Expect("text without values, for a culture the provider gives", ShopLocalization.Cart, "Winkelwagen");
-Expect("inline text, for a culture the provider gives", Orders(), "Bestellingen");
-Expect("the current UI culture after it", CultureInfo.CurrentUICulture.Name, "en");
-LocalizationRegistry.CurrentUICultureProvider = null;
 
 // A text on a member, of the library and of the app. The build wrote each as code, and the app's registrar registered
 // those of the library when the app started, so nothing reads an attribute here. An enum's value gives its text

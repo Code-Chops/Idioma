@@ -8,6 +8,11 @@ Keep the vocabulary:
 - A *text* is the object, such as `ShopLocalization.Checkout`.
 - Its *wording* is the string it shows in one language.
 - A *set* is a class per language, the *contract* is the generated interface, and the *generated class* is `ShopLocalization`.
+- A *standalone text* belongs to no set and carries its own wording in every language. It's an inline text (`LocalizedText.Inline`) or a text written as an attribute (`[Localized]`). Name the two apart only where they differ.
+- A language *serves* a culture that is that language or a region of it, as `en` serves `en-GB`. A set serves the cultures its language serves.
+- A *rewording* is a set that derives from another set of the same language and overrides some of its texts.
+- The build *discovers* each set to register it, and each text of a set to put it in the contract. `[ExcludeFromLocalizationDiscovery]` keeps it from discovering one. Write "discover", not "recognize" or "pick up".
+- The *user* is the person whose language a text shows in. Don't call them the reader.
 
 Rules:
 

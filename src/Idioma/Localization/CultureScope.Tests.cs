@@ -1,12 +1,10 @@
-using Architect.AmbientContexts;
 using CodeChops.Idioma.Tests.GeneratedSets;
 using CodeChops.Idioma.Tests.TestHelpers;
 
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// <see cref="LocalizationRegistry.UseCulture"/> through the generated texts of <see cref="GeneratedLocalization"/>,
-/// and the same with an ambient scope of Architect.AmbientContexts, which an app may use in its place.
+/// <see cref="LocalizationRegistry.UseCulture"/> through the generated texts of <see cref="GeneratedLocalization"/>.
 /// </summary>
 public sealed class CultureScopeTests
 {
@@ -61,6 +59,29 @@ public sealed class CultureScopeTests
     }
 
     [Test]
+    public void UseCulture_WhereTheFlowOfTheExecutionContextIsSuppressed_ShouldPutTheCulturesBack()
+    {
+        // Arrange: no execution context to capture, so the scope can't put the one from before back, and sets the
+        // cultures back one by one instead.
+        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
+
+        // Act
+        string total;
+
+        using (ExecutionContext.SuppressFlow())
+        {
+            using (LocalizationRegistry.UseCulture(Dutch))
+                total = GeneratedLocalization.Total(1234.5m);
+        }
+
+        // Assert: Dutch inside the scope, and the cultures from before after it.
+        total.ShouldBe("Totaal: 1.234,50");
+        CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
+        CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
+        GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
+    }
+
+    [Test]
     public void UseCulture_InsideAnotherScope_ShouldWinUntilItIsDisposed()
     {
         // Arrange
@@ -83,37 +104,6 @@ public sealed class CultureScopeTests
     }
 
     [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
-    public void UseCulture_WithCurrentUICultureProvider_ShouldWinOverItWithoutAskingIt()
-    {
-        // Arrange: an app that keeps an American user's culture somewhere else, on a thread of another culture.
-        using var _ = new CulturesScope(uiCulture: "en-GB", culture: "en-GB");
-        using var provider = new ProvidedCultureScope("en-US");
-
-        // Act
-        string total, checkout, orders;
-        int calls;
-
-        using (LocalizationRegistry.UseCulture(Dutch))
-        {
-            var callsBefore = provider.CallCount;
-
-            total = GeneratedLocalization.Total(1234.5m);
-            checkout = GeneratedLocalization.Checkout;
-            orders = InlineTexts.Orders;
-
-            calls = provider.CallCount - callsBefore;
-        }
-
-        // Assert: the scope's culture, and the provider's again after it.
-        total.ShouldBe("Totaal: 1.234,50");
-        checkout.ShouldBe("Afrekenen");
-        orders.ShouldBe("Bestellingen");
-        calls.ShouldBe(0);
-        GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
-    }
-
-    [Test]
     public void UseCulture_DisposedTwice_ShouldPutCulturesBackOnce()
     {
         // Arrange
@@ -130,12 +120,10 @@ public sealed class CultureScopeTests
     }
 
     [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
     public void UseCulture_DisposedBeforeAScopeInsideIt_ShouldEndThatScopeToo()
     {
-        // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread.
+        // Arrange
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-        using var provider = new ProvidedCultureScope("en-US");
         var outer = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB"));
         var inner = LocalizationRegistry.UseCulture(Dutch);
 
@@ -151,18 +139,15 @@ public sealed class CultureScopeTests
         uiCultureAfterOuter.ShouldBe("en-US");
         cultureAfterOuter.ShouldBe("en-US");
         totalAfterOuter.ShouldBe("Total: 1,234.50");
-        CultureScope.Current.ShouldBeNull();
         CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
         GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
     }
 
     [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
     public void UseCulture_MiddleOfThreeDisposedFirst_ShouldEndTheInnermostTooAndLeaveTheOutermost()
     {
-        // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread.
+        // Arrange
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-        using var provider = new ProvidedCultureScope("en-US");
         var outermost = LocalizationRegistry.UseCulture(Dutch);
         var middle = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-GB"));
         var innermost = LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-BE"));
@@ -189,13 +174,11 @@ public sealed class CultureScopeTests
     }
 
     [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
     public async Task UseCulture_DisposedWhileATaskStartedInsideItRuns_ShouldStillHoldInThatTask()
     {
-        // Arrange: a provider, so that a text reads the scope and not only the cultures of the thread. An email is
-        // started inside the scope, and the code that started it ends the scope before the email reads its texts.
+        // Arrange: an email is started inside the scope, and the code that started it ends the scope before the email
+        // reads its texts.
         using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-        using var provider = new ProvidedCultureScope("en-US");
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Task<(string Checkout, string Total, string AfterScopeOfItsOwn)> email;
 
@@ -222,7 +205,7 @@ public sealed class CultureScopeTests
         var (checkout, total, afterScopeOfItsOwn) = await email;
 
         // Assert: the email is Dutch throughout, as the cultures of its thread are, and the code that ended the scope
-        // follows the provider again.
+        // has the cultures from before it again.
         checkout.ShouldBe("Afrekenen");
         total.ShouldBe("Totaal: 1.234,50");
         afterScopeOfItsOwn.ShouldBe("Afrekenen");
@@ -293,67 +276,5 @@ public sealed class CultureScopeTests
     {
         // Act & Assert
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.UseCulture(null!)).ParamName.ShouldBe("culture");
-    }
-
-    [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
-    public async Task AmbientScopeOfAnotherLibrary_GivenToTheProvider_ShouldGiveTextsItsCulture()
-    {
-        // Arrange: an app that uses Architect.AmbientContexts gives its own scope to the provider. The provider gives
-        // no culture outside such a scope, so the tests that run next to this one keep theirs.
-        using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-        var previous = LocalizationRegistry.CurrentUICultureProvider;
-        LocalizationRegistry.CurrentUICultureProvider = static () => TextCultureScope.Current?.Culture;
-
-        try
-        {
-            // Act
-            string total, checkout, orders, nested;
-
-            using (new TextCultureScope(Dutch))
-            {
-                await Task.Yield();
-
-                total = GeneratedLocalization.Total(1234.5m);
-                checkout = GeneratedLocalization.Checkout;
-                orders = InlineTexts.Orders;
-
-                // A scope of Idioma inside it wins, as it does over any provider.
-                using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("en-US")))
-                    nested = GeneratedLocalization.Total(1234.5m);
-            }
-
-            // Assert
-            total.ShouldBe("Totaal: 1.234,50");
-            checkout.ShouldBe("Afrekenen");
-            orders.ShouldBe("Bestellingen");
-            nested.ShouldBe("Total: 1,234.50");
-            GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
-        }
-        finally
-        {
-            LocalizationRegistry.CurrentUICultureProvider = previous;
-        }
-    }
-
-    /// <summary>
-    /// An ambient scope as an app writes it with Architect.AmbientContexts, which holds the culture of its texts.
-    /// </summary>
-    private sealed class TextCultureScope : AmbientScope<TextCultureScope>
-    {
-        public static TextCultureScope? Current => GetAmbientScope();
-
-        public CultureInfo Culture { get; }
-
-        public TextCultureScope(CultureInfo culture)
-            : base(AmbientScopeOption.ForceCreateNew)
-        {
-            this.Culture = culture;
-            this.Activate();
-        }
-
-        protected override void DisposeImplementation()
-        {
-        }
     }
 }

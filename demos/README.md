@@ -25,8 +25,6 @@ cd demos
 dotnet run SetDemo.cs
 ```
 
-A codespace takes a GitHub account, and its use counts towards the free hours of that account.
-
 ## On your machine
 
 Run one from this folder in a clone of the repository:
@@ -35,6 +33,6 @@ Run one from this folder in a clone of the repository:
 dotnet run SetDemo.cs
 ```
 
-A demo runs with .NET 10 or later. Its first line fetches the latest version of the package.
+A demo runs with .NET 10 or later. Its first line fetches the latest version of the package, a preview included.
 
 A comment in each file says how to break its build. For example, remove a Dutch wording from any of the files, and it no longer builds.

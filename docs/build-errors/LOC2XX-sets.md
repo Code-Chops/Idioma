@@ -167,7 +167,7 @@ A set can't be registered automatically, so its texts won't be found. This is a 
 Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and register an instance yourself:
 
 - In an app, pass it to `LocalizationRegistry.Register`.
-- In a library, pass it to `LocalizationRegistry.RegisterDefaults`, so an app's set still rewords its texts.
+- In a library, pass it to `LocalizationRegistry.RegisterLibrarySets`, so an app's set still rewords its texts.
 
 A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
 

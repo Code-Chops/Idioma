@@ -109,7 +109,7 @@ app.MapGet("/culture/set", (string culture, string? returnUrl, HttpContext http)
 });
 ```
 
-The cookie gets an expiry, so it lasts as long as the choice in local storage does. A cookie without one is gone when the browser closes. The server would then render the next visit in the browser's language, and the page would switch to the stored language once WebAssembly takes over.
+The cookie gets an expiry, so it lasts as long as the choice in local storage does. Without one, the server would render the next visit in the browser's language, and the page would switch to the stored language once WebAssembly takes over.
 
 The languages come from the `[assembly: SupportedLanguages]` of the server project, so the server lists them nowhere else. In a Blazor Web App, the server project and the client project are each an app, so each declares the same languages ([details](libraries-and-apps.md#the-apps-languages)).
 
@@ -129,8 +129,6 @@ After a click in WebAssembly, Blazor re-renders only the picker. Other component
     @Body
 </div>
 ```
-
-An `EventCallback` re-renders the component that receives it, so any handler would do. `StateHasChanged` makes that explicit.
 
 When the key changes, Blazor rebuilds everything inside it, so every text reads the new culture. Whatever is rebuilt loses its state, such as what a user typed in a form.
 
@@ -183,6 +181,4 @@ This also needs all globalization data, because the app can start in a culture o
 
 ## Dates and numbers
 
-To show dates and numbers correctly in every culture, set `<BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>` in the project file of the WebAssembly app. In a Blazor Web App, that's the client project.
-
-Dates and numbers follow the culture too, but they need its globalization data. Blazor loads only the part for the culture the app starts with, so an app starting in English shows Dutch dates in English.
+An app whose culture can differ from the one it starts with needs all globalization data to show dates and numbers correctly. Set `<BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>` in the project file of the WebAssembly app, which in a Blazor Web App is the client project ([Microsoft's docs](https://learn.microsoft.com/aspnet/core/blazor/globalization-localization)).

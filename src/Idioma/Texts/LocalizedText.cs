@@ -36,8 +36,9 @@ namespace CodeChops.Idioma;
 /// change of language. On a server, a string kept in a static field shows every user the language of the first one.
 /// </para>
 /// <para>
-/// An app that keeps the user's culture somewhere other than <see cref="CultureInfo.CurrentUICulture"/> sets
-/// <see cref="LocalizationRegistry.CurrentUICultureProvider"/>, and every text follows that instead.
+/// An app that keeps the user's culture somewhere else, such as in a user profile, makes it
+/// <see cref="CultureInfo.CurrentUICulture"/>: per request on a server, or once the user picks a language in an app.
+/// For one block of code, wrap it in <see cref="LocalizationRegistry.UseCulture"/>.
 /// </para>
 /// <para>
 /// To put a parameter's value in the wording, write it into every language:

@@ -115,4 +115,4 @@ The fix changes every language or none. There's no fix when:
 
 A wording in a raw string keeps its placeholder and its warning, so write its value by hand.
 
-An inline text gets no fix, because its wording has no parameter to take the value. Neither does a label written with `[Localized]`.
+An inline text gets no fix, because its wording has no parameter to take the value. Neither does a text written with `[Localized]`.

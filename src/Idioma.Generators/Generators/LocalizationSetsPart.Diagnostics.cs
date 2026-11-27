@@ -81,12 +81,12 @@ public static partial class LocalizationSetsPart
 
     private static readonly DiagnosticDescriptor LibraryCannotBeTranslatedRule = new(
         id: LibraryCannotBeTranslatedDiagnosticId,
-        title: "Referenced library's inline texts can't be translated",
-        messageFormat: "'{0}' has inline texts without '{1}', which this assembly supports. No set added here can translate them, so users of '{1}' will see them in '{2}'.",
+        title: "Referenced library's standalone texts can't be translated",
+        messageFormat: "'{0}' has standalone texts without '{1}', which this assembly supports. No set added here can translate them, so users of '{1}' will see them in '{2}'.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Nothing outside a library can add a language to its inline texts, which are those it writes with LocalizedText.Inline and with [Localized] on a member. A library that wants to be translatable writes its texts in sets.",
+        description: "Nothing outside a library can add a language to its standalone texts, which are those it writes with LocalizedText.Inline and with [Localized] on a member. A library that wants to be translatable writes its texts in sets.",
         helpLinkUri: PackageNames.HelpLink(LibraryCannotBeTranslatedDiagnosticId));
 
     private static readonly DiagnosticDescriptor ReservedTextNameRule = Error(

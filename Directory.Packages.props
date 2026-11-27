@@ -11,8 +11,6 @@
     <!-- Testing packages -->
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="TUnit" Version="1.76.28" />
-    <!-- Only for the test that an ambient scope of this library can give texts their culture. The package doesn't depend on it. -->
-    <PackageVersion Include="Architect.AmbientContexts" Version="2.0.1" />
     <!-- Verify is pinned with exact ranges on purpose. Every release from the VerifyTests organization after
          1 September 2026 falls under the maintainer's paid Open Source Maintenance Fee (a build-time SponsorCheck from
          Verify 33 onward); 32.0.0 (26 August 2026) is the last stable release before that line. DiffEngine and

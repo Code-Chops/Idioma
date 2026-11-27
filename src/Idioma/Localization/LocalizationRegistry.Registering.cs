@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.Loader;
 
 namespace CodeChops.Idioma;
 
@@ -18,7 +17,7 @@ public sealed partial class LocalizationRegistry
     // A field, because the swap takes it by reference. A swap that needs a value captures it, rather than handing it to
     // the overload that takes an argument. That overload is generic over the argument's type, and for a struct,
     // ReadyToRun can't compile it, so every app would JIT it at its start.
-    private static Registrations Registered = new(defaults: [], overrides: [], languages: []);
+    private static Registrations Registered = new(defaults: [], overrides: [], languages: [], application: null);
 
     /// <summary>
     /// How the source generator described the sets it found, per type: the language the build read from its name,
@@ -28,7 +27,7 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     // The language, so that a set keeps it when its type is renamed after the build, and a set named after a longer
     // code its assembly declares, such as ShopLocalizationEnGb for en-GB, isn't read by its last two letters. The texts,
-    // so that the registry knows which texts a set rewords without calling it (GetWording).
+    // so that the registry knows which texts a set rewords without calling it (GetWordingSet).
     private static ConcurrentDictionary<Type, SetDescription> SetDescriptions { get; } = new();
 
     /// <summary>
@@ -36,9 +35,7 @@ public sealed partial class LocalizationRegistry
     /// <see langword="null"/> before that. Its texts of an enum win over those of every library
     /// (<see cref="Internals.GeneratedCode.RegisterEnumTexts{TEnum, TContract}"/>).
     /// </summary>
-    internal static Assembly? ApplicationAssembly => Volatile.Read(ref _applicationAssembly);
-    // ReSharper disable once InconsistentNaming
-    private static Assembly? _applicationAssembly;
+    internal static Assembly? ApplicationAssembly => Volatile.Read(ref Registered).Application;
 
     // The types of the sets this thread is creating, the outermost first, or null on a thread that has created none.
     // A constructor runs on one thread, so the types tell a set that needs itself while it's created. Read only where a
@@ -133,7 +130,7 @@ public sealed partial class LocalizationRegistry
     /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
     /// culture name such as <c>en-GB</c>.
     /// </exception>
-    public static void RegisterDefaults(params ReadOnlySpan<ILocalizationSet> sets)
+    public static void RegisterLibrarySets(params ReadOnlySpan<ILocalizationSet> sets)
     {
         Add(sets, asDefaults: true);
     }
@@ -151,15 +148,14 @@ public sealed partial class LocalizationRegistry
         var languages = ToCultureNames(defaultLanguage, otherLanguages);
 
         // The app's own registrar runs before any assembly it loads, and calls this before the registrars of the
-        // assemblies it references, so the first call is the app's. The texts of an enum chosen before are chosen again
-        // with the app's first (GeneratedCode.GetEnumText).
-        Interlocked.CompareExchange(ref _applicationAssembly, application, comparand: null);
-
-        // The swap gives a new registry instance, so that a cache a consumer keys on it drops wording resolved before.
+        // assemblies it references, so the first call is the app's. The app and its languages are set in one swap, so
+        // two apps that start at once can't each set one of them. The texts of an enum chosen before are chosen again
+        // with the app's first (GeneratedCode.GetEnumText). The swap gives a new registry instance, so that a cache a
+        // consumer keys on it drops wording resolved before.
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes the languages, a struct, is left to the JIT under ReadyToRun.
         ImmutableInterlocked.Update(
             ref Registered,
-            registered => registered.Languages.IsEmpty ? registered.WithLanguages(languages) : registered);
+            registered => registered.Application is null ? registered.WithApplication(application, languages) : registered);
     }
 
     /// <summary>
@@ -178,15 +174,15 @@ public sealed partial class LocalizationRegistry
         if (languageCode is not null)
             languageCode = ToCultureName(languageCode, nameof(languageCode));
 
-        CollectibleAssemblies.Watch(typeof(TSet));
-
         // A set registered before its description is filed under the language of its name, and words every text itself, until
         // the lookup tables are built again. So the registrations are swapped for a copy, which builds them anew.
-        if (!SetDescriptions.TryAdd(typeof(TSet), new SetDescription(languageCode, ownTexts)))
+        var description = new SetDescription(languageCode, ownTexts);
+        var existing = SetDescriptions.GetOrAdd(typeof(TSet), description);
+
+        if (!ReferenceEquals(existing, description))
         {
-            // The same code again, as when the generated registration runs twice, leaves the set as it is. Codes are
-            // never removed, so the first description is there.
-            var described = SetDescriptions[typeof(TSet)].LanguageCode;
+            // The same code again, as when the generated registration runs twice, leaves the set as it is.
+            var described = existing.LanguageCode;
 
             if (String.Equals(described, languageCode, StringComparison.Ordinal))
                 return;
@@ -212,7 +208,7 @@ public sealed partial class LocalizationRegistry
 
     /// <summary>
     /// Adds sets that were created already, for <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> and
-    /// <see cref="RegisterDefaults"/>. With <paramref name="asDefaults"/>, they give a library's own wording, as the
+    /// <see cref="RegisterLibrarySets"/>. With <paramref name="asDefaults"/>, they give a library's own wording, as the
     /// sets the generated code registers through <see cref="Internals.GeneratedCode.RegisterSets"/> do. Every other set
     /// wins over those.
     /// </summary>
@@ -229,7 +225,6 @@ public sealed partial class LocalizationRegistry
         {
             ArgumentNullException.ThrowIfNull(sets[i], nameof(sets));
             entries[i] = Registration.Of(sets[i]);
-            CollectibleAssemblies.Watch(entries[i].Type);
         }
 
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
@@ -262,7 +257,6 @@ public sealed partial class LocalizationRegistry
             ArgumentNullException.ThrowIfNull(create, nameof(sets));
 
             entries[i] = Registration.ToCreate(type, create, ILocalizationSet.GetLanguageCode(type));
-            CollectibleAssemblies.Watch(type);
         }
 
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
@@ -312,19 +306,5 @@ public sealed partial class LocalizationRegistry
 
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract - The consumer creates the set.
         return set ?? throw new InvalidOperationException($"What creates '{type}' gave null instead of a set.");
-    }
-
-    /// <summary>
-    /// Forgets what the assemblies of a context that unloads registered (<see cref="CollectibleAssemblies"/>): their
-    /// sets, and how the build described them.
-    /// </summary>
-    internal static void Forget(AssemblyLoadContext context)
-    {
-        foreach (var type in SetDescriptions.Keys)
-            if (CollectibleAssemblies.IsIn(type, context))
-                SetDescriptions.TryRemove(type, out _);
-
-        // ReSharper disable once HeapView.CanAvoidClosure - Once per context that unloads.
-        ImmutableInterlocked.Update(ref Registered, registered => registered.Without(context));
     }
 }

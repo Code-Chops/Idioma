@@ -204,7 +204,7 @@ public sealed partial class LocalizationSetsPartTests
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId);
         diagnostic.Id.ShouldBe("LOC701");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
-        diagnostic.GetMessage().ShouldBe("'InlineLibrary' has inline texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.");
+        diagnostic.GetMessage().ShouldBe("'InlineLibrary' has standalone texts without 'de', which this assembly supports. No set added here can translate them, so users of 'de' will see them in 'en'.");
     }
 
     [Test]
@@ -259,7 +259,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.LibraryCannotBeTranslatedDiagnosticId);
         diagnostic.Id.ShouldBe("LOC701");
-        diagnostic.GetMessage().ShouldContain("'MemberLibrary' has inline texts without 'de'");
+        diagnostic.GetMessage().ShouldContain("'MemberLibrary' has standalone texts without 'de'");
     }
 
     [Test]

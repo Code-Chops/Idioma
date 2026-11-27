@@ -1,14 +1,14 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Picks the language a standalone text shows for the reader. A standalone text carries its own wording instead of a
+/// Picks the language a standalone text shows for the user. A standalone text carries its own wording instead of a
 /// set's. It's written with <c>LocalizedText.Inline</c>, or with <c>[Localized]</c> on a member.
 /// </summary>
 /// <remarks>
 /// A standalone text has a wording for each language of its assembly, the default language first. It shows the first
 /// of these:
 /// <list type="number">
-/// <item>The wording for the reader's culture, or else for a culture it falls back to. A culture none of the app's
+/// <item>The wording for the user's culture, or else for a culture it falls back to. A culture none of the app's
 /// languages serves skips this.</item>
 /// <item>The wording for the app's default language, or else for a language it falls back to.</item>
 /// <item>The wording for the assembly's default language.</item>
@@ -32,27 +32,22 @@ internal static class StandaloneLanguage
     private static int LastIndex;
 
     /// <summary>
-    /// The position, among an assembly's languages, of the one a text shows for the reader's culture
-    /// (<see cref="WordingScope.GetReaderCulture(out CultureInfo)"/>).
+    /// The position, among an assembly's languages, of the one a text shows for the user's culture
+    /// (<see cref="CultureInfo.CurrentUICulture"/>).
     /// </summary>
     /// <param name="languages">The languages of the assembly, each a culture name, the default first.</param>
     public static int IndexOfShownLanguage(string[] languages)
     {
-        var culture = WordingScope.GetReaderCulture(out _);
-        var lookup = LocalizationRegistry.Current.Resolve(culture);
+        var lookup = LocalizationRegistry.Current.Resolve(CultureInfo.CurrentUICulture);
 
         if (ReferenceEquals(lookup, LastLookup) && ReferenceEquals(languages, LastLanguages))
             return LastIndex;
 
         var index = IndexOfShownLanguage(languages, lookup);
 
-        // Not for a registry that holds a plugin's sets (LocalizationRegistry.HoldsCollectibleSets).
-        if (!lookup.Registry.HoldsCollectibleSets)
-        {
-            LastLookup = lookup;
-            LastLanguages = languages;
-            LastIndex = index;
-        }
+        LastLookup = lookup;
+        LastLanguages = languages;
+        LastIndex = index;
 
         return index;
     }

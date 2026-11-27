@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using CodeChops.Idioma.Internals;
 using CodeChops.Idioma.Tests.TestHelpers;
 
@@ -435,26 +436,6 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        [NotInParallel(nameof(LocalizationRegistry))]
-        public void GetTextByMember_WithCurrentUICultureProvider_ShouldFollowItsCultureInPlaceOfCurrentUICulture()
-        {
-            // Arrange: the thread is American, and the app keeps a Dutch user's culture somewhere else.
-            using var _ = new CulturesScope("en-US");
-
-            // Act & Assert
-            using (new ProvidedCultureScope("nl-NL"))
-            {
-                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
-                LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
-                ParcelStatus.Picked.GetText().ShouldBe("Gepickt");
-            }
-
-            // A provider that gives no culture leaves the text on the current UI culture.
-            using (new ProvidedCultureScope(name: null))
-                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
-        }
-
-        [Test]
         public void GetTextByMember_WithNull_ShouldThrowArgumentNullException()
         {
             // Arrange & Act & Assert
@@ -481,6 +462,70 @@ namespace CodeChops.Idioma.Tests
             LocalizedText.GetTextOfType<RegisteredLater>().ShouldBe("Later (nl)");
             LocalizedText.GetTextByMember<RegisteredLater>("Other").ShouldBeNull();
             LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
+        }
+
+        [Test]
+        public void GetTextByMember_OfAssemblyLoadedLater_BeforeAnyOfItsCodeRuns_ShouldGiveItsText()
+        {
+            // Arrange: a plugin's type, read through reflection alone, as a table that shows the labels of a plugin's
+            // model reads it. Its texts register as its code first runs, and none of it ran yet.
+            var plugin = new AssemblyLoadContext("PluginWithLabels").LoadFromStream(new MemoryStream(GeneratorTestHelper.EmitLibraryWithGenerators("PluginWithLabels", """
+                using CodeChops.Idioma;
+
+                [assembly: SupportedLanguages("en", "nl")]
+
+                namespace PluginWithLabels;
+
+                public class Address
+                {
+                    [Localized(en: "City", nl: "Plaats")]
+                    public string City { get; set; } = "";
+                }
+                """)));
+
+            var address = plugin.GetType("PluginWithLabels.Address")!;
+
+            // Act
+            using var _ = new CulturesScope("nl-NL");
+            var byName = LocalizedText.GetTextByMember(address, "City");
+            var byProperty = LocalizedText.GetTextByMember(address.GetProperty("City")!);
+
+            // Assert: the text, rather than none.
+            byName.ShouldBe("Plaats");
+            byProperty.ShouldBe("Plaats");
+        }
+
+        [Test]
+        public void GetTextByMember_OfAssemblyWhoseModuleInitializerThrows_ShouldGiveNoTextRatherThanThrow()
+        {
+            // Arrange: a plugin whose own code throws as it first runs, read through reflection alone.
+            var plugin = new AssemblyLoadContext("PluginThatFailsToStart").LoadFromStream(new MemoryStream(GeneratorTestHelper.EmitLibrary("PluginThatFailsToStart", """
+                using System;
+                using System.Runtime.CompilerServices;
+
+                namespace PluginThatFailsToStart;
+
+                public class Address
+                {
+                    public string City { get; set; } = "";
+                }
+
+                internal static class Startup
+                {
+                    [ModuleInitializer]
+                    internal static void Run() => throw new InvalidOperationException("No settings.");
+                }
+                """)));
+
+            var address = plugin.GetType("PluginThatFailsToStart.Address")!;
+
+            // Act
+            var byName = LocalizedText.GetTextByMember(address, "City");
+            var ofType = LocalizedText.GetTextOfType(address);
+
+            // Assert: the label has no text, and what the plugin throws is left for the plugin's own code to meet.
+            byName.ShouldBeNull();
+            ofType.ShouldBeNull();
         }
 
         [Test]

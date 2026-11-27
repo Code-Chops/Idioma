@@ -6,10 +6,10 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 ## In short
 
-- A text of a set takes about a tenth of the time `IStringLocalizer` takes, on .NET and with Mono's interpreter in WebAssembly. A plain text allocates nothing, and a text with a parameter allocates only the string it returns.
+- A plain text of a set takes less than a tenth of the time `IStringLocalizer` takes, on .NET and with Mono's interpreter in WebAssembly, and allocates nothing. A text with a parameter takes about a tenth, and allocates only the string it returns.
 - A text with a parameter takes longer for a user whose language falls back, such as a German user of an app in English and Dutch. It still takes less time than `IStringLocalizer`.
-- A plain inline text takes a tenth of the time too, and a text written as an attribute a seventh.
-- Idioma adds more to a download. For 100 texts, it adds 34.7 KB and 1.8 KB for each extra language. resx and `IStringLocalizer` add 19.3 KB, and 3.8 KB for a user whose language isn't the default.
+- A plain inline text takes a tenth of the time or less, and a text written as an attribute a seventh.
+- Idioma adds more to a download. For 100 texts, it adds 30.6 KB and 1.9 KB for each extra language. resx and `IStringLocalizer` add 19.3 KB, and 3.8 KB for a user whose language isn't the default.
 
 So speed rarely decides between them. A page that shows 200 texts spends about 9 µs on them with `IStringLocalizer` on .NET, and under 1 µs with Idioma's sets. With Mono's interpreter, that's about 0.14 ms and 0.01 ms.
 
@@ -28,8 +28,6 @@ Each benchmark first checks that every approach shows the expected wording, so n
 
 The numbers come from one run on an AMD Ryzen AI 9 HX PRO 370 on Windows 11, with .NET 11.0.0, BenchmarkDotNet 0.16.0-preview.2 and a headless Chrome 158. [Its tables](../benchmarks/results) are kept. Compare the factors rather than the nanoseconds, because those depend on the machine and on how busy it is. On .NET, each benchmark ran in three processes, because its time varies more from one process to the next than within one.
 
-Mono's AOT and a second machine weren't measured again since a text became a `string`. The tables in [`benchmarks/earlier-design-results`](../benchmarks/earlier-design-results) are from an Apple M2 Max, and describe the earlier design.
-
 ## Showing a text
 
 Each benchmark shows one text once, as a render does. The `IStringLocalizer` column shows how long that takes. The other columns show their time as a factor of it, so 0.50× takes half as long. On .NET, a cell also shows the bytes allocated.
@@ -39,14 +37,14 @@ Each benchmark shows one text once, as a render does. The `IStringLocalizer` col
 | Text, user's culture                  | IStringLocalizer | Idioma set   | Inline       | Attribute  |
 |---------------------------------------|------------------|--------------|--------------|------------|
 | Plain text, default language          | 46 ns, 72 B      | 0.07×, 0 B   | 0.10×, 0 B   | 0.14×, 0 B |
-| Plain text, second language           | 46 ns, 72 B      | 0.08×, 0 B   | 0.10×, 0 B   | 0.14×, 0 B |
-| Plain text, region                    | 148 ns, 168 B    | 0.02×, 0 B   | 0.03×, 0 B   | 0.04×, 0 B |
+| Plain text, second language           | 47 ns, 72 B      | 0.07×, 0 B   | 0.10×, 0 B   | 0.14×, 0 B |
+| Plain text, region                    | 144 ns, 168 B    | 0.02×, 0 B   | 0.03×, 0 B   | 0.05×, 0 B |
 | Reworded text, region                 | 45 ns, 72 B      | 0.07×, 0 B   | 0.10×, 0 B   | 0.14×, 0 B |
 | Plain text, fallback                  | 46 ns, 72 B      | 0.07×, 0 B   | 0.10×, 0 B   | 0.14×, 0 B |
 | Text with parameter, default language | 68 ns, 152 B     | 0.09×, 48 B  | 0.24×, 144 B | –          |
-| Text with parameter, second language  | 69 ns, 152 B     | 0.09×, 48 B  | 0.24×, 144 B | –          |
-| Text with parameter, region           | 164 ns, 248 B    | 0.04×, 48 B  | 0.10×, 144 B | –          |
-| Text with parameter, fallback         | 70 ns, 152 B     | 0.67×, 48 B  | 0.24×, 144 B | –          |
+| Text with parameter, second language  | 68 ns, 152 B     | 0.09×, 48 B  | 0.24×, 144 B | –          |
+| Text with parameter, region           | 165 ns, 248 B    | 0.04×, 48 B  | 0.10×, 144 B | –          |
+| Text with parameter, fallback         | 69 ns, 152 B     | 0.60×, 48 B  | 0.25×, 144 B | –          |
 
 ### In Blazor WebAssembly
 
@@ -56,29 +54,29 @@ The browser has no BenchmarkDotNet, so the app times each text itself. Each time
 
 | Text, user's culture                  | IStringLocalizer | Idioma set | Inline | Attribute |
 |---------------------------------------|------------------|------------|--------|-----------|
-| Plain text, default language          | 711 ns           | 0.09×      | 0.10×  | 0.15×     |
-| Plain text, second language           | 727 ns           | 0.09×      | 0.10×  | 0.16×     |
-| Plain text, region                    | 2,003 ns         | 0.03×      | 0.04×  | 0.05×     |
-| Reworded text, region                 | 689 ns           | 0.09×      | 0.10×  | 0.16×     |
-| Plain text, fallback                  | 740 ns           | 0.09×      | 0.10×  | 0.15×     |
-| Text with parameter, default language | 1,176 ns         | 0.14×      | 0.29×  | –         |
-| Text with parameter, second language  | 1,157 ns         | 0.14×      | 0.29×  | –         |
-| Text with parameter, region           | 2,504 ns         | 0.06×      | 0.14×  | –         |
-| Text with parameter, fallback         | 1,210 ns         | 0.72×      | 0.31×  | –         |
+| Plain text, default language          | 696 ns           | 0.08×      | 0.07×  | 0.14×     |
+| Plain text, second language           | 710 ns           | 0.08×      | 0.07×  | 0.13×     |
+| Plain text, region                    | 1,983 ns         | 0.03×      | 0.03×  | 0.05×     |
+| Reworded text, region                 | 684 ns           | 0.08×      | 0.07×  | 0.14×     |
+| Plain text, fallback                  | 723 ns           | 0.08×      | 0.07×  | 0.13×     |
+| Text with parameter, default language | 1,164 ns         | 0.13×      | 0.27×  | –         |
+| Text with parameter, second language  | 1,169 ns         | 0.13×      | 0.28×  | –         |
+| Text with parameter, region           | 2,494 ns         | 0.06×      | 0.13×  | –         |
+| Text with parameter, fallback         | 1,151 ns         | 0.71×      | 0.29×  | –         |
 
-The times in the browser vary more between runs than those on .NET, by up to an eighth for one cell. In three runs of this version, a plain text took 59 to 69 ns with a set.
+The times in the browser vary more between runs than those on .NET, most of all on a machine that is still warm from other work. In three runs of this version, a plain text took 50 to 58 ns with a set, and 680 to 960 ns with `IStringLocalizer`. The table is from a run on a machine at rest.
 
 ### What the numbers mean
 
 - **Plain text.** Idioma keeps, per culture, the set that words each text. So showing a text reads that table and calls the set's property, which allocates nothing.
-- **Region.** A British user's text costs a set the same as any other, because Idioma works out once which set words it. `IStringLocalizer` looks for British wording first on every call. So a text that comes from English takes it three times as long, about 150 ns and 168 bytes on .NET.
+- **Region.** A British user's text costs a set the same as any other, because Idioma works out once which set words it. `IStringLocalizer` looks for British wording first on every call. So a text that comes from English takes it three times as long, about 145 ns and 168 bytes on .NET.
 - **Text with parameter.** Idioma hands the values to the method of the set for the user's language. That takes about 6 ns on .NET, and allocates only the string the method makes, 48 bytes here.
-- **Fallback.** A text with a parameter runs its method in the culture of the language that words it. A German user sees English, so the call switches the thread's culture to English. That takes about seven times as long as for an English user on .NET, and five and a half times with the interpreter. It's still two thirds of what `IStringLocalizer` takes on .NET, and seven tenths with the interpreter. A plain text switches nothing.
-- **Inline.** A plain inline text picks one of the wordings it's called with. That takes about 4.7 ns on .NET, and allocates nothing.
-- **Inline text with parameter.** C# builds the wording of every language before `Inline` picks one. With three languages, that takes about 16.5 ns and allocates 144 bytes, and it grows with each language. For a text you show often, write a method of a set, which builds one wording.
-- **Attribute.** Idioma finds the text by its type and the name of its member on each call. It compares the name as an object first, and `nameof(Address.City)` gives the same string every time. That takes about 6.5 ns on .NET, and allocates nothing.
+- **Fallback.** A text with a parameter runs its method in the culture of the language that words it. A German user sees English, so the call switches the thread's culture to English. That takes about seven times as long as for an English user on .NET, and five and a half times with the interpreter. It's still three fifths of what `IStringLocalizer` takes on .NET, and seven tenths with the interpreter. A plain text switches nothing.
+- **Inline.** A plain inline text picks one of the wordings it's called with. That takes about 4.6 ns on .NET, and allocates nothing.
+- **Inline text with parameter.** C# builds the wording of every language before `Inline` picks one. With three languages, that takes about 16 ns and allocates 144 bytes, and it grows with each language. For a text you show often, write a method of a set, which builds one wording.
+- **Attribute.** Idioma finds the text by its type and the name of its member on each call. It compares the name as an object first, and `nameof(Address.City)` gives the same string every time. That takes about 6.4 ns on .NET, and allocates nothing.
 
-The culture also switches when `CurrentUICultureProvider` gives a culture the thread doesn't have. A culture of the same name that formats values alike counts as the thread's, such as the one request localization gives a thread next to the one `CultureInfo.GetCultureInfo` gives. The first switch in an execution context, such as the first of a request, copies the context. The next ones reuse that copy. A Blazor app can avoid the switch by making its default language the UI culture of a German user, as [Blazor](blazor.md#a-browser-language-the-app-doesnt-have) shows.
+The first switch in an execution context, such as the first of a request, copies the context. The next ones reuse that copy. A Blazor app can avoid the switch by making its default language the UI culture of a German user, as [Blazor](blazor.md#a-browser-language-the-app-doesnt-have) shows.
 
 ## Labels and enum values
 
@@ -88,16 +86,16 @@ Each row finds one label and shows it once, for a Dutch user, on .NET:
 
 | Approach           | What's measured                                        | Time   | Allocated |
 |--------------------|--------------------------------------------------------|--------|-----------|
-| .NET's `[Display]` | Its attribute read once and kept                       | 35 ns  | 0 B       |
-| .NET's `[Display]` | Its attribute read from the property each time         | 790 ns | 760 B     |
+| .NET's `[Display]` | Its attribute read once and kept                       | 36 ns  | 0 B       |
+| .NET's `[Display]` | Its attribute read from the property each time         | 820 ns | 760 B     |
 | Idioma             | `GetTextByMember<Order>(nameof(Order.Checkout))`       | 6.4 ns | 0 B       |
-| Idioma             | `GetTextByMember(property)`, by a `PropertyInfo`       | 9.9 ns | 0 B       |
-| Idioma             | `GetTextOfType<Order>()`                               | 5.3 ns | 0 B       |
-| Idioma             | `status.GetText()`, an enum with `[Localized]` members | 4.9 ns | 0 B       |
-| Idioma             | `status.GetText()`, a set of the enum                  | 3.7 ns | 0 B       |
+| Idioma             | `GetTextByMember(property)`, by a `PropertyInfo`       | 9.6 ns | 0 B       |
+| Idioma             | `GetTextOfType<Order>()`                               | 5.2 ns | 0 B       |
+| Idioma             | `status.GetText()`, an enum with `[Localized]` members | 4.8 ns | 0 B       |
+| Idioma             | `status.GetText()`, a set of the enum                  | 3.4 ns | 0 B       |
 
-- **`[Display]`.** With its attribute kept, a label takes 35 ns, most of it the lookup in the resource file. Read each time, it takes about 0.8 µs and allocates 760 bytes, because .NET creates the attribute anew on every read.
-- **Idioma.** A label takes 4 to 10 ns, less than a third of what a kept `[Display]` takes. It allocates nothing, and the caller has nothing to keep. An enum's `GetText()` first asks whether a set of another assembly gives the enum its texts, and else chooses the text in a `switch`.
+- **`[Display]`.** With its attribute kept, a label takes 36 ns, most of it the lookup in the resource file. Read each time, it takes about 0.8 µs and allocates 760 bytes, because .NET creates the attribute anew on every read.
+- **Idioma.** A label takes 3 to 10 ns, less than a third of what a kept `[Display]` takes. It allocates nothing, and the caller has nothing to keep. An enum's `GetText()` first asks whether a set of another assembly gives the enum its texts, and else chooses the text in a `switch`.
 
 These rows weren't measured in Blazor WebAssembly.
 
@@ -107,16 +105,16 @@ Each size is what an approach adds to the same app without localization, which s
 
 | What's downloaded                      | resx and `IStringLocalizer` |                 Idioma |
 |----------------------------------------|----------------------------:|-----------------------:|
-| Its own assemblies                     |                     11.3 KB |                18.6 KB |
-| Its texts and their generated code     |                      4.0 KB |                 9.4 KB |
-| What it keeps of .NET's own assemblies |                      3.9 KB |                 6.7 KB |
+| Its own assemblies                     |                     11.3 KB |                15.5 KB |
+| Its texts and their generated code     |                      4.0 KB |                 9.5 KB |
+| What it keeps of .NET's own assemblies |                      3.9 KB |                 5.6 KB |
 | The rest, such as `dotnet.js`          |                      0.1 KB |                 0.1 KB |
-| **100 texts in the default language**  |                 **19.3 KB** |            **34.7 KB** |
-| Each extra language                    |  3.8 KB, only for its users | 1.8 KB, for every user |
+| **100 texts in the default language**  |                 **19.3 KB** |            **30.6 KB** |
+| Each extra language                    |  3.8 KB, only for its users | 1.9 KB, for every user |
 
-- A user of resx downloads only the satellite assembly of their own language. Every user of Idioma downloads the set of every language. So in an app in English and Dutch, a Dutch user downloads 23.1 KB with resx and 36.5 KB with Idioma.
-- A set in an assembly of its own, which the app loads lazily, doesn't pay off for 100 texts. An English user then downloads 51.5 KB, and a Dutch user 56.6 KB.
-- Most of what Idioma keeps of .NET is `System.Collections.Immutable` (2.8 KB), `System.Threading` (1.7 KB), `System.Private.CoreLib` (1.1 KB) and `System.Linq` (0.8 KB). An app that uses them itself downloads them anyway.
+- A user of resx downloads only the satellite assembly of their own language. Every user of Idioma downloads the set of every language. So in an app in English and Dutch, a Dutch user downloads 23.1 KB with resx and 32.5 KB with Idioma.
+- A set in an assembly of its own, which the app loads lazily, doesn't pay off for 100 texts. An English user then downloads 47.2 KB, and a Dutch user 52.3 KB.
+- Most of what Idioma keeps of .NET is `System.Collections.Immutable` (2.4 KB), `System.Threading` (1.7 KB), `System.Linq` (0.8 KB) and `System.Private.CoreLib` (0.4 KB). An app that uses them itself downloads them anyway.
 
 ## Run it yourself
 

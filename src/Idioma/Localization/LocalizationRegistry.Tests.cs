@@ -73,6 +73,47 @@ public sealed partial class LocalizationRegistryTests
         }
     }
 
+    private interface IRegistryRacedLocalization : ILocalizationSet;
+
+    /// <summary>
+    /// A set whose constructor waits until a second thread creates it too, while <see cref="BothCreating"/> is set. So
+    /// two threads create it at once.
+    /// </summary>
+    private sealed class RegistryRacedLocalizationNl : IRegistryRacedLocalization
+    {
+        private static int _created;
+
+        public static Barrier? BothCreating { get; set; }
+
+        public static int Created => Volatile.Read(ref _created);
+
+        public RegistryRacedLocalizationNl()
+        {
+            Interlocked.Increment(ref _created);
+            BothCreating?.SignalAndWait(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    /// <summary>
+    /// A set of a default language, which a text creates itself (<c>GetDefaultSet</c>). As
+    /// <see cref="RegistryRacedLocalizationNl"/> does, its constructor waits until a second thread creates it too, while
+    /// <see cref="BothCreating"/> is set.
+    /// </summary>
+    private sealed class RegistryRacedDefaultLocalizationEn : IRegistryRacedLocalization
+    {
+        private static int _created;
+
+        public static Barrier? BothCreating { get; set; }
+
+        public static int Created => Volatile.Read(ref _created);
+
+        public RegistryRacedDefaultLocalizationEn()
+        {
+            Interlocked.Increment(ref _created);
+            BothCreating?.SignalAndWait(TimeSpan.FromSeconds(10));
+        }
+    }
+
     /// <summary>
     /// The one text of the contracts below, which a set reads while it's created.
     /// </summary>
@@ -88,8 +129,8 @@ public sealed partial class LocalizationRegistryTests
         where TContract : class, IRegistryBrandTexts
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var brand = Internals.GeneratedCode.GetLocalizationSet<TContract>(0, 1, out var culture)?.Brand
-            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, culture, "Brand", static set => set.Brand);
+        var brand = Internals.GeneratedCode.GetLocalizationSet<TContract>(0, 1)?.Brand
+            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
 
         return brand;
     }
@@ -157,7 +198,7 @@ public sealed partial class LocalizationRegistryTests
     }
 
     /// <summary>
-    /// The set the text takes its default wording from. Never registered, so a Dutch reader never sees it.
+    /// The set the text takes its default wording from. Never registered, so a Dutch user never sees it.
     /// </summary>
     private sealed class RegistryConcurrentLocalizationEn : IRegistryConcurrentLocalization
     {
@@ -330,7 +371,7 @@ public sealed partial class LocalizationRegistryTests
 
         // Act & Assert: such a set would be filed under a language no culture reaches.
         Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(invalid)).Message.ShouldContain($"'{languageCode}'");
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterDefaults(invalid));
+        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterLibrarySets(invalid));
         Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Create([invalid]));
     }
 
@@ -407,6 +448,8 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
+    // Apart from the tests that count when a set is created, because reading the sets of the app creates every set.
+    [NotInParallel(nameof(LocalizationRegistry))]
     public void Register_AndCreate_ShouldThrowForNullOrWhiteSpaceLanguageCode()
     {
         // Arrange: a set taking its language from configuration that is missing.
@@ -416,7 +459,7 @@ public sealed partial class LocalizationRegistryTests
         // Act & Assert: at the registration, naming the set, rather than in every text read afterwards; neither tier
         // keeps the set.
         Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(withoutLanguage)).Message.ShouldContain(nameof(RegistryConfiguredLocalization));
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterDefaults(withBlankLanguage));
+        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterLibrarySets(withBlankLanguage));
         Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Create([withoutLanguage]));
         LocalizationRegistry.Sets.ShouldNotContain(withoutLanguage);
         LocalizationRegistry.Sets.ShouldNotContain(withBlankLanguage);

@@ -40,7 +40,7 @@ internal sealed partial record LocalizationSetsAnalysis
                 var isGenerated = generatedContracts.Contains(LocalizationDiscovery.GetContractFullName(set.Namespace, baseName));
 
                 // Without a default-language set the generator can use, there's no contract to add. Naming one, or the
-                // set it would come from, would send the reader after types that don't exist.
+                // set it would come from, would send the developer after types that don't exist.
                 var (problem, advice) = isGenerated
                     ? (MissesContract(contract), AddContract(contract, defaultSet))
                     : ("implements no contract", $"Its contract would be '{contract}', which the generator writes from a default-language set named '{defaultSet}' that it can use. Write that set, or remove ILocalizationSet if '{set.Name}' isn't a set.");

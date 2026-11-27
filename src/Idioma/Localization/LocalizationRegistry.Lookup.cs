@@ -10,7 +10,7 @@ public sealed partial class LocalizationRegistry
     /// Per culture name, how the culture resolves here (see <see cref="Resolve"/>). Up to <see cref="MaxLookupsKept"/>
     /// names are kept.
     /// </summary>
-    // Every text works this out for the culture of its reader, so without it a render worked it out once per text. Kept
+    // Every text works this out for the culture of its user, so without it a render worked it out once per text. Kept
     // by name, because an app may create a culture of the same name per request. Dropped only when more names came in
     // than are kept (see Keep): a registry never changes, and a registration builds a new one.
     private ConcurrentDictionary<string, CultureLookup> ByCulture { get; } = new(StringComparer.Ordinal);
@@ -20,15 +20,15 @@ public sealed partial class LocalizationRegistry
     /// <see cref="MaxLookupsKept"/> codes are kept.
     /// </summary>
     // Apart from ByCulture, though a code is usually a culture name. A lookup there holds the culture object of the
-    // reader who asked first, which a thread compares by reference. A code's lookup holds the culture of its language
-    // instead, while an app's readers bring culture objects of their own, such as those of ASP.NET Core's options. So
-    // in one dictionary, the lookup of en that a fallback made first would make every text of an English reader miss
+    // caller who asked first, which a thread compares by reference. A code's lookup holds the culture of its language
+    // instead, while an app's callers bring culture objects of their own, such as those of ASP.NET Core's options. So
+    // in one dictionary, the lookup of en that a fallback made first would make every text of an English user miss
     // that comparison.
     private ConcurrentDictionary<string, CultureLookup> ByLanguageCode { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Far more than the cultures of an app's users. A culture name can come from outside, such as a request header that
-    /// CurrentUICultureProvider passes on, so the lookups can't grow without end.
+    /// an app makes the thread's culture, so the lookups can't grow without end.
     /// </summary>
     private const int MaxLookupsKept = 256;
 
@@ -43,9 +43,9 @@ public sealed partial class LocalizationRegistry
     private static CultureLookup? LastCulture;
 
     /// <summary>
-    /// The culture object this thread asked LastCulture for. A lookup holds the object of the reader who asked first,
-    /// and a later reader may bring another object of the same name, as ASP.NET Core's options do after a
-    /// UseCulture(CultureInfo.GetCultureInfo("nl-NL")). Compared by reference too, so that reader pays the lookup by
+    /// The culture object this thread asked LastCulture for. A lookup holds the object of the caller who asked first,
+    /// and a later caller may bring another object of the same name, as ASP.NET Core's options do after a
+    /// UseCulture(CultureInfo.GetCultureInfo("nl-NL")). Compared by reference too, so that caller pays the lookup by
     /// name once, and not for every text. Read only where the lookup's own culture isn't the one asked for.
     /// </summary>
     [ThreadStatic]
@@ -74,12 +74,8 @@ public sealed partial class LocalizationRegistry
             lookup = Keep(this.ByCulture, culture.Name, new CultureLookup(this, new CultureFallback(culture), culture, language: null), ref this._culturesKept);
 
         // Both written on this thread, one after the other, so the culture asked always belongs to the lookup next to it.
-        // Not for a registry that holds a plugin's sets, which the thread would hold after the plugin unloads.
-        if (!this.HoldsCollectibleSets)
-        {
-            LastCulture = lookup;
-            LastCultureAsked = culture;
-        }
+        LastCulture = lookup;
+        LastCultureAsked = culture;
 
         return lookup;
     }
@@ -96,9 +92,7 @@ public sealed partial class LocalizationRegistry
         if (!this.ByLanguageCode.TryGetValue(language, out var lookup))
             lookup = Keep(this.ByLanguageCode, language, new CultureLookup(this, CultureFallback.OfLanguage(language), CultureName.GetCulture(language), language), ref this._languagesKept);
 
-        if (!this.HoldsCollectibleSets)
-            LastLanguage = lookup;
-
+        LastLanguage = lookup;
         return lookup;
     }
 
@@ -109,7 +103,7 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     // Dropped all at once, and not left full: names that don't exist, such as those of a request header, would then
     // take every place for good, and a culture of a real user that came after them was worked out again for every
-    // text. A lookup that is dropped is worked out once more by its next reader, which the cultures of an app's users
+    // text. A lookup that is dropped is worked out once more by its next caller, which the cultures of an app's users
     // are within a few texts. A thread that holds a dropped lookup keeps reading it, as it's of the same registry.
     //
     // Two threads that keep one name both count, so the count may run ahead of the dictionary, which then empties a
@@ -136,31 +130,42 @@ public sealed partial class LocalizationRegistry
     }
 
     /// <summary>
-    /// The wording the sets of a contract give a text for the first of the names that has a set, or
-    /// <see langword="null"/> when none has. Within a name, it's the wording of the set registered last that words the
+    /// The set of a contract to read a text's wording from, for the first of the names that has a set, or
+    /// <see langword="null"/> when none has. Within a name, the wording is that of the set registered last that words the
     /// text itself, rather than leaving it to the set it derives from (<see cref="GetLevelSet"/>). So rewordings of
     /// one set, registered one after another, each show the texts they change. When that set leaves the text to a set of
     /// a less specific name it derives from, the text takes the wording of that name instead, and so on up. So a set that
     /// rewords a language reaches the regional sets built on that language, for every text they leave as it was.
     /// </summary>
+    /// <remarks>
+    /// The wording is read from the most specific set that inherits it, rather than from the set whose class declares
+    /// the text. So a set that overrides another member its inherited texts read, such as a protected one, shows those
+    /// texts with its own member. A regional set comes first. Within a name, the set registered last comes first
+    /// (<see cref="GetInheritor"/>).
+    /// </remarks>
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
     /// <param name="lookup">
     /// The culture or language to look in, from <see cref="Resolve"/> or <see cref="ResolveLanguage"/>.
     /// </param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
-    /// <param name="select">Gives the text as a set of the contract words it.</param>
-    /// <param name="set">The set that gave the wording, or <see langword="null"/> when none did.</param>
     // Which texts a set words itself comes from the build's description of its class (DescribeSet), not from reflection,
     // which the trimmer can't see. A set the build doesn't describe, such as a nested one registered by hand, words every
     // text itself. A set deriving from no other set of its name, or a regional set deriving from no set of its language,
     // gives way to nothing, as it inherits none of its texts.
-    // Only the set that gives the wording is called. A British set that leaves a text to the English one isn't called
-    // for that text at all. Called anyway, a text that a wording shows was worded twice per level for a British user.
-    internal string? GetWording<TContract>(CultureLookup lookup, string name, Func<TContract, string?> select, out TContract? set)
+    //
+    // The description names only the texts a class declares, not the other members it overrides. So the walk below finds
+    // the class whose wording a text shows, and the set to read it from is chosen apart from it (readFrom). Read from the
+    // instance of that class instead, a British set that overrides only a protected Currency showed its British users
+    // the English one.
+    //
+    // Only that one set is given, and the caller reads it. Read on every level instead, a text that a wording shows was
+    // worded twice per level for a British user.
+    internal TContract? GetWordingSet<TContract>(CultureLookup lookup, string name)
         where TContract : class
     {
         var contract = typeof(TContract);
         ContractSet? found = null;
+        ContractSet? readFrom = null;
 
         foreach (var sets in lookup.Levels)
         {
@@ -178,13 +183,19 @@ public sealed partial class LocalizationRegistry
                     break;
             }
 
-            if (GetLevelSet(candidates, name) is { } level)
+            if (GetLevelSet(candidates, name, out var inheritor) is { } level)
+            {
+                // A set of a more specific name that inherits this level's wording keeps being the one read, so a
+                // British set's own members still show in a text it leaves to English.
+                if (readFrom is null || readFrom.WordsItselfOver(level.Set.GetType(), name))
+                    readFrom = inheritor ?? level;
+
                 found = level;
+            }
         }
 
-        set = (TContract?)found?.Set;
-
-        return set is null ? null : select(set);
+        var set = (TContract?)readFrom?.Set;
+        return set;
     }
 
     /// <summary>
@@ -194,7 +205,11 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <param name="candidates">The sets of the contract for the name.</param>
     /// <param name="name">The name of the text.</param>
-    private static ContractSet? GetLevelSet(ContractSet[] candidates, string name)
+    /// <param name="inheritor">
+    /// The set to read the wording from where it isn't the set returned (<see cref="GetInheritor"/>), or
+    /// <see langword="null"/>.
+    /// </param>
+    private static ContractSet? GetLevelSet(ContractSet[] candidates, string name, out ContractSet? inheritor)
     {
         // Ends at the latest at the candidate deriving from no other, as no class derives from itself.
         for (var i = candidates.Length - 1; i >= 0; i--)
@@ -204,8 +219,32 @@ public sealed partial class LocalizationRegistry
             // A set deriving from no other words every text itself. Told without a call, because nearly every lookup
             // ends at such a set, and in WebAssembly's interpreter a call cost every text about 40 ns.
             if (candidate.Basis is null || candidate.WordsItselfOverBasis(name))
+            {
+                inheritor = GetInheritor(candidates, i, name);
                 return candidate;
+            }
         }
+
+        inheritor = null;
+        return null;
+    }
+
+    /// <summary>
+    /// The set registered last after the chosen candidate that inherits the chosen candidate's wording of a text, or
+    /// <see langword="null"/>. It's a rewording that leaves the text as it was, but may override another member the
+    /// text reads, such as a protected one. So the wording is read from it.
+    /// </summary>
+    /// <param name="candidates">The sets of the contract for one name, in the order they apply.</param>
+    /// <param name="chosen">The position of the candidate that words the text.</param>
+    /// <param name="name">The name of the text.</param>
+    private static ContractSet? GetInheritor(ContractSet[] candidates, int chosen, string name)
+    {
+        var chosenType = candidates[chosen].Set.GetType();
+
+        // Nearly every lookup chooses the last candidate, which has none after it.
+        for (var i = candidates.Length - 1; i > chosen; i--)
+            if (!candidates[i].WordsItselfOver(chosenType, name))
+                return candidates[i];
 
         return null;
     }

@@ -109,7 +109,7 @@ internal static class CultureName
     /// </summary>
     // The letter case RFC 5646 (section 2.1.1) recommends, and not always that of CultureInfo.Name, which depends on
     // the machine: with ICU a variant is in upper case (ca-ES-VALENCIA).
-    // Codes match in any letter case, so the case is only what a reader sees: the languages of a registry, and the
+    // Codes match in any letter case, so the case is only what a person sees: the languages of a registry, and the
     // languages a text is written to JSON under, which must not depend on which set registered first.
     public static string Normalize(string code)
     {

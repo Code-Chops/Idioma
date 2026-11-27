@@ -62,9 +62,9 @@ internal static partial class LocalizationContractSource
         var sb = new StringBuilder();
         AppendHeader(sb, contract, warnings);
 
-        // The texts first, because they're what a reader of this file looks for. Partial, so that a helper can sit next
-        // to them, unless the generated code can't create the set for their default wording (LOC200). A switch it
-        // calls, for a set of the texts of an enum, comes last.
+        // The texts first, because they're what someone who opens this file looks for. Partial, so that a helper can sit
+        // next to them, unless the generated code can't create the set for their default wording (LOC200). A switch
+        // it calls, for a set of the texts of an enum, comes last.
         var lookups = new StringBuilder();
 
         if (contract.HasTexts)

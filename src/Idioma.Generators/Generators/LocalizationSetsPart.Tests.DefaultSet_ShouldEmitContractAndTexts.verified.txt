@@ -34,7 +34,7 @@ public static partial class ShopLocalization
     /// </list>
     /// </remarks>
     [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
-    public static string Checkout => GetLocalizationSet<IShopLocalization>(0, 2, out var culture)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 2, culture, "Checkout", static set => set.Checkout);
+    public static string Checkout => GetLocalizationSet<IShopLocalization>(0, 2)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 2, "Checkout", static set => set.Checkout);
 
     /// <summary>
     /// Total
@@ -47,7 +47,7 @@ public static partial class ShopLocalization
     /// </list>
     /// </remarks>
     [GeneratedCode("CodeChops.Idioma", "{PackageVersion}"), ExcludeFromCodeCoverage]
-    public static string Total => GetLocalizationSet<IShopLocalization>(1, 2, out var culture)?.Total ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(1, 2, culture, "Total", static set => set.Total);
+    public static string Total => GetLocalizationSet<IShopLocalization>(1, 2)?.Total ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(1, 2, "Total", static set => set.Total);
 
     /// <summary>
     /// The text with a key, or <see langword="null"/> for an unknown key. The key is the name of the text, such as <c>"Checkout"</c>.

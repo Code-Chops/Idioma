@@ -1,4 +1,6 @@
-# Build errors about inline texts and attributes
+# Build errors about standalone texts
+
+A standalone text carries its own wording in every language, and belongs to no set. It's an inline text, written with `LocalizedText.Inline`, or a text written as an attribute, with `[Localized]`.
 
 Each code has an example and the fix. The [list of every code](../build-errors.md#all-codes) shows which ones your IDE can fix.
 

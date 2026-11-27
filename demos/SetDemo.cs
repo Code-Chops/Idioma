@@ -1,4 +1,4 @@
-﻿#:package CodeChops.Idioma@*
+﻿#:package CodeChops.Idioma@*-*
 
 using System.Globalization;
 using CodeChops.Idioma;

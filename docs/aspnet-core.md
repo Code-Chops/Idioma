@@ -14,7 +14,7 @@ var app = builder.Build();
 app.UseRequestLocalization([.. LocalizationRegistry.SupportedLanguages]);
 ```
 
-The first language is the default one. ASP.NET Core then takes the language of a request from the query string, a cookie, or the `Accept-Language` header, in that order. Without this line, every user gets the language of the server.
+The first language is the default one. Without this line, every user gets the language of the server. Microsoft's docs cover [how a request gets its language](https://learn.microsoft.com/aspnet/core/fundamentals/localization/select-language-culture).
 
 A user whose language you don't support gets your default language, from ASP.NET Core and from Idioma alike ([Fallback order](advanced-topics.md#fallback-order)).
 
@@ -56,10 +56,4 @@ A server serves users of different languages at once, so a text that's kept show
 
 ## A language from the user's profile
 
-An app that keeps each user's language in their profile doesn't need request localization for its texts. Set a provider once at startup:
-
-```csharp
-LocalizationRegistry.CurrentUICultureProvider = () => UserProfile.Current?.Culture;
-```
-
-Every text then follows the culture it returns ([details](advanced-topics.md#the-current-culture)). Return the same `CultureInfo` object for the same language, as `CultureInfo.GetCultureInfo` does, because Idioma finds its sets fastest for a culture object it has seen before.
+An app that keeps each user's language in their profile gives it to request localization, with a request culture provider of its own ([Microsoft's docs](https://learn.microsoft.com/aspnet/core/fundamentals/localization/select-language-culture)). Every text then follows the language of the profile, because ASP.NET Core makes it `CultureInfo.CurrentUICulture` for the request ([details](advanced-topics.md#the-current-culture)).

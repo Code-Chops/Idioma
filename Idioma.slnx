@@ -1,13 +1,23 @@
 <Solution>
+  <Folder Name="/Benchmarks/" />
+  <Folder Name="/Benchmarks/Results/">
+    <File Path="benchmarks/results/1-showing-a-text.md" />
+    <File Path="benchmarks/results/2-wasm-interpreter.md" />
+    <File Path="benchmarks/results/4-download-sizes.md" />
+    <File Path="benchmarks/results/5-finding-a-label.md" />
+  </Folder>
   <Folder Name="/Demos/">
     <File Path="demos/AttributeDemo.cs" />
+    <File Path="demos/Directory.Build.props" />
     <File Path="demos/EnumDemo.cs" />
+    <File Path="demos/global.json" />
     <File Path="demos/InlineTextDemo.cs" />
     <File Path="demos/README.md" />
     <File Path="demos/SetDemo.cs" />
   </Folder>
   <Folder Name="/Docs/">
     <File Path="docs/advanced-topics.md" />
+    <File Path="docs/aspnet-core.md" />
     <File Path="docs/attributes.md" />
     <File Path="docs/blazor.md" />
     <File Path="docs/build-errors.md" />
@@ -15,6 +25,7 @@
     <File Path="docs/enums.md" />
     <File Path="docs/language-codes.md" />
     <File Path="docs/libraries-and-apps.md" />
+    <File Path="docs/maui.md" />
     <File Path="docs/performance.md" />
     <File Path="docs/translating.md" />
     <File Path="README.md" />
@@ -29,6 +40,7 @@
     <File Path="docs/build-errors/LOC7XX-libraries.md" />
   </Folder>
   <Folder Name="/Solution Items/">
+    <File Path=".devcontainer/devcontainer.json" />
     <File Path=".editorconfig" />
     <File Path=".gitattributes" />
     <File Path=".github/workflows/ci.yml" />

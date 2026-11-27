@@ -14,11 +14,7 @@ using CodeChops.Idioma;
 [assembly: SupportedLanguages(defaultLanguage: "en", "nl")]
 ```
 
-Declare the same languages for each platform too, as Microsoft's [MAUI localization docs](https://learn.microsoft.com/dotnet/maui/fundamentals/localization#perform-platform-setup) describe:
-
-- On iOS and Mac Catalyst, list them under `CFBundleLocalizations` in `Platforms/iOS/Info.plist` and `Platforms/MacCatalyst/Info.plist`, and set your default language as `CFBundleDevelopmentRegion`.
-- On Windows, replace `<Resource Language="x-generate"/>` in `Platforms/Windows/Package.appxmanifest` with a `<Resource Language="..."/>` per language.
-- Android needs nothing.
+Declare the same languages for each platform too, as Microsoft's [MAUI localization docs](https://learn.microsoft.com/dotnet/maui/fundamentals/localization#perform-platform-setup) describe.
 
 The app then starts in the language of the device. A device language you don't support gets your default language ([Fallback order](advanced-topics.md#fallback-order)).
 
@@ -55,41 +51,54 @@ A language picker in the app does two things:
 1. It makes every text follow the language the user chose.
 2. It creates the pages again, so that each text is read again.
 
-For the first, set `LocalizationRegistry.CurrentUICultureProvider` once at startup ([details](advanced-topics.md#the-current-culture)). Every text then follows the culture it returns, or the device's language where it returns `null`. The provider leaves the cultures of the app's threads alone, because Microsoft's docs note that setting `CultureInfo.CurrentUICulture` in code behaves differently per platform.
+For the first, make the chosen language the UI culture of the app, which every text follows ([details](advanced-topics.md#the-current-culture)). Set it in two places:
+
+- `CultureInfo.DefaultThreadCurrentUICulture`, for every thread that set no culture itself.
+- `CultureInfo.CurrentUICulture`, for the UI thread.
 
 For the second, give the window a new page. The user loses what the page held, such as what they typed in a form.
 
 ```csharp
 // LanguageChoice.cs
 using System.Globalization;
-using CodeChops.Idioma;
 
 public static class LanguageChoice
 {
-    private static CultureInfo? chosen;
-
     // Once at startup, in the constructor of App, which runs before it creates its first page.
     public static void Restore()
     {
         var name = Preferences.Default.Get("language", "");
 
         if (name.Length > 0)
-            chosen = CultureInfo.GetCultureInfo(name);
-
-        LocalizationRegistry.CurrentUICultureProvider = static () => chosen;
+            Apply(CultureInfo.GetCultureInfo(name));
     }
 
     // From the picker.
     public static void Select(string name)
     {
-        chosen = CultureInfo.GetCultureInfo(name);
         Preferences.Default.Set("language", name);
 
-        // x:Static and code-behind read each text once, so create the pages again.
-        Application.Current!.Windows[0].Page = new AppShell();
+        // In a turn of the UI thread of its own, so the culture also stays when an async method calls this.
+        Application.Current!.Dispatcher.Dispatch(() =>
+        {
+            Apply(CultureInfo.GetCultureInfo(name));
+
+            // x:Static and code-behind read each text once, so create the pages again.
+            Application.Current!.Windows[0].Page = new AppShell();
+        });
+    }
+
+    private static void Apply(CultureInfo culture)
+    {
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+        CultureInfo.CurrentUICulture = culture;
     }
 }
 ```
+
+`Select` hands the change to the dispatcher, because a picker's command is often `async`. A culture that an `async` method sets on its thread ends when that method returns. The new page would then be in the chosen language, and every text read after it in the language from before.
+
+This was run on Windows. Test the picker on each other platform you ship, because Microsoft's docs note that setting the UI culture in code behaves differently per platform.
 
 The picker shows a button for each language your app declares, here in the code-behind of a page with a `HorizontalStackLayout` named `Languages`:
 
@@ -100,4 +109,4 @@ foreach (var language in LocalizationRegistry.SupportedLanguages)
 
 An app without Shell creates its first page in its own way. Give the window that page instead of `AppShell`.
 
-Dates and numbers keep the format of the device, because the provider changes only the language of the texts. A text of a set with parameters is the exception. It formats its values for the chosen language, because the set's method runs in the provider's culture. A value in an inline text keeps the format of the device ([details](advanced-topics.md#texts-with-parameters)).
+Dates and numbers keep the format of the device, because only the UI culture changes. To change their format too, set `CultureInfo.DefaultThreadCurrentCulture` and `CultureInfo.CurrentCulture` in `Apply` as well.

@@ -177,6 +177,31 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
+    /// A set whose texts read a member that isn't a text: a property, and a method that takes a value.
+    /// </summary>
+    public class BrandLocalizationEn : ILocalizationSet, IBrandLocalization
+    {
+        protected virtual string ShopName => "the shop";
+
+        public virtual string Checkout => $"Pay at {this.ShopName}";
+        public virtual string Thanks(string name) => $"Thanks for shopping at {this.ShopName}, {name}!";
+    }
+
+    public sealed class BrandLocalizationNl : ILocalizationSet, IBrandLocalization
+    {
+        public string Checkout => "Afrekenen";
+        public string Thanks(string name) => $"Bedankt voor je bestelling, {name}!";
+    }
+
+    /// <summary>
+    /// A rewording that overrides only the member the texts read. The build describes it as wording no text itself.
+    /// </summary>
+    public sealed class ContosoBrandLocalizationEn : BrandLocalizationEn
+    {
+        protected override string ShopName => "Contoso";
+    }
+
+    /// <summary>
     /// A helper next to the generated texts: the generated class is partial.
     /// </summary>
     public static partial class GeneratedLocalization
@@ -263,6 +288,18 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        public void OverrideSet_ThatOverridesOnlyAMemberItsTextsRead_ShouldShowItsTextsWithThatMember()
+        {
+            // Arrange
+            using var _ = new UICultureScope("en-US");
+
+            // Act & Assert: a property and a text that takes a value, both inherited from the set the rewording
+            // derives from, with the rewording's own name of the shop.
+            BrandLocalization.Checkout.ShouldBe("Pay at Contoso");
+            BrandLocalization.Thanks("Anna").ShouldBe("Thanks for shopping at Contoso, Anna!");
+        }
+
+        [Test]
         public void GeneratedTextThatTakesValues_ShouldBeWordedBySetOfCultureWithThoseValues()
         {
             // Arrange
@@ -323,50 +360,6 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
-        [NotInParallel(nameof(LocalizationRegistry))]
-        public void GeneratedTextThatTakesValues_WithCurrentUICultureProvider_ShouldBeWordedAndFormattedForItsCulture()
-        {
-            // Arrange: both cultures of the thread are American, as on a server, and the app keeps a Dutch user's
-            // culture somewhere else.
-            using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-
-            // Act & Assert: in wording and in number, for a text read before the provider was set too.
-            GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
-
-            using (new ProvidedCultureScope("nl-NL"))
-            {
-                GeneratedLocalization.Total(1234.5m).ShouldBe("Totaal: 1.234,50");
-                GeneratedLocalization.Checkout.ShouldBe("Afrekenen");
-                InlineTexts.Orders.ShouldBe("Bestellingen");
-                CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
-                CultureInfo.CurrentUICulture.Name.ShouldBe("en-US");
-            }
-
-            GeneratedLocalization.Total(1234.5m).ShouldBe("Total: 1,234.50");
-        }
-
-        [Test]
-        [NotInParallel(nameof(LocalizationRegistry))]
-        public void GeneratedTextThatTakesValues_WithCurrentUICultureProviderGivingCultureThreadDoesNotHave_ShouldAskItOncePerText()
-        {
-            // Arrange: a Dutch user on an American thread. Such a text is worded in a scope on every read, so it
-            // never reads a kept set.
-            using var _ = new CulturesScope(uiCulture: "en-US", culture: "en-US");
-            using var provider = new ProvidedCultureScope("nl-NL");
-
-            // Act: the first read, and one after it.
-            var first = GeneratedLocalization.Total(1234.5m);
-            var callsOfFirst = provider.CallCount;
-            var second = GeneratedLocalization.Total(1234.5m);
-
-            // Assert
-            first.ShouldBe("Totaal: 1.234,50");
-            second.ShouldBe("Totaal: 1.234,50");
-            callsOfFirst.ShouldBe(1);
-            provider.CallCount.ShouldBe(2);
-        }
-
-        [Test]
         public void GeneratedClass_ShouldGiveDisplayAndValidationAttributesTheirWording()
         {
             // Arrange: .NET's own attributes, which read a public static string property of a public class by its name.
@@ -410,7 +403,7 @@ namespace CodeChops.Idioma.Tests
         [Test]
         public void TextAmongValuesOfGeneratedText_ShouldBeWordedWhereItIsPassed()
         {
-            // Arrange & Act & Assert: a text among the values is a string, worded for the reader before the call.
+            // Arrange & Act & Assert: a text among the values is a string, worded for the user before the call.
             using (new UICultureScope("en-US"))
                 GeneratedLocalization.Removed(InlineTexts.Orders).ShouldBe("Orders removed");
 
@@ -444,6 +437,8 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        // Apart from the tests that count when a set is created, because reading the sets of the app creates every set.
+        [NotInParallel(nameof(LocalizationRegistry))]
         public void ExcludedSet_ShouldNotRegisterItself()
         {
             // Arrange
@@ -458,6 +453,7 @@ namespace CodeChops.Idioma.Tests
         }
 
         [Test]
+        [NotInParallel(nameof(LocalizationRegistry))]
         public void SetDerivedFromSetOfItsAssembly_ShouldRegisterAfterIt()
         {
             // Arrange & Act
@@ -592,7 +588,7 @@ namespace CodeChops.Idioma.Tests
         [Arguments("en-US")]
         public void ShowingATextThatTakesValues_ShouldAllocateOnlyItsWording(string culture)
         {
-            // Arrange: what the docs promise a text that takes values costs. A reader whose language has a set, so
+            // Arrange: what the docs promise a text that takes values costs. A user whose language has a set, so
             // that the text is a call of that set's method.
             using var _ = new CulturesScope(culture);
             const string name = "Max";
@@ -612,15 +608,12 @@ namespace CodeChops.Idioma.Tests
 
         [Test]
         [NotInParallel(nameof(LocalizationRegistry))]
-        [Arguments("fr-FR", null)]
-        [Arguments("en-US", "nl-NL")]
-        public void ShowingATextThatTakesValues_InACultureTheThreadDoesNotHave_ShouldAllocateOnlyItsWording(string culture, string? provided)
+        public void ShowingATextThatTakesValues_InALanguageItFallsBackTo_ShouldAllocateOnlyItsWording()
         {
-            // Arrange: a French reader of an app in English and Dutch gets English, and a provider's Dutch reader on an
-            // American thread gets Dutch. Either way the set's method runs in a culture the thread doesn't have, which
-            // takes switching the culture. The first switch in a context copies it, and the next ones restore that copy.
-            using var _ = new CulturesScope(culture);
-            using var provider = provided is null ? null : new ProvidedCultureScope(provided);
+            // Arrange: a French user of an app in English and Dutch gets English. The set's method runs in the UI
+            // culture of English, which the thread doesn't have, so the culture is switched. The first switch in a
+            // context copies it, and the next ones restore that copy.
+            using var _ = new CulturesScope("fr-FR");
             const string name = "Max";
             var wording = GeneratedLocalization.Welcome(name);
 

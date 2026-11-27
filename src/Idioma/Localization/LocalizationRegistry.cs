@@ -70,38 +70,6 @@ public sealed partial class LocalizationRegistry
     public static string? DefaultLanguage => SupportedLanguages is [var defaultLanguage, ..] ? defaultLanguage : null;
 
     /// <summary>
-    /// A function that gives the user's culture, for an app that keeps it somewhere other than
-    /// <see cref="CultureInfo.CurrentUICulture"/>. Every text then shows the wording for the culture it returns.
-    /// <see langword="null"/> by default, which leaves texts on <see cref="CultureInfo.CurrentUICulture"/>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Set it once, at startup. It applies to every text of your app, including the texts of the libraries it uses.
-    /// The function runs each time a text is read, so keep it fast, and have it return the same
-    /// <see cref="CultureInfo"/> object for the same language, as <see cref="CultureInfo.GetCultureInfo(string)"/> does.
-    /// A text finds its set fastest for a culture object it has seen before. When it returns <see langword="null"/>, the text
-    /// follows <see cref="CultureInfo.CurrentUICulture"/> for that call.
-    /// </para>
-    /// <para>
-    /// A text that takes values, such as <c>ShopLocalization.Total(amount)</c>, formats them for the same culture, so
-    /// a date or a number reads as the user writes it.
-    /// </para>
-    /// <para>
-    /// With a provider set, changing <see cref="CultureInfo.CurrentUICulture"/> doesn't change the language of a text.
-    /// To get a wording in another language, such as that of an email's recipient, wrap the block that reads the
-    /// texts in <see cref="UseCulture"/>, which wins over the provider.
-    /// </para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // At startup, in an app that keeps each user's language in their profile:
-    /// LocalizationRegistry.CurrentUICultureProvider = () => UserProfile.Current?.Culture;
-    /// </code>
-    /// </example>
-    // ReSharper disable once InconsistentNaming - Same casing as CultureInfo.CurrentUICulture.
-    public static Func<CultureInfo?>? CurrentUICultureProvider { get; set; }
-
-    /// <summary>
     /// The sets of your whole app, in the order they apply: every set that registered itself, and every set you
     /// registered. For one contract and language, a later set wins for every text it changes.
     /// </summary>
@@ -178,26 +146,20 @@ public sealed partial class LocalizationRegistry
     /// <summary>
     /// The registered sets of each language in <see cref="SetLanguages"/>, matched in any letter case.
     /// </summary>
-    private FrozenDictionary<string, SetsOfLanguage> SetsByLanguage { get; }
-
-    /// <summary>
-    /// Whether a set of an assembly that can be unloaded is registered here, such as a plugin's. A thread then keeps
-    /// nothing of this registry as its last lookup. No other thread could let go of that when the plugin unloads, and
-    /// the registry holds the plugin's sets (<see cref="CollectibleAssemblies"/>).
-    /// </summary>
-    internal bool HoldsCollectibleSets { get; }
+    // Never changed once the registry has it, so threads read it without a lock. Each culture reads it once, as its
+    // lookup is worked out (CultureLookup).
+    private Dictionary<string, SetsOfLanguage> SetsByLanguage { get; }
 
     private LocalizationRegistry(ImmutableArray<Registration> registrations, ImmutableArray<string> appLanguages,
-        FrozenDictionary<string, SetsOfLanguage> setsByLanguage, bool holdsCollectibleSets)
+        Dictionary<string, SetsOfLanguage> setsByLanguage)
     {
         ArgumentNullException.ThrowIfNull(setsByLanguage);
 
         this.SetRegistrations = registrations;
         this.AppLanguages = appLanguages;
         this.SetsByLanguage = setsByLanguage;
-        this.HoldsCollectibleSets = holdsCollectibleSets;
-        // Sorted, because a frozen dictionary gives its keys in an order of its own, which a reader can't rely on.
-        this.SetLanguages = setsByLanguage.Keys.Sort(StringComparer.Ordinal);
+        // Sorted, because a dictionary gives its keys in an order of its own, which a caller can't rely on.
+        this.SetLanguages = setsByLanguage.Keys.ToImmutableArray().Sort(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -231,9 +193,8 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The culture chooses the wording and formats dates and numbers, and it wins over
-    /// <see cref="CurrentUICultureProvider"/>. The scope follows your code across an <see langword="await"/>. See
-    /// <see cref="CultureScope"/>.
+    /// The culture chooses the wording and formats dates and numbers. The scope follows your code across an
+    /// <see langword="await"/>. See <see cref="CultureScope"/>.
     /// </para>
     /// <para>
     /// Entering a scope copies the execution context. So wrap a block of texts, not each text.
@@ -306,16 +267,6 @@ public sealed partial class LocalizationRegistry
     public static ILocalizationSet? GetLocalizationSet(Type contract, CultureInfo culture)
     {
         return Current.GetByCulture(contract, culture);
-    }
-
-    /// <summary>
-    /// The culture a provider gives for the code that runs now: that of the <see cref="CultureScope"/> it's in, or
-    /// else what the provider answers.
-    /// </summary>
-    internal static CultureInfo? GetCultureFromScopeOrProvider(Func<CultureInfo?> provider)
-    {
-        var culture = CultureScope.Current ?? provider();
-        return culture;
     }
 
     /// <summary>
@@ -499,20 +450,11 @@ public sealed partial class LocalizationRegistry
             list.Add(registration);
         }
 
-        var holdsCollectibleSets = registrations.Any(static registration => registration.Type.IsCollectible);
-
-        // Filled first and then frozen, not frozen through selectors. That overload is a generic method over
-        // KeyValuePair, a struct, so ReadyToRun can't compile it outside the framework and every app would JIT it.
         var setsByLanguage = new Dictionary<string, SetsOfLanguage>(byLanguage.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var pair in byLanguage)
-            setsByLanguage[pair.Key] = new SetsOfLanguage([.. pair.Value], holdsCollectibleSets);
+            setsByLanguage[pair.Key] = new SetsOfLanguage([.. pair.Value]);
 
-        var registry = new LocalizationRegistry(
-            registrations: registrations,
-            appLanguages: appLanguages,
-            setsByLanguage: setsByLanguage.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
-            holdsCollectibleSets: holdsCollectibleSets);
-
+        var registry = new LocalizationRegistry(registrations, appLanguages, setsByLanguage);
         return registry;
     }
 

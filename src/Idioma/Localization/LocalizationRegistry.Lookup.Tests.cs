@@ -40,7 +40,7 @@ public sealed partial class LocalizationRegistryTests
         thread.Start();
         thread.Join();
 
-        // Assert: the lookup is kept, where a registry that stays full would work it out again for every reader.
+        // Assert: the lookup is kept, where a registry that stays full would work it out again for every caller.
         other.ShouldBeSameAs(lookup);
         lookup.Names.ShouldBe(["nl-NL", "nl"]);
     }
@@ -142,20 +142,20 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
-    public void ResolveLanguage_OfCodeThatIsACultureName_ShouldKeepItsLookupApartFromTheReaders()
+    public void ResolveLanguage_OfCodeThatIsACultureName_ShouldKeepItsLookupApartFromTheCallers()
     {
-        // Arrange: a reader's culture object of its own, as the options of ASP.NET Core hold one.
+        // Arrange: a caller's culture object of its own, as the options of ASP.NET Core hold one.
         var registry = LocalizationRegistry.Create([new RegistryLocalizationEn(), new RegistryLocalizationNl()], "en", "nl");
-        var reader = new CultureInfo("en");
+        var callerCulture = new CultureInfo("en");
 
         // Act: the code first, as a text falling back to the default language resolves it.
         var language = registry.ResolveLanguage("en");
-        var culture = registry.Resolve(reader);
+        var culture = registry.Resolve(callerCulture);
 
-        // Assert: the reader's lookup holds the reader's culture, which a thread compares by reference, and the code's
+        // Assert: the caller's lookup holds the caller's culture, which a thread compares by reference, and the code's
         // lookup holds the culture of its language. Both walk the same names.
         culture.ShouldNotBeSameAs(language);
-        culture.Culture.ShouldBeSameAs(reader);
+        culture.Culture.ShouldBeSameAs(callerCulture);
         culture.Language.ShouldBeNull();
         language.Culture.ShouldBe(CultureInfo.GetCultureInfo("en"));
         language.Language.ShouldBe("en");

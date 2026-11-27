@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using CodeChops.Idioma.Internals;
@@ -116,32 +117,148 @@ public sealed partial class GeneratedCodeTests
     }
 
     [Test]
-    // Alone, because the library's sets are registered with those of the whole app until its context unloads.
+    // Alone, because the library's sets are registered with those of the whole app.
     [NotInParallel]
     public void GetEnumText_ShouldGiveTheTextOfTheAppOverThatOfALibraryThatLoadedLater()
     {
         // Arrange: the app's texts, and then those of a library that loaded and registered its sets after the app.
         GeneratedCode.RegisterEnumTexts<LaterStatus, GeneratedCodeTests>(static _ => "of the app");
 
-        var context = new AssemblyLoadContext("LaterLibrary", isCollectible: true);
-        var library = context.LoadFromStream(new MemoryStream(LaterLibrary));
+        var library = new AssemblyLoadContext("LaterLibrary").LoadFromStream(new MemoryStream(LaterLibrary));
         RuntimeHelpers.RunModuleConstructor(library.ManifestModule.ModuleHandle);
 
         var register = typeof(GeneratedCode).GetMethod(nameof(GeneratedCode.RegisterEnumTexts))!
             .MakeGenericMethod(typeof(LaterStatus), library.GetType("LaterLibrary.ILaterLocalization")!);
         register.Invoke(null, [(Func<LaterStatus, string>)(static _ => "of a library")]);
 
-        try
-        {
-            // Act
-            var text = GeneratedCode.GetEnumText(LaterStatus.Open);
+        // Act
+        var text = GeneratedCode.GetEnumText(LaterStatus.Open);
 
-            // Assert
-            text.ShouldBe("of the app");
-        }
-        finally
+        // Assert
+        text.ShouldBe("of the app");
+    }
+
+    [Test]
+    // Alone, because the sets of the assembly with the set are registered with those of the whole app.
+    [NotInParallel]
+    public void GetText_OfMemberThatASetOfAnotherAssemblyHasNoTextOf_ShouldGiveTheTextOfItsAttribute()
+    {
+        // Arrange & Act: a set of a library's enum, built against a version of the library that a newer one replaces.
+        var (closed, cancelled) = ReadStatusesWithSetOfOlderLibrary();
+
+        // Assert: the set's text of a member it knows, and the [Localized] text of the member the newer version adds.
+        // The set gave that member its name before, in every language.
+        closed.ShouldBe("Dicht");
+        cancelled.ShouldBe("Geannuleerd");
+    }
+
+    /// <summary>
+    /// A library's enum whose members are marked <c>[Localized]</c>, in the version a set of it was built against.
+    /// </summary>
+    private const string OlderLibraryWithStatus = """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en", "nl")]
+
+        namespace LibraryWithStatus;
+
+        public enum Status
         {
-            context.Unload();
+            [Localized(en: "Open", nl: "Open")]
+            Open,
+
+            [Localized(en: "Closed", nl: "Gesloten")]
+            Closed,
         }
+
+        public static class Texts
+        {
+            public static string Of(Status status) => status.GetText();
+        }
+        """;
+
+    /// <summary>
+    /// The newer version of <see cref="OlderLibraryWithStatus"/>, with a member more. It has the same name, so it
+    /// stands in for the older one at run time.
+    /// </summary>
+    private const string NewerLibraryWithStatus = """
+        using CodeChops.Idioma;
+
+        [assembly: SupportedLanguages("en", "nl")]
+
+        namespace LibraryWithStatus;
+
+        public enum Status
+        {
+            [Localized(en: "Open", nl: "Open")]
+            Open,
+
+            [Localized(en: "Closed", nl: "Gesloten")]
+            Closed,
+
+            [Localized(en: "Cancelled", nl: "Geannuleerd")]
+            Cancelled,
+        }
+
+        public static class Texts
+        {
+            public static string Of(Status status) => status.GetText();
+        }
+        """;
+
+    /// <summary>
+    /// A set of the library's enum in another assembly, which rewords one member.
+    /// </summary>
+    private const string SetOfStatus = """
+        using CodeChops.Idioma;
+        using LibraryWithStatus;
+
+        [assembly: SupportedLanguages("en", "nl")]
+
+        namespace SetOfStatus;
+
+        public class StatusLocalizationEn : ILocalizationSet<Status>, IStatusLocalization
+        {
+            public string Open => "Open";
+            public string Closed => "Shut";
+        }
+
+        public class StatusLocalizationNl : ILocalizationSet<Status>, IStatusLocalization
+        {
+            public string Open => "Open";
+            public string Closed => "Dicht";
+        }
+        """;
+
+    private static (string Closed, string Cancelled) ReadStatusesWithSetOfOlderLibrary()
+    {
+        var older = GeneratorTestHelper.CompileLibraryWithGenerators("LibraryWithStatus", OlderLibraryWithStatus);
+        var newer = GeneratorTestHelper.EmitLibraryWithGenerators("LibraryWithStatus", NewerLibraryWithStatus);
+        var setOfStatus = GeneratorTestHelper.EmitLibraryWithGenerators("SetOfStatus", SetOfStatus, older);
+
+        var context = new ContextOfNewerLibrary();
+        context.Library = context.LoadFromStream(new MemoryStream(newer));
+        var sets = context.LoadFromStream(new MemoryStream(setOfStatus));
+
+        // Registers as an assembly the app loads later does, as its code first runs.
+        RuntimeHelpers.RunModuleConstructor(sets.ManifestModule.ModuleHandle);
+
+        var of = context.Library.GetType("LibraryWithStatus.Texts")!.GetMethod("Of")!;
+        var status = context.Library.GetType("LibraryWithStatus.Status")!;
+
+        using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-NL")))
+            return ((string)of.Invoke(null, [Enum.ToObject(status, 1)])!, (string)of.Invoke(null, [Enum.ToObject(status, 2)])!);
+    }
+
+    /// <summary>
+    /// A context that gives the newer library to the set built against the older one, and takes every other assembly
+    /// from the app, Idioma included.
+    /// </summary>
+    private sealed class ContextOfNewerLibrary() : AssemblyLoadContext("ContextOfNewerLibrary")
+    {
+        public Assembly? Library { get; set; }
+
+        protected override Assembly? Load(AssemblyName assemblyName) =>
+            String.Equals(assemblyName.Name, "LibraryWithStatus", StringComparison.Ordinal) ? this.Library : null;
     }
 }

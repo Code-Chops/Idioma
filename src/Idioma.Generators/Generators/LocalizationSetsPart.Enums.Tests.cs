@@ -117,8 +117,8 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         string[] members = ["string Caption { get; }", "string Delivered { get; }", "string Pending { get; }", "string Shipped { get; }"];
         members.Select(member => text.IndexOf(member, StringComparison.Ordinal)).ShouldBeInOrder();
-        text.ShouldContain("public static string Caption => GetLocalizationSet<IOrderStatusLocalization>(0, 4, out var culture)?.Caption");
-        text.ShouldContain("public static string Shipped => GetLocalizationSet<IOrderStatusLocalization>(3, 4, out var culture)?.Shipped");
+        text.ShouldContain("public static string Caption => GetLocalizationSet<IOrderStatusLocalization>(0, 4)?.Caption");
+        text.ShouldContain("public static string Shipped => GetLocalizationSet<IOrderStatusLocalization>(3, 4)?.Shipped");
     }
 
     [Test]

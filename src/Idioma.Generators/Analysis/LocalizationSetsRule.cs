@@ -48,7 +48,7 @@ internal enum LocalizationSetsRule
     LibraryMissingLanguage,
 
     /// <summary>
-    /// <c>LOC701</c>: a referenced library writes texts inline, and lacks a supported language.
+    /// <c>LOC701</c>: a referenced library writes standalone texts, and lacks a supported language.
     /// </summary>
     LibraryCannotBeTranslated,
 

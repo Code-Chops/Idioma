@@ -69,7 +69,7 @@ public sealed partial class GeneratedCodeTests
 
     /// <summary>
     /// A contract no other test uses, whose texts show the cultures they're worded in. No set of it is registered, so
-    /// the set of the default language words every text. For a reader whose culture English doesn't serve, it's the
+    /// the set of the default language words every text. For a user whose culture English doesn't serve, it's the
     /// fallback.
     /// </summary>
     private interface ICulturesLocalization : ILocalizationSet
@@ -86,8 +86,34 @@ public sealed partial class GeneratedCodeTests
 
     // As the source generator writes a text that takes values.
     private static string CulturesOf(string name) =>
-        GeneratedCode.GetLocalizationSetForValues<ICulturesLocalization>(1, 2, out var culture)?.CulturesOf(name)
-        ?? GeneratedCode.ResolveWording<ICulturesLocalization, CulturesLocalizationEn, string>(1, 2, culture, "CulturesOf", static (set, name) => set.CulturesOf(name), name);
+        GeneratedCode.GetLocalizationSetForValues<ICulturesLocalization>(1, 2)?.CulturesOf(name)
+        ?? GeneratedCode.ResolveWording<ICulturesLocalization, CulturesLocalizationEn, string>(1, 2, "CulturesOf", static (set, name) => set.CulturesOf(name), name);
+
+    /// <summary>
+    /// A contract no other test uses, whose text shows the nickname it's given, which may be null at run time, as one
+    /// read from a database. No set of it is registered, so for a French user the set of the default language words it
+    /// as the fallback.
+    /// </summary>
+    private interface INicknameLocalization : ILocalizationSet
+    {
+        string Nickname(string? nickname);
+    }
+
+    private sealed class NicknameLocalizationEn : INicknameLocalization
+    {
+        public static int Reads { get; private set; }
+
+        public string Nickname(string? nickname)
+        {
+            Reads++;
+            return nickname!;
+        }
+    }
+
+    // As the source generator writes a text that takes values.
+    private static string Nickname(string? nickname) =>
+        GeneratedCode.GetLocalizationSetForValues<INicknameLocalization>(0, 1)?.Nickname(nickname)
+        ?? GeneratedCode.ResolveWording<INicknameLocalization, NicknameLocalizationEn, string?>(0, 1, "Nickname", static (set, nickname) => set.Nickname(nickname), nickname);
 
     /// <summary>
     /// A type a string converts to in code, which a value passed by a key doesn't.
@@ -220,22 +246,6 @@ public sealed partial class GeneratedCodeTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void GetLanguageIndexForStandaloneText_WithCurrentUICultureProvider_ShouldFollowItsCultureInPlaceOfCurrentUICulture()
-    {
-        // Arrange: the thread is American, and the app keeps a Dutch user's culture somewhere else.
-        using var _ = new CulturesScope("en-US");
-
-        // Act & Assert
-        using (new ProvidedCultureScope("nl-NL"))
-            GeneratedCode.GetLanguageIndexForStandaloneText(EnglishDutch).ShouldBe(1);
-
-        // A provider that gives no culture leaves the text on the current UI culture.
-        using (new ProvidedCultureScope(name: null))
-            GeneratedCode.GetLanguageIndexForStandaloneText(EnglishDutch).ShouldBe(0);
-    }
-
-    [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
     public void GetLanguageIndexForStandaloneText_ShouldAllocateNothing()
     {
         // Arrange: apart from the tests that register sets, which make the next read build the registry anew.
@@ -269,7 +279,7 @@ public sealed partial class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act: as a property of the class the source generator writes calls it.
-        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, null, "Checkout", static set => set.Checkout);
+        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(0, 3, "Checkout", static set => set.Checkout);
 
         // Assert
         wording.ShouldBe("Checkout");
@@ -283,7 +293,7 @@ public sealed partial class GeneratedCodeTests
         const string name = "Anna";
 
         // Act: as a method of the class the source generator writes calls it.
-        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, null, "Greeting", static (set, name) => set.Greeting(name), name);
+        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, string>(1, 3, "Greeting", static (set, name) => set.Greeting(name), name);
 
         // Assert
         wording.ShouldBe("Hello, Anna!");
@@ -298,9 +308,9 @@ public sealed partial class GeneratedCodeTests
         // Act: the values as one tuple, as the source generator writes them, also beyond the seven a tuple holds
         // before it nests the rest.
         var two = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, (string, string)>(
-            2, 3, null, "Joined", static (set, values) => set.Joined([values.Item1, values.Item2]), ("1", "2"));
+            2, 3, "Joined", static (set, values) => set.Joined([values.Item1, values.Item2]), ("1", "2"));
         var nine = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn, (string, string, string, string, string, string, string, string, int)>(
-            2, 3, null, "Joined", static (set, values) => set.Joined([values.Item1, values.Item2, values.Item3, values.Item4, values.Item5, values.Item6, values.Item7, values.Item8, values.Item9.ToString(CultureInfo.InvariantCulture)]),
+            2, 3, "Joined", static (set, values) => set.Joined([values.Item1, values.Item2, values.Item3, values.Item4, values.Item5, values.Item6, values.Item7, values.Item8, values.Item9.ToString(CultureInfo.InvariantCulture)]),
             ("1", "2", "3", "4", "5", "6", "7", "8", 9));
 
         // Assert
@@ -310,70 +320,59 @@ public sealed partial class GeneratedCodeTests
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    [Arguments("fr-FR", null)]
-    [Arguments("en-US", "fr-FR")]
-    public void GetWording_OfTextThatTakesValues_InLanguageItFallsBackTo_ShouldRunItsSetInThatLanguageOnEveryCall(string thread, string? provided)
+    public void GetWording_OfTextThatTakesValues_InLanguageItFallsBackTo_ShouldRunItsSetInThatLanguageOnEveryCall()
     {
-        // Arrange: a French reader of an app in English and Dutch gets English, from the thread or from a provider. The
-        // set is kept as the text's fallback after the first call, and the generated class never calls it without the
-        // scope of English.
-        using var _ = new CulturesScope(thread);
-        using var provider = provided is null ? null : new ProvidedCultureScope(provided);
+        // Arrange: a French user of an app in English and Dutch gets English. The set is kept as the text's fallback
+        // after the first call, and the generated class never calls it without the scope of English.
+        using var _ = new CulturesScope("fr-FR");
 
         // Act: the first call looks the set up, and the next one words the text with the set kept for it.
         var first = CulturesOf("Ada");
         var second = CulturesOf("Max");
         var resolved = ResolvedSets<ICulturesLocalization>.Get(CultureInfo.GetCultureInfo("fr-FR"), textCount: 2);
 
-        // Assert: in the UI culture of English, with the values formatted for the reader.
-        var valuesCulture = provided ?? thread;
-
-        first.ShouldBe($"Ada: en/{valuesCulture}");
-        second.ShouldBe($"Max: en/{valuesCulture}");
+        // Assert: in the UI culture of English, with the values formatted for the user.
+        first.ShouldBe("Ada: en/fr-FR");
+        second.ShouldBe("Max: en/fr-FR");
         resolved.GetFallback(1).ShouldNotBeNull().Culture.ShouldNotBeNull().Name.ShouldBe("en");
         resolved.SetsForValues[1].ShouldBeNull();
-        CultureInfo.CurrentUICulture.Name.ShouldBe(thread);
+        CultureInfo.CurrentUICulture.Name.ShouldBe("fr-FR");
     }
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
-    public void GetWording_OfTextThatTakesValues_InProvidedCultureTheThreadDoesNotHave_ShouldRunTheKeptSetInThatCulture()
+    public void GetWording_OfTextThatTakesValues_WithFallbackOfLanguageWithoutCulture_ShouldEnterNoScope()
     {
-        // Arrange: a provider's British reader on a Dutch thread, whom English serves. The set is kept for the text,
-        // but the generated class can't call it, because its method has to run in the provider's culture.
-        using var _ = new CulturesScope("nl-NL");
-        using var provider = new ProvidedCultureScope("en-GB");
-
-        // Act: the first call looks the set up, and the next one words the text with the set kept for it.
-        var first = CulturesOf("Ada");
-        var second = CulturesOf("Max");
-        var kept = ResolvedSets<ICulturesLocalization>.Get(CultureInfo.GetCultureInfo("en-GB"), textCount: 2).SetsForValues[1];
-
-        // Assert: both in the provider's culture, and the thread's cultures back afterwards.
-        first.ShouldBe("Ada: en-GB/en-GB");
-        second.ShouldBe("Max: en-GB/en-GB");
-        kept.ShouldBeSameAs(GeneratedCode.GetDefaultSet<CulturesLocalizationEn>());
-        CultureInfo.CurrentUICulture.Name.ShouldBe("nl-NL");
-        CultureInfo.CurrentCulture.Name.ShouldBe("nl-NL");
-    }
-
-    [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
-    public void GetWording_OfTextThatTakesValues_WithFallbackOfLanguageWithoutCulture_ShouldRunInScopeOfTheReader()
-    {
-        // Arrange: a provider's Belgian reader on an American thread, and a fallback whose language has no culture on
-        // this machine, as under invariant globalization. No other test reads for fr-BE, so none finds this fallback.
-        using var _ = new CulturesScope("en-US");
-        using var provider = new ProvidedCultureScope("fr-BE");
+        // Arrange: a Belgian user, and a fallback whose language has no culture on this machine, as under invariant
+        // globalization. No other test reads for fr-BE, so none finds this fallback.
+        using var _ = new CulturesScope("fr-BE");
         var resolved = ResolvedSets<ICulturesLocalization>.Get(CultureInfo.GetCultureInfo("fr-BE"), textCount: 2);
         resolved.KeepFallback(1, GeneratedCode.GetDefaultSet<CulturesLocalizationEn>(), culture: null);
 
         // Act
         var wording = CulturesOf("Max");
 
-        // Assert: no scope of the language, but the values are formatted for the reader, as the lookup formats them.
+        // Assert: no scope of the language, so the set's method runs in the cultures of the user.
         wording.ShouldBe("Max: fr-BE/fr-BE");
-        CultureInfo.CurrentCulture.Name.ShouldBe("en-US");
+        CultureInfo.CurrentUICulture.Name.ShouldBe("fr-BE");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void GetWording_OfTextThatTakesValues_WhereTheKeptFallbackGivesNull_ShouldAskItOnce()
+    {
+        // Arrange: a French user of an app in English and Dutch. The first read keeps the English set as the text's
+        // fallback.
+        using var _ = new CulturesScope("fr-FR");
+        Nickname("Ada").ShouldBe("Ada");
+        var reads = NicknameLocalizationEn.Reads;
+
+        // Act: a read whose value makes that set give null, where no other set words the text.
+        var exception = Should.Throw<InvalidOperationException>(() => Nickname(null));
+
+        // Assert: the set was asked once, and the exception names it. The lookup asked it once more before.
+        NicknameLocalizationEn.Reads.ShouldBe(reads + 1);
+        exception.Message.ShouldContain(nameof(NicknameLocalizationEn));
     }
 
     [Test]
@@ -383,15 +382,15 @@ public sealed partial class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act
-        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(7, 3, null, "Checkout", static set => set.Checkout);
-        var negative = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(-1, 3, null, "Checkout", static set => set.Checkout);
+        var wording = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(7, 3, "Checkout", static set => set.Checkout);
+        var negative = GeneratedCode.ResolveWording<IGeneratedCodeLocalization, GeneratedCodeLocalizationEn>(-1, 3, "Checkout", static set => set.Checkout);
 
         // Assert: worded, and no set is kept or read outside the texts.
         wording.ShouldBe("Checkout");
         negative.ShouldBe("Checkout");
-        GeneratedCode.GetLocalizationSet<IGeneratedCodeLocalization>(7, 3, out var _).ShouldBeNull();
-        GeneratedCode.GetLocalizationSet<IGeneratedCodeLocalization>(-1, 3, out var _).ShouldBeNull();
-        GeneratedCode.GetLocalizationSetForValues<IGeneratedCodeLocalization>(7, 3, out var _).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IGeneratedCodeLocalization>(-1, 3).ShouldBeNull();
+        GeneratedCode.GetLocalizationSetForValues<IGeneratedCodeLocalization>(7, 3).ShouldBeNull();
     }
 
     [Test]
@@ -413,14 +412,14 @@ public sealed partial class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert: asking for a kept set creates none.
-        GeneratedCode.GetLocalizationSet<ILazyLocalization>(0, 1, out var _).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<ILazyLocalization>(0, 1).ShouldBeNull();
         LazyLocalizationEn.Created.ShouldBe(0);
 
         // The first text that needs the set creates it, and every text after it reads the same one.
-        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
-        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
+        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
+        GeneratedCode.ResolveWording<ILazyLocalization, LazyLocalizationEn>(0, 1, "Checkout", static set => set.Checkout).ShouldBe("Checkout");
         LazyLocalizationEn.Created.ShouldBe(1);
-        GeneratedCode.GetLocalizationSet<ILazyLocalization>(0, 1, out var _).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
+        GeneratedCode.GetLocalizationSet<ILazyLocalization>(0, 1).ShouldBeSameAs(GeneratedCode.GetDefaultSet<LazyLocalizationEn>());
     }
 
     [Test]
@@ -430,19 +429,19 @@ public sealed partial class GeneratedCodeTests
         using var _ = new CulturesScope("en-US");
 
         // Act & Assert: asking for a kept set creates none, so the generated class is there for every text.
-        GeneratedCode.GetLocalizationSet<IThrowingLocalization>(0, 1, out var _).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IThrowingLocalization>(0, 1).ShouldBeNull();
         ThrowingLocalizationEn.Created.ShouldBe(0);
 
         // What needs the set says which set threw, with the set's own exception inside, and so does every read after
         // it, which tries again.
-        var first = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout));
-        var second = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, null, "Checkout", static set => set.Checkout));
+        var first = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, "Checkout", static set => set.Checkout));
+        var second = Should.Throw<InvalidOperationException>(() => GeneratedCode.ResolveWording<IThrowingLocalization, ThrowingLocalizationEn>(0, 1, "Checkout", static set => set.Checkout));
 
         first.Message.ShouldContain(nameof(ThrowingLocalizationEn));
         first.InnerException.ShouldBeOfType<FormatException>().Message.ShouldBe("No shop name.");
         second.Message.ShouldBe(first.Message);
         ThrowingLocalizationEn.Created.ShouldBe(2);
-        GeneratedCode.GetLocalizationSet<IThrowingLocalization>(0, 1, out var _).ShouldBeNull();
+        GeneratedCode.GetLocalizationSet<IThrowingLocalization>(0, 1).ShouldBeNull();
     }
 
     [Test]

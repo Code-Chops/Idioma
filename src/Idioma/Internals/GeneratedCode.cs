@@ -51,52 +51,27 @@ public static partial class GeneratedCode
     /// <b>Don't use this method directly! This code is called by source-generated code.</b>
     /// </para>
     /// <para>
-    /// The set that words a text without parameters for the current UI culture, or <see langword="null"/> where none
-    /// is kept yet. A property of the generated class reads its wording from it, and words the text with
-    /// <see cref="ResolveWording{TContract, TDefaultSet}(int, int, CultureInfo, string, Func{TContract, string})"/>
+    /// The set that words a text without parameters for <see cref="CultureInfo.CurrentUICulture"/>, or
+    /// <see langword="null"/> where none is kept yet. A property of the generated class reads its wording from it, and
+    /// words the text with <see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/>
     /// otherwise:
     /// <code>
-    /// GetLocalizationSet&lt;IShopLocalization&gt;(1, 3, out var culture)?.Checkout
-    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, culture, "Checkout", static set => set.Checkout)
+    /// GetLocalizationSet&lt;IShopLocalization&gt;(1, 3)?.Checkout
+    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, "Checkout", static set => set.Checkout)
     /// </code>
     /// </para>
     /// </summary>
     /// <remarks>
-    /// The current UI culture is <see cref="CultureInfo.CurrentUICulture"/>, unless the app sets
-    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/>. Nothing is allocated.
+    /// Nothing is allocated.
     /// </remarks>
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
     /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
     /// <param name="textCount">The number of texts the generated class has.</param>
-    /// <param name="providedCulture">
-    /// What the provider answered, or <see langword="null"/> where it wasn't asked or gave none. Pass it to
-    /// <c>ResolveWording</c>, so that the provider, which may read a request or a user's profile, is asked once per text.
-    /// </param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? GetLocalizationSet<TContract>(int textIndex, int textCount, out CultureInfo? providedCulture)
+    public static TContract? GetLocalizationSet<TContract>(int textIndex, int textCount)
         where TContract : class
     {
-        CultureInfo culture;
-        providedCulture = null;
-
-        // As WordingScope.GetReaderCulture gives it, written out: every text of a generated class asks here, and the
-        // call cost more than this in WebAssembly's interpreter. Inside a text being worded, its culture, which a
-        // provider would otherwise override. Without a provider that culture is the thread's, so the scope isn't read.
-        if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
-        {
-            culture = CultureInfo.CurrentUICulture;
-        }
-        else if (WordingScope.Current is { } entered)
-        {
-            culture = entered;
-        }
-        else
-        {
-            providedCulture = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
-            culture = providedCulture ?? CultureInfo.CurrentUICulture;
-        }
-
-        var sets = ResolvedSets<TContract>.Get(culture, textCount).Sets;
+        var sets = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount).Sets;
 
         var set = (uint)textIndex < (uint)sets.Length ? sets[textIndex] : null;
         return set;
@@ -107,55 +82,27 @@ public static partial class GeneratedCode
     /// <b>Don't use this method directly! This code is called by source-generated code.</b>
     /// </para>
     /// <para>
-    /// The set that words a text with parameters for the current UI culture, or <see langword="null"/> where none is
-    /// kept yet. A method of the generated class calls the set's method with its values, and words the text with
-    /// <c>ResolveWording</c> otherwise:
+    /// The set that words a text with parameters for <see cref="CultureInfo.CurrentUICulture"/>, or
+    /// <see langword="null"/> where none is kept yet. A method of the generated class calls the set's method with its
+    /// values, and words the text with <c>ResolveWording</c> otherwise:
     /// <code>
-    /// GetLocalizationSetForValues&lt;IShopLocalization&gt;(2, 3, out var culture)?.Greeting(name)
-    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, culture, "Greeting", static (set, name) => set.Greeting(name), name)
+    /// GetLocalizationSetForValues&lt;IShopLocalization&gt;(2, 3)?.Greeting(name)
+    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, "Greeting", static (set, name) => set.Greeting(name), name)
     /// </code>
     /// </para>
     /// </summary>
     /// <remarks>
-    /// The set's method formats the values as it runs, for <see cref="CultureInfo.CurrentCulture"/>. Where
-    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/> gives a culture the thread doesn't have, this gives
-    /// <see langword="null"/>, and <c>ResolveWording</c> runs the method in that culture.
+    /// The set's method formats the values as it runs, for <see cref="CultureInfo.CurrentCulture"/>. A set whose method
+    /// has to run in the culture of a fallback language isn't given here. <c>ResolveWording</c> runs it in that culture.
     /// </remarks>
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
     /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
     /// <param name="textCount">The number of texts the generated class has.</param>
-    /// <param name="providedCulture">
-    /// What the provider answered, or <see langword="null"/> where it wasn't asked or gave none. Pass it to
-    /// <c>ResolveWording</c>, so that the provider is asked once per text.
-    /// </param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? GetLocalizationSetForValues<TContract>(int textIndex, int textCount, out CultureInfo? providedCulture)
+    public static TContract? GetLocalizationSetForValues<TContract>(int textIndex, int textCount)
         where TContract : class
     {
-        CultureInfo culture;
-        providedCulture = null;
-
-        if (LocalizationRegistry.CurrentUICultureProvider is not { } provider)
-        {
-            culture = CultureInfo.CurrentUICulture;
-        }
-        else if (WordingScope.Current is { } entered)
-        {
-            culture = entered;
-        }
-        else
-        {
-            providedCulture = LocalizationRegistry.GetCultureFromScopeOrProvider(provider);
-
-            // The method must run in the provided culture, which takes a scope where the thread has another, or one of
-            // its name that formats values otherwise (CultureFormats). ResolveWording enters it.
-            if (providedCulture is not null && (!CultureFormats.AreAlike(providedCulture, CultureInfo.CurrentCulture) || !providedCulture.Equals(CultureInfo.CurrentUICulture)))
-                return null;
-
-            culture = providedCulture ?? CultureInfo.CurrentUICulture;
-        }
-
-        var sets = ResolvedSets<TContract>.Get(culture, textCount).SetsForValues;
+        var sets = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount).SetsForValues;
 
         var set = (uint)textIndex < (uint)sets.Length ? sets[textIndex] : null;
         return set;
@@ -166,9 +113,9 @@ public static partial class GeneratedCode
     /// <b>Don't use this method directly! This code is called by source-generated code.</b>
     /// </para>
     /// <para>
-    /// The wording of a text of a localization contract for the current UI culture, for a text whose set
-    /// <see cref="GetLocalizationSet{TContract}"/> doesn't hold. It finds the set that words the text, and keeps it
-    /// where the same set words the text on every call.
+    /// The wording of a text of a localization contract for <see cref="CultureInfo.CurrentUICulture"/>, for a text
+    /// whose set <see cref="GetLocalizationSet{TContract}"/> doesn't hold. It finds the set that words the text, and
+    /// keeps it where the same set words the text on every call.
     /// </para>
     /// </summary>
     /// <remarks>
@@ -182,36 +129,26 @@ public static partial class GeneratedCode
     /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
     /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
     /// <param name="textCount">The number of texts the generated class has.</param>
-    /// <param name="providedCulture">What <see cref="GetLocalizationSet{TContract}"/> gave as the provider's answer.</param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="selector">Picks the text from a set.</param>
     /// <exception cref="InvalidOperationException">
-    /// When every set gives <see langword="null"/> as the wording. Return a string from the set of the default
-    /// language, such as an empty one where a value is missing. Also when the constructor of that set throws, or it has
-    /// no language code (<c>LOC208</c>).
+    /// When the set that words the text gives <see langword="null"/> as the wording. Return a string, such as an empty
+    /// one where a value is missing. Also when the constructor of the set of the default language throws, or that set
+    /// has no language code (<c>LOC208</c>).
     /// </exception>
     // A property is never kept as a fallback, so there's none to look for. LocalizationRegistry.KeepSet says why.
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet>(int textIndex, int textCount,
-        CultureInfo? providedCulture, string name, Func<TContract, string?> selector)
+    public static string ResolveWording<TContract, TDefaultSet>(int textIndex, int textCount, string name,
+        Func<TContract, string?> selector)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
         Debug.Assert(name is not null);
         Debug.Assert(selector is not null);
 
-        var culture = WordingScope.GetReaderCulture(providedCulture);
-        var resolved = ResolvedSets<TContract>.Get(culture, textCount);
+        var resolved = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount);
 
-        var wording = LookUp<TContract, TDefaultSet>(
-            culture: culture,
-            providedCulture: providedCulture,
-            resolved: resolved,
-            textIndex: textIndex,
-            name: name,
-            select: selector,
-            takesValues: false);
-
+        var wording = LookUp<TContract, TDefaultSet>(resolved, textIndex, name, selector, takesValues: false);
         return wording;
     }
 
@@ -220,30 +157,26 @@ public static partial class GeneratedCode
     /// <b>Don't use this method directly! This code is called by source-generated code.</b>
     /// </para>
     /// <para>
-    /// The wording of a text of a localization contract that takes values, for the current UI culture, for a text whose
-    /// set <see cref="GetLocalizationSetForValues{TContract}"/> doesn't give. The values come as one: the value itself
-    /// for a text with one parameter, and a tuple of them for more:
+    /// The wording of a text of a localization contract that takes values, for
+    /// <see cref="CultureInfo.CurrentUICulture"/>, for a text whose set
+    /// <see cref="GetLocalizationSetForValues{TContract}"/> doesn't give. The values come as one: the value itself for
+    /// a text with one parameter, and a tuple of them for more:
     /// <code>
-    /// ResolveWording&lt;IShopLocalization, ShopLocalizationEn, (string, int)&gt;(2, 3, culture, "Order",
+    /// ResolveWording&lt;IShopLocalization, ShopLocalizationEn, (string, int)&gt;(2, 3, "Order",
     ///     static (set, values) => set.Order(values.Item1, values.Item2), (name, count))
     /// </code>
     /// </para>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The set's method runs in the culture the text is worded for. Where
-    /// <see cref="LocalizationRegistry.CurrentUICultureProvider"/> gives a culture, the values are formatted for that
-    /// culture too.
-    /// </para>
-    /// <para>
     /// The text falls back as a text without parameters does
-    /// (<see cref="ResolveWording{TContract, TDefaultSet}(int, int, CultureInfo, string, Func{TContract, string})"/>).
+    /// (<see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/>).
     /// </para>
     /// <para>
-    /// A set that words the text on every call is worded in the scope it needs, without a lookup. That's a scope of the
-    /// language the text falls back to (<see cref="ResolvedSets{TContract}.GetFallback"/>), or of a provider's culture
-    /// the thread doesn't have. Any other text is looked up in the registry (<see cref="LocalizationRegistry.Word"/>),
-    /// which keeps its set where the same set words it on every call.
+    /// A set that words the text on every call in a language the text falls back to is called in a scope of that
+    /// language, without a lookup (<see cref="ResolvedSets{TContract}.GetFallback"/>). Any other text is looked up in
+    /// the registry (<see cref="LocalizationRegistry.Word"/>), which keeps its set where the same set words it on every
+    /// call.
     /// </para>
     /// </remarks>
     /// <typeparam name="TContract">
@@ -253,7 +186,6 @@ public static partial class GeneratedCode
     /// <typeparam name="TValues">The type of the value, or the tuple of the values.</typeparam>
     /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
     /// <param name="textCount">The number of texts the generated class has.</param>
-    /// <param name="providedCulture">What <see cref="GetLocalizationSetForValues{TContract}"/> gave as the provider's answer.</param>
     /// <param name="name">The name of the text, such as <c>Greeting</c>.</param>
     /// <param name="selector">
     /// Picks the text from a set of the contract, with the values. It's handed those values, so it holds none itself
@@ -261,78 +193,50 @@ public static partial class GeneratedCode
     /// </param>
     /// <param name="values">The value, or the tuple of the values.</param>
     /// <exception cref="InvalidOperationException">
-    /// When every set gives <see langword="null"/> as the wording. Also when the constructor of the set of the default
-    /// language throws, or that set has no language code (<c>LOC208</c>).
+    /// When the set that words the text gives <see langword="null"/> as the wording. Also when the constructor of the
+    /// set of the default language throws, or that set has no language code (<c>LOC208</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValues>(int textIndex, int textCount,
-        CultureInfo? providedCulture, string name, Func<TContract, TValues, string?> selector, TValues values)
+    public static string ResolveWording<TContract, TDefaultSet, TValues>(int textIndex, int textCount, string name,
+        Func<TContract, TValues, string?> selector, TValues values)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
         Debug.Assert(name is not null);
         Debug.Assert(selector is not null);
 
-        var culture = WordingScope.GetReaderCulture(providedCulture);
-        var resolved = ResolvedSets<TContract>.Get(culture, textCount);
-        var setsForValues = resolved.SetsForValues;
+        var resolved = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount);
 
-        // The set kept for the text, which the generated class couldn't call itself, because a provider gives a culture
-        // the thread doesn't have. Its method runs in a scope of that culture.
-        if ((uint)textIndex < (uint)setsForValues.Length && setsForValues[textIndex] is { } kept)
+        if (resolved.GetFallback(textIndex) is { } fallback)
         {
-            using var scope = new WordingScope(culture, providedCulture);
+            // Where the language has no culture on this machine, no scope is entered, as in the lookup.
+            using var scope = new WordingScope(fallback.Culture);
 
-            if (selector(kept, values) is { } keptWording)
-                return keptWording;
-        }
-        else if (resolved.GetFallback(textIndex) is { } fallback)
-        {
-            // A method formats its values as it runs, so it runs in a scope wherever a text with values does. Where the
-            // language has no culture on this machine, that's the scope of the reader, as in the lookup.
-            using var scope = new WordingScope(fallback.Culture ?? culture, providedCulture);
-
-            if (selector(fallback.Set, values) is { } fallbackWording)
-                return fallbackWording;
+            var fallbackWording = selector(fallback.Set, values) ?? throw LocalizationRegistry.CreateNullWordingException(fallback.Set, name);
+            return fallbackWording;
         }
 
-        var wording = LookUpWithValues<TContract, TDefaultSet, TValues>(
-            culture: culture,
-            providedCulture: providedCulture,
-            resolved: resolved,
-            textIndex: textIndex,
-            name: name,
-            selector: selector,
-            values: values);
-
+        var wording = LookUpWithValues<TContract, TDefaultSet, TValues>(resolved, textIndex, name, selector, values);
         return wording;
     }
 
     // A method of its own, because C# creates the closure over a method's parameters as that method starts, also where
     // the lambda is never reached. In ResolveWording, a text kept as a fallback would allocate it on every call.
-    private static string LookUpWithValues<TContract, TDefaultSet, TValues>(CultureInfo culture, CultureInfo? providedCulture,
-        ResolvedSets<TContract> resolved, int textIndex, string name, Func<TContract, TValues, string?> selector, TValues values)
+    private static string LookUpWithValues<TContract, TDefaultSet, TValues>(ResolvedSets<TContract> resolved, int textIndex,
+        string name, Func<TContract, TValues, string?> selector, TValues values)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var wording = LookUp<TContract, TDefaultSet>(
-            culture: culture,
-            providedCulture: providedCulture,
-            resolved: resolved,
-            textIndex: textIndex,
-            name: name,
-            select: set => selector(set, values),
-            takesValues: true);
-
+        var wording = LookUp<TContract, TDefaultSet>(resolved, textIndex, name, set => selector(set, values), takesValues: true);
         return wording;
     }
 
     /// <summary>
-    /// Words a text of a contract for the reader of this thread, from the sets of the whole app. Every
+    /// Words a text of a contract for the user of this thread, from the sets of the whole app. Every
     /// <c>ResolveWording</c> ends here.
     /// </summary>
-    private static string LookUp<TContract, TDefaultSet>(CultureInfo culture, CultureInfo? providedCulture,
-        ResolvedSets<TContract> resolved, int textIndex, string name, Func<TContract, string?> select, bool takesValues)
+    private static string LookUp<TContract, TDefaultSet>(ResolvedSets<TContract> resolved, int textIndex, string name,
+        Func<TContract, string?> select, bool takesValues)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
@@ -340,8 +244,6 @@ public static partial class GeneratedCode
 
         var wording = lookup.Registry.Word(
             lookup: lookup,
-            culture: culture,
-            valuesCulture: providedCulture,
             name: name,
             select: select,
             defaultSetType: typeof(TDefaultSet),

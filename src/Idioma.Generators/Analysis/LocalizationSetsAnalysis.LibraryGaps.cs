@@ -5,7 +5,7 @@ internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
     /// What a referenced library leaves untranslated: a contract no language set serves one of this assembly's
-    /// languages for, which adding the set fixes, and inline texts lacking a language, which nothing here can fix.
+    /// languages for, which adding the set fixes, and standalone texts lacking a language, which nothing here can fix.
     /// </summary>
     public static EquatableArray<LocalizationSetsFinding> FindLibraryGaps(
         DeclaredLanguages? languages,

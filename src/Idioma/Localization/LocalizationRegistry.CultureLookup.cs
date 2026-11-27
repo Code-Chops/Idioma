@@ -90,18 +90,13 @@ public sealed partial class LocalizationRegistry
         }
 
         /// <summary>
-        /// The sets found so far for the texts of a contract, for a reader of this culture. See
+        /// The sets found so far for the texts of a contract, for a user of this culture. See
         /// <see cref="ResolvedSets{TContract}"/>.
         /// </summary>
         /// <param name="textCount">The number of texts the contract has.</param>
         public ResolvedSets<TContract> GetResolvedSets<TContract>(int textCount)
             where TContract : class
         {
-            // Not kept for a plugin's contract in a registry that doesn't hold its sets, as after the plugin unloaded: this
-            // registry isn't built anew when the plugin goes, so it would hold the plugin (CollectibleAssemblies).
-            if (typeof(TContract).IsCollectible && !this.Registry.HoldsCollectibleSets)
-                return new ResolvedSets<TContract>(this, textCount);
-
             var resolved = this.ResolvedByContract.TryGetValue(typeof(TContract), out var known)
                 ? known
                 : this.ResolvedByContract.GetOrAdd(typeof(TContract), new ResolvedSets<TContract>(this, textCount));

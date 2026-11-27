@@ -76,8 +76,8 @@ public sealed partial class LocalizationSetsPartTests
         text.ShouldContain("    string Delegates(System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
         text.ShouldContain("public static string @event(string @class, int @int) => GetLocalizationSetForValues<IShopLocalization>(");
-        text.ShouldContain(", out var culture)?.@event(@class, @int) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, (string, int)>(");
-        text.ShouldContain(", culture, \"event\", static (set, values) => set.@event(values.Item1, values.Item2), (@class, @int));");
+        text.ShouldContain(")?.@event(@class, @int) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, (string, int)>(");
+        text.ShouldContain(", \"event\", static (set, values) => set.@event(values.Item1, values.Item2), (@class, @int));");
     }
 
     [Test]
@@ -116,15 +116,13 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void NamesStandingBeforeWhatGeneratedMethodWrites_ShouldCompile()
     {
-        // Arrange: parameters named like the set, the tuple of values and the culture the generated method names itself,
+        // Arrange: parameters named like the set and the tuple of values the generated method names itself,
         // like the members of a tuple, like the helpers it calls, and like another text; texts named like those helpers
         // and like the namespace of a parameter's type; and a text with more values than a tuple holds before it nests
         // the rest.
         const string methods = """
             public string Paired(string set, string set_) => set + set_;
             public string Valued(string values, int values_) => values + values_;
-            public string Cultured(string culture, int culture_) => culture + culture_;
-            public string Alone(string culture) => culture;
             public string Tupled(string Rest, string Item1) => Rest + Item1;
             public string Nine(int a, int b, int c, int d, int e, int f, int g, int h, string i) => $"{a}{b}{c}{d}{e}{f}{g}{h}{i}";
             public string ResolveWording(string GetLocalizationSet, string GetLocalizationSetForValues) => GetLocalizationSet + GetLocalizationSetForValues;
@@ -166,8 +164,6 @@ public sealed partial class LocalizationSetsPartTests
         unresolved.ShouldBeEmpty();
         text.ShouldContain("static (set__, values) => set__.Paired(values.Item1, values.Item2), (set, set_)");
         text.ShouldContain("static (set, values__) => set.Valued(values__.Item1, values__.Item2), (values, values_)");
-        text.ShouldContain("out var culture__)?.Cultured(culture, culture_) ?? ResolveWording<IOptionLocalization, OptionLocalizationEn, (string, int)>(");
-        text.ShouldContain("out var culture_)?.Alone(culture) ?? ResolveWording<IOptionLocalization, OptionLocalizationEn, string>(");
         text.ShouldContain(", (int, int, int, int, int, int, int, int, string)>(");
         text.ShouldContain("values.Item8, values.Item9), (a, b, c, d, e, f, g, h, i));");
     }

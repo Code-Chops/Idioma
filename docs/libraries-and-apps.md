@@ -16,9 +16,9 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 Three choices decide what an app that uses your library can change:
 
-- **Write texts in sets.** An app can add a language to a set, but not to an inline text or a text written as an attribute ([LOC701](build-errors/LOC7XX-libraries.md#loc701)).
+- **Write texts in sets.** An app can add a language to a set, but not to a standalone text, which is an inline text or a text written as an attribute ([LOC701](build-errors/LOC7XX-libraries.md#loc701)).
 - **Make the sets public.** A contract takes the accessibility of its set, and an app needs a public contract to add a language.
-- **Leave the sets unsealed and the texts `virtual`.** An app can then reword one text and keep the rest ([Changing a text of a library](#changing-a-text-of-a-library)).
+- **Leave the sets unsealed and the texts `virtual`.** An app can then reword one text and keep the rest ([Changing a text of a library](#changing-a-text-of-a-library)). A `protected virtual` member that several texts read, such as the shop's name, lets an app change all of them at once.
 
 ## The app's languages
 
@@ -73,7 +73,7 @@ public class ShopLocalizationDe : ILocalizationSet, Shop.IShopLocalization
 
 A library's set covers the regions of its language. An app that lists `en-GB` doesn't need to add a British set to a library that has an English one.
 
-Nothing outside a library can add a language to its inline texts. For those, the app gets a warning instead (`LOC701`), which is why a library should write its texts in sets. The same goes for a text a library writes as an attribute, with `[Localized]`, because it carries its wording itself too. An enum whose members a library marks so is the exception: write a set of the enum in the app, and the library's `GetText()` gives its wording ([Enums](enums.md#a-set-of-the-enum)).
+Nothing outside a library can add a language to its standalone texts, which it writes with `LocalizedText.Inline` or `[Localized]`. They carry their wording themselves. For those, the app gets a warning instead (`LOC701`), which is why a library should write its texts in sets. An enum whose members a library marks `[Localized]` is the exception: write a set of the enum in the app, and the library's `GetText()` gives its wording ([Enums](enums.md#a-set-of-the-enum)).
 
 ## Changing a text of a library
 
@@ -93,6 +93,19 @@ Such a rewording:
 - Always wins over the library's own set, whichever assembly loads first. So does a set you register yourself.
 - Reaches the library's regional sets. Rewording `ShopLocalizationEn` also changes a text for British users, unless `ShopLocalizationEnGb` has its own wording for that text. To change that wording too, reword `ShopLocalizationEnGb` the same way.
 - Adds up with other rewordings. When a shared library of yours rewords some texts and your app rewords others of the same set, both show. When both reword the same text, the set registered last wins.
+
+A rewording can also override a member that isn't a text, such as a protected `ShopName` that the library's texts read. Every text it inherits then shows with that member:
+
+```csharp
+public sealed class MyShopLocalizationEn : ShopLocalizationEn
+{
+    protected override string ShopName => "Contoso"; // ShopName is protected virtual in ShopLocalizationEn
+}
+```
+
+Such a member doesn't reach the library's regional sets, because `ShopLocalizationEnGb` derives from the library's English set and not from your rewording. So override it in a rewording of `ShopLocalizationEnGb` too, for your British users.
+
+Several rewordings of one set don't share such a member either. A text that all of them leave as it was is read from the rewording registered last, so only that one's member shows. To use it in every text, put the rewordings in one class, or derive one from the other.
 
 A library allows this by leaving its sets unsealed and its texts `virtual`, as in `public virtual string Checkout => "Checkout";`. Where a library's set is sealed, or the text isn't virtual, implement the library's contract in full, in the same language. Such a set reaches the library's regional sets too, as a rewording does.
 

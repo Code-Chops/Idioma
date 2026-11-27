@@ -1,6 +1,6 @@
 # Idioma
 
-[![NuGet](https://img.shields.io/nuget/v/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)
+[![NuGet](https://img.shields.io/nuget/vpre/CodeChops.Idioma)](https://www.nuget.org/packages/CodeChops.Idioma)
 [![CI](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Code-Chops/Idioma/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-preview-orange)](https://www.nuget.org/packages/CodeChops.Idioma)
 
@@ -18,7 +18,9 @@ Lightweight and fast translations for any .NET app, written in C# and checked at
   - Go to definition;
   - Every language's wording on hover;
   - Find all references.
-- A wording can be any C#, where a resx entry is a fixed string. A set is a class, so a set you register yourself can take your app's services in its constructor ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#dependency-injection)).
+- Translations are C# code instead of fixed strings like resx entries:
+  - A translation can pick the right plural for a number ([details](https://github.com/Code-Chops/Idioma#plurals)).
+  - The class that holds them can take your app's services in its constructor ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#dependency-injection)).
 - Idioma shows texts in less time than IStringLocalizer, and plain texts allocate nothing ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/performance.md)).
 - An AI coding assistant translates your texts well:
   - It sees the code that uses them so it knows the context.
@@ -88,8 +90,10 @@ From the English set, the source generator writes the contract `IShopLocalizatio
 ### Install
 
 ```shell
-dotnet add package CodeChops.Idioma
+dotnet add package CodeChops.Idioma --prerelease
 ```
+
+Keep `--prerelease` while Idioma is in preview. Without it, the command takes the latest release, which is older than the latest preview.
 
 The package needs .NET 10 or later and C# 14. C# 14 is the default on .NET 10. An older `LangVersion` in your project is build error `LOC102`.
 
@@ -170,7 +174,7 @@ An inline text is written where you use it, in markup or in C#. It suits a text 
 public string Title => LocalizedText.Inline(en: "Orders", nl: "Bestellingen");
 ```
 
-`Inline` takes one argument per language you declared, so leaving out a translation doesn't compile. It returns the wording for the user's language, so write the property with `=>`. A property with an initializer keeps the wording of the first user.
+`Inline` takes one argument per language you declared, so leaving out a translation doesn't compile. It returns the wording for the user's language, so write the property with `=>`. A property with an initializer keeps the wording of the moment it's set.
 
 To include a value, write it into every language: `LocalizedText.Inline(en: $"Hello, {name}!", nl: $"Hallo, {name}!")`. A Dutch wording that lost its `{name}` is a build error (`LOC402`).
 
@@ -195,6 +199,8 @@ public class Address
 `[Localized]` takes one argument per language you declared, as `Inline` does, so leaving out a translation doesn't compile.
 
 Its wording is a constant, so it can't include a value. Write a text with a value in a set or inline.
+
+An inline text and a text written as an attribute are *standalone texts*. Each carries its own wording in every language, and belongs to no set. So an app can't add a language to the standalone texts of a library it uses ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/libraries-and-apps.md#writing-a-library)).
 
 ### Show a text
 
@@ -222,7 +228,7 @@ To show a text written as an attribute, ask for it by its type and the name of i
 </label>
 ```
 
-All three give a `string`: the wording for the user's language at the moment you read the text. So they work in markup, in string interpolation, and wherever a `string` is expected, as in `string label = ShopLocalization.Checkout;`.
+Each gives a `string`: the wording for the user's language at the moment you read the text. So a text works in markup, in string interpolation, and wherever a `string` is expected, as in `string label = ShopLocalization.Checkout;`. A text written as an attribute is a `string?`, because a member without one gives `null`.
 
 ### The user's language
 
@@ -234,11 +240,7 @@ A desktop or console app starts with the language of the user's system, and a Bl
 
 Users whose language you don't support see your default language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#fallback-order)).
 
-An app that keeps the user's language somewhere else, such as in a user profile, sets `LocalizationRegistry.CurrentUICultureProvider` once at startup. Every text then follows the culture it returns ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/advanced-topics.md#the-current-culture)):
-
-```csharp
-LocalizationRegistry.CurrentUICultureProvider = () => UserProfile.Current?.Culture;
-```
+An app that keeps the user's language somewhere else, such as in a user profile, makes it `CultureInfo.CurrentUICulture`. An ASP.NET Core app does that for each request ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/aspnet-core.md#a-language-from-the-users-profile)), and a MAUI app when the user picks a language ([details](https://github.com/Code-Chops/Idioma/blob/main/docs/maui.md#switching-languages-in-the-app)).
 
 #### Another language
 
