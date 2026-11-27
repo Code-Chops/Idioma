@@ -212,7 +212,9 @@ Show a text of a set by its name, wherever you need it:
 </button>
 ```
 
-In your IDE, hovering over `ShopLocalization.Cart` shows its wording in every language, and you can jump to each.
+In your IDE, hovering over a text shows its wording in every language, and you can jump to each:
+
+![The popup over ShopLocalization.Checkout in a Razor file shows its wording in English and in Dutch](https://raw.githubusercontent.com/Code-Chops/Idioma/main/docs/images/wording-on-hover.png)
 
 An inline text shows where you write it.
 
