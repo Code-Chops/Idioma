@@ -84,7 +84,7 @@ public sealed class InlineTextValuesAnalyzerTests
         // a format, through a call, or as a member of it, and for a field or property as for a parameter. A method of
         // the class can't read a parameter, so calling one doesn't excuse leaving the name out.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe(InlineTextValuesAnalyzer.ValueLeftOutDiagnosticId);
+        diagnostic.Id.ShouldBe(TextParametersAnalyzer.ValueLeftOutDiagnosticId);
         diagnostic.Id.ShouldBe("LOC402");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe($"The '{language}' wording doesn't use '{value}', but the 'en' wording shows it. Use '{value}' in every language, or users of '{language}' won't see it.");
@@ -238,7 +238,7 @@ public sealed class InlineTextValuesAnalyzerTests
             """);
 
         // Assert
-        diagnostics.ShouldHaveSingleItem().Id.ShouldBe(InlineTextValuesAnalyzer.ValueLeftOutDiagnosticId);
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe(TextParametersAnalyzer.ValueLeftOutDiagnosticId);
     }
 
     [Test]

@@ -1,27 +1,20 @@
-using System.Globalization;
-
 namespace CodeChops.Idioma.Generators;
 
-// The part of LocalizationDiscovery that reads the texts of a set: which members are texts, which it declares or
-// inherits, and their wording, for the doc comments of the generated members. A plain comment: the compiler merges the
-// XML docs of every partial declaration, and the type's summary lives in LocalizationDiscovery.cs.
+// Reads the texts of a set: which members are texts, which it declares or inherits, and their wordings.
 /// <inheritdoc cref="LocalizationDiscovery"/>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
-    /// The texts a cref can name on this set: the public string properties the class declares itself, and its methods
-    /// of the shape of a text that takes values (<see cref="TextParameters.IsTextMethod"/>). A cref does not find a
-    /// member through a class that only inherits it (<c>ShopLocalizationEnGb.Checkout</c>, declared by
-    /// <c>ShopLocalizationEn</c>, is <c>CS1574</c>), so those are named where they are declared
-    /// (<see cref="GetInheritedTexts"/>). An explicit interface implementation has no such name, and a method that
-    /// shares its name with another has none of its own (<c>CS0419</c>).
+    /// The texts a cref can name on this set, which are the ones the class declares itself (<see cref="IsNameableText"/>).
+    /// A cref doesn't find an inherited member (<c>CS1574</c>), so those are named where they're declared
+    /// (<see cref="GetInheritedTexts"/>).
     /// </summary>
     private static ImmutableArray<string> GetDeclaredTexts(INamedTypeSymbol type)
     {
         var names = ImmutableArray.CreateBuilder<string>();
 
         foreach (var member in type.GetMembers())
-            if (IsNameableText(member) && !String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal))
+            if (IsNameableText(member))
                 names.Add(member.Name);
 
         var declaredTexts = names.Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal).ToImmutableArray();
@@ -29,8 +22,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether a member is a text a cref can name by its name alone: a public string property, or a method of the
-    /// shape of a text that takes values whose class declares no other member of that name.
+    /// Whether a member is a text a cref can name by its name alone: a public string property, or a text method whose
+    /// class declares no other member of that name (<c>CS0419</c>).
     /// </summary>
     private static bool IsNameableText(ISymbol member)
     {
@@ -41,19 +34,16 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The texts this set inherits (public string properties, and methods of the shape of a text that takes values),
-    /// each with the nearest class declaring it: where a cref names a text the set does not declare itself, such as
-    /// <c>ShopLocalizationEn.Checkout</c> for a British set that leaves <c>Checkout</c> as it is. A text that the set,
-    /// or a class between it and the one declaring the text, implements explicitly is left out, because that
-    /// implementation is its wording, and has no name. So is a method that shares its name with another of its class,
-    /// which a cref can't name by its name alone.
+    /// The texts this set inherits, each with the nearest class declaring it, as a cref names it
+    /// (<c>ShopLocalizationEn.Checkout</c> for a British set). A text a nearer class implements explicitly is left out,
+    /// because that implementation has its wording and no name.
     /// </summary>
     private static ImmutableArray<InheritedText> GetInheritedTexts(INamedTypeSymbol type)
     {
         var texts = ImmutableArray.CreateBuilder<InheritedText>();
 
-        // The names a nearer class has settled: those it declares, and those it implements explicitly.
-        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+        // The names a nearer class has declared or implemented explicitly.
+        var settled = new HashSet<string>(StringComparer.Ordinal);
 
         for (var current = type; current is not null; current = current.BaseType)
         {
@@ -70,8 +60,8 @@ internal static partial class LocalizationDiscovery
                     TypeName: GetCrefName(current)));
             }
 
-            // After the texts a cref can name, so that a class holding both is linked at the one with a name. A method
-            // that shares its name with another settles it too: the nearest class has the wording, name or no name.
+            // After the nameable texts, so a class holding both is linked at the one with a name. An overloaded method
+            // settles its name too, because the nearest class has the wording.
             foreach (var member in members)
             {
                 if (member is IPropertySymbol { IsStatic: false } or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation }
@@ -91,52 +81,13 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The names of the texts a set's own class words, rather than leaving them to the class it derives from. They're
-    /// the public string properties and the methods of the shape of a text that it declares, overrides included, and
-    /// the members it implements explicitly. The generated registrar passes them on for a set deriving from another, so
-    /// the registry knows which texts the set rewords without calling it.
+    /// The texts a set inherits from base classes of its assembly without declaring them, which its contract leaves out
+    /// (<c>LOC303</c>). A class of another assembly isn't read, because its members, such as <c>Exception.Message</c>,
+    /// weren't written as texts.
     /// </summary>
-    private static ImmutableArray<string> GetOwnTexts(INamedTypeSymbol type)
-    {
-        var names = new SortedSet<string>(StringComparer.Ordinal);
-
-        foreach (var member in type.GetMembers())
-        {
-            // A member that hides a text words nothing, because the contract calls the member it hides (LOC302).
-            // Passed on, it would keep the registry from the wording a rewording of the language gives that text.
-            if (HidesText(member, type))
-                continue;
-
-            if (IsPublicStringProperty(member, out _) || TextParameters.IsTextMethod(member, out _))
-            {
-                names.Add(member.Name);
-            }
-            else if (member is IPropertySymbol { IsStatic: false, Type.SpecialType: SpecialType.System_String }
-                         or IMethodSymbol { IsStatic: false, MethodKind: MethodKind.ExplicitInterfaceImplementation, ReturnType.SpecialType: SpecialType.System_String }
-                     && GetExplicitlyImplementedName(member) is { } name)
-            {
-                names.Add(name);
-            }
-        }
-
-        names.Remove(LanguageCodeMemberName);
-
-        return [.. names];
-    }
-
-    /// <summary>
-    /// The texts a set inherits from the classes of its assembly it derives from, without declaring them: public string
-    /// properties, and methods of the shape of a text that takes values. A contract takes only the texts its set
-    /// declares, so it leaves these out, and no other language has to word them (<c>LOC303</c>).
-    /// </summary>
-    /// <remarks>
-    /// A member the set declares again, overrides, or implements explicitly settles its name, and so does one of a
-    /// nearer class. A member marked <c>[ExcludeFromLocalizationDiscovery]</c> is no text. A class of another assembly
-    /// isn't read, because its members weren't written as texts, such as <c>Exception.Message</c>.
-    /// </remarks>
     private static ImmutableArray<UndeclaredText> GetUndeclaredTexts(INamedTypeSymbol type)
     {
-        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+        var settled = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var member in type.GetMembers())
         {
@@ -179,8 +130,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The part of a partial property or method that implements it, which holds its body, or the member itself when
-    /// it isn't partial. A class lists a partial member by the part that declares it.
+    /// The implementing part of a partial property or method, which holds its body, or the member itself.
     /// </summary>
     internal static ISymbol GetImplementingPart(ISymbol member)
     {
@@ -195,71 +145,17 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether a member of a set hides a text of a class it derives from, rather than overriding it:
-    /// <c>public new string Color => "Colour";</c> in a British set deriving from the English one. A contract then calls
-    /// the member it hides, so this member words nothing. It does when the set lists a contract again, because that maps
-    /// the contract to the nearest member of the name: this one.
-    /// </summary>
-    /// <remarks>
-    /// A contract generated here binds to nothing yet, and counts as listed again. So does any interface of the set's
-    /// own base list besides <c>ILocalizationSet</c>, which a set lists again to give its language a code.
-    /// </remarks>
-    internal static bool HidesText(ISymbol member, INamedTypeSymbol type)
-    {
-        if (member is not (IPropertySymbol { IsStatic: false, IsOverride: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public }
-            or IMethodSymbol { IsStatic: false, IsOverride: false, MethodKind: MethodKind.Ordinary, DeclaredAccessibility: Accessibility.Public }))
-        {
-            return false;
-        }
-
-        if (Enumerable.Any(type.Interfaces, static @interface => !IsLocalizationSetInterface(@interface)))
-            return false;
-
-        for (var current = type.BaseType; current is not null; current = current.BaseType)
-        {
-            foreach (var hidden in current.GetMembers(member.Name))
-            {
-                var isHidden = (member, hidden) switch
-                {
-                    (IPropertySymbol, IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public }) => true,
-                    (IMethodSymbol method, IMethodSymbol { IsStatic: false, DeclaredAccessibility: Accessibility.Public } other) => HaveSameParameters(method, other),
-                    _ => false,
-                };
-
-                if (isHidden)
-                    return true;
-            }
-        }
-
-        return false;
-
-        static bool HaveSameParameters(IMethodSymbol method, IMethodSymbol other)
-        {
-            if (method.Parameters.Length != other.Parameters.Length)
-                return false;
-
-            for (var i = 0; i < method.Parameters.Length; i++)
-                if (!SymbolEqualityComparer.Default.Equals(method.Parameters[i].Type, other.Parameters[i].Type) || method.Parameters[i].RefKind != other.Parameters[i].RefKind)
-                    return false;
-
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// The wording this set gives each of its texts that returns a constant, from the nearest class implementing the
-    /// text, in the order of the names: its own property, the property it inherits (<see cref="GetInheritedTexts"/>), or
-    /// an explicit implementation, which wins over a property of the same name in its class. A text a class implements
-    /// explicitly for two interfaces has no one wording, and a text whose wording is no constant, or is declared where
-    /// this compilation has no syntax for it, has none either. A text that takes values has the wording its method
-    /// writes, with each value in braces (<see cref="MethodWording"/>), unless its class has two methods of its name.
+    /// The constant wording of each text, from the nearest class implementing it, ordered by name. An explicit
+    /// implementation wins over a property of the same name in its class. A text with parameters has the wording its
+    /// method writes (<see cref="MethodWording"/>). A text has none when it isn't a constant, has no syntax here, or is
+    /// implemented twice.
     /// </summary>
     private static ImmutableArray<TextWording> GetWordings(INamedTypeSymbol type, WordingReader reader, CancellationToken cancellationToken)
     {
         var wordings = ImmutableArray.CreateBuilder<TextWording>();
 
         // The names a nearer class has settled, with a wording or without one.
-        var settled = new HashSet<string>(StringComparer.Ordinal) { LanguageCodeMemberName };
+        var settled = new HashSet<string>(StringComparer.Ordinal);
 
         for (var current = type; current is not null; current = current.BaseType)
         {
@@ -313,10 +209,9 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The name of the member a property or method implements explicitly (<c>Checkout</c> for
-    /// <c>string IShopLocalization.Checkout</c>), or <see langword="null"/> for any other member.
+    /// <c>string IShopLocalization.Checkout</c>), or <see langword="null"/>.
     /// </summary>
-    // Read from the member's own name, which holds the interface as it is written: the symbol names no implemented
-    // member for a contract generated here, which binds to nothing yet.
+    // Read from the member's name, because a generated contract doesn't bind yet, so the symbol names no implemented member.
     private static string? GetExplicitlyImplementedName(ISymbol member)
     {
         var separator = member.Name.LastIndexOf('.');
@@ -326,22 +221,14 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The texts: the public, instance, non-indexer <see cref="string"/> properties with a public getter declared by
-    /// the class itself, and its methods of the shape of a text that takes values
-    /// (<see cref="TextParameters.IsTextMethod"/>), in the order they're written, by file and then by position (an inherited member belongs to the base's
-    /// own contract). <c>LocalizationLanguageCode</c> (the <c>ILocalizationSet</c> member, which a set may override) and explicit
-    /// interface implementations are not texts, and neither is a member marked
-    /// <c>[ExcludeFromLocalizationDiscovery]</c>. A method of that shape that can't be a text
-    /// (<see cref="TextParameters.FindProblem"/>) is left out, and handed back to be reported (<c>LOC400</c>). So is
-    /// a text written as a method without parameters (<see cref="TextParameters.IsTextWithoutParameters"/>). With
-    /// them come the using directives the contract repeats (<see cref="RepeatedUsings"/>).
+    /// The texts the class declares itself (<see cref="IsPublicStringProperty"/>, <see cref="TextParameters.IsTextMethod"/>),
+    /// by file and then by position. A method that can't be a text (<see cref="TextParameters.FindProblem"/>,
+    /// <see cref="TextParameters.IsTextWithoutParameters"/>) is handed back to be reported (<c>LOC400</c>). With them come
+    /// the using directives the contract repeats (<see cref="RepeatedUsings"/>).
     /// </summary>
     /// <remarks>
-    /// A set of the texts of an enum (<see cref="GetLocalizedEnums"/>) has a text for every member of that enum, as a
-    /// property named after the member. A member the class declares no such text for gets one all the same, after the
-    /// texts that are written, in the order of the enum. The contract then asks every set for it, the
-    /// default-language set too (<c>CS0535</c>). A method with the name of a member can't be its text, and is handed
-    /// back to be reported (<c>LOC400</c>).
+    /// A set of an enum gets a text for each enum member it declares none for, after the others, so the contract asks
+    /// every set for it (<c>CS0535</c>).
     /// </remarks>
     private static ImmutableArray<LocalizationMember> GetTextMembers(INamedTypeSymbol type, ImmutableArray<LocalizedEnum> enums, WordingReader reader,
         CancellationToken cancellationToken, out ImmutableArray<UnsupportedText> unsupported, out RepeatedUsings usings)
@@ -360,9 +247,7 @@ internal static partial class LocalizationDiscovery
 
         foreach (var member in type.GetMembers())
         {
-            // A member marked [ExcludeFromLocalizationDiscovery] is no text, whatever its shape: a helper that has to
-            // be public.
-            if (String.Equals(member.Name, LanguageCodeMemberName, StringComparison.Ordinal) || IsExcluded(member))
+            if (IsExcluded(member))
                 continue;
 
             // A partial member is read where it's implemented, because the part that declares it has no body.
@@ -378,13 +263,11 @@ internal static partial class LocalizationDiscovery
                     HasDocComment: declaration is not null && HasDocComment(declaration),
                     DefaultText: declaration is PropertyDeclarationSyntax ? reader.Read(declaration, cancellationToken) : null,
                     Parameters: default,
-                    Marks: ReadMarks(property),
-                    IsObsoleteAsError: IsObsoleteAsError(property),
-                    SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(property)))));
+                    Marks: ReadMarks(property))));
             }
             else if (TextParameters.IsTextMethod(member, out var method))
             {
-                // The text of an enum member takes no values, so that the text of a value can be looked up.
+                // The text of an enum member has no parameters, so it can be looked up by value.
                 if (enumMembers.TryGetValue(method.Name, out var enumName))
                 {
                     unsupportedTexts.Add(new UnsupportedText(
@@ -401,8 +284,7 @@ internal static partial class LocalizationDiscovery
                     continue;
                 }
 
-                // A type another generator writes binds to nothing yet, and is written by the words the method writes
-                // it in. They name it only next to the using directives of the method, which the contract repeats.
+                // A type another generator writes is copied as written, so the contract repeats the method's usings.
                 if (declaration is MethodDeclarationSyntax written && TextParameters.HasUnboundType(method))
                 {
                     var (ofFile, ofNamespace) = TextParameters.ReadUsings(written);
@@ -417,29 +299,25 @@ internal static partial class LocalizationDiscovery
                     Parameters: TextParameters.Read(
                         (IMethodSymbol)implementingPart,  // The part whose body is read, as its parameters are what the body names.
                         declaration as MethodDeclarationSyntax,
-                        // Only in a tree of this compilation, as for the wording (WordingReader.FindModel).
+                        // Only in a tree of this compilation (WordingReader.FindModel).
                         declaration is null ? null : reader.FindModel(declaration.SyntaxTree),
                         cancellationToken),
-                    Marks: ReadMarks(method),
-                    IsObsoleteAsError: IsObsoleteAsError(method),
-                    SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(method)))));
+                    Marks: ReadMarks(method))));
             }
             else if (TextParameters.IsTextWithoutParameters(member, out var withoutParameters))
             {
-                // No text, and reported: what calls it as one would find nothing by its name (CS0117).
+                // Reported, because code calling it as a text would find nothing (CS0117).
                 unsupportedTexts.Add(new UnsupportedText(withoutParameters.Name, TextParameters.WithoutParametersProblem, DiagnosticLocation.From(withoutParameters.Locations[0])));
             }
         }
 
         unsupported = unsupportedTexts.ToImmutable();
 
-        // Each directive once, though two texts may bring it, or two files of a partial set.
         usings = new RepeatedUsings(
             new EquatableArray<string>([.. usingsOfFile.Distinct(StringComparer.Ordinal)]),
             new EquatableArray<string>([.. usingsOfNamespace.Distinct(StringComparer.Ordinal)]));
 
-        // As written on the set, by file and then by position, so that a partial set orders the same on every build.
-        // A member from a referenced assembly has no file, and keeps the order its metadata gives.
+        // By file and then by position, so a partial set orders the same on every build.
         var ordered = members.ToImmutable()
             .OrderBy(static item => item.Location.IsInSource ? item.Location.SourceTree!.FilePath : "", StringComparer.Ordinal)
             .ThenBy(static item => item.Location.IsInSource ? item.Location.SourceSpan.Start : 0)
@@ -449,7 +327,7 @@ internal static partial class LocalizationDiscovery
         if (enumMembers.Count is 0)
             return ordered;
 
-        // After the texts that are written: a text for each member of an enum that the class declares none for.
+        // A text for each enum member the class declares none for.
         var texts = ordered.ToBuilder();
         var names = new HashSet<string>(ordered.Select(static member => member.Name), StringComparer.Ordinal);
 
@@ -462,9 +340,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The enums whose members a set has a text for: the type argument of each <c>ILocalizationSet&lt;TEnum&gt;</c> it
-    /// implements, in the order of their full names. An argument that binds to no enum, as one another generator
-    /// writes, is left out.
+    /// The enum of each <c>ILocalizationSet&lt;TEnum&gt;</c> a set implements, ordered by full name. An argument that
+    /// binds to no enum is left out.
     /// </summary>
     private static ImmutableArray<LocalizedEnum> GetLocalizedEnums(INamedTypeSymbol type)
     {
@@ -485,41 +362,41 @@ internal static partial class LocalizationDiscovery
 
             var members = ImmutableArray.CreateBuilder<LocalizedEnumMember>();
             var values = new HashSet<object>();
-            var suppressed = new List<string>(GetSuppressedDiagnosticsOfType(@enum));
 
             foreach (var member in @enum.GetMembers())
             {
                 if (member is not IFieldSymbol { HasConstantValue: true, ConstantValue: { } value })
                     continue;
 
-                members.Add(new LocalizedEnumMember(
-                    member.Name,
-                    IsFirstOfItsValue: values.Add(value),
-                    ObsoleteAsErrorValue: IsObsoleteAsError(member) ? Convert.ToString(value, CultureInfo.InvariantCulture) : null));
-
-                suppressed.AddRange(GetSuppressedDiagnostics(member));
+                members.Add(new LocalizedEnumMember(member.Name, IsFirstOfItsValue: values.Add(value)));
             }
 
             var holder = FindGetTextOfItsAssembly(@enum, type.ContainingAssembly);
+            var isPublic = IsPublic(@enum);
+
+            // None where the enum's assembly has a GetText() this one can call, and internal for an enum of another
+            // assembly.
+            var getText = holder is not null && (holder.DeclaredAccessibility is Accessibility.Public || holder.ContainingAssembly.GivesAccessTo(type.ContainingAssembly))
+                ? GetTextAccessibility.None
+                : isPublic && SymbolEqualityComparer.Default.Equals(@enum.ContainingAssembly, type.ContainingAssembly)
+                    ? GetTextAccessibility.Public
+                    : GetTextAccessibility.Internal;
 
             enums.Add(new LocalizedEnum(
                 Type: TextParameters.ReadType(@enum),
                 FullyQualifiedName: fullyQualifiedName,
                 Name: @enum.ToDisplayString(CrefNameFormat),
                 Namespace: GetNamespaceName(@enum.ContainingNamespace),
-                IsPublic: IsPublic(@enum),
+                IsPublic: isPublic,
                 Members: new EquatableArray<LocalizedEnumMember>(members.ToImmutable()),
-                SuppressedDiagnostics: new EquatableArray<string>([.. suppressed.Distinct(StringComparer.Ordinal)]),
                 HasTextsOfItsAssembly: holder is not null,
-                ReachesGetTextOfItsAssembly: holder is not null
-                                             && (holder.DeclaredAccessibility is Accessibility.Public || holder.ContainingAssembly.GivesAccessTo(type.ContainingAssembly))));
+                GetText: getText));
         }
 
         var ordered = enums.OrderBy(static @enum => @enum.FullyQualifiedName, StringComparer.Ordinal).ToImmutableArray();
         return ordered;
 
-        // The class of another assembly that gives the enum its GetText() from the [Localized] of its members, by the
-        // name its generator gives it (LocalizedMembers), or null. Only an assembly that uses Idioma writes one.
+        // The class of another assembly that gives the enum its GetText() (LocalizedMembers), or null.
         static INamedTypeSymbol? FindGetTextOfItsAssembly(INamedTypeSymbol @enum, IAssemblySymbol setAssembly)
         {
             if (SymbolEqualityComparer.Default.Equals(@enum.ContainingAssembly, setAssembly))
@@ -542,7 +419,7 @@ internal static partial class LocalizationDiscovery
             return holder is { IsStatic: true, ContainingType: null } ? holder : null;
         }
 
-        // Whether code outside the assembly can name the enum: it's public, and so is every type that holds it.
+        // Whether the enum and every type that holds it are public.
         static bool IsPublic(INamedTypeSymbol @enum)
         {
             for (var current = @enum; current is not null; current = current.ContainingType)
@@ -563,8 +440,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether a member has the shape of a text without values: a public instance property of type
-    /// <see cref="string"/>, with a public getter, that isn't an indexer or an explicit interface implementation.
+    /// Whether a member has the shape of a text without parameters: a public instance <see cref="string"/> property with
+    /// a public getter, that isn't an indexer or an explicit interface implementation.
     /// </summary>
     public static bool IsPublicStringProperty(ISymbol member, out IPropertySymbol property)
     {
@@ -584,9 +461,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether the property or method carries a doc comment. Checked on the trivia rather than through the symbol,
-    /// because a project that emits no documentation file parses <c>///</c> as a plain comment, and the symbol reports
-    /// none.
+    /// Whether the property or method carries a doc comment. Checked on the trivia, because a project without a
+    /// documentation file parses <c>///</c> as a plain comment.
     /// </summary>
     private static bool HasDocComment(MemberDeclarationSyntax declaration)
     {
@@ -606,16 +482,12 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The attributes <c>[Obsolete]</c>, <c>[Experimental]</c> and <c>[StringSyntax]</c> of a text, as the generated
-    /// member repeats them, or <see langword="null"/> when it has none of them, with their arguments as constants. The
-    /// file of the generated class imports <c>System</c>, as for every type of the framework it names, and not the
-    /// namespace of the other two, which it writes in full.
+    /// The <c>[Obsolete]</c> and <c>[StringSyntax]</c> of a text as the generated member repeats them, or
+    /// <see langword="null"/>. The generated file imports <c>System</c>, so <c>[StringSyntax]</c> is written in full.
     /// </summary>
     /// <remarks>
-    /// <c>[Obsolete]</c> and <c>[Experimental]</c> tell the code that shows the text. <c>[StringSyntax]</c> tells it what
-    /// the wording is, such as a composite format whose placeholders an attribute fills in. That one keeps the analyzer
-    /// from reporting the placeholders in every language (<c>LOC403</c>). Only its first argument is repeated, which a
-    /// property can be given alone.
+    /// <c>[StringSyntax]</c> keeps the analyzer from reporting a composite format's placeholders in every language
+    /// (<c>LOC403</c>). Only its first argument is repeated.
     /// </remarks>
     private static string? ReadMarks(ISymbol text)
     {
@@ -626,8 +498,6 @@ internal static partial class LocalizationDiscovery
             var name = attribute.AttributeClass switch
             {
                 { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } => "Obsolete",
-                { Name: "ExperimentalAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
-                    => "System.Diagnostics.CodeAnalysis.Experimental",
                 { Name: "StringSyntaxAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
                     when attribute.ConstructorArguments is [{ Kind: TypedConstantKind.Primitive, Value: string syntax }]
                     => $"System.Diagnostics.CodeAnalysis.StringSyntax({SymbolDisplay.FormatLiteral(syntax, quote: true)})",

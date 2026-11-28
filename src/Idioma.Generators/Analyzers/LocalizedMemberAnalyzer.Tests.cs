@@ -78,6 +78,8 @@ public sealed class LocalizedMemberAnalyzerTests
             Open,
         }
 
+        public class AppException : System.Exception;
+
         public static class Labels
         {
             public static string? Of(System.Type type, string member, System.Reflection.PropertyInfo property) => {{call}};
@@ -183,47 +185,6 @@ public sealed class LocalizedMemberAnalyzerTests
 
         // Assert
         diagnostic.GetMessage().ShouldBe("The text of 'Hidden.Article' can't be registered because generated code can't name 'Hidden', which is file-local, so it won't be found. Remove 'file' from 'Hidden'.");
-    }
-
-    [Test]
-    public async Task MemberOfTypeMarkedObsoleteAsError_ShouldReportLOC502()
-    {
-        // Arrange & Act: naming the type is an error (CS0619), which no pragma turns off.
-        var diagnostic = await SingleCannotRegisterAsync($$"""
-            {{Header}}
-
-            [System.Obsolete("Use the new address.", error: true)]
-            public class OldAddress
-            {
-                [Localized(en: "City", nl: "Plaats")]
-                public string City { get; } = "";
-            }
-            """);
-
-        // Assert
-        diagnostic.GetMessage().ShouldBe("The text of 'OldAddress.City' can't be registered because generated code can't name 'OldAddress', which is marked [Obsolete] as an error, so it won't be found. Make the [Obsolete] of 'OldAddress' a warning, or remove [Localized].");
-    }
-
-    [Test]
-    public async Task EnumMemberMarkedObsoleteAsError_ShouldReportNothing()
-    {
-        // Arrange & Act: GetText() finds it by its value.
-        var diagnostics = await AnalyzeAsync($$"""
-            {{Header}}
-
-            public enum ParcelStatus
-            {
-                [Localized(en: "Picked", nl: "Gepickt")]
-                Picked,
-
-                [System.Obsolete("Use Picked.", error: true)]
-                [Localized(en: "Dropped", nl: "Afgeleverd")]
-                Dropped,
-            }
-            """);
-
-        // Assert
-        diagnostics.ShouldBeEmpty();
     }
 
     [Test]
@@ -733,6 +694,19 @@ public sealed class LocalizedMemberAnalyzerTests
         diagnostic.GetMessage().ShouldStartWith($"{start} 'DayOfWeek' is a type of '");
         diagnostic.GetMessage().ShouldEndWith("', which doesn't use Idioma, so it has no texts written as attributes.");
         At(diagnostic).ShouldBe(at);
+    }
+
+    [Test]
+    public async Task LookupOfMemberInheritedFromAssemblyWithoutIdioma_ShouldSayWhereItIsDeclared()
+    {
+        // Arrange & Act: AppException is this assembly's, and Message is Exception's, which no [Localized] can mark.
+        var diagnostic = (await AnalyzeAsync(Lookup("LocalizedText.GetTextByMember<AppException>(nameof(AppException.Message))"))).ShouldHaveSingleItem();
+
+        // Assert: not that AppException has no such member, which the compiler checked through nameof.
+        diagnostic.Id.ShouldBe(LocalizedMemberAnalyzer.NoTextToFindDiagnosticId);
+        diagnostic.GetMessage().ShouldStartWith("'AppException.Message' has no text, so GetTextByMember gives null. 'Message' is declared in 'Exception' of '");
+        diagnostic.GetMessage().ShouldEndWith("', which doesn't use Idioma, so it has no text written as an attribute.");
+        At(diagnostic).ShouldBe("nameof(AppException.Message)");
     }
 
     [Test]

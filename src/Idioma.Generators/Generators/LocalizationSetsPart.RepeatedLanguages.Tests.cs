@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed partial class LocalizationSetsPartTests
 {
     [Test]
-    public void TwoSetsOfOneLanguage_ShouldReportLOC209AtTheSecond()
+    public void TwoSetsOfOneLanguage_ShouldReportLOC203AtTheSecond()
     {
         // Arrange & Act: a copied file, or two people adding Dutch.
         var result = Run($$"""
@@ -37,7 +37,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SecondSetOfTheDefaultLanguage_ShouldReportLOC209AtItAndNotAtTheDefaultSet()
+    public void SecondSetOfTheDefaultLanguage_ShouldReportLOC203AtItAndNotAtTheDefaultSet()
     {
         // Arrange & Act
         var result = Run($$"""
@@ -65,7 +65,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetDerivingFromSetOfItsLanguage_ShouldReportNoLOC209()
+    public void SetDerivingFromSetOfItsLanguage_ShouldReportNoLOC203()
     {
         // Arrange & Act: it rewords the Dutch set, and always wins over it.
         var result = Run($$"""
@@ -109,9 +109,9 @@ public sealed partial class LocalizationSetsPartTests
         """);
 
     [Test]
-    public void TwoSetsRewordingOtherTextsOfLibrarySet_ShouldReportNoLOC209()
+    public void TwoSetsRewordingLibrarySet_ShouldReportNoLOC203()
     {
-        // Arrange & Act: each rewords one text of the library's English set, and the registry shows each for its own.
+        // Arrange & Act: both reword the library's English set, which LOC209 reports instead.
         var result = Run("""
             using CodeChops.Idioma;
 
@@ -135,35 +135,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TwoSetsRewordingOneTextOfLibrarySet_ShouldReportLOC209AtTheSecond()
-    {
-        // Arrange & Act: both reword the cart, and users see only one of the two wordings.
-        var result = Run("""
-            using CodeChops.Idioma;
-
-            [assembly: SupportedLanguages("en")]
-
-            namespace TestApp;
-
-            public sealed class PromoShopLocalizationEn : RewordedLibrary.ShopLocalizationEn
-            {
-                public override string Cart => "Basket";
-                public override string Checkout => "Pay now";
-            }
-
-            public sealed class HolidayShopLocalizationEn : RewordedLibrary.ShopLocalizationEn
-            {
-                public override string Cart => "Gift bag";
-            }
-            """, RewordedLibrary);
-
-        // Assert: at the set whose name sorts last.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.RepeatedLanguageDiagnosticId);
-        diagnostic.GetMessage().ShouldStartWith("'PromoShopLocalizationEn' is a second set of 'RewordedLibrary.IShopLocalization' for 'en', next to 'HolidayShopLocalizationEn'.");
-    }
-
-    [Test]
-    public void SecondSetRegisteredByHand_ShouldReportNoLOC209()
+    public void SecondSetRegisteredByHand_ShouldReportNoLOC203()
     {
         // Arrange & Act: registering it is a choice the code states.
         var result = Run($$"""
@@ -191,7 +163,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void TwoSetsOfOneLanguageOfHandWrittenContract_ShouldReportLOC209()
+    public void TwoSetsOfOneLanguageOfHandWrittenContract_ShouldReportLOC203()
     {
         // Arrange & Act
         var result = Run($$"""
@@ -224,7 +196,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetsOfOneLanguageOfTwoContracts_ShouldReportNoLOC209()
+    public void SetsOfOneLanguageOfTwoContracts_ShouldReportNoLOC203()
     {
         // Arrange & Act: one Dutch set per contract.
         var result = Run($$"""

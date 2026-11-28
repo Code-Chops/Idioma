@@ -11,25 +11,20 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <c>[assembly: SupportedLanguages("en", "nl", "de")]</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A set whose name ends in a longer code adds that code, which its name then gives it: <c>en-GB</c> for
-/// <c>ShopLocalizationEnGb</c>. The diagnostic carries the language to add
-/// (<see cref="LocalizationSetsPart.SuggestedNameProperty"/>).
-/// </para>
-/// <para>
-/// Every other contract then lacks a set of that language, which <c>LOC201</c> reports, and which its fix adds. The
-/// attribute changes only where each of its arguments is a string written in it, in whichever file it is. The first
-/// may carry the name of its parameter, as in <c>SupportedLanguages(defaultLanguage: "en", "nl")</c>.
-/// </para>
-/// <para>
-/// There's no "Fix all", because one fix serves every set of the language.
-/// </para>
+/// The diagnostic carries the language to add (<see cref="LocalizationSetsPart.SuggestedNameProperty"/>). The attribute
+/// changes only where each argument is a string literal. There's no "Fix all", because one fix serves every set of the
+/// language.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(UnlistedLanguageCodeFixProvider))]
 [Shared]
 public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.UnlistedLanguageDiagnosticId];
+
+    /// <summary>
+    /// The properties with a language to list, each a fix of its own, the likely one first.
+    /// </summary>
+    private static readonly string[] LanguageProperties = [LocalizationSetsPart.SuggestedNameProperty, LocalizationSetsPart.AlternativeNameProperty];
 
     public override FixAllProvider? GetFixAllProvider() => null;
 
@@ -44,9 +39,8 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
             return;
         }
 
-        // Each argument a string written in the attribute, so that one more fits after them. The first may carry the
-        // name of its parameter, as in SupportedLanguages(defaultLanguage: "en", "nl"): a string after it still takes
-        // the next place.
+        // Each argument must be a string literal, so one more fits after them. A name is fine where it names the
+        // parameter of its place, as in SupportedLanguages(defaultLanguage: "en", "nl").
         for (var i = 0; i < arguments.Arguments.Count; i++)
         {
             var argument = arguments.Arguments[i];
@@ -63,26 +57,30 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            // Listed since the diagnostic was reported.
-            if (!diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var language)
-                || language is null
-                || listed.Contains(language, StringComparer.OrdinalIgnoreCase))
+            // The language the name likely means, then the other one it may mean, such as fr-BE and be for
+            // ShopLocalizationFrBe.
+            foreach (var property in LanguageProperties)
             {
-                continue;
-            }
+                // Listed since the diagnostic was reported.
+                if (!diagnostic.Properties.TryGetValue(property, out var language)
+                    || language is null
+                    || listed.Contains(language, StringComparer.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
-            context.RegisterCodeFix(
-                CodeAction.Create(
-                    title: $"Add '{language}' to [assembly: SupportedLanguages]",
-                    createChangedSolution: cancellationToken => CodeFixSupport.ReplaceNodesAsync(document.Project.Solution, [arguments], original => Add(original, language), cancellationToken),
-                    equivalenceKey: $"ListLanguage:{language}"),
-                diagnostic);
+                context.RegisterCodeFix(
+                    CodeAction.Create(
+                        title: $"Add '{language}' to [assembly: SupportedLanguages]",
+                        createChangedSolution: cancellationToken => CodeFixSupport.ReplaceNodesAsync(document.Project.Solution, [arguments], original => Add(original, language), cancellationToken),
+                        equivalenceKey: $"ListLanguage:{language}"),
+                    diagnostic);
+            }
         }
     }
 
     /// <summary>
-    /// <c>[assembly: SupportedLanguages(...)]</c> as written in a file of the project, with the constructor it calls,
-    /// or <see langword="null"/> when no file holds it.
+    /// <c>[assembly: SupportedLanguages(...)]</c> with its constructor, or <see langword="null"/> when no file holds it.
     /// </summary>
     private static async Task<(AttributeSyntax Syntax, IMethodSymbol? Constructor)?> FindAttributeAsync(Compilation compilation, CancellationToken cancellationToken)
     {
@@ -99,8 +97,7 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Whether the name of an argument is that of the parameter of its place, which isn't <c>params</c>: then the
-    /// argument takes that place as it would without its name.
+    /// Whether an argument's name is that of the non-<see langword="params"/> parameter of its place, so it takes that place anyway.
     /// </summary>
     private static bool NamesParameterOfItsPlace(NameColonSyntax nameColon, int index, IMethodSymbol? constructor)
     {
@@ -113,7 +110,7 @@ public sealed class UnlistedLanguageCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The arguments with a language after the last one, which takes over what stood after that one.
+    /// The arguments with a language added at the end, taking the last one's trailing trivia.
     /// </summary>
     private static AttributeArgumentListSyntax Add(AttributeArgumentListSyntax arguments, string language)
     {

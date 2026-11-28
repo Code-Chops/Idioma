@@ -8,14 +8,10 @@ namespace CodeChops.Idioma.CodeFixes;
 public sealed partial class PlaceholderCodeFixProvider
 {
     /// <summary>
-    /// What the fix reads of a whole project, read once per compilation: the classes that derive from a class or
-    /// implement a contract, the code that uses a name, and the fix of each text it was asked for. A compilation
-    /// doesn't change, so neither does what's read of it.
+    /// What the fix reads of a whole project, cached per compilation: derived and implementing classes, uses of a
+    /// name, and each text's fix. The IDE and "Fix all" ask for a fix many times, so each would otherwise read the whole
+    /// project again.
     /// </summary>
-    /// <remarks>
-    /// The IDE asks for the fix of a text each time it shows the lightbulb, and "Fix all" asks for one per diagnostic.
-    /// Each of them would otherwise read every class and every file of the project again.
-    /// </remarks>
     private sealed class ProjectTexts(Compilation compilation)
     {
         private static readonly ConditionalWeakTable<Compilation, ProjectTexts> PerCompilation = new();
@@ -32,7 +28,7 @@ public sealed partial class PlaceholderCodeFixProvider
         public static ProjectTexts Of(Compilation compilation) => PerCompilation.GetValue(compilation, static compilation => new ProjectTexts(compilation));
 
         /// <summary>
-        /// The fix of a property, found with <paramref name="find"/> the first time it's asked for.
+        /// The fix of a property, found with <paramref name="find"/> the first time.
         /// </summary>
         public Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? GetOrAddFix(PropertyDeclarationSyntax property,
             Func<Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>?> find)
@@ -52,7 +48,7 @@ public sealed partial class PlaceholderCodeFixProvider
         }
 
         /// <summary>
-        /// The top-level classes of this assembly that derive from a class, directly or through another class.
+        /// The top-level classes of this assembly that derive from a class, directly or not.
         /// </summary>
         public IReadOnlyList<INamedTypeSymbol> FindClassesDerivingFrom(INamedTypeSymbol @base)
         {
@@ -64,8 +60,7 @@ public sealed partial class PlaceholderCodeFixProvider
         }
 
         /// <summary>
-        /// The top-level classes of this assembly that implement an interface, themselves or through a class they
-        /// derive from.
+        /// The top-level classes of this assembly that implement an interface, directly or not.
         /// </summary>
         public IReadOnlyList<INamedTypeSymbol> FindClassesImplementing(INamedTypeSymbol @interface)
         {
@@ -106,8 +101,7 @@ public sealed partial class PlaceholderCodeFixProvider
         }
 
         /// <summary>
-        /// Notes a name that <see cref="FindUsesOf"/> will be asked for, so that one pass over the project finds the
-        /// uses of every such name.
+        /// Notes a name <see cref="FindUsesOf"/> will be asked for, so one pass finds the uses of all of them.
         /// </summary>
         public void ExpectUsesOf(string name)
         {
@@ -119,11 +113,10 @@ public sealed partial class PlaceholderCodeFixProvider
         }
 
         /// <summary>
-        /// Each place in the code of the project, generated code included, where a name is used, outside comments.
+        /// Each use of a name in the project's code, generated code included.
         /// </summary>
         /// <remarks>
-        /// Each file is searched once for a name, and where it uses the name is kept with its syntax tree, which an
-        /// edit of another file leaves as it was. So after an edit, only the file it changed is searched again.
+        /// Results are kept per syntax tree, so after an edit only the changed file is searched again.
         /// </remarks>
         public ImmutableArray<IdentifierNameSyntax> FindUsesOf(string name, CancellationToken cancellationToken)
         {
@@ -166,15 +159,12 @@ public sealed partial class PlaceholderCodeFixProvider
             }
         }
 
-        /// <summary>
-        /// Per file, where each name that was asked for is used.
-        /// </summary>
-        // Spans only, so the syntax of the file isn't kept alive by this.
+        // Spans only, so this doesn't keep the file's syntax alive.
         private static readonly ConditionalWeakTable<SyntaxTree, ConcurrentDictionary<string, ImmutableArray<TextSpan>>> UsesPerTree = new();
 
         /// <summary>
-        /// Searches a file for the names it hasn't been searched for yet, in one pass, and keeps where it uses each. Gives
-        /// the root of the file where it was searched, else <see langword="null"/>.
+        /// Searches a file in one pass for the names it hasn't been searched for yet. Returns the root when it searched,
+        /// else <see langword="null"/>.
         /// </summary>
         private static SyntaxNode? FindSpans(SyntaxTree tree, ConcurrentDictionary<string, ImmutableArray<TextSpan>> spansByName, string[] names,
             CancellationToken cancellationToken)

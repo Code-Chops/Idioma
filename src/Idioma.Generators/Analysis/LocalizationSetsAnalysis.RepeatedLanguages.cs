@@ -4,21 +4,13 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// Reports a set of a contract for a language that another set of that contract in this assembly serves already
-    /// (<c>LOC209</c>), where neither derives from the other. Only one of them shows, and which one depends on the order
-    /// of their names.
+    /// Reports a second set of a contract for the same language in this assembly (<c>LOC203</c>), where neither derives
+    /// from the other, because only one of them shows. Generated, handwritten and library contracts all count.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Every contract counts: one this build generates, one written by hand, and a library's. A set that derives from
-    /// another of the same language rewords it, and wins over it whatever the order, so it's no second set. Nor is a set
-    /// registered by hand, or one that can't be registered automatically, because neither competes at startup.
-    /// </para>
-    /// <para>
-    /// A set that derives from a set of its language in another assembly, such as a library's, rewords that set too. The
-    /// registry shows each of several such rewordings for the texts it words itself. So two of them are reported only
-    /// where both word one text, of which users see only one wording.
-    /// </para>
+    /// A rewording isn't a second set, and neither is a set that isn't registered automatically. Two rewordings of
+    /// another assembly's set are the same check, reported as <c>LOC209</c> at the one that doesn't show. A rewording
+    /// next to one of a referenced assembly is <c>LOC209</c> too (<see cref="FindRewordingGaps"/>).
     /// </remarks>
     private static void ReportRepeatedLanguages(
         ImmutableArray<DiscoveredLocalization> sets,
@@ -26,6 +18,7 @@ internal sealed partial record LocalizationSetsAnalysis
         ImmutableArray<LocalizationSetsFinding>.Builder findings)
     {
         var byContractAndLanguage = new Dictionary<(string Contract, string Language), List<DiscoveredLocalization>>();
+        var reportedPairs = new HashSet<(string, string)>();
 
         foreach (var set in sets)
         {
@@ -50,20 +43,17 @@ internal sealed partial record LocalizationSetsAnalysis
             if (ofLanguage.Count < 2)
                 continue;
 
-            // A set deriving from another of the group rewords that set, and so does one deriving from a set of its
-            // language in another assembly.
-            var names = new HashSet<string>(ofLanguage.Select(static set => set.MetadataName), StringComparer.Ordinal);
-            var rewordings = ofLanguage.Where(set => !set.AncestorNames.Any(names.Contains) && RewordsSetOfOtherAssembly(set)).ToList();
-            var roots = ofLanguage.Where(set => !set.AncestorNames.Any(names.Contains) && !RewordsSetOfOtherAssembly(set)).ToList();
+            ReportOwnRewordingsThatDontAddUp(ofLanguage, reportedPairs, findings);
 
-            ReportRepeatedRewordings(contract, rewordings, findings);
+            // Rewordings aren't roots.
+            var names = new HashSet<string>(ofLanguage.Select(static set => set.MetadataName), StringComparer.Ordinal);
+            var roots = ofLanguage.Where(set => !set.AncestorNames.Any(names.Contains) && !RewordsSetOfOtherAssembly(set)).ToList();
 
             if (roots.Count < 2)
                 continue;
 
-            // The set named after the contract and its language is the one that stays. The others are reported.
-            var contractName = contract.Substring(contract.LastIndexOf('.') + 1);
-            var expectedName = contractName.Length > 1 ? $"{contractName.Substring(1)}{SupportedLanguages.ToTypeSuffix(roots[0].Language!)}" : null;
+            // The set named after the contract and its language stays, and the others are reported.
+            var expectedName = $"{GetContractBaseName(contract)}{SupportedLanguages.ToTypeSuffix(roots[0].Language!)}";
 
             var ordered = roots
                 .OrderBy(set => String.Equals(set.Name, expectedName, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
@@ -85,51 +75,19 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Whether a set derives directly from a set of its own language in another assembly, which it rewords. Only a class
-    /// of another assembly leaves the classes of this one a set derives from (<see cref="DiscoveredLocalization.AncestorNames"/>)
-    /// empty, where the set it derives from (<see cref="DiscoveredLocalization.BaseSet"/>) is known.
+    /// Whether a set rewords a set of another assembly in its own language, also through an abstract class of this
+    /// assembly, as <c>AppEn : AppBase : Shop.ShopLocalizationEn</c> does. Two such rewordings are <c>LOC209</c>.
     /// </summary>
     private static bool RewordsSetOfOtherAssembly(DiscoveredLocalization set)
     {
-        var rewords = set.AncestorNames.Length is 0
-                      && set.BaseSet is { Language: { } baseLanguage }
-                      && String.Equals(baseLanguage, set.Language, StringComparison.OrdinalIgnoreCase);
+        var rewords = set.Reworded is { Language: { } rewordedLanguage }
+                      && String.Equals(rewordedLanguage, set.Language, StringComparison.OrdinalIgnoreCase);
 
         return rewords;
     }
 
     /// <summary>
-    /// Reports each rewording of a set of another assembly that words a text an earlier rewording of the group words
-    /// too (<c>LOC209</c>), in the order of their names. Users see the wording of only one of them for that text.
-    /// </summary>
-    private static void ReportRepeatedRewordings(string contract, List<DiscoveredLocalization> rewordings,
-        ImmutableArray<LocalizationSetsFinding>.Builder findings)
-    {
-        var ordered = rewordings.OrderBy(static set => set.MetadataName, StringComparer.Ordinal).ToArray();
-
-        for (var i = 1; i < ordered.Length; i++)
-        {
-            var repeated = ordered[i];
-            var texts = new HashSet<string>(repeated.OfContract.DeclaredTexts, StringComparer.Ordinal);
-
-            for (var j = 0; j < i; j++)
-            {
-                if (!ordered[j].OfContract.DeclaredTexts.Any(texts.Contains))
-                    continue;
-
-                findings.Add(new LocalizationSetsFinding(
-                    LocalizationSetsRule.RepeatedLanguage,
-                    repeated.Location,
-                    new EquatableArray<string>([repeated.Name, contract, repeated.Language!, ordered[j].Name])));
-
-                break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// The full names of the contracts a set implements, itself or through a class it derives from: those that exist
-    /// in the compilation, and those this build generates.
+    /// The full names of the contracts a set implements, generated ones included.
     /// </summary>
     private static IEnumerable<string> GetContracts(DiscoveredLocalization set, GeneratedContracts generatedContracts)
     {

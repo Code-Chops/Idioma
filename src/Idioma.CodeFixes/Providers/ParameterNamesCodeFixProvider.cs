@@ -6,33 +6,24 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a text of a set that names a parameter differently than its contract does (<c>LOC401</c>). It names every
-/// parameter of the method as the contract does, in one of two ways.
+/// Fixes a text of a set that names a parameter differently than its contract does (<c>LOC401</c>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// When the set has the contract's names in another order, only the names in the parameter list change. The body stays
-/// as it is, so each use reads the parameter of its name, as its author meant:
-/// <c>Invited(string guest, string host) => $"{host} heeft {guest} uitgenodigd"</c> becomes
-/// <c>Invited(string host, string guest) => $"{host} heeft {guest} uitgenodigd"</c>. A rename would keep the swap,
-/// because it renames the uses too. A <c>&lt;param&gt;</c> doc comment stays as it is, because it describes a parameter
-/// by its name.
+/// When the set has the contract's names in another order, only the parameter list changes, so each use in the body
+/// reads the parameter of its name, as its author meant. A rename would keep the swap.
 /// </para>
 /// <para>
-/// When each name that differs is one the contract doesn't have, as <c>aantal</c> for <c>count</c>, the parameter is
-/// renamed along with its uses and its doc comments. The method then words the same values as before. A call in the
-/// project that names the parameter, as in <c>ItemsInCart(aantal: 2)</c>, names it anew too. Moving names needs no such
-/// change, because a named argument and a use in the body both follow the name.
+/// When each differing name is one the contract doesn't have, as <c>aantal</c> for <c>count</c>, the parameter is
+/// renamed with its uses, doc comments and named arguments in the project.
 /// </para>
 /// <para>
 /// There's no fix when:
 /// </para>
 /// <list type="bullet">
-/// <item>the names mix both cases, as <c>(guest, gast)</c> for <c>(host, guest)</c>, because a use of <c>guest</c>
-/// could mean either parameter.</item>
-/// <item>a new name already stands in the method, such as a local variable or a field it reads, because the renamed
-/// parameter would clash with it or hide it.</item>
-/// <item>the method is partial, because the part that holds its body would need the same names.</item>
+/// <item>the names mix both cases, because a use could mean either parameter.</item>
+/// <item>a new name already stands in the method, because the parameter would clash with it or hide it.</item>
+/// <item>the method is partial.</item>
 /// </list>
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(ParameterNamesCodeFixProvider))]
@@ -58,39 +49,41 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            if (Name(root, semanticModel, diagnostic, context.CancellationToken) is not var (method, named, title, calls))
+            if (Name(root, semanticModel, diagnostic, context.CancellationToken) is not var (method, named, title, findCalls))
                 continue;
 
-            var nodes = new Dictionary<SyntaxNode, SyntaxNode>(calls) { [method] = named };
-
+            // The named arguments are looked for once the fix is chosen, because that reads every file of the project,
+            // and a light bulb asks for its fixes each time the caret lands on the line.
             context.RegisterCodeFix(
                 CodeAction.Create(
                     title,
-                    createChangedSolution: cancellationToken => CodeFixSupport.ReplaceNodesAsync(document.Project.Solution, nodes.Keys, node => nodes[node], cancellationToken),
+                    createChangedSolution: cancellationToken =>
+                    {
+                        var nodes = new Dictionary<SyntaxNode, SyntaxNode>(findCalls(cancellationToken)) { [method] = named };
+                        return CodeFixSupport.ReplaceNodesAsync(document.Project.Solution, nodes.Keys, node => nodes[node], cancellationToken);
+                    },
                     equivalenceKey: EquivalenceKey),
                 diagnostic);
         }
     }
 
     /// <summary>
-    /// The method a diagnostic sits on, with what it becomes, and each named argument of a call that names a renamed
-    /// parameter. <see langword="null"/> when there's no fix (see the remarks of this class).
+    /// The nodes to replace, or <see langword="null"/> when there's no fix.
     /// </summary>
     private static Dictionary<SyntaxNode, SyntaxNode>? Fix(SyntaxNode root, SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken)
     {
-        var fix = Name(root, semanticModel, diagnostic, cancellationToken) is var (method, named, _, calls)
-            ? new Dictionary<SyntaxNode, SyntaxNode>(calls) { [method] = named }
+        var fix = Name(root, semanticModel, diagnostic, cancellationToken) is var (method, named, _, findCalls)
+            ? new Dictionary<SyntaxNode, SyntaxNode>(findCalls(cancellationToken)) { [method] = named }
             : null;
 
         return fix;
     }
 
     /// <summary>
-    /// The method a diagnostic sits on, with its parameters named as the contract names them, the title of that fix,
-    /// and the name of each named argument elsewhere in the project that names a renamed parameter, with its new name.
-    /// <see langword="null"/> when there's no fix (see the remarks of this class).
+    /// The method with its parameters named as the contract names them, the fix's title, and what finds the renamed
+    /// named arguments in the project. <see langword="null"/> when there's no fix.
     /// </summary>
-    private static (MethodDeclarationSyntax Method, MethodDeclarationSyntax Named, string Title, Dictionary<SyntaxNode, SyntaxNode> Calls)? Name(SyntaxNode root,
+    private static (MethodDeclarationSyntax Method, MethodDeclarationSyntax Named, string Title, Func<CancellationToken, Dictionary<SyntaxNode, SyntaxNode>> FindCalls)? Name(SyntaxNode root,
         SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken)
     {
         // The diagnostic sits on the name of a parameter.
@@ -114,9 +107,7 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
 
         if (IsOrderOf(names, expected))
         {
-            // Only among parameters of one type. Moving a name leaves the body as it is, so each use then reads the
-            // parameter of its name. Where the types differ, the body was written for the positions, and the wording
-            // would show each value in the place of another.
+            // Only among parameters of one type. Where the types differ, the body was written for the positions.
             var movedTypes = parameters
                 .Where((_, index) => !String.Equals(names[index], expected[index], StringComparison.Ordinal))
                 .Select(static parameter => parameter.Type?.ToString())
@@ -128,10 +119,9 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
             for (var i = 0; i < parameters.Count; i++)
                 renamed.Add(parameters[i].Identifier, expected[i]);
 
-            return (method, Rename(method, renamed), "Put the parameter names in the contract's order", []);
+            return (method, Rename(method, renamed), "Put the parameter names in the contract's order", static _ => []);
         }
 
-        // Each parameter whose name differs, with the name of the contract.
         var parametersToRename = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
 
         for (var i = 0; i < parameters.Count; i++)
@@ -139,7 +129,7 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
             if (String.Equals(names[i], expected[i], StringComparison.Ordinal))
                 continue;
 
-            // A name the contract gives another parameter: a use of it could mean either one.
+            // A name the contract gives another parameter, so a use of it could mean either one.
             if (expected.Contains(names[i], StringComparer.Ordinal)
                 || semanticModel.GetDeclaredSymbol(parameters[i], cancellationToken) is not { } parameter)
             {
@@ -161,15 +151,14 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
             ? $"Rename '{parametersToRename.Keys.First().Name}' to '{parametersToRename.Values.First()}'"
             : "Rename the parameters as the contract names them";
 
-        return (method, Rename(method, renamed), title, RenameNamedArguments(method, parametersToRename, semanticModel.Compilation, cancellationToken));
+        var compilation = semanticModel.Compilation;
+        return (method, Rename(method, renamed), title, token => RenameNamedArguments(method, parametersToRename, compilation, token));
     }
 
     /// <summary>
-    /// Each name of a named argument in the project that names one of the parameters, as in <c>ItemsInCart(aantal: 2)</c>,
-    /// with the name the parameter gets. One inside the method itself is renamed with the method.
+    /// Each named argument outside the method that names one of the parameters, with its new name.
     /// </summary>
-    // Each tree is read as text first, so that only one that holds an old name is bound. A call in another project
-    // isn't found: the build reports it there (CS1739).
+    // Only a tree whose text holds an old name is bound. A call in another project gets CS1739 there.
     private static Dictionary<SyntaxNode, SyntaxNode> RenameNamedArguments(MethodDeclarationSyntax method, Dictionary<ISymbol, string> parameters, Compilation compilation,
         CancellationToken cancellationToken)
     {
@@ -205,9 +194,6 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
         return renamed;
     }
 
-    /// <summary>
-    /// Whether a set has the names of the contract, each once, in another order.
-    /// </summary>
     private static bool IsOrderOf(string[] names, string[] expected)
     {
         var isOrder = names.OrderBy(static name => name, StringComparer.Ordinal).SequenceEqual(expected.OrderBy(static name => name, StringComparer.Ordinal), StringComparer.Ordinal);
@@ -215,8 +201,7 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Whether a name stands in a method already, as the name of a local variable, a parameter, or a member it reads.
-    /// The name of an element or attribute of a doc comment, such as <c>&lt;param name="..."&gt;</c>, doesn't count.
+    /// Whether a name stands in a method already as an identifier, not counting doc comment element and attribute names.
     /// </summary>
     private static bool UsesName(MethodDeclarationSyntax method, IEnumerable<string> names)
     {
@@ -230,12 +215,10 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The parameter of a method that an identifier in it reads, names in <c>nameof</c>, or names in a
-    /// <c>&lt;param&gt;</c> or <c>&lt;paramref&gt;</c> doc comment, if any.
+    /// The parameter an identifier refers to, also in <c>nameof</c> or a <c>&lt;param&gt;</c> or <c>&lt;paramref&gt;</c>.
     /// </summary>
     private static ISymbol? FindParameter(IdentifierNameSyntax identifier, MethodDeclarationSyntax method, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
-        // A doc comment by the name it gives, as the compiler reads it.
         if (identifier.Parent is XmlNameAttributeSyntax attribute)
         {
             var element = attribute.Parent switch
@@ -257,8 +240,7 @@ public sealed class ParameterNamesCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A method with identifiers renamed, each keeping what stood around it. A keyword becomes a verbatim identifier,
-    /// as in <c>@event</c>, except in a doc comment, which names it as it is.
+    /// A method with identifiers renamed. A keyword becomes a verbatim identifier, except in a doc comment.
     /// </summary>
     private static MethodDeclarationSyntax Rename(MethodDeclarationSyntax method, Dictionary<SyntaxToken, string> renamed)
     {

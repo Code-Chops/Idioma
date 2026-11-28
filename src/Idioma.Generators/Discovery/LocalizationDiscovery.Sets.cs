@@ -1,36 +1,37 @@
 namespace CodeChops.Idioma.Generators;
 
-// The part of LocalizationDiscovery that resolves a class to a set: its shape, the classes it derives from, the
-// contracts it implements, and whether generated code can create it to register it. A plain comment: the compiler
-// merges the XML docs of every partial declaration, and the type's summary lives in LocalizationDiscovery.cs.
+// Resolves a class to a set: its shape, its base classes, the contracts it implements, and whether generated code can
+// create it to register it.
 /// <inheritdoc cref="LocalizationDiscovery"/>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
-    /// What an abstract, generic, nested, or file-local class gives discovery: a set rewording another assembly's texts
-    /// where generated code can't reach it (<c>LOC208</c>), or a class listing <c>ILocalizationSet</c> as a
-    /// default-language set does, which its shape keeps the generator from extending (<c>LOC200</c> in the default
-    /// language); <see langword="null"/> for anything else, such as a test fixture.
+    /// What an abstract, generic, nested or file-local class gives discovery: a rewording of another assembly's texts
+    /// that generated code can't reach (<c>LOC207</c>), or a class listing <c>ILocalizationSet</c> as a default-language
+    /// set does, whose shape the generator can't extend (<c>LOC200</c>). <see langword="null"/> for anything else.
     /// </summary>
-    // Only overrides and classes that may start a contract: a nested set of the assembly's own contract is what a test
-    // fixture is, registered by hand, and a language it was meant to give the assembly is reported as missing (LOC201)
-    // anyway. Such a fixture lists ILocalizationSet and the contract, as a default-language set does, so the analysis
-    // leaves out a class whose contract is generated from another set (UnextendableSet.UnresolvedBaseTypes).
+    // A nested set of the assembly's own contract is usually a test fixture registered by hand, so it isn't reported.
+    // The analysis leaves out a class whose contract is generated from another set (UnextendableSet.UnresolvedBaseTypes).
     private static DiscoveryResult? DiscoverUnnameable(INamedTypeSymbol type, TypeDeclarationSyntax declaration,
         SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var reader = new WordingReader(semanticModel.Compilation, semanticModel);
         var typeName = type.ToDisplayString();
 
-        // An override needs new T() to work. A class meant to start a contract lists one that binds to nothing yet, as
-        // the default-language set lists the contract generated from it, or is partial, as such a set once was. The
-        // base list is bound only when either could apply.
+        // An override needs new T() to work. A class meant to start a contract lists an unresolved one, or is partial.
+        // The base list is bound only when either could apply.
         var mayRegister = type is { IsAbstract: false, IsGenericType: false };
         var mayStartContract = declaration.Modifiers.Any(SyntaxKind.PartialKeyword)
                                || Enumerable.Any(type.Interfaces, static @interface => @interface.TypeKind is TypeKind.Error);
 
+        // A nested set can only be registered by hand, and the registry reads its language from this description.
+        var nestedSet = IsNameableNestedSet(type) && ImplementsLocalizationSet(type)
+                        && GetLanguage(type, GetSourceAncestors(type, reader, cancellationToken)) is { } nestedLanguage
+            ? new SetDescription(typeName, GetFullyQualifiedName(type), nestedLanguage)
+            : (SetDescription?)null;
+
         if ((!mayRegister && !mayStartContract) || !ImplementsLocalizationSet(type) || IsExcluded(type))
-            return null;
+            return nestedSet is null ? null : new DiscoveryResult(Set: null, UnnameableOverride: null, UnextendableSet: null, nestedSet);
 
         UnregistrableLocalization? unnameableOverride = null;
         if (mayRegister && IsOverride(type))
@@ -48,8 +49,7 @@ internal static partial class LocalizationDiscovery
             var ancestors = GetSourceAncestors(type, reader, cancellationToken);
             var baseTypeLocations = ImmutableArray.CreateBuilder<BaseTypeLocation>();
 
-            // Of every part, so that each part of a partial class finds the same class. With those of the classes it
-            // derives from, as for a set (DiscoverSet).
+            // Of every part, so each part of a partial class finds the same class, and of its base classes.
             var unresolvedBaseTypes = type.DeclaringSyntaxReferences
                 .Select(reference => reference.GetSyntax(cancellationToken))
                 .OfType<TypeDeclarationSyntax>()
@@ -66,24 +66,23 @@ internal static partial class LocalizationDiscovery
                 MetadataName: typeName,
                 Name: type.Name,
                 Problem: DescribeShape(type),
-                Language: GetLanguage(type, ancestors, reader, cancellationToken),
+                Language: GetLanguage(type, ancestors),
                 UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
                 Location: DiagnosticLocation.From(type.Locations[0]),
                 BaseTypeLocations: new EquatableArray<BaseTypeLocation>(baseTypeLocations.ToImmutable()));
         }
 
-        var result = unnameableOverride is null && unextendableSet is null
+        var result = unnameableOverride is null && unextendableSet is null && nestedSet is null
             ? null
-            : new DiscoveryResult(Set: null, unnameableOverride, unextendableSet);
+            : new DiscoveryResult(Set: null, unnameableOverride, unextendableSet, nestedSet);
 
         return result;
     }
 
     /// <summary>
-    /// Whether a class reads as the start of a contract, as a default-language set does: it lists
-    /// <c>ILocalizationSet</c> itself, implements no contract, and derives from no concrete set (see
-    /// <see cref="IsDefaultSet"/>). Whether a contract it lists is generated from another set is known only once every
-    /// set is found, so the analysis asks that (<see cref="ListsOnlyOtherGeneratedContracts"/>).
+    /// Whether a class reads as the start of a contract (see <see cref="IsDefaultSet"/>): it lists
+    /// <c>ILocalizationSet</c> itself, implements no contract, and derives from no concrete set. The analysis checks the
+    /// rest once every set is found (<see cref="ListsOnlyOtherGeneratedContracts"/>).
     /// </summary>
     private static bool StartsContract(INamedTypeSymbol type)
     {
@@ -95,16 +94,10 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether a set lists <c>ILocalizationSet</c>: itself, or through an abstract class it derives from, as
-    /// <c>ShopLocalizationEn : ShopBase</c> does next to <c>abstract class ShopBase : ILocalizationSet,
-    /// IShopLocalization</c>. An abstract class is no set, so the first concrete class that derives from it lists what
-    /// it lists.
+    /// Whether a set lists <c>ILocalizationSet</c>, itself or through an abstract base class, as
+    /// <c>ShopLocalizationEn : ShopBase</c> does. A concrete base class is a set the set rewords
+    /// (<see cref="RewordsSet"/>), and so is one above an abstract base, so what they list doesn't count.
     /// </summary>
-    /// <remarks>
-    /// Only abstract classes are passed through. A concrete class the set derives from is a set of its own, which the
-    /// set rewords (<see cref="RewordsSet"/>). An abstract class that derives from a concrete set rewords that set too,
-    /// so what it lists doesn't count.
-    /// </remarks>
     private static bool ListsLocalizationSet(INamedTypeSymbol type)
     {
         if (Enumerable.Any(type.Interfaces, IsLocalizationSetInterface))
@@ -142,21 +135,19 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Resolves a concrete, closed, top-level class that implements <c>ILocalizationSet</c> to a discovered set. An
-    /// excluded set is resolved too, and flagged. It reads what both parts of the generator use, and each part takes
-    /// its own share of it (<see cref="ForPart"/>).
+    /// Resolves a concrete, closed, top-level class that implements <c>ILocalizationSet</c> to a set, with what both parts
+    /// of the generator use (<see cref="ForPart"/>). An excluded set is resolved too, and flagged.
     /// </summary>
     private static DiscoveredLocalization DiscoverSet(INamedTypeSymbol type, TypeDeclarationSyntax declaration,
         SemanticModel semanticModel, CancellationToken cancellationToken)
     {
-        // One reader for the whole class: a model per file, and each wording read once.
         var reader = new WordingReader(semanticModel.Compilation, semanticModel);
         var ancestors = GetSourceAncestors(type, reader, cancellationToken);
         var metadataName = type.ToDisplayString();
         var baseTypeLocations = ImmutableArray.CreateBuilder<BaseTypeLocation>();
 
-        // A class implements a contract generated here through its own base list, or through that of a class it derives
-        // from: an abstract base shared by the languages, or the set a regional set rewords.
+        // A generated contract can also be listed by a base class, such as a shared abstract base or the set a regional
+        // set rewords.
         var inheritedBaseTypes = ancestors.SelectMany(static ancestor => ancestor.UnresolvedBaseTypes).ToImmutableArray();
         var unresolvedBaseTypes = GetUnresolvedBaseTypes(type, metadataName, declaration, semanticModel, baseTypeLocations, cancellationToken)
             .Concat(inheritedBaseTypes)
@@ -171,18 +162,8 @@ internal static partial class LocalizationDiscovery
             ? baseType
             : null;
 
-        // The LocalizationLanguageCode of the set once, and the code the build describes a set without one with. Its
-        // language, its description, and whether it can register all ask for them.
-        var languageCode = ReadSetLanguageCode(type);
-        var declaresLanguageCode = languageCode.IsDeclared;
-        var describedCode = declaresLanguageCode ? null : FindDescribedLanguageCode(type, ancestors, declaresLanguageCode: false);
-        var unmappedLanguageCode = languageCode.Mapping.Unmapped;
         var constructor = FindConstructorCalledWithoutArguments(type, semanticModel, cancellationToken);
-        var language = GetLanguage(type, languageCode, describedCode, reader, cancellationToken, out var invalidLanguageCode, out var unknownLanguageCode);
-        var describedLanguageCode = declaresLanguageCode ? ReadImplementedLanguageCode(languageCode, reader, cancellationToken) : describedCode ?? GetNameLanguage(type.Name);
-
-        // Not for a constant that is no culture name, which LOC207 reports as an error.
-        var hasUnreadableLanguageCode = declaresLanguageCode && describedLanguageCode is null && invalidLanguageCode is null;
+        var language = GetLanguage(type, ancestors);
         var location = DiagnosticLocation.From(type.Locations[0]);
         var depth = GetDepth(type, ancestors);
         var enums = listsLocalizationSet ? GetLocalizedEnums(type) : ImmutableArray<LocalizedEnum>.Empty;
@@ -195,32 +176,13 @@ internal static partial class LocalizationDiscovery
             IsOverride: IsOverride(type),
             Depth: depth,
             UnresolvedBaseTypes: new EquatableArray<UnresolvedBaseType>(unresolvedBaseTypes),
-            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguageCode: declaresLanguageCode || describedCode is not null, hasUnreadableLanguageCode),
-            IsObsoleteAsError: IsObsoleteAsError(type),
-            SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(type)),
+            RegistrationProblem: GetRegistrationProblem(type, constructor, hasLanguage: language is not null),
             HasPublicParameterlessConstructor: Enumerable.Any(type.InstanceConstructors, static candidate => candidate is { Parameters.Length: 0, DeclaredAccessibility: Accessibility.Public }),
             IsExcluded: IsExcluded(type),
             Locations: new SetLocations(
                 Set: location,
-                InvalidLanguageCode: invalidLanguageCode,
-                UnknownLanguageCode: unknownLanguageCode,
-                UnmappedLanguageCode: unmappedLanguageCode is { ContainingType: { } declaring }
-                    ? new UnmappedLanguageCode(
-                        DeclaringType: declaring.Name,
-                        DeclaringTypeBase: declaring.BaseType?.Name ?? "object",
-                        // At the class that declares it, so that the sets deriving from that class report one error,
-                        // where the fix is. A class of another assembly has no place in this one, and is reported at
-                        // the set.
-                        Location: IsDeclaredIn(declaring, type.ContainingAssembly) ? DiagnosticLocation.From(declaring.Locations[0]) : location)
-                    : null,
                 BaseTypes: new EquatableArray<BaseTypeLocation>(baseTypeLocations.ToImmutable())),
             Language: language,
-            // Not for a LocalizationLanguageCode the build can't read: such a set has a language, which only the run time knows.
-            NameGivesNoLanguage: language is null && invalidLanguageCode is null && !declaresLanguageCode && unmappedLanguageCode is null,
-            DescribedLanguageCode: describedLanguageCode,
-            // Only for a set deriving from another: the registry asks it of such a set alone, and a set deriving from
-            // none would list every text, in every language, in the generated code.
-            OwnTexts: new EquatableArray<string>(depth > 0 ? GetOwnTexts(type) : ImmutableArray<string>.Empty),
             ListsLocalizationSet: listsLocalizationSet,
             ContractNames: new EquatableArray<string>(GetPublicContractNames(type)),
             OwnContractNames: new EquatableArray<string>(GetOwnContractNames(type)),
@@ -230,8 +192,12 @@ internal static partial class LocalizationDiscovery
                 ? null
                 : new BaseSet(
                     Name: baseSet.Name,
-                    Language: GetLanguage(baseSet, [.. ancestors.Skip(1)], reader, cancellationToken),
+                    Language: GetLanguage(baseSet, [.. ancestors.Skip(1)]),
                     Contracts: ImplementsLocalizationSet(baseSet) ? default : new EquatableArray<UnresolvedBaseType>(inheritedBaseTypes)),
+            BaseSetNames: new EquatableArray<string>(GetBaseSetNames(type)),
+            Reworded: FindRewordedSet(type) is { } reworded
+                ? new RewordedSet(reworded.ToDisplayString(), reworded.ContainingAssembly.Identity.Name, GetLanguage(reworded, []))
+                : null,
             IsRecord: type.IsRecord,
             IsSealed: type.IsSealed,
             IsPublic: type.DeclaredAccessibility is Accessibility.Public,
@@ -250,10 +216,8 @@ internal static partial class LocalizationDiscovery
                 UndeclaredTexts: default,
                 TextsOutsideEnums: default));
 
-        // The texts a contract is written from, which only a set a contract may come from has: one in the default
-        // language, or in any language while the build can't read the default one, as the analysis takes them
-        // (ReadsAsDefaultSet). Discovery reads every set again on every edit, and the texts are what it reads longest,
-        // so a set of another language is left without them.
+        // Only a set a contract may come from gets its texts read (ReadsAsDefaultSet), because they take longest to read
+        // and discovery runs on every edit.
         if (!listsLocalizationSet || !ReadsAsDefaultSet(set, SupportedLanguages.ReadDefaultLanguage(type.ContainingAssembly)))
             return set;
 
@@ -277,14 +241,10 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The type or namespace that has the name the generated class of a default-language set would get, as a message
-    /// names it (<c>the enum 'OrderStatus'</c>, <c>the namespace 'MyApp.Texts'</c>), or <see langword="null"/> when the
-    /// name is free. <c>OrderStatusEn</c> next to the enum <c>OrderStatus</c> is such a set: the generated class would
-    /// be a second <c>OrderStatus</c> (<c>CS0101</c>).
+    /// The type or namespace that already has the name of a default-language set's generated class, as a message names
+    /// it (<c>the enum 'OrderStatus'</c>), or <see langword="null"/> when the name is free. Such a clash is <c>CS0101</c>.
     /// </summary>
-    // A static partial class of that name is the generated class itself, where a helper sits next to the texts. A type
-    // with type parameters is another type, and so is one of another assembly, which the namespace of this class
-    // doesn't hold.
+    // A static partial class of that name is a part of the generated class itself.
     private static string? FindTypeNamedLikeTexts(INamedTypeSymbol type, string language, CancellationToken cancellationToken)
     {
         if (DeriveBaseName(type.Name, language) is not { } textsName)
@@ -311,16 +271,15 @@ internal static partial class LocalizationDiscovery
             return $"the {kind} '{other.Name}'";
         }
 
-        // A namespace of this compilation holds the name too, as the folder Texts next to TextsEn gives MyApp.Texts.
+        // A namespace of this compilation, as the folder Texts next to TextsEn gives MyApp.Texts.
         foreach (var other in type.ContainingNamespace.GetNamespaceMembers())
         {
             if (String.Equals(other.Name, textsName, StringComparison.Ordinal) && other.Locations.Any(static location => location.IsInSource))
                 return $"the namespace '{GetNamespaceName(other)}'";
         }
 
-        // The enum whose texts the set holds, where it lies in another namespace and the set names it by its name
-        // alone, as behind a using. Inside the set's namespace the generated class would stand before the enum, so the
-        // set's own ILocalizationSet<OrderStatus> would name that class (CS0718).
+        // The set's enum in another namespace, named by its simple name. The generated class would shadow it, so the
+        // set's ILocalizationSet<OrderStatus> would name that class (CS0718).
         foreach (var @interface in type.AllInterfaces)
         {
             if (PackageNames.IsLocalizationSetOfEnum(@interface)
@@ -336,8 +295,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether a set lists <c>ILocalizationSet&lt;TEnum&gt;</c> with the enum written by its name alone, and not with
-    /// its namespace in front. All the syntax can tell.
+    /// Whether a set lists <c>ILocalizationSet&lt;TEnum&gt;</c> with the enum written by its simple name, as far as the
+    /// syntax tells.
     /// </summary>
     private static bool ListsSetOfEnumBySimpleName(INamedTypeSymbol type, string enumName, CancellationToken cancellationToken)
     {
@@ -369,10 +328,9 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The type that has the name the contract of a default-language set would get, as a message names it
-    /// (<c>the interface 'IShopLocalization'</c>), or <see langword="null"/> when the name is free. The generated
-    /// contract would be a second type of that name (<c>CS0101</c>). A contract written by hand isn't such a type: a set
-    /// that implements it starts no contract.
+    /// The type that already has the name of a default-language set's contract, as a message names it, or
+    /// <see langword="null"/> when the name is free (<c>CS0101</c>). A contract written by hand doesn't count, because a
+    /// set that implements it starts no contract.
     /// </summary>
     private static string? FindTypeNamedLikeContract(INamedTypeSymbol type, string language)
     {
@@ -401,9 +359,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The texts of a set with a name its generated class can't give them (<c>LOC300</c>), each with where it's
-    /// written: the member of the set, or the member of the enum for a text the set doesn't declare. A member outside
-    /// this compilation has no place in it, so the set stands in.
+    /// The texts of a set with a name its generated class can't give them (<c>LOC300</c>). Each is reported at its
+    /// member, or at the set when that member is outside this compilation.
     /// </summary>
     private static ImmutableArray<ReservedText> GetReservedTexts(INamedTypeSymbol type, string language, ImmutableArray<LocalizationMember> texts,
         bool hasEnums)
@@ -432,8 +389,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The texts a set of an enum declares that aren't a member of its enums (<c>LOC305</c>), each with where it's
-    /// written. Not a text with a name its generated class can't give it, which <c>LOC300</c> reports.
+    /// The texts a set of an enum declares that aren't a member of its enums (<c>LOC305</c>). A reserved name is left
+    /// to <c>LOC300</c>.
     /// </summary>
     private static ImmutableArray<TextOutsideEnums> GetTextsOutsideEnums(INamedTypeSymbol type, string language, ImmutableArray<LocalizationMember> texts)
     {
@@ -480,8 +437,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether the type, or a class of this assembly it derives from, lists a base type that binds to nothing, as one
-    /// implementing a contract generated here does.
+    /// Whether the type, or a base class of this assembly, lists a base type that binds to nothing.
     /// </summary>
     private static bool HasUnboundBaseType(INamedTypeSymbol type)
     {
@@ -510,16 +466,14 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether the set rewords something of another assembly: it derives from a concrete set declared there, or
-    /// implements a contract declared there. Such a set must win whichever assembly loads first. A set deriving from a
-    /// set of its own assembly is no override (a library's regional set must not outrank an app's), and registers after
-    /// its base instead (<see cref="GetDepth"/>).
+    /// Whether the set rewords another assembly's set or contract, so it must win whichever assembly loads first. A
+    /// rewording of a set of its own assembly registers after its base instead (<see cref="GetDepth"/>), so a library's
+    /// regional set doesn't outrank an app's.
     /// </summary>
     private static bool IsOverride(INamedTypeSymbol type)
     {
-        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
-            if (!baseType.IsAbstract && ImplementsLocalizationSet(baseType) && !IsDeclaredIn(baseType, type.ContainingAssembly))
-                return true;
+        if (FindRewordedSet(type) is not null)
+            return true;
 
         var isOverride = type.AllInterfaces.Any(@interface
             => PackageNames.IsContract(@interface)
@@ -529,16 +483,36 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// How many sets the type derives from. The generated registration adds a set after the sets it derives from, so a
-    /// set rewording another of its own assembly wins within their tier.
+    /// The nearest concrete set of another assembly that a set derives from, which it rewords, or <see langword="null"/>.
     /// </summary>
-    /// <remarks>
-    /// An abstract class isn't counted, such as a base that the sets of every language share. It's never registered,
-    /// so a set deriving from it rewords no set, and words every text itself. Counted, it would make the registrar
-    /// name every text of every such set (<see cref="DiscoveredLocalization.OwnTexts"/>), which nothing reads.
-    /// </remarks>
-    /// <param name="type">The set.</param>
-    /// <param name="ancestors">The classes of this assembly it derives from, nearest first, as the start of its chain.</param>
+    private static INamedTypeSymbol? FindRewordedSet(INamedTypeSymbol type)
+    {
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+            if (!baseType.IsAbstract && ImplementsLocalizationSet(baseType) && !IsDeclaredIn(baseType, type.ContainingAssembly))
+                return baseType;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The full names of the concrete sets a set derives from, nearest first, of any assembly.
+    /// </summary>
+    private static ImmutableArray<string> GetBaseSetNames(INamedTypeSymbol type)
+    {
+        var names = ImmutableArray.CreateBuilder<string>();
+
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+            if (!baseType.IsAbstract && ImplementsLocalizationSet(baseType))
+                names.Add(baseType.ToDisplayString());
+
+        return names.ToImmutable();
+    }
+
+    /// <summary>
+    /// How many concrete sets the type derives from. A set is registered after its base sets, so a rewording wins within
+    /// their tier.
+    /// </summary>
+    /// <param name="ancestors">The classes of this assembly it derives from, nearest first.</param>
     private static int GetDepth(INamedTypeSymbol type, ImmutableArray<SourceAncestor> ancestors)
     {
         var depth = 0;
@@ -548,8 +522,7 @@ internal static partial class LocalizationDiscovery
             if (baseType.IsAbstract)
                 continue;
 
-            // A class of this assembly implementing a contract generated here binds that contract to nothing yet, so
-            // what it lists, or what a class it derives from lists, has to stand in for the interface.
+            // A generated contract doesn't bind yet, so an unresolved base type stands in for the interface.
             var implementsGeneratedContract = index < ancestors.Length
                                               && ancestors.Skip(index).Any(static ancestor => ancestor.UnresolvedBaseTypes.Length > 0);
 
@@ -561,8 +534,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The classes of this assembly the type derives from, nearest first, each with the base types it lists itself that
-    /// bind to nothing. Stops at the first class from elsewhere, whose base types all bind.
+    /// The classes of this assembly the type derives from, nearest first, each with its unresolved base types. Stops at
+    /// the first class from elsewhere.
     /// </summary>
     private static ImmutableArray<SourceAncestor> GetSourceAncestors(INamedTypeSymbol type, WordingReader reader,
         CancellationToken cancellationToken)
@@ -579,7 +552,7 @@ internal static partial class LocalizationDiscovery
                 if (reference.GetSyntax(cancellationToken) is TypeDeclarationSyntax declaration && reader.FindModel(declaration.SyntaxTree) is { } model)
                     unresolved.AddRange(GetUnresolvedBaseTypes(baseType, name, declaration, model, locations, cancellationToken));
 
-            ancestors.Add(new SourceAncestor(baseType, name, unresolved.ToImmutable(), locations.ToImmutable()));
+            ancestors.Add(new SourceAncestor(name,unresolved.ToImmutable(), locations.ToImmutable()));
         }
 
         return ancestors.ToImmutable();
@@ -592,8 +565,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The contracts another assembly could implement too: the public contracts (<see cref="PackageNames.IsContract"/>)
-    /// that the type resolves in the input compilation.
+    /// The public contracts the type implements (<see cref="PackageNames.IsContract"/>), which another assembly could
+    /// implement too.
     /// </summary>
     private static ImmutableArray<string> GetPublicContractNames(INamedTypeSymbol type)
     {
@@ -608,10 +581,8 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether the type implements a contract of another assembly that isn't public, which it can only see through
-    /// <c>InternalsVisibleTo</c>, as the set of a test project does for the internal contract of the library it tests.
-    /// Such a contract counts for none of the assemblies referencing this one, so it isn't among
-    /// <see cref="GetPublicContractNames"/>.
+    /// Whether the type implements another assembly's internal contract through <c>InternalsVisibleTo</c>, as a test
+    /// project's set does. It isn't among <see cref="GetPublicContractNames"/>, because no other assembly sees it.
     /// </summary>
     private static bool ImplementsInternalContract(INamedTypeSymbol type)
     {
@@ -623,7 +594,7 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// The contracts written by hand in the type's own assembly (<see cref="PackageNames.IsContract"/>), whatever their
-    /// accessibility. A contract the generator writes is not among them, as it does not exist in the input compilation.
+    /// accessibility.
     /// </summary>
     private static ImmutableArray<string> GetOwnContractNames(INamedTypeSymbol type)
     {
@@ -638,8 +609,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Whether discovery finds a set of this shape, so that generated code can name it: concrete, closed, top-level, and
-    /// not file-local.
+    /// Whether generated code can name a set of this shape: concrete, closed, top-level and not file-local.
     /// </summary>
     private static bool IsNameableSet(INamedTypeSymbol type)
     {
@@ -648,148 +618,55 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Why generated code can't register the set, as the clause of the <c>LOC208</c> message, or
-    /// <see langword="null"/> when it can.
+    /// Whether generated code in another file of the assembly can name a nested set: a concrete class that isn't generic,
+    /// public or internal, in classes that are public or internal and not generic or file-local.
     /// </summary>
-    /// <param name="type">The set.</param>
-    /// <param name="constructor">
-    /// The constructor <c>new T()</c> calls (<see cref="FindConstructorCalledWithoutArguments"/>), or
-    /// <see langword="null"/> when it calls none.
-    /// </param>
-    /// <param name="hasLanguageCode">
-    /// Whether the set implements <c>LocalizationLanguageCode</c>, or the build describes it with a code
-    /// (<see cref="FindDescribedLanguageCode(INamedTypeSymbol, ImmutableArray{SourceAncestor}, bool)"/>).
-    /// </param>
-    /// <param name="hasUnreadableLanguageCode">
-    /// Whether the set implements <c>LocalizationLanguageCode</c> with something other than a constant the build can
-    /// read, such as a value read at run time, or an implementation in another assembly.
-    /// </param>
-    private static string? GetRegistrationProblem(INamedTypeSymbol type, IMethodSymbol? constructor, bool hasLanguageCode,
-        bool hasUnreadableLanguageCode)
+    private static bool IsNameableNestedSet(INamedTypeSymbol type)
     {
-        // Naming it is an error (CS0619), which no pragma turns off.
-        if (IsObsoleteAsError(type))
-            return ObsoleteAsErrorProblem;
+        if (type is not { IsAbstract: false, TypeKind: TypeKind.Class, IsGenericType: false, ContainingType: not null })
+            return false;
 
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (current.IsGenericType || current.IsFileLocal
+                || current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Why generated code can't register the set, as the <c>LOC207</c> clause, or <see langword="null"/>.
+    /// </summary>
+    /// <param name="constructor">What <c>new T()</c> calls (<see cref="FindConstructorCalledWithoutArguments"/>).</param>
+    /// <param name="hasLanguage">Whether the set has a language.</param>
+    private static string? GetRegistrationProblem(INamedTypeSymbol type, IMethodSymbol? constructor, bool hasLanguage)
+    {
         if (constructor is null)
             return "it has no parameterless constructor";
 
-        // new T() sets no member, and compiles only when the constructor says it sets the required ones itself.
+        // new T() compiles only when the constructor sets the required members itself.
         if (FindUnsetRequiredMember(type, constructor) is { } required)
             return $"it has a required member ('{required}'), which generated code can't set";
 
-        // At run time this would throw while the assembly loads, where the cause is hard to see.
-        if (!EndsInTwoLetterSuffix(type.Name) && !hasLanguageCode)
+        // Else it would throw while the assembly loads, where the cause is hard to see.
+        if (!hasLanguage)
             return NoLanguageCodeProblem;
-
-        // The registry files a set under the language the build describes it with, without creating it. Creating it to
-        // ask its language ran its constructor while the registry was being built.
-        if (hasUnreadableLanguageCode)
-            return UnreadableLanguageCodeProblem;
 
         return null;
     }
 
     /// <summary>
-    /// Why a set whose language code the build can't read can't be registered, as the clause of the <c>LOC208</c>
-    /// message.
+    /// Why a set without a language code can't be registered, as the clause of the <c>LOC207</c> message.
     /// </summary>
-    internal const string UnreadableLanguageCodeProblem = "its LocalizationLanguageCode isn't a constant the build can read";
+    internal const string NoLanguageCodeProblem = "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb)";
 
     /// <summary>
-    /// Why a set without a language code can't be registered, as the clause of the <c>LOC208</c> message.
-    /// </summary>
-    internal const string NoLanguageCodeProblem = "its name doesn't end in a language code that starts with a capital (two letters, as in ShopLocalizationNl, or a longer code the assembly declares, as in ShopLocalizationEnGb), and it doesn't implement LocalizationLanguageCode";
-
-    /// <summary>
-    /// Why a set marked <c>[Obsolete]</c> as an error can't be registered, as the clause of a message.
-    /// </summary>
-    internal const string ObsoleteAsErrorProblem = "it's marked [Obsolete] as an error, and generated code can't name such a class";
-
-    /// <summary>
-    /// Whether a type or a member is marked <c>[Obsolete]</c> as an error, as in
-    /// <c>[Obsolete("Use another set", error: true)]</c>. Naming it is an error (<c>CS0619</c>), which no pragma turns off.
-    /// </summary>
-    internal static bool IsObsoleteAsError(ISymbol symbol)
-    {
-        var isObsoleteAsError = symbol.GetAttributes().Any(static attribute =>
-            attribute.AttributeClass is { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } }
-            && attribute.ConstructorArguments is [_, { Value: true }]);
-
-        return isObsoleteAsError;
-    }
-
-    /// <summary>
-    /// What writing a type in generated code reports besides <c>CS0612</c> and <c>CS0618</c>
-    /// (<see cref="GetSuppressedDiagnostics(ISymbol)"/>), for the type, the types around it, and the types it's made of,
-    /// such as the element of an array or a type argument. <c>Payment&lt;Money&gt;[]</c> reports what <c>Payment</c> and
-    /// <c>Money</c> are marked with.
-    /// </summary>
-    internal static ImmutableArray<string> GetSuppressedDiagnosticsOfType(ITypeSymbol type)
-    {
-        var suppressed = new List<string>();
-        Add(type, suppressed);
-
-        return [.. suppressed.Distinct(StringComparer.Ordinal)];
-
-        static void Add(ITypeSymbol type, List<string> suppressed)
-        {
-            switch (type)
-            {
-                case IArrayTypeSymbol array:
-                    Add(array.ElementType, suppressed);
-                    break;
-
-                case INamedTypeSymbol named:
-                    for (var current = named; current is not null; current = current.ContainingType)
-                        suppressed.AddRange(GetSuppressedDiagnostics(current.OriginalDefinition));
-
-                    foreach (var argument in named.TypeArguments)
-                        Add(argument, suppressed);
-
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// The diagnostics that naming a type or a member reports, other than <c>CS0612</c> and <c>CS0618</c>, which every
-    /// generated file turns off: the id of <c>[Experimental("SHOP001")]</c>, and the <c>DiagnosticId</c> of
-    /// <c>[Obsolete]</c>. The author of a set or a member marked so can't act on them in generated code, and a build
-    /// that treats warnings as errors would stop at them.
-    /// </summary>
-    internal static ImmutableArray<string> GetSuppressedDiagnostics(ISymbol symbol)
-    {
-        var builder = ImmutableArray.CreateBuilder<string>();
-
-        foreach (var attribute in symbol.GetAttributes())
-        {
-            switch (attribute.AttributeClass)
-            {
-                case { Name: "ExperimentalAttribute", ContainingNamespace: { Name: "CodeAnalysis", ContainingNamespace: { Name: "Diagnostics", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } } }
-                    when attribute.ConstructorArguments is [{ Value: string id }] && IsDiagnosticId(id):
-                    builder.Add(id);
-                    break;
-
-                case { Name: "ObsoleteAttribute", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } }:
-                    foreach (var argument in attribute.NamedArguments)
-                        if (argument is { Key: "DiagnosticId", Value.Value: string id } && IsDiagnosticId(id))
-                            builder.Add(id);
-
-                    break;
-            }
-        }
-
-        return builder.ToImmutable();
-
-        // Written into a pragma, so only what a pragma can hold: letters, digits and underscores.
-        static bool IsDiagnosticId(string id) => id.Length > 0 && id.All(static c => c is '_' || Char.IsLetterOrDigit(c));
-    }
-
-    /// <summary>
-    /// The constructor <c>new T()</c> calls from generated code, which lies in another file of the set's assembly, or
-    /// <see langword="null"/> when that does not compile: no constructor it can reach takes no arguments, or several do
-    /// and none is better than the others.
+    /// The constructor <c>new T()</c> calls from generated code in another file, or <see langword="null"/> when that
+    /// doesn't compile.
     /// </summary>
     private static IMethodSymbol? FindConstructorCalledWithoutArguments(INamedTypeSymbol type, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
@@ -816,9 +693,8 @@ internal static partial class LocalizationDiscovery
         if (count < 2)
             return callable;
 
-        // Several of them: which one new T() calls, if any, is for the compiler to say, as it will for the generated
-        // code. A default is better than params, and two defaults are ambiguous. Bound at the start of the file, outside
-        // every type, as generated code is: there a private constructor is out of reach.
+        // The compiler picks among several. It's bound at the start of the file, outside every type, as generated code
+        // is, so a private constructor is out of reach.
         var creation = SyntaxFactory.ParseExpression($"new {type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}()");
 
         var methodSymbol = semanticModel.GetSpeculativeSymbolInfo(position: 0, creation, SpeculativeBindingOption.BindAsExpression).Symbol as IMethodSymbol;
@@ -826,8 +702,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// A required member of the set that <c>new T()</c> leaves unset (<c>CS9035</c>), or <see langword="null"/> when
-    /// it has none, or the constructor sets them all (<c>[SetsRequiredMembers]</c>).
+    /// A required member that <c>new T()</c> leaves unset (<c>CS9035</c>), or <see langword="null"/>.
     /// </summary>
     private static string? FindUnsetRequiredMember(INamedTypeSymbol type, IMethodSymbol constructor)
     {

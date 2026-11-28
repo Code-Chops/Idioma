@@ -18,21 +18,21 @@ The first digit of a code names its subject.
 |-------------------------------------------------------------------------------------------|-------------------------------------------------------------|
 | **[Languages](build-errors/LOC1XX-languages.md)**                                         |                                                             |
 | [`LOC100`](build-errors/LOC1XX-languages.md#loc100) (code fix)                            | A set or standalone text in an assembly without languages   |
-| [`LOC101`](build-errors/LOC1XX-languages.md#loc101)                                       | An invalid or repeated language                             |
-| [`LOC102`](build-errors/LOC1XX-languages.md#loc102)                                       | A C# version older than 14                                  |
-| [`LOC103`](build-errors/LOC1XX-languages.md#loc103)                                       | An app without languages                                    |
-| [`LOC104`](build-errors/LOC1XX-languages.md#loc104) (warning)                             | A language code that doesn't exist, such as `dk`            |
+| [`LOC101`](build-errors/LOC1XX-languages.md#loc101)                                       | An app without languages                                    |
+| [`LOC102`](build-errors/LOC1XX-languages.md#loc102)                                       | An invalid or repeated language                             |
+| [`LOC103`](build-errors/LOC1XX-languages.md#loc103) (warning)                             | A language code that doesn't exist, such as `dk`            |
+| [`LOC104`](build-errors/LOC1XX-languages.md#loc104)                                       | A C# version older than 14                                  |
 | **[Sets](build-errors/LOC2XX-sets.md)**                                                   |                                                             |
 | [`LOC200`](build-errors/LOC2XX-sets.md#loc200) (code fix)                                 | A default-language set the generator can't use              |
 | [`LOC201`](build-errors/LOC2XX-sets.md#loc201) (code fix)                                 | A language without a set                                    |
 | [`LOC202`](build-errors/LOC2XX-sets.md#loc202) (code fix)                                 | A set for a language that isn't listed                      |
-| [`LOC203`](build-errors/LOC2XX-sets.md#loc203) (code fix)                                 | A set deriving from another language, as `nl` from `en`     |
-| [`LOC204`](build-errors/LOC2XX-sets.md#loc204) (code fix)                                 | A set that doesn't list its contract                        |
-| [`LOC205`](build-errors/LOC2XX-sets.md#loc205) (warning, code fix)                        | A set whose enums don't match its contract                  |
-| [`LOC206`](build-errors/LOC2XX-sets.md#loc206) (code fix)                                 | A `LocalizationLanguageCode` that implements nothing        |
-| [`LOC207`](build-errors/LOC2XX-sets.md#loc207)                                            | A `LocalizationLanguageCode` that isn't a culture name      |
-| [`LOC208`](build-errors/LOC2XX-sets.md#loc208) (warning)                                  | A set that can't be registered automatically                |
-| [`LOC209`](build-errors/LOC2XX-sets.md#loc209)                                            | Two sets of one contract for one language                   |
+| [`LOC203`](build-errors/LOC2XX-sets.md#loc203)                                            | Two sets of one contract for one language                   |
+| [`LOC204`](build-errors/LOC2XX-sets.md#loc204) (code fix)                                 | A set deriving from another language, as `nl` from `en`     |
+| [`LOC205`](build-errors/LOC2XX-sets.md#loc205) (code fix)                                 | A set that doesn't list its contract                        |
+| [`LOC206`](build-errors/LOC2XX-sets.md#loc206) (warning, code fix)                        | A set whose enums don't match its contract                  |
+| [`LOC207`](build-errors/LOC2XX-sets.md#loc207) (warning)                                  | A set that can't be registered                              |
+| [`LOC208`](build-errors/LOC2XX-sets.md#loc208) (warning)                                  | A rewording that doesn't reach a library's regional set     |
+| [`LOC209`](build-errors/LOC2XX-sets.md#loc209) (warning)                                  | Two rewordings of one set, of which only one shows          |
 | **[Texts of a set](build-errors/LOC3XX-texts-of-a-set.md)**                               |                                                             |
 | [`LOC300`](build-errors/LOC3XX-texts-of-a-set.md#loc300)                                  | A text with a name the generated class can't give it        |
 | [`LOC301`](build-errors/LOC3XX-texts-of-a-set.md#loc301) (code fix)                       | A text with a setter                                        |

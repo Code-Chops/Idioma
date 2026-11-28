@@ -4,33 +4,23 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Closes what the generated factory can't in an assembly that declares <c>[assembly: SupportedLanguages(...)]</c>:
-/// <c>LOC500</c> for a language argument without its name, of <c>LocalizedText.Inline</c> or of <c>[Localized]</c>.
-/// In an assembly without the attribute, it reports a call of <c>LocalizedText.Inline</c> (<c>LOC100</c>), which the
-/// compiler alone reports as a method that doesn't exist. The generator reports a member marked <c>[Localized]</c>
-/// there (<see cref="LocalizedTextFactoryGenerator"/>), because the compiler stops at an attribute that doesn't exist
-/// before any analyzer runs.
+/// Reports a language argument without its name, of <c>LocalizedText.Inline</c> or of <c>[Localized]</c>
+/// (<c>LOC500</c>). In an assembly without languages, it reports a call of <c>LocalizedText.Inline</c> (<c>LOC100</c>),
+/// which the compiler alone reports as a method that doesn't exist.
 /// </summary>
 /// <remarks>
-/// Generated code is left alone, as its author can't fix a report on it, except what Razor generates from a
-/// <c>.razor</c> or <c>.cshtml</c> file, which is the user's own markup and maps back to it.
+/// <c>[Localized]</c> without languages is reported by <see cref="LocalizedTextFactoryGenerator"/>, because the
+/// compiler stops at an attribute that doesn't exist before any analyzer runs. Generated code is left alone, except
+/// what Razor generates from the user's markup.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
 {
-    // An earlier rule reported wording written in one language where a text was expected. A text is a string now, so
-    // the build can't tell such wording from any other string, and that rule is gone.
     public const string UnnamedLanguageDiagnosticId = "LOC500";
 
     /// <summary>
-    /// The code a set in an assembly without languages gets too (<see cref="LocalizationSetsPart"/>).
-    /// </summary>
-    public const string NoLanguagesDeclaredDiagnosticId = LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId;
-
-    /// <summary>
-    /// The property of <c>LOC500</c> that holds the language of each argument of the call or the attribute, in the
-    /// order they're written, separated by commas: <c>en,nl</c>. Its code fix names the arguments from it, also in a
-    /// workspace that hasn't run the generator that writes <c>LocalizedText.Inline</c> and <c>[Localized]</c>.
+    /// The property of <c>LOC500</c> that holds the parameter of each argument in written order, as <c>en,nl</c>. The
+    /// code fix reads it, so it works also where the generator hasn't run.
     /// </summary>
     public const string ParameterNamesProperty = "ParameterNames";
 
@@ -44,16 +34,14 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
         description: "Every parameter of LocalizedText.Inline and of [Localized] is a string, so wording in the wrong position compiles and shows in the wrong language.",
         helpLinkUri: PackageNames.HelpLink(UnnamedLanguageDiagnosticId));
 
-    // LOC100 is the code of a set and of [Localized] in an assembly without languages too, which the generators report
-    // (SharedRules).
+    // The generators report LOC100 too (SharedRules).
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [UnnamedLanguageRule, SharedRules.NoLanguagesDeclared];
 
     public override void Initialize(AnalysisContext context)
     {
         context.EnableConcurrentExecution();
 
-        // Razor's output counts as generated code, and a text written in markup must be caught there. IsHandWritten
-        // leaves out the rest.
+        // Razor's output counts as generated code, but a text written in markup must be caught (AnalyzerSupport.IsHandWritten).
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
@@ -84,10 +72,10 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     /// </summary>
     private static void AnalyzeInlineWithoutLanguages(SyntaxNodeAnalysisContext context, INamedTypeSymbol text)
     {
-        // By its shape first, which binds nothing: nearly every call is another one.
+        // By its shape first, which binds nothing, because nearly every call is another one.
         if (context.Node is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } invocation
             || !String.Equals(access.Name.Identifier.ValueText, LocalizedTextFactoryGenerator.FactoryName, StringComparison.Ordinal)
-            || !IsHandWritten(context.IsGeneratedCode, invocation.SyntaxTree))
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, invocation.SyntaxTree))
         {
             return;
         }
@@ -110,7 +98,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
 
         if (!LocalizedMembers.IsNamedLocalized(attribute)
             || attribute.ArgumentList is not { Arguments: var arguments }
-            || !IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree)
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree)
             || context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken).Symbol is not IMethodSymbol constructor
             || !LocalizedMembers.IsGeneratedAttribute(constructor.ContainingType, context.Compilation.Assembly))
         {
@@ -132,9 +120,8 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The parameter of each argument of an attribute, in the order the arguments are written, separated by commas, or
-    /// <see langword="null"/> when an argument has no parameter. An argument without a name takes the parameter of
-    /// its place.
+    /// The parameter of each argument of an attribute, comma-separated, or <see langword="null"/> when an argument has
+    /// none.
     /// </summary>
     private static string? FindParameterNames(SeparatedSyntaxList<AttributeArgumentSyntax> arguments, IMethodSymbol constructor)
     {
@@ -142,12 +129,10 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
 
         for (var i = 0; i < arguments.Count; i++)
         {
-            if (arguments[i].NameColon is { } nameColon)
-                names[i] = nameColon.Name.Identifier.ValueText;
-            else if (arguments[i].NameEquals is null && i < constructor.Parameters.Length)
-                names[i] = constructor.Parameters[i].Name;
-            else
+            if (AnalyzerSupport.FindParameterOfArgument(arguments, i, constructor) is not { } name)
                 return null;
+
+            names[i] = name;
         }
 
         var parameterNames = String.Join(",", names);
@@ -157,12 +142,8 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeInvocation(OperationAnalysisContext context, string sample)
     {
         var invocation = (IInvocationOperation)context.Operation;
-        var method = invocation.TargetMethod;
 
-        if (!IsHandWritten(context))
-            return;
-
-        if (!IsFactory(method))
+        if (!AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree) || !AnalyzerSupport.IsFactory(invocation.TargetMethod))
             return;
 
         foreach (var argument in invocation.Arguments)
@@ -182,8 +163,7 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The parameter of each argument of a call, in the order the arguments are written, separated by commas, or
-    /// <see langword="null"/> when an argument has no parameter, as in a call that doesn't compile.
+    /// The parameter of each argument of a call, comma-separated, or <see langword="null"/> when an argument has none.
     /// </summary>
     private static string? FindParameterNames(IInvocationOperation invocation)
     {
@@ -206,55 +186,4 @@ public sealed class UnnamedLanguageAnalyzer : DiagnosticAnalyzer
         return parameterNames;
     }
 
-    /// <summary>
-    /// Whether a method is the generated factory. An extension member's method lies in a block inside the static class.
-    /// </summary>
-    internal static bool IsFactory(IMethodSymbol method)
-    {
-        if (!String.Equals(method.Name, LocalizedTextFactoryGenerator.FactoryName, StringComparison.Ordinal))
-            return false;
-
-        for (var type = method.ContainingType; type is not null; type = type.ContainingType)
-            if (String.Equals(type.Name, LocalizedTextFactoryGenerator.ClassName, StringComparison.Ordinal))
-                return true;
-
-        return false;
-    }
-
-    private static bool IsHandWritten(OperationAnalysisContext context)
-    {
-        var isHandWritten = IsHandWritten(context.IsGeneratedCode, context.Operation.Syntax.SyntaxTree);
-        return isHandWritten;
-    }
-
-    /// <summary>
-    /// Whether code is the user's own: not generated, or generated by Razor from the user's markup.
-    /// </summary>
-    internal static bool IsHandWritten(bool isGeneratedCode, SyntaxTree tree)
-    {
-        // Razor names its output after the markup file: Pages/Index.cshtml becomes Pages/Index_cshtml.g.cs.
-        var path = tree.FilePath;
-
-        var isHandWritten = !isGeneratedCode
-                            || path.EndsWith("_razor.g.cs", StringComparison.Ordinal)
-                            || path.EndsWith("_cshtml.g.cs", StringComparison.Ordinal)
-                            || IsRazorDeclaration(tree);
-
-        return isHandWritten;
-    }
-
-    /// <summary>
-    /// Whether Razor wrote a file of declarations from the user's markup. From SDK 11 on, Razor writes the members of
-    /// a component's <c>@code</c> block to a file of their own, such as <c>Pages/Index_razor.decl.g.cs</c>. Other
-    /// source generators see that file, so the generator that writes the texts reads a <c>[Localized]</c> in it.
-    /// </summary>
-    internal static bool IsRazorDeclaration(SyntaxTree tree)
-    {
-        var path = tree.FilePath;
-
-        var isRazorDeclaration = path.EndsWith("_razor.decl.g.cs", StringComparison.Ordinal)
-                                 || path.EndsWith("_cshtml.decl.g.cs", StringComparison.Ordinal);
-
-        return isRazorDeclaration;
-    }
 }

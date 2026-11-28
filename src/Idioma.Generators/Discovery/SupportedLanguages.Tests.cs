@@ -6,7 +6,7 @@ namespace CodeChops.Idioma.Tests;
 /// <summary>
 /// Tests for <see cref="SupportedLanguages"/> against the cultures of the runtime the tests run on: the parents the
 /// build writes out must be the parents a text follows at run time (<see cref="CultureInfo.Parent"/>), and the
-/// languages and regions it knows must hold those of every culture (<c>LOC104</c>).
+/// languages and regions it knows must hold those of every culture (<c>LOC103</c>).
 /// </summary>
 public sealed class SupportedLanguagesTests
 {
@@ -113,7 +113,7 @@ public sealed class SupportedLanguagesTests
     public void EveryCultureOfTheRuntime_ShouldHaveNoUnknownPart()
     {
         // Arrange: the tables of languages and regions the build carries, against the cultures a user can have. A
-        // culture the tables don't know would get LOC104 for a code that is right.
+        // culture the tables don't know would get LOC103 for a code that is right.
         var unknown = new List<string>();
 
         foreach (var culture in CulturesToCheck())
@@ -227,5 +227,63 @@ public sealed class SupportedLanguagesTests
 
         // Assert
         missed.ShouldBeEmpty();
+    }
+
+    [Test]
+    [Arguments("nl", "nl")]
+    [Arguments("NL", "nl")]
+    [Arguments("NL-be", "nl-BE")]
+    [Arguments("ZH-hans-tw", "zh-Hans-TW")]
+    [Arguments("ES-419", "es-419")]
+    [Arguments("ca-es-VALENCIA", "ca-ES-valencia")]
+    [Arguments("en-us-posix", "en-US-posix")]
+    [Arguments("sgn-be-fr", "sgn-BE-FR")]
+    [Arguments("EN-ca-X-CA", "en-CA-x-ca")]
+    [Arguments("az-latn-x-LATN", "az-Latn-x-latn")]
+    [Arguments("en-us-U-CA-Gregory", "en-US-u-ca-gregory")]
+    public void Normalize_ShouldWriteCodeAsCultureNamesAreWritten(string code, string expected)
+    {
+        // Arrange & Act & Assert: the letter case RFC 5646 recommends, in which the generated code passes every code.
+        SupportedLanguages.Normalize(code).ShouldBe(expected);
+    }
+
+    [Test]
+    [Arguments("ShopLocalizationEnGb", "en", "en-GB")]
+    [Arguments("ShopLocalizationEnGb", "en,en-GB", "en-GB")]
+    [Arguments("ShopLocalizationDeDe", "de", "de-DE")]
+    [Arguments("ShopLocalizationFrCa", "fr", "fr-CA")]
+    [Arguments("ShopLocalizationFrCa", "fr,ca,fr-CA", "fr-CA")]
+    [Arguments("ShopLocalizationFrCa", "fr,ca", null)] // Catalan, by its last two letters
+    [Arguments("YesNoDe", "en,no,de", null)] // German, not no-DE
+    [Arguments("UserIdNl", "id,nl", null)] // Dutch, not id-NL
+    [Arguments("AdminUiNl", "en,nl", null)]
+    public void FindNamedLanguage_ShouldLetDeclaredLanguageAtTheEndWinOverRegion(string typeName, string codes, string? expected)
+    {
+        // Arrange & Act: null leaves the name to its last two letters.
+        var language = SupportedLanguages.FindNamedLanguage(typeName, codes.Split(','));
+
+        // Assert
+        language.ShouldBe(expected);
+    }
+
+    [Test]
+    public void Normalize_ShouldAgreeWithCultureNamesOfRuntime()
+    {
+        // Arrange
+        var differing = new List<string>();
+
+        foreach (var culture in CultureInfo.GetCultures(CultureTypes.AllCultures))
+        {
+            // Act: a culture name the build accepts is written as the runtime writes it. Not a variant, which ICU writes
+            // in upper case (en-US-POSIX), where RFC 5646 recommends lower case.
+            if (culture.Name.Length > 0 && SupportedLanguages.IsCultureName(culture.Name) && culture.Name.Split('-').All(static part => part.Length <= 4)
+                && !String.Equals(SupportedLanguages.Normalize(culture.Name.ToUpperInvariant()), culture.Name, StringComparison.Ordinal))
+            {
+                differing.Add(culture.Name);
+            }
+        }
+
+        // Assert
+        differing.ShouldBeEmpty();
     }
 }

@@ -9,7 +9,7 @@ namespace CodeChops.Idioma;
 /// <remarks>
 /// <para>
 /// <b>On a set.</b> Mark a set that can't be registered automatically, such as one that needs constructor arguments.
-/// Build warning <c>LOC208</c> points these out.
+/// Build warning <c>LOC207</c> points these out.
 /// </para>
 /// <para>
 /// <b>On a member.</b> Every public string property of the set of your default language is a text. So is every public
@@ -69,7 +69,6 @@ namespace CodeChops.Idioma;
 /// LocalizationRegistry.Register(new BrandedShopLocalizationEn(configuration["ShopName"]!));
 /// </code>
 /// </example>
-// The source generator locates this type by its full name (PackageNames.ExcludeFromLocalizationDiscoveryAttribute).
-// A rename that misses that constant silently disables the exclusion, so a test pins the two to each other.
+// The generator finds this type by its full name (PackageNames.ExcludeFromLocalizationDiscoveryAttribute), which a test pins.
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method, Inherited = false)]
 public sealed class ExcludeFromLocalizationDiscoveryAttribute : Attribute;

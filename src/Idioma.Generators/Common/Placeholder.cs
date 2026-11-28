@@ -3,20 +3,16 @@ using System.Globalization;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Finds a placeholder of a format string in a wording: <c>{0}</c>, with or without an alignment or a format, as in
-/// <c>{1,8}</c> and <c>{0:N2}</c>. Nothing fills one in, so in a wording it is a value that was meant to be there and
-/// is not (<c>LOC403</c>).
+/// Finds a format placeholder in a wording, such as <c>{0}</c>, <c>{1,8}</c> or <c>{0:N2}</c>. Nothing fills one in
+/// (<c>LOC403</c>).
 /// </summary>
 /// <remarks>
-/// A placeholder is written as <see cref="string.Format(string, object?)"/> reads it: a number, then an alignment, then
-/// a format. The alignment is a comma and a whole number, as in <c>,8</c> or <c>, -8</c>. The format is a colon and
-/// anything but a brace, as in <c>:N2</c>. So <c>{1, 2, 3}</c> is text, because <c> 2, 3</c> is no alignment.
+/// It's read as <see cref="string.Format(string, object?)"/> reads it, so <c>{1, 2, 3}</c> is text.
 /// </remarks>
 internal static class Placeholder
 {
     /// <summary>
-    /// The first placeholder a wording holds, as it is written, or <see langword="null"/> when it holds none. Braces
-    /// around anything but a number are text: <c>{name}</c>, <c>{}</c>, and <c>{ 0 }</c> are no placeholders.
+    /// The first placeholder as written, or <see langword="null"/>. <c>{name}</c>, <c>{}</c> and <c>{ 0 }</c> are text.
     /// </summary>
     public static string? Find(string wording)
     {
@@ -30,16 +26,10 @@ internal static class Placeholder
     }
 
     /// <summary>
-    /// The placeholder that starts at <paramref name="start"/>: its number, its alignment and format as written (as in
-    /// <c>,8</c> or <c>:N2</c>), and the index after it. <see langword="null"/> when none starts there, or when its
-    /// number is too large to be one.
+    /// The placeholder at <paramref name="start"/>: its number, its alignment and format as written, and the index
+    /// after it. <see langword="null"/> when none starts there, or its number overflows.
     /// </summary>
-    /// <param name="written">The text that holds the placeholder.</param>
-    /// <param name="start">The index of its opening brace.</param>
-    /// <param name="braceWidth">
-    /// How often a brace of the placeholder is written: once, or twice in the text of an interpolated string as the
-    /// source writes it.
-    /// </param>
+    /// <param name="braceWidth">2 for the source text of an interpolated string, which doubles braces, else 1.</param>
     public static (int Number, string AlignmentAndFormat, int End)? Read(string written, int start, int braceWidth)
     {
         if (FindEnd(written, start, braceWidth) is not var (digitsEnd, end))
@@ -54,8 +44,7 @@ internal static class Placeholder
     }
 
     /// <summary>
-    /// Where the number of the placeholder that starts at <paramref name="start"/> ends, and the index after the
-    /// placeholder. <see langword="null"/> when none starts there.
+    /// Where the placeholder's number ends, and the index after it. <see langword="null"/> when none starts there.
     /// </summary>
     private static (int DigitsEnd, int End)? FindEnd(string written, int start, int braceWidth)
     {
@@ -65,7 +54,6 @@ internal static class Placeholder
         var digits = start + braceWidth;
         var digitsEnd = SkipDigits(written, digits);
 
-        // Without a number, no placeholder.
         if (digitsEnd == digits)
             return null;
 

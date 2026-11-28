@@ -6,17 +6,11 @@ namespace CodeChops.Idioma.Generators;
 /// A source location to carry through the pipeline: the syntax tree it lies in, and its span there.
 /// </summary>
 /// <remarks>
-/// It keeps the tree, and not only its path and line numbers, because a diagnostic at a location inside its tree is one
-/// that <c>#pragma warning disable</c>, <c>[SuppressMessage]</c>, and the severities of an <c>.editorconfig</c> apply
-/// to, and one a code fix finds its document by. A location made from a path alone looks the same in the error list,
-/// but none of those reach it.
+/// It keeps the tree, because only a location inside a tree is reached by pragmas, <c>[SuppressMessage]</c>,
+/// <c>.editorconfig</c> severities and code fixes.
 /// </remarks>
-// A tree compares by reference, and stays the same object for as long as its file is not edited, so a pipeline step
-// holding a location is reused across edits in other files. An edit in the file itself gives a new tree, and with it a
-// new location, also where nothing moved: the steps holding one then run again. So what a generator writes comes from
-// models without a location (the contracts, the listed sets, the registrar, the languages of the factory), and only
-// reporting runs again. Discovery keeps every location of a set in one share (SetLocations), which the registrar's
-// share of that set leaves empty, so the steps that read the registrar's share don't run again either.
+// A tree compares by reference, so an edit in its file makes every step holding a location run again. So generated code
+// comes from models without a location, and discovery keeps a set's locations apart (SetLocations).
 internal readonly record struct DiagnosticLocation(SyntaxTree? Tree, TextSpan Span)
 {
     public static DiagnosticLocation From(Location location)
@@ -26,11 +20,14 @@ internal readonly record struct DiagnosticLocation(SyntaxTree? Tree, TextSpan Sp
     }
 
     /// <summary>
-    /// The location inside its tree, or no location for one that lies in no tree, such as the default value.
+    /// The location inside its tree, or <see cref="Location.None"/> without one.
     /// </summary>
     public Location ToLocation()
     {
-        var location = this.Tree is null ? Location.None : Location.Create(this.Tree, this.Span);
+        var location = this.Tree is null
+            ? Location.None
+            : Location.Create(this.Tree, this.Span);
+
         return location;
     }
 }

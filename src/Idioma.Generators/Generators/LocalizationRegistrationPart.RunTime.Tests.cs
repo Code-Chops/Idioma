@@ -1,7 +1,9 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using CodeChops.Idioma.Generators;
 using CodeChops.Idioma.Tests.TestHelpers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace CodeChops.Idioma.Tests;
 
@@ -242,7 +244,7 @@ public sealed partial class LocalizationRegistrationPartTests
     [NotInParallel(nameof(LocalizationRegistry))]
     public void SetNamedAfterDeclaredLongCode_ShouldServeItAtRunTime()
     {
-        // Arrange: neither set implements LocalizationLanguageCode; the rewording's name gives no language of its own.
+        // Arrange: the rewording's name gives no language of its own, so it takes that of the set it derives from.
         var image = GeneratorTestHelper.EmitLibraryWithGenerators("RegionalNameLibrary", """
             using CodeChops.Idioma;
 
@@ -277,14 +279,111 @@ public sealed partial class LocalizationRegistrationPartTests
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
 
         // Assert: both serve nl-BE, not be; the rewording wins over its base, and keeps the base's other texts.
-        var belgian = (ILocalizationSet)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopLocalizationNlBe")!)!;
-        var rewording = (ILocalizationSet)Activator.CreateInstance(assembly.GetType("RegionalNameLibrary.ShopRewording")!)!;
-        belgian.LocalizationLanguageCode.ShouldBe("nl-BE");
-        rewording.LocalizationLanguageCode.ShouldBe("nl-BE");
+        LocalizationRegistry.GetLanguageCode(assembly.GetType("RegionalNameLibrary.ShopLocalizationNlBe")!).ShouldBe("nl-BE");
+        LocalizationRegistry.GetLanguageCode(assembly.GetType("RegionalNameLibrary.ShopRewording")!).ShouldBe("nl-BE");
 
         var texts = assembly.GetType("RegionalNameLibrary.ShopLocalization")!;
         ReadText(texts, "Checkout", "nl-BE").ShouldBe("Betalen");
         ReadText(texts, "Total", "nl-BE").ShouldBe("Totaal");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void EverySet_ShouldServeAtRunTimeTheLanguageTheBuildReadFromItsName()
+    {
+        // Arrange: a plain suffix, a listed longer code, an unlisted region of a listed language, a region of a listed
+        // script, a region that doesn't exist (EnUk gives uk), a name whose ui isn't a listed language, an inherited
+        // language, a nested set registered by hand, and an app's rewording of the British set.
+        var library = GeneratorTestHelper.EmitLibraryWithGenerators("LanguageRuleLibrary", """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "nl-BE", "zh-Hans")]
+
+            namespace LanguageRuleLibrary;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Afrekenen";
+            }
+
+            public class ShopLocalizationEnGb : ShopLocalizationEn
+            {
+                public override string Checkout => "Pay";
+            }
+
+            public sealed class ShopLocalizationZhHansTw : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Jiezhang";
+            }
+
+            public sealed class ShopLocalizationEnUk : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed class AdminUiNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+
+            public sealed class BelgianRewording : ShopLocalizationNlBe;
+
+            public static class HandRegistered
+            {
+                public sealed class ShopLocalizationEnAu : ShopLocalizationEn
+                {
+                    public override string Checkout => "Check out";
+                }
+            }
+            """);
+        var app = GeneratorTestHelper.EmitLibraryWithGenerators("LanguageRuleApp", """
+            namespace LanguageRuleApp;
+
+            public sealed class MyShopLocalization : LanguageRuleLibrary.ShopLocalizationEnGb
+            {
+                public override string Checkout => "Pay now";
+            }
+            """, MetadataReference.CreateFromImage(library));
+        var context = new InMemoryLoadContext(new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["LanguageRuleLibrary"] = library,
+            ["LanguageRuleApp"] = app,
+        });
+
+        var compilation = CSharpCompilation.Create("LanguageRuleReader", references:
+            [.. GeneratorTestHelper.References, MetadataReference.CreateFromImage(library), MetadataReference.CreateFromImage(app)]);
+
+        // Act: the app's module initializer, which registers the library first, and the nested set registered by hand.
+        var appAssembly = context.LoadFromAssemblyName(new AssemblyName("LanguageRuleApp"));
+        RuntimeHelpers.RunModuleConstructor(appAssembly.ManifestModule.ModuleHandle);
+        var libraryAssembly = context.LoadFromAssemblyName(new AssemblyName("LanguageRuleLibrary"));
+        var nested = (ILocalizationSet)Activator.CreateInstance(libraryAssembly.GetType("LanguageRuleLibrary.HandRegistered+ShopLocalizationEnAu", throwOnError: true)!)!;
+        LocalizationRegistry.Register(nested);
+
+        (string Build, string RunTime) Read(Assembly assembly, string name)
+        {
+            var symbol = compilation.GetTypeByMetadataName(name).ShouldNotBeNull();
+            var build = LocalizationDiscovery.ReadLanguage(symbol, compilation, CancellationToken.None).ShouldNotBeNull();
+
+            return (build, LocalizationRegistry.GetLanguageCode(assembly.GetType(name, throwOnError: true)!));
+        }
+
+        // Assert: the registry reads each language from the description the build wrote.
+        Read(libraryAssembly, "LanguageRuleLibrary.ShopLocalizationEn").ShouldBe(("en", "en"));
+        Read(libraryAssembly, "LanguageRuleLibrary.ShopLocalizationNlBe").ShouldBe(("nl-BE", "nl-BE"));
+        Read(libraryAssembly, "LanguageRuleLibrary.ShopLocalizationEnGb").ShouldBe(("en-GB", "en-GB"));
+        Read(libraryAssembly, "LanguageRuleLibrary.ShopLocalizationZhHansTw").ShouldBe(("zh-Hans-TW", "zh-Hans-TW"));
+        Read(libraryAssembly, "LanguageRuleLibrary.ShopLocalizationEnUk").ShouldBe(("uk", "uk"));
+        Read(libraryAssembly, "LanguageRuleLibrary.AdminUiNl").ShouldBe(("nl", "nl"));
+        Read(libraryAssembly, "LanguageRuleLibrary.BelgianRewording").ShouldBe(("nl-BE", "nl-BE"));
+        Read(libraryAssembly, "LanguageRuleLibrary.HandRegistered+ShopLocalizationEnAu").ShouldBe(("en-AU", "en-AU"));
+        Read(appAssembly, "LanguageRuleApp.MyShopLocalization").ShouldBe(("en-GB", "en-GB"));
+        LocalizationRegistry.GetLocalizationSet<ILocalizationSet>(CultureInfo.GetCultureInfo("en-AU")).ShouldBeSameAs(nested);
     }
 
     [Test]

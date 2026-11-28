@@ -1,9 +1,9 @@
 namespace CodeChops.Idioma.Tests;
 
 /// <summary>
-/// Tests for <see cref="ILocalizationSet"/>, the base of every localization contract: the language code derived from the
-/// type's name or given by the build's description of it, the implementation that replaces it with any neutral culture
-/// name, a clear error for a name the code can't be derived from, and the metadata name the generator pins.
+/// Tests for <see cref="ILocalizationSet"/>, the base of every localization contract: the language the registry reads
+/// from a set's type (its description or its name), a clear error for
+/// a type without a language, and the metadata name the generator pins.
 /// </summary>
 public sealed class ILocalizationSetTests
 {
@@ -16,19 +16,23 @@ public sealed class ILocalizationSetTests
     private sealed class Localization<T>;
     // ReSharper restore ClassNeverInstantiated.Local
 
-    private sealed class ContractLocalizationNl : ILocalizationSet;
+    internal sealed class ContractLocalizationNl : ILocalizationSet;
 
-    private sealed class ContractLocalizationDE : ILocalizationSet;
+    internal sealed class ContractLocalizationDE : ILocalizationSet;
 
-    private sealed class ContractLocalizationSet : ILocalizationSet;
+    internal sealed class ContractLocalizationSet : ILocalizationSet;
 
     /// <summary>
-    /// A set serving one script of a language: a code the two-letter default can't carry.
+    /// A set serving one script of a language: a code the two-letter default can't carry, so the build describes it.
     /// </summary>
-    private sealed class SimplifiedChineseLocalization : ILocalizationSet
-    {
-        string ILocalizationSet.LocalizationLanguageCode => "zh-Hans";
-    }
+    private sealed class SimplifiedChineseLocalization : ILocalizationSet;
+
+    /// <summary>
+    /// A rewording of the Chinese set, which inherits its description.
+    /// </summary>
+    private sealed class SimplifiedChineseRewording : SimplifiedChineseLocalizationBase;
+
+    private class SimplifiedChineseLocalizationBase : ILocalizationSet;
 
     /// <summary>
     /// A set the build describes with Belgian Dutch, as the registrar of an assembly declaring nl-BE does.
@@ -36,24 +40,21 @@ public sealed class ILocalizationSetTests
     private class DescribedLocalizationNlBe : ILocalizationSet;
 
     /// <summary>
+    /// A set the build describes with Serbian as written in Serbia, whose default script is Cyrillic.
+    /// </summary>
+    private sealed class ScriptDescribedLocalizationSrRs : ILocalizationSet;
+
+    /// <summary>
     /// A rewording of the Belgian set, under a name that gives no language of its own.
     /// </summary>
     private sealed class DescribedRewording : DescribedLocalizationNlBe;
 
     /// <summary>
-    /// A set implementing its code, which a description does not replace.
+    /// A nested rewording of the Belgian set that the build didn't describe, whose name ends in another language.
     /// </summary>
-    private sealed class ImplementedLocalizationNlBe : ILocalizationSet
-    {
-        string ILocalizationSet.LocalizationLanguageCode => "nl-NL";
-    }
+    private sealed class DescribedRewordingFr : DescribedLocalizationNlBe;
 
     private sealed class FirstDescribedLocalizationZhHans : ILocalizationSet;
-
-    /// <summary>
-    /// A set whose code is described in another letter case than culture names have.
-    /// </summary>
-    private sealed class CasedDescribedLocalization : ILocalizationSet;
 
     /// <summary>
     /// A set whose code is described twice, as when the generated registration runs again.
@@ -62,32 +63,36 @@ public sealed class ILocalizationSetTests
     #endregion
 
     [Test]
-    public void LanguageCode_ShouldDefaultToTypeNameSuffixInLowerCase()
+    public void LanguageCode_OfNestedSet_ShouldBeWhatTheBuildDescribedFromItsName()
     {
-        // Arrange & Act & Assert: the suffix in any letter case after its capital.
-        ((ILocalizationSet)new ContractLocalizationNl()).LocalizationLanguageCode.ShouldBe("nl");
-        ((ILocalizationSet)new ContractLocalizationDE()).LocalizationLanguageCode.ShouldBe("de");
+        // Act & Assert: the registrar of this assembly describes a nested set it can name, with the suffix in lower case.
+        LocalizationRegistry.GetLanguageCode(typeof(ContractLocalizationNl)).ShouldBe("nl");
+        LocalizationRegistry.GetLanguageCode(typeof(ContractLocalizationDE)).ShouldBe("de");
     }
 
     [Test]
-    public void LanguageCode_ShouldThrowForNameEndingInLettersWithoutCapital()
+    public void LanguageCode_ShouldThrowForSetWhoseNameTheBuildReadsNoLanguageFrom()
     {
-        // Arrange & Act: the capital marks where a code starts, so "Set" holds none, where "et" would be Estonian.
-        var exception = Should.Throw<InvalidOperationException>(() => ((ILocalizationSet)new ContractLocalizationSet()).LocalizationLanguageCode);
+        // Act: the capital marks where a code starts, so the build reads none from "Set", where "et" would be Estonian.
+        var exception = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.GetLanguageCode(typeof(ContractLocalizationSet)));
 
         // Assert
-        exception.Message.ShouldContain("its name doesn't end in a language code that starts with a capital");
+        exception.Message.ShouldContain("has no language. The build reads a set's language from its name");
     }
 
     [Test]
-    public void LanguageCode_ShouldBeImplementableWithAnyNeutralCultureName()
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void LanguageCode_ShouldComeFromDescriptionOfClassOrBaseClass()
     {
-        // Arrange
+        // Arrange: what the registrar of an assembly that declares zh-Hans does.
+        LocalizationRegistry.DescribeSet<SimplifiedChineseLocalization>("zh-Hans");
+        LocalizationRegistry.DescribeSet<SimplifiedChineseLocalizationBase>("zh-Hans");
         var set = new SimplifiedChineseLocalization();
         var registry = LocalizationRegistry.Create([set]);
 
         // Act & Assert: zh-Hans-CN resolves through zh-Hans; zh-Hant-TW walks zh-Hant and zh, neither registered.
-        ((ILocalizationSet)set).LocalizationLanguageCode.ShouldBe("zh-Hans");
+        LocalizationRegistry.GetLanguageCode(typeof(SimplifiedChineseLocalization)).ShouldBe("zh-Hans");
+        LocalizationRegistry.GetLanguageCode(typeof(SimplifiedChineseRewording)).ShouldBe("zh-Hans");
         registry.GetByCulture<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hans-CN")).ShouldBeSameAs(set);
         registry.GetByCulture<ILocalizationSet>(CultureInfo.GetCultureInfo("zh-Hant-TW")).ShouldBeNull();
     }
@@ -97,15 +102,36 @@ public sealed class ILocalizationSetTests
     public void LanguageCode_ShouldPreferCodeDescribedForSetOrSetItDerivesFrom()
     {
         // Arrange: what the generated registrar does for a set named after a declared code.
-        LocalizationRegistry.DescribeSet<DescribedLocalizationNlBe>("nl-BE", []);
-        LocalizationRegistry.DescribeSet<ImplementedLocalizationNlBe>("nl-BE", []);
+        LocalizationRegistry.DescribeSet<DescribedLocalizationNlBe>("nl-BE");
 
-        // Act & Assert: the description wins over the last two letters (be), a rewording inherits it, and an implementation
-        // wins over a description.
-        ((ILocalizationSet)new DescribedLocalizationNlBe()).LocalizationLanguageCode.ShouldBe("nl-BE");
-        ((ILocalizationSet)new DescribedRewording()).LocalizationLanguageCode.ShouldBe("nl-BE");
-        ILocalizationSet.GetLanguageCode(typeof(DescribedRewording)).ShouldBe("nl-BE");
-        ((ILocalizationSet)new ImplementedLocalizationNlBe()).LocalizationLanguageCode.ShouldBe("nl-NL");
+        // Act & Assert: the description wins over the last two letters (be), and a rewording inherits it, also where its
+        // own name ends in another language.
+        LocalizationRegistry.GetLanguageCode(typeof(DescribedLocalizationNlBe)).ShouldBe("nl-BE");
+        LocalizationRegistry.GetLanguageCode(typeof(DescribedRewording)).ShouldBe("nl-BE");
+        LocalizationRegistry.GetLanguageCode(typeof(DescribedRewordingFr)).ShouldBe("nl-BE");
+    }
+
+    [Test]
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void DescribeSet_WithScript_ShouldKeepCultureOfAnotherScriptFromThatLanguage()
+    {
+        // Arrange: what the generated registrar does for a regional set of a language written in two scripts.
+        LocalizationRegistry.DescribeSet<ScriptDescribedLocalizationSrRs>("sr-RS", "Cyrl");
+        var scripts = LocalizationRegistry.Current.AppScripts;
+        var latin = new List<string>();
+        var cyrillic = new List<string>();
+
+        // Act: by name, so the names don't depend on the cultures of the machine.
+        foreach (var name in new CultureFallback("sr-Latn-RS", scripts))
+            latin.Add(name);
+
+        foreach (var name in new CultureFallback("sr-Cyrl-RS", scripts))
+            cyrillic.Add(name);
+
+        // Assert: a user who reads Latin script doesn't get the Cyrillic set of their region.
+        scripts["sr-RS"].ShouldBe("Cyrl");
+        latin.ShouldBe(["sr-Latn-RS", "sr-Latn", "sr"]);
+        cyrillic.ShouldBe(["sr-Cyrl-RS", "sr-RS", "sr-Cyrl", "sr"]);
     }
 
     [Test]
@@ -113,44 +139,23 @@ public sealed class ILocalizationSetTests
     public void DescribeSet_ShouldThrowForSecondCodeAndKeepFirst()
     {
         // Arrange & Act: a set's language must not change, so a second code is refused.
-        LocalizationRegistry.DescribeSet<FirstDescribedLocalizationZhHans>("zh-Hans", []);
-        Should.Throw<ArgumentException>(() => LocalizationRegistry.DescribeSet<FirstDescribedLocalizationZhHans>("zh-Hant", []));
+        LocalizationRegistry.DescribeSet<FirstDescribedLocalizationZhHans>("zh-Hans");
+        Should.Throw<ArgumentException>(() => LocalizationRegistry.DescribeSet<FirstDescribedLocalizationZhHans>("zh-Hant"));
 
         // Assert
-        ((ILocalizationSet)new FirstDescribedLocalizationZhHans()).LocalizationLanguageCode.ShouldBe("zh-Hans");
+        LocalizationRegistry.GetLanguageCode(typeof(FirstDescribedLocalizationZhHans)).ShouldBe("zh-Hans");
     }
 
     [Test]
     [NotInParallel(nameof(LocalizationRegistry))]
     public void DescribeSet_ShouldIgnoreSameCodeDescribedAgain()
     {
-        // Arrange & Act: in another letter case too, which gives the same culture name.
-        LocalizationRegistry.DescribeSet<RepeatedDescribedLocalizationEnGb>("en-GB", []);
-        LocalizationRegistry.DescribeSet<RepeatedDescribedLocalizationEnGb>("en-GB", []);
-        LocalizationRegistry.DescribeSet<RepeatedDescribedLocalizationEnGb>("EN-gb", []);
+        // Arrange & Act: the generated code passes a code cased as culture names are, every time it runs.
+        LocalizationRegistry.DescribeSet<RepeatedDescribedLocalizationEnGb>("en-GB");
+        LocalizationRegistry.DescribeSet<RepeatedDescribedLocalizationEnGb>("en-GB");
 
         // Assert
-        ILocalizationSet.GetLanguageCode(typeof(RepeatedDescribedLocalizationEnGb)).ShouldBe("en-GB");
-    }
-
-    [Test]
-    public void DescribeSet_ShouldThrowForCodeThatIsNoCultureName()
-    {
-        // Arrange & Act & Assert: a code no culture reaches would fail every text once the sets are read again.
-        Should.Throw<ArgumentException>(() => LocalizationRegistry.DescribeSet<ContractLocalizationNl>(" ", []));
-        Should.Throw<ArgumentException>(() => LocalizationRegistry.DescribeSet<ContractLocalizationNl>("nl_BE", []));
-        ILocalizationSet.GetLanguageCode(typeof(ContractLocalizationNl)).ShouldBe("nl");
-    }
-
-    [Test]
-    [NotInParallel(nameof(LocalizationRegistry))]
-    public void DescribeSet_ShouldWriteCodeAsCultureName()
-    {
-        // Arrange & Act
-        LocalizationRegistry.DescribeSet<CasedDescribedLocalization>("NL-be", []);
-
-        // Assert
-        ILocalizationSet.GetLanguageCode(typeof(CasedDescribedLocalization)).ShouldBe("nl-BE");
+        LocalizationRegistry.GetLanguageCode(typeof(RepeatedDescribedLocalizationEnGb)).ShouldBe("en-GB");
     }
 
     [Test]
@@ -162,19 +167,12 @@ public sealed class ILocalizationSetTests
         foreach (var setType in setTypes)
         {
             // Act
-            var exception = Should.Throw<InvalidOperationException>(() => ILocalizationSet.GetLanguageCode(setType));
+            var exception = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.GetLanguageCode(setType));
 
-            // Assert: the message names the type and points at the naming rule and the property to implement.
+            // Assert: the message names the type, and points at the naming rule.
             exception.Message.ShouldContain(setType.Name);
-            exception.Message.ShouldContain(nameof(ILocalizationSet.LocalizationLanguageCode));
+            exception.Message.ShouldContain("ShopLocalizationDe");
         }
-    }
-
-    [Test]
-    public void GetLanguageCode_ShouldThrowForNullType()
-    {
-        // Arrange & Act & Assert
-        Should.Throw<ArgumentNullException>(() => ILocalizationSet.GetLanguageCode(null!));
     }
 
     [Test]
@@ -183,6 +181,13 @@ public sealed class ILocalizationSetTests
         // Assert: the source generators reference this name as a string constant, so a rename or namespace change must
         // update the generator constant in the same commit.
         typeof(ILocalizationSet).FullName.ShouldBe("CodeChops.Idioma.ILocalizationSet");
+    }
+
+    [Test]
+    public void Interface_ShouldHaveNoMembers()
+    {
+        // Assert: a set's language comes from its type, so no code of the set runs to learn it.
+        typeof(ILocalizationSet).GetMembers().ShouldBeEmpty();
     }
 
     [Test]

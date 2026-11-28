@@ -41,6 +41,8 @@ The build checks a call that names its type and its member in the code: by a typ
 
 A type of another assembly is checked only when that assembly doesn't use Idioma, such as `DayOfWeek` of .NET itself. The attribute isn't kept in a compiled assembly, so the build can't see which members of a library have a text.
 
+A member your class inherits from such an assembly has no text either, such as `Message` of a class that derives from `Exception`. The message says where the member is declared. To give it a text, override it in your class and mark the override, where the member is virtual.
+
 To ask for a text that isn't there yet on purpose, turn the error off around the call: `#pragma warning disable LOC601`.
 
 ## LOC602

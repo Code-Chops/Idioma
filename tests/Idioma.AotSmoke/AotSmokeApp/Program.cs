@@ -19,8 +19,11 @@ Expect("languages", string.Join(",", LocalizationRegistry.SupportedLanguages), "
 // the code its assembly declares.
 var british = LocalizationRegistry.GetLocalizationSet<IShopLocalization>(CultureInfo.GetCultureInfo("en-GB"));
 Expect("set for en-GB", british?.GetType().Name, nameof(ShopLocalizationEnGb));
-Expect("language code of the set for en-GB", (british as ILocalizationSet)?.LocalizationLanguageCode, "en-GB");
-Expect("language code of the set for nl", (LocalizationRegistry.GetLocalizationSet<IShopLocalization>(CultureInfo.GetCultureInfo("nl")) as ILocalizationSet)?.LocalizationLanguageCode, "nl");
+Expect("registered languages", string.Join(",", LocalizationRegistry.RegisteredLanguages), "en,en-GB,nl");
+
+// A nested set the app registers itself has the language the build read from its name, en-AU, a region of en.
+LocalizationRegistry.Register(new HandRegistered.ShopLocalizationEnAu());
+Expect("set for en-AU, registered by hand", LocalizationRegistry.GetLocalizationSet<IShopLocalization>(CultureInfo.GetCultureInfo("en-AU"))?.Cart, "Trolley");
 
 // An inline text gives the wording of the moment it's read, so it's read in each culture below.
 static string Orders() => LocalizedText.Inline(en: "Orders", nl: "Bestellingen", enGb: "Orders");
@@ -125,6 +128,14 @@ public class ShopLocalizationEnGb : ShopLocalizationEn
     public override string ItemsInCart(int count, string shop) => count is 1
         ? $"1 item in your basket at {shop}"
         : $"{count} items in your basket at {shop}";
+}
+
+public static class HandRegistered
+{
+    public sealed class ShopLocalizationEnAu : ShopLocalizationEn
+    {
+        public override string Cart => "Trolley";
+    }
 }
 
 public class Customer

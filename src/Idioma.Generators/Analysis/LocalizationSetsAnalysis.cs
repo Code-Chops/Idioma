@@ -10,39 +10,32 @@ internal sealed partial record LocalizationSetsAnalysis(
     EquatableArray<LocalizationSetsFinding> Findings)
 {
     /// <summary>
-    /// The name of the method the generated class of a set of the texts of an enum gets, which gives the text of a
-    /// value: <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>.
+    /// The method of an enum's generated class that gives the text of a value:
+    /// <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>.
     /// </summary>
     public const string LookupName = "GetTextByValue";
 
     /// <summary>
-    /// The name of the extension method the generated class of a set of the texts of an enum gets, which gives a value
-    /// its text: <c>order.Status.GetText()</c>.
+    /// The extension method of an enum's generated class: <c>order.Status.GetText()</c>.
     /// </summary>
     public const string ExtensionName = "GetText";
 
     /// <summary>
-    /// The name of the method every generated class gets, which gives a text by its key, or <see langword="null"/> for
-    /// an unknown key: <c>ShopLocalization.GetTextByKey("Checkout")</c>.
+    /// The method of every generated class that gives a text by its key, or <see langword="null"/> for an unknown key.
     /// </summary>
     public const string GetName = "GetTextByKey";
 
     /// <summary>
-    /// The name of the property every generated class gets, which lists the key of every text:
-    /// <c>ShopLocalization.TextKeys</c>.
+    /// The property of every generated class that lists the key of every text.
     /// </summary>
     public const string KeysName = "TextKeys";
 
     /// <summary>
-    /// Whether a text can't become a member of the generated texts class (<c>LOC300</c>). It carries the class's own
-    /// name, which C# allows no member, the name of a member that gives a text by its key or lists the keys
-    /// (<see cref="GetName"/>, <see cref="KeysName"/>), or the name of a method that gives
-    /// the text of an enum value (<see cref="LookupName"/>, and <see cref="ExtensionName"/> on the value itself). The
-    /// class declares no other member of its own, so that no other name is taken.
+    /// Whether a text's name is taken in the generated class (<c>LOC300</c>): the class's own name, or the name of one
+    /// of its members. The class declares no other members, so no other name is taken.
     /// </summary>
-    /// <param name="name">The name of the text.</param>
     /// <param name="textsName">The name of the generated class.</param>
-    /// <param name="hasLookup">Whether the class gets those two methods, as that of a set of the texts of an enum does.</param>
+    /// <param name="hasLookup">Whether the class gets the two methods of an enum's texts.</param>
     public static bool IsReservedTextName(string name, string textsName, bool hasLookup)
     {
         var isReserved = String.Equals(name, textsName, StringComparison.Ordinal)
@@ -64,21 +57,12 @@ internal sealed partial record LocalizationSetsAnalysis(
         var candidates = LocalizationDiscovery.Merge(discovered);
         var sets = candidates.Where(static candidate => !candidate.IsExcluded).ToImmutableArray();
 
-        // A set marked [ExcludeFromLocalizationDiscovery] is registered by hand, so nothing is reported about it, but it
-        // does translate its contract: it counts as a set of its language, here and for the assemblies referencing this
-        // one. Otherwise the fix LOC208 names for a set needing constructor arguments would end in LOC201 or LOC700,
-        // asking for the very set that exists.
+        // An excluded set is registered by hand, so nothing is reported about it. It still counts as a set of its
+        // language, here and for referencing assemblies, so LOC201 and LOC700 don't ask for a set that exists.
         var excludedSets = candidates.Where(static candidate => candidate.IsExcluded).ToImmutableArray();
         var excluded = excludedSets.Where(static set => set.Language is not null).ToImmutableArray();
 
-        // A set whose language the build can't read (its LocalizationLanguageCode is no constant, or comes from another assembly)
-        // may be the set of any language. So a contract it implements is not said to miss one, here or in an assembly
-        // referencing this one: that would ask for a set that exists.
-        // A set whose name gives no language, and that has no LocalizationLanguageCode, serves none. It gets LOC208, and
-        // its contract is held to every language as if it weren't there: taken for a set of any language, a Dutch set
-        // renamed ShopLocalizationDutch would hide every missing language of its contract behind that one warning.
-        // Nor is a set whose code is no culture name (LOC207), as "en_GB": registering it throws, so it serves none.
-        var unreadable = sets.Concat(excludedSets).Where(static set => IsUnreadable(set)).ToImmutableArray();
+        // A set without a language (LOC207) serves none, so its contract is held to every language without it.
         var findings = ImmutableArray.CreateBuilder<LocalizationSetsFinding>();
         var contracts = ImmutableArray.CreateBuilder<LocalizationContract>();
         var provided = ImmutableArray.CreateBuilder<ProvidedLocalizationSet>();
@@ -91,19 +75,16 @@ internal sealed partial record LocalizationSetsAnalysis(
         }
         else if (declared.DefaultLanguage is not { } defaultLanguage)
         {
-            // The attribute's first language is one the build can't use, which LOC101 reports. Nothing is held to a
-            // default language then, and the next language does not take its place: that would report every set of the
-            // language that was meant, and write no contract for it. The contracts are still written, each from the
-            // set that starts it, so that the code using them keeps compiling while the attribute is put right.
-            AnalyzeContracts(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings: null, cancellationToken);
+            // The first language is unusable (LOC102). The next one doesn't take its place, because that would report
+            // every set of the intended language. The contracts are still written, so code using them keeps compiling.
+            AnalyzeContracts(sets, excluded, declared, generatedContracts, contracts, provided, findings: null, cancellationToken);
 
-            // What needs no language list is still reported, as it is without the attribute.
             ReportDerivedFromOtherLanguage(sets, generatedContracts, findings);
         }
         else
         {
-            AnalyzeContracts(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings, cancellationToken);
-            AnalyzeOwnContracts(sets, excluded, unreadable, declared, defaultLanguage, findings);
+            AnalyzeContracts(sets, excluded, declared, generatedContracts, contracts, provided, findings, cancellationToken);
+            AnalyzeOwnContracts(sets, excluded, declared, defaultLanguage, findings);
             AnalyzeSets(sets, declared.Codes, defaultLanguage, generatedContracts, findings);
             ReportExcludedSetsOfUnlistedLanguages(excluded, declared.Codes, findings);
             ReportDefaultSetsWithoutLanguage(sets, declared, defaultLanguage, generatedContracts, findings);
@@ -111,6 +92,7 @@ internal sealed partial record LocalizationSetsAnalysis(
             ReportDefaultSetsOfParentLanguage(sets, defaultLanguage, generatedContracts, findings);
             ReportDefaultSetsOfAnotherContract(sets, defaultLanguage, generatedContracts, findings);
             ReportUnextendableDefaultSets(unextendable, defaultLanguage, generatedContracts, findings);
+            ReportSetsOfContractWithoutDefaultSet(sets, defaultLanguage, generatedContracts, findings);
         }
 
         // Needs no language list: an app adding a language to a library's contract may declare none.
@@ -118,43 +100,30 @@ internal sealed partial record LocalizationSetsAnalysis(
 
         var analysis = new LocalizationSetsAnalysis(
             new EquatableArray<LocalizationContract>(contracts.ToImmutable()),
-            new EquatableArray<ProvidedLocalizationSet>(provided.Distinct().OrderBy(static set => set.Contract, StringComparer.Ordinal).ThenBy(static set => set.Language, StringComparer.Ordinal).ToImmutableArray()),
+            new EquatableArray<ProvidedLocalizationSet>(provided.Distinct().OrderBy(static set => set.Contract, StringComparer.Ordinal).ThenBy(static set => set.Language, StringComparer.Ordinal).ThenBy(static set => set.Set, StringComparer.Ordinal).ToImmutableArray()),
             new EquatableArray<LocalizationSetsFinding>(findings.ToImmutable()));
 
         return analysis;
     }
 
     /// <summary>
-    /// Lists every set for each public contract it implements, under its language. A set whose language the build
-    /// can't read is listed under <see cref="ProvidedLocalizationSet.UnreadableLanguage"/>, and a set whose name
-    /// gives no language is left out.
+    /// Lists every set with a language for each public contract it implements.
     /// </summary>
     private static void AddProvidedSets(IEnumerable<DiscoveredLocalization> sets, ImmutableArray<ProvidedLocalizationSet>.Builder provided)
     {
         foreach (var set in sets)
         {
-            if (set.NameGivesNoLanguage || (set.Language is null && !IsUnreadable(set)))
+            if (set.Language is null)
                 continue;
 
             foreach (var contract in set.ContractNames)
-                provided.Add(new ProvidedLocalizationSet(contract, set.Language ?? ProvidedLocalizationSet.UnreadableLanguage));
+                provided.Add(ProvidedLocalizationSet.Of(contract, set));
         }
     }
 
     /// <summary>
-    /// Whether a set has a language the build can't read, so that it may be the set of any language: its
-    /// <c>LocalizationLanguageCode</c> isn't a constant, or it inherits it from a set of another assembly. Not a set
-    /// whose name gives no language, and not one whose code is no culture name (<c>LOC207</c>), which serve none.
-    /// </summary>
-    private static bool IsUnreadable(DiscoveredLocalization set)
-    {
-        var isUnreadable = set is { Language: null, NameGivesNoLanguage: false, Locations.InvalidLanguageCode: null };
-        return isUnreadable;
-    }
-
-    /// <summary>
-    /// Reports what needs no language list, in an assembly that declares no languages: a set that would start a
-    /// contract (<c>LOC100</c>), and a set that derives from a set of another language (<c>LOC203</c>).
+    /// Reports, in an assembly that declares no languages, a set that would start a contract (<c>LOC100</c>) and a set
+    /// derived from another language (<c>LOC204</c>).
     /// </summary>
     private static void ReportWithoutLanguages(
         ImmutableArray<DiscoveredLocalization> sets,
@@ -163,18 +132,18 @@ internal sealed partial record LocalizationSetsAnalysis(
     {
         foreach (var set in sets)
         {
-                // Without a default language there is no telling which set the contract should come from.
+                // Without a default language, there's no telling which set the contract comes from.
                 if (set.ListsLocalizationSet && !LocalizationDiscovery.ImplementsContract(set) && !LocalizationDiscovery.RewordsSet(set))
                     findings.Add(new LocalizationSetsFinding(LocalizationSetsRule.NoLanguagesDeclared, set.Location, new EquatableArray<string>([$"'{set.Name}' is a localization set"])));
-                // No language list needed: an app rewording a library under a name without its language suffix would
-                // serve another language without a word.
+                // Needs no language list, because an app rewording a library's set could otherwise serve another
+                // language silently.
                 else if (set.Language is { } language && IsDerivedFromOtherLanguage(set, generatedContracts))
                     findings.Add(DerivedFromOtherLanguage(set, language));
         }
     }
 
     /// <summary>
-    /// Reports every set that derives from a set of another language (<c>LOC203</c>), which needs no language list.
+    /// Reports every set derived from a set of another language (<c>LOC204</c>).
     /// </summary>
     private static void ReportDerivedFromOtherLanguage(
         ImmutableArray<DiscoveredLocalization> sets,

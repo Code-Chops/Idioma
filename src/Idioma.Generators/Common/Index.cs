@@ -1,14 +1,13 @@
 // ReSharper disable once CheckNamespace
 namespace System;
 
-// Lets list patterns compile on netstandard2.0, where the runtime does not declare this type: the compiler asks for it
-// for a pattern such as [var only], even though it then reads the list by a plain number.
+// Lets list patterns compile on netstandard2.0, which lacks this type.
 // ReSharper disable UnusedMember.Global
 internal readonly struct Index : IEquatable<Index>
 {
     public override string ToString() => this.IsFromEnd ? "^" + this.Value : this.Value.ToString(Globalization.CultureInfo.InvariantCulture);
 
-    // The position, with a position counted from the end stored as its bitwise complement, as the runtime's own does.
+    // A position from the end is stored as its bitwise complement, as in the runtime.
     private readonly int _value;
 
     public Index(int value, bool fromEnd = false)
@@ -19,9 +18,9 @@ internal readonly struct Index : IEquatable<Index>
         this._value = fromEnd ? ~value : value;
     }
 
-    public static Index Start => new(0);
+    public static Index Start => new(value: 0);
 
-    public static Index End => new(0, fromEnd: true);
+    public static Index End => new(value: 0, fromEnd: true);
 
     public int Value => this._value < 0 ? ~this._value : this._value;
 

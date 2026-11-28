@@ -437,7 +437,6 @@ public sealed class PlaceholderAnalyzerTests
             $$"""
             {{DutchGreeting}}
             public string Old => "Oud";
-            public string LocalizationLanguageCode => "nl";
             public string Template => "{0}";
             public string Helper(string value) => string.Format("{0}?", value);
             """));
@@ -465,6 +464,49 @@ public sealed class PlaceholderAnalyzerTests
         var diagnostic = diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe("LOC403");
         diagnostic.GetMessage().ShouldStartWith("'ShopLocalizationDe.Total' holds the placeholder {0}");
+    }
+
+    [Test]
+    [Arguments("""string.Format(LocalizedText.Inline(en: "{0} items", nl: "{0} artikelen", enGb: "{0} items"), count)""")]
+    [Arguments("""string.Format(System.Globalization.CultureInfo.CurrentCulture, (LocalizedText.Inline(en: "{0} items", nl: "{0} artikelen", enGb: "{0} items")), count)""")]
+    [Arguments("""new System.Text.StringBuilder().AppendFormat(LocalizedText.Inline(en: "{0} items", nl: "{0} artikelen", enGb: "{0} items"), count).ToString()""")]
+    public async Task InlineTextPassedAsFormat_ShouldReportNothing(string text)
+    {
+        // Arrange: the parameter takes a composite format ([StringSyntax(CompositeFormat)]), which fills its placeholders in.
+        var source = $$"""
+            {{Header}}
+
+            public static class Texts
+            {
+                public static string Items(int count) => {{text}};
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task InlineTextPassedToOtherParameter_ShouldReportLOC403()
+    {
+        // Arrange: a string that's shown as written, and not formatted.
+        var source = $$"""
+            {{Header}}
+
+            public static class Texts
+            {
+                public static string Items(int count) => string.Concat(LocalizedText.Inline(en: "{0} items", nl: "Artikelen", enGb: "Items"), "!");
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().Id.ShouldBe("LOC403");
     }
 
     [Test]

@@ -6,44 +6,27 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// The texts of generated classes that attributes name as a resource, as .NET's validation and display attributes do:
-/// <c>[Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]</c>,
-/// or <c>[Display(Name = nameof(ShopLocalization.Name), ResourceType = typeof(ShopLocalization))]</c>. Such an attribute
-/// reads the text at run time as a static property, by its name.
+/// <c>[Display(Name = nameof(ShopLocalization.Name), ResourceType = typeof(ShopLocalization))]</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A text named as an error message (<c>ErrorMessageResourceName</c>) is a format: the attribute fills in <c>{0}</c>
-/// with the name of the field, so <c>"Enter {0}"</c> shows <c>"Enter Name"</c>. That placeholder is no mistake
-/// (<c>LOC403</c>). A display name (<c>Name</c>, <c>ShortName</c>, <c>Description</c>, <c>Prompt</c>,
-/// <c>GroupName</c>) is shown as it's written.
+/// A text named as an error message is a format whose <c>{0}</c> the attribute fills in, so it's no mistake
+/// (<c>LOC403</c>). A display name is shown as written.
 /// </para>
 /// <para>
-/// Read by the arguments' names, so any attribute that follows .NET's convention counts. The name of the text may be
-/// written as <see langword="nameof"/> or as a string.
-/// </para>
-/// <para>
-/// An IDE asks again on every edit, with a new compilation. Each file is searched once, for the attributes that may name
-/// a text, and what it holds is kept with its syntax tree, which an edit of another file leaves as it was. So an edit
-/// searches only the file it changes. Only the attributes that may name the text asked for are bound.
+/// Each file is searched once and kept with its syntax tree, so an edit searches only the file it changes.
 /// </para>
 /// </remarks>
 internal sealed class ResourceNamedTexts
 {
-    /// <summary>
-    /// Per compilation, what was asked of it and the answer.
-    /// </summary>
     private static readonly ConditionalWeakTable<Compilation, ResourceNamedTexts> PerCompilation = new();
 
-    /// <summary>
-    /// Per file, the attributes that may name a text, found the first time any compilation asks.
-    /// </summary>
-    // Spans and names only, so the syntax of the file isn't kept alive by this.
+    // Spans and names only, so this doesn't keep the file's syntax alive.
     private static readonly ConditionalWeakTable<SyntaxTree, NamingAttributes> PerTree = new();
 
     private static readonly string[] DisplayNameArguments = ["Name", "ShortName", "Description", "Prompt", "GroupName"];
 
     private readonly Compilation _compilation;
-    // By the full name of the generated class, which no two types of a compilation share.
     private readonly ConcurrentDictionary<(string GeneratedClass, string Text, bool ErrorMessagesOnly), bool> _answers = new();
 
     private ResourceNamedTexts(Compilation compilation)
@@ -73,8 +56,8 @@ internal sealed class ResourceNamedTexts
     }
 
     /// <summary>
-    /// The generated class whose text a member of a set implements, as an attribute names it: <c>ShopLocalization</c>
-    /// for a text of <c>IShopLocalization</c>. <see langword="null"/> for a contract written by hand, which has none.
+    /// <c>ShopLocalization</c> for a text of <c>IShopLocalization</c>, or <see langword="null"/> for a contract written
+    /// by hand.
     /// </summary>
     public static INamedTypeSymbol? FindGeneratedClass(ISymbol contractText)
     {
@@ -113,8 +96,7 @@ internal sealed class ResourceNamedTexts
 
             foreach (var entry in attributes.Entries)
             {
-                // By the name it gives first, which binds nothing. A name the syntax doesn't give, such as a constant,
-                // may be any.
+                // Filtered by name first, which binds nothing. A name only the compiler knows may be any.
                 if ((errorMessagesOnly && !entry.IsErrorMessage) || (entry.Text is not null && !String.Equals(entry.Text, text, StringComparison.Ordinal)))
                     continue;
 
@@ -149,7 +131,6 @@ internal sealed class ResourceNamedTexts
         if (!SymbolEqualityComparer.Default.Equals(model.GetTypeInfo(type, cancellationToken).Type, generatedClass))
             return false;
 
-        // A string, or nameof, which the compiler gives as a string too.
         foreach (var name in names)
             if (model.GetConstantValue(name, cancellationToken) is { HasValue: true, Value: string named } && String.Equals(named, text, StringComparison.Ordinal))
                 return true;
@@ -157,9 +138,6 @@ internal sealed class ResourceNamedTexts
         return false;
     }
 
-    /// <summary>
-    /// The attributes of a file that may name a text, read once per syntax tree.
-    /// </summary>
     private static NamingAttributes GetNamingAttributes(SyntaxTree tree, CancellationToken cancellationToken)
     {
         if (PerTree.TryGetValue(tree, out var known))
@@ -167,7 +145,7 @@ internal sealed class ResourceNamedTexts
 
         var found = ReadNamingAttributes(tree, cancellationToken);
 
-        // Another thread may have read it in the meantime, and gives the same.
+        // Another thread may have added the same in the meantime.
         try
         {
             PerTree.Add(tree, found);
@@ -203,8 +181,8 @@ internal sealed class ResourceNamedTexts
     }
 
     /// <summary>
-    /// The arguments of an attribute that name a text, by their names, which binds nothing: nearly every attribute has
-    /// none of them. <see langword="null"/> for an attribute without them.
+    /// The arguments of an attribute that name a text, read by name without binding. <see langword="null"/> without
+    /// them.
     /// </summary>
     private static ResourceArguments? ReadArguments(AttributeSyntax attribute)
     {
@@ -242,8 +220,7 @@ internal sealed class ResourceNamedTexts
     }
 
     /// <summary>
-    /// The name of a text as the syntax gives it: a string, or the last name in <c>nameof(...)</c>. <see langword="null"/>
-    /// where only the compiler can tell, as for a constant.
+    /// A string, or the last name in <c>nameof(...)</c>. <see langword="null"/> where only the compiler can tell.
     /// </summary>
     private static string? ReadNamedText(ExpressionSyntax name)
     {
@@ -262,27 +239,19 @@ internal sealed class ResourceNamedTexts
         return text;
     }
 
-    /// <summary>
-    /// The arguments of an attribute that name a text: the type and the name of an error message, and the type and
-    /// the names of a display name.
-    /// </summary>
     private sealed record ResourceArguments(
         TypeSyntax? ErrorMessageType,
         ExpressionSyntax? ErrorMessageName,
         TypeSyntax? ResourceType,
         ImmutableArray<ExpressionSyntax> DisplayNames);
 
-    /// <summary>
-    /// The attributes of one file that may name a text.
-    /// </summary>
     private sealed class NamingAttributes(ImmutableArray<NamingAttribute> entries)
     {
         public ImmutableArray<NamingAttribute> Entries { get; } = entries;
     }
 
     /// <summary>
-    /// An attribute that may name a text: where it's written, whether it names an error message or a display name, and
-    /// the name of the text as the syntax gives it, if it does.
+    /// An attribute that may name a text, with the text's name if the syntax gives it.
     /// </summary>
     private readonly record struct NamingAttribute(TextSpan Span, bool IsErrorMessage, string? Text);
 }

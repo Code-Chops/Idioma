@@ -6,12 +6,11 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a set that lists <c>ILocalizationSet</c> without its contract (<c>LOC204</c>). It adds the contract right after
+/// Fixes a set that lists <c>ILocalizationSet</c> without its contract (<c>LOC205</c>). It adds the contract right after
 /// <c>ILocalizationSet</c> (<c>IShopLocalization</c> for <c>ShopLocalizationNl</c>), which then requires every text.
 /// </summary>
 /// <remarks>
-/// A set without its contract gets the fix only when the build generates that contract. Without a default-language set
-/// to generate it from, there is nothing to implement yet.
+/// The fix is offered only when the build generates that contract from a default-language set.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(MissingContractCodeFixProvider))]
 [Shared]
@@ -25,7 +24,6 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     {
         var document = context.Document;
 
-        // The place is found here, so that no fix is offered that would change nothing.
         if (await CodeFixSupport.FindDeclarationAsync(context).ConfigureAwait(false) is not { } declaration
             || await CodeFixSupport.FindTypeAsync(document, declaration, context.CancellationToken).ConfigureAwait(false) is not var (type, semanticModel)
             || await FindPlaceAsync(declaration, type, semanticModel.Compilation, context.CancellationToken).ConfigureAwait(false) is not var (part, index))
@@ -50,8 +48,7 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Where the contract goes: right after <c>ILocalizationSet</c>, in whichever part of the class lists it.
-    /// <see langword="null"/> when no part of the class has a base list.
+    /// Where the contract goes, right after <c>ILocalizationSet</c>, or <see langword="null"/> when no part has a base list.
     /// </summary>
     private static async Task<(TypeDeclarationSyntax Part, int Index)?> FindPlaceAsync(TypeDeclarationSyntax declaration, INamedTypeSymbol type, Compilation compilation,
         CancellationToken cancellationToken)
@@ -73,16 +70,14 @@ public sealed class MissingContractCodeFixProvider : CodeFixProvider
             }
         }
 
-        // Nothing to go next to, as for a set that gets ILocalizationSet through a class it derives from: at the end,
-        // in the part the diagnostic is on when it has a base list, and else in the first part that has one.
+        // A set that inherits ILocalizationSet gets it at the end of this part's base list, else the first part's.
         var last = declaration.BaseList is not null ? declaration : parts.FirstOrDefault(static part => part.BaseList is not null);
 
         return last?.BaseList is { } own ? (last, own.Types.Count) : null;
     }
 
     /// <summary>
-    /// Adds the contract to the base list of one part at an index. The contract is one that binds, or one generated
-    /// here, which binds to nothing yet.
+    /// Adds the contract to one part's base list. A contract generated here may not bind yet.
     /// </summary>
     private static Task<Solution> AddAsync(Solution solution, TypeDeclarationSyntax part, int index, string name, CancellationToken cancellationToken)
     {

@@ -9,39 +9,25 @@ namespace CodeChops.Idioma.Generators;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Every parameter of <c>Inline</c> is a string, so the compiler doesn't mind a wording that leaves a value out:
-/// <c>LocalizedText.Inline(en: $"Hello, {name}!", nl: "Hallo!")</c> compiles, and Dutch users don't see the name.
+/// The default wording is the first language's argument. It shows the locals, parameters, fields and properties its
+/// interpolated strings hold, without those it only chooses by (<see cref="TextParameters"/>). A constant or a text
+/// (<see cref="TextProperties"/>) is wording and no value.
 /// </para>
 /// <para>
-/// The default wording is the argument of the first language. It shows a value where an interpolated string it writes
-/// holds one: a local variable, a parameter, or a field or property of this assembly. <c>{count:N0}</c> and
-/// <c>{count.ToString("N0")}</c> show <c>count</c>, and <c>{user.Name}</c> shows <c>user</c>. A value it only chooses
-/// by, as in <c>count == 1 ? "1 item" : $"{count} items"</c> without the last part, isn't shown, as for a text of a
-/// set (<see cref="TextParameters"/>). A constant is wording and no value. So is a text, such as
-/// <c>ShopLocalization.Checkout</c>, or a property whose getter gives one (<see cref="TextProperties"/>).
-/// </para>
-/// <para>
-/// Another language uses a value when its argument reads it anywhere, also in a condition, or reads a local variable
-/// that is declared with it. Nothing is reported where the build can't tell:
+/// Another language uses a value when its argument reads it anywhere, directly or through a local's declaration.
+/// Nothing is reported where the build can't tell:
 /// </para>
 /// <list type="bullet">
-/// <item>An argument that isn't written in place, such as a variable or the result of a call.</item>
-/// <item>An argument that calls a local function or a delegate, which may read the value.</item>
-/// <item>For a field, a property, or a parameter of a primary constructor, an argument that calls a method of this
-/// assembly, or reads a property of it that has a body.</item>
+/// <item>An argument that isn't written in place.</item>
+/// <item>An argument that calls a local function or a delegate.</item>
+/// <item>For a field, property or primary constructor parameter, an argument that calls code of this assembly.</item>
 /// <item>A call that doesn't compile.</item>
 /// </list>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
 {
-    /// <summary>
-    /// The code a set that leaves a value out gets too (<see cref="TextParametersAnalyzer"/>).
-    /// </summary>
-    public const string ValueLeftOutDiagnosticId = TextParametersAnalyzer.ValueLeftOutDiagnosticId;
-
-    // The code of a set's method that leaves a value out too (SharedRules): both say that a language doesn't show a
-    // value the default wording shows, and both have the same fix.
+    // Shared with a set's method that leaves a value out, because both have the same fix.
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [SharedRules.ValueLeftOut];
 
     public override void Initialize(AnalysisContext context)
@@ -49,49 +35,38 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
 
         // Razor's output counts as generated code, and a text written in markup must be read there.
-        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
+        // AnalyzerSupport.IsHandWritten leaves out the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
 
     private static void Start(CompilationStartAnalysisContext context)
     {
-        // Read once per compilation, and not per call: an app may write hundreds of inline texts.
         var codes = SupportedLanguages.ReadCodes(context.Compilation.Assembly);
 
-        // One language has no other to hold to it.
         if (codes.Length < 2)
             return;
 
-        // Per tree of operations, so that the writes of a method are found once for all its inline texts, and not once
-        // per text. Razor writes all the markup of a page in one method, which may hold thousands of them.
+        // Found once per method for all its inline texts, because Razor writes a whole page in one method.
         var writes = new TreeWrites();
 
-        // For a property that gives a text, which is wording and no value (TextProperties).
         var text = context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText);
 
         context.RegisterOperationAction(c => AnalyzeInvocation(c, codes, writes, text), OperationKind.Invocation);
     }
 
-    /// <summary>
-    /// Holds each language of a call of <c>LocalizedText.Inline</c> to the values the first language shows.
-    /// </summary>
-    /// <param name="context">The invocation.</param>
-    /// <param name="codes">The languages the assembly declares, which name the wording of each parameter.</param>
-    /// <param name="writes">What the code the call stands in writes its local variables with.</param>
     private static void AnalyzeInvocation(OperationAnalysisContext context, ImmutableArray<string> codes, TreeWrites writes, INamedTypeSymbol? text)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
-        // By the name of the method first, which costs nothing: nearly every call is another one.
-        if (!UnnamedLanguageAnalyzer.IsFactory(invocation.TargetMethod)
-            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree)
+        if (!AnalyzerSupport.IsFactory(invocation.TargetMethod)
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree)
             || invocation.Syntax.ContainsDiagnostics)
         {
             return;
         }
 
-        // The factory takes the languages in the order the assembly declares them, the default first.
+        // The first parameter is the default language.
         if (invocation.Arguments.FirstOrDefault(static argument => argument.Parameter is { Ordinal: 0 }) is not { Parameter: { } defaultParameter } defaultArgument)
             return;
 
@@ -101,7 +76,6 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         if (shown.Count is 0)
             return;
 
-        // Nothing to say about values in a call of which a part binds to nothing.
         if (invocation.Descendants().Any(static operation => operation is IInvalidOperation))
             return;
 
@@ -109,7 +83,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
 
         foreach (var argument in invocation.Arguments)
         {
-            // Only a wording written in place is held to the values: a variable or a call may hold them unseen.
+            // Only a wording written in place, because a variable or a call may hold the values unseen.
             if (argument == defaultArgument
                 || argument.Parameter is not { } parameter
                 || !WrittenWording.FindStrings(argument.Value.Syntax as ExpressionSyntax).Any())
@@ -137,9 +111,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether a method or a property of this assembly can read a value, so that a wording that calls one may show
-    /// the value unseen: a field, a property, or a parameter of a primary constructor, which every member of its type
-    /// reads as it reads a field. Any other parameter and a local variable belong to the code around the call alone.
+    /// Whether code of this assembly can read a value: a field, a property, or a primary constructor parameter.
     /// </summary>
     private static bool IsReadableByOwnCode(ISymbol value, CancellationToken cancellationToken)
     {
@@ -158,8 +130,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The values the wording of an argument shows, in the order it shows them: what the interpolated strings it writes
-    /// hold, without what they only choose by.
+    /// The values an argument's interpolated strings show, in order, without those they only choose by.
     /// </summary>
     private static List<ISymbol> FindShownValues(IArgumentOperation argument, TextProperties texts)
     {
@@ -174,8 +145,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The interpolated strings an operation shows one of, or shows next to each other: where
-    /// <see cref="WrittenWording"/> finds the strings of a wording.
+    /// The interpolated strings an operation shows, where <see cref="WrittenWording"/> finds a wording's strings.
     /// </summary>
     private static IEnumerable<IInterpolatedStringOperation> FindWrittenInterpolatedStrings(IOperation? operation)
     {
@@ -202,9 +172,8 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Adds the values an operation shows, when it stands in an interpolated string. A value that only chooses what is
-    /// shown is left out, as <see cref="TextParameters"/> leaves it out for a text of a set: one in a condition, in
-    /// what a switch switches on, in a pattern, or in a comparison.
+    /// Adds the values an interpolation shows. A value in a condition, switch, pattern or comparison only chooses, so
+    /// it's left out, as in <see cref="TextParameters"/>.
     /// </summary>
     private static void AddShownValues(IOperation? operation, IArgumentOperation argument, List<ISymbol> shown, TextProperties texts)
     {
@@ -236,7 +205,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
 
         if (FindValue(operation) is { } value)
         {
-            // A text is wording, as a constant is, so another language may word it its own way.
+            // A text is wording, so another language may word it its own way.
             if (IsValueOfCaller(value, argument) && !texts.IsText(value) && !shown.Contains(value, SymbolEqualityComparer.Default))
                 shown.Add(value);
 
@@ -248,9 +217,8 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The value an operation reads by itself: a local variable, a parameter, or a field or property that is read of
-    /// this instance or of a type. A member of another value, such as <c>user.Name</c>, is no value by itself: the
-    /// value is <c>user</c>.
+    /// The local, parameter, or field or property of this instance or a type that an operation reads. For
+    /// <c>user.Name</c>, the value is <c>user</c>.
     /// </summary>
     private static ISymbol? FindValue(IOperation operation)
     {
@@ -267,9 +235,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether a value is one the code around the call holds: declared in this assembly, and not inside the argument
-    /// that shows it, as the parameter of a lambda is. Another language can't be held to a value of the argument's own,
-    /// and a member of another assembly, such as <c>DateTime.Now</c>, is no value of the text.
+    /// Whether a value is declared in this assembly and outside the argument, as a lambda's parameter isn't.
     /// </summary>
     private static bool IsValueOfCaller(ISymbol value, IArgumentOperation argument)
     {
@@ -286,35 +252,31 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
     /// <summary>
     /// What the wording of a language reads, and whether it calls code that may read more.
     /// </summary>
-    /// <param name="treeWrites">What the code the call stands in writes its local variables with.</param>
     private sealed class Reads(TreeWrites treeWrites)
     {
         /// <summary>
-        /// The local variables, parameters, fields, and properties read, also those read where a local variable that is
-        /// read is declared: <c>var fullName = $"{first} {last}";</c> reads both names for a wording that shows
-        /// <c>fullName</c>.
+        /// The symbols read, also through the declarations and assignments of the locals read.
         /// </summary>
         public HashSet<ISymbol> Symbols { get; } = new(SymbolEqualityComparer.Default);
 
         /// <summary>
-        /// Whether a local function or a delegate is called, which may read any value of the code around the call.
+        /// Whether a local function or a delegate is called, which may read any value around the call.
         /// </summary>
         public bool CallsLocalCode { get; private set; }
 
         /// <summary>
-        /// Whether code of this assembly is called, which may read a field or property: a method, a constructor, or a
-        /// property with a body.
+        /// Whether a method, constructor or property with a body of this assembly is called.
         /// </summary>
         public bool CallsOwnCode { get; private set; }
 
         /// <summary>
-        /// Whether a local variable is read that gets its value where the build can't read what it holds: one declared
-        /// by a pattern, a deconstruction, <c>out var</c> or <c>foreach</c>, or one passed by reference.
+        /// Whether a local is read whose value the build can't follow, such as one from a pattern, <c>out var</c>,
+        /// <see langword="foreach"/> or a <see langword="ref"/> argument.
         /// </summary>
         public bool ReadsUnreadableLocal { get; private set; }
 
         /// <summary>
-        /// What the code around the call writes its local variables with, found when the wording first reads one.
+        /// Found when the wording first reads a local.
         /// </summary>
         private Writes? Writes { get; set; }
 
@@ -364,8 +326,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         }
 
         /// <summary>
-        /// Adds what the declaration of a local variable reads, as in <c>var name = user.Name;</c>. A local variable
-        /// declared in another way holds what the build can't read (<see cref="ReadsUnreadableLocal"/>).
+        /// Adds what a local's declarator reads. A local declared another way sets <see cref="ReadsUnreadableLocal"/>.
         /// </summary>
         private void AddDeclaration(ILocalSymbol local, SemanticModel? semanticModel, CancellationToken cancellationToken)
         {
@@ -390,9 +351,8 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         }
 
         /// <summary>
-        /// Adds what a local variable is assigned after its declaration, as in <c>upper = name.ToUpperInvariant();</c>
-        /// or <c>list += name;</c>. A local variable written in another way, as by a deconstruction or as an argument
-        /// passed by reference, holds what the build can't read (<see cref="ReadsUnreadableLocal"/>).
+        /// Adds what a local is assigned after its declaration. Another kind of write, such as a <c>ref</c> argument,
+        /// sets <see cref="ReadsUnreadableLocal"/>.
         /// </summary>
         private void AddWrites(ILocalSymbol local, IOperation read, CancellationToken cancellationToken)
         {
@@ -405,7 +365,7 @@ public sealed partial class InlineTextValuesAnalyzer : DiagnosticAnalyzer
         }
 
         /// <summary>
-        /// Whether a property of this assembly has code that may read another member, and so isn't an auto-property.
+        /// Whether a property of this assembly isn't an auto-property.
         /// </summary>
         private static bool HasBody(IPropertySymbol property, CancellationToken cancellationToken)
         {

@@ -8,27 +8,9 @@ namespace CodeChops.Idioma.Generators;
 /// property (<c>LOC602</c>), as in <c>static readonly string Label = ShopLocalization.Checkout;</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A text is a string with the wording for the user's language at the moment it's read. A static initializer runs
-/// once, for whoever uses the class first, so every user after that gets the wording of that first user's language.
-/// The code compiles and reads well, and the mistake only shows with two users of different languages.
-/// </para>
-/// <para>
-/// A text is one of these:
-/// </para>
-/// <list type="bullet">
-/// <item>A member of a generated class, such as <c>ShopLocalization.Checkout</c> or
-/// <c>ShopLocalization.GetTextByKey("Checkout")</c>.</item>
-/// <item>A call of <c>LocalizedText.Inline</c>, <c>LocalizedText.GetTextByMember</c> or
-/// <c>LocalizedText.GetTextOfType</c>.</item>
-/// <item>A call of the generated <c>GetText()</c> on a value of an enum.</item>
-/// </list>
-/// <para>
-/// A text inside a lambda or a local function isn't reported, because it's read when that runs:
-/// <c>static readonly Func&lt;string&gt; Label = () => ShopLocalization.Checkout;</c>. Neither is a text an instance
-/// field keeps, which lives as long as its object. Generated code is left alone, except what Razor generates from the
-/// user's markup.
-/// </para>
+/// A static initializer runs once, so every user gets the wording of the first user's language. A text inside a
+/// lambda or a local function isn't reported, because it's read when that runs. Generated code is left alone, except
+/// what Razor generates from the user's markup.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
@@ -53,8 +35,7 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     {
         context.EnableConcurrentExecution();
 
-        // Razor's output counts as generated code, and a field in the @code of a component is the user's own.
-        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
+        // Razor's output counts as generated code, but a field in a component's @code is the user's own.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
@@ -72,7 +53,6 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     {
         var initializer = (ISymbolInitializerOperation)context.Operation;
 
-        // The first of the members it initializes names them all: 'static string A = ..., B = ...' has an initializer each.
         ISymbol? member = initializer switch
         {
             IFieldInitializerOperation { InitializedFields: [var field, ..] } => field,
@@ -80,28 +60,68 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
             _ => null,
         };
 
-        // A constant can't hold a text, because a text is no constant.
         if (member is not { IsStatic: true }
             || member is IFieldSymbol { IsConst: true }
-            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, initializer.Syntax.SyntaxTree))
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, initializer.Syntax.SyntaxTree))
         {
             return;
         }
 
         if (FindText(initializer.Value, text, isEnumerated: false, runsLambdas: false) is { } read)
-            context.ReportDiagnostic(Diagnostic.Create(KeptTextRule, read.Syntax.GetLocation(), read.Syntax.ToString(), member.Name));
+            context.ReportDiagnostic(Diagnostic.Create(KeptTextRule, read.Syntax.GetLocation(), Describe(read), member.Name));
     }
 
     /// <summary>
-    /// The first text an expression reads as it's evaluated, or <see langword="null"/>. What a lambda or a local
-    /// function reads is read when that runs, so it isn't looked into, unless the lambda runs as the initializer does.
+    /// Longer than this, a text is named by what it reads, such as <c>LocalizedText.Inline</c>, rather than written out.
     /// </summary>
-    /// <param name="operation">The expression, or a part of it.</param>
-    /// <param name="text">The class <c>LocalizedText</c>.</param>
-    /// <param name="isEnumerated">
-    /// Whether the initializer enumerates what the expression gives, as <c>ToList()</c> or <c>[.. query]</c> does. A
-    /// query of LINQ that it stores as it is runs its lambdas only when it's enumerated, later.
-    /// </param>
+    private const int MaxWrittenLength = 80;
+
+    /// <summary>
+    /// The text as the code writes it, on one line, such as <c>ShopLocalization.Greeting("Ada")</c>. A long one, such as
+    /// an inline text with its wording in every language, by the member it reads.
+    /// </summary>
+    // On one line, because a build prints a message up to its first line break.
+    private static string Describe(IOperation read)
+    {
+        // Each run of white space as one space, and none inside brackets: LocalizedText.Inline(en: "...", nl: "...").
+        var written = new StringBuilder();
+        var isSpaced = false;
+
+        foreach (var character in read.Syntax.ToString())
+        {
+            if (Char.IsWhiteSpace(character))
+            {
+                isSpaced = written.Length > 0;
+                continue;
+            }
+
+            if (isSpaced && written[written.Length - 1] is not ('(' or '[') && character is not (')' or ']'))
+                written.Append(' ');
+
+            written.Append(character);
+            isSpaced = false;
+        }
+
+        if (written.Length <= MaxWrittenLength)
+            return written.ToString();
+
+        var name = read switch
+        {
+            // The top-level type that holds the member, also where an extension block lies inside it.
+            IPropertyReferenceOperation { Property: var property } => $"{AnalyzerSupport.GetContainingTypes(property).Last().Name}.{property.Name}",
+            IInvocationOperation { TargetMethod: var method } when AnalyzerSupport.IsFactory(method) => $"{PackageNames.LocalizedTextName}.{method.Name}",
+            IInvocationOperation { TargetMethod: var method } => $"{AnalyzerSupport.GetContainingTypes(method).Last().Name}.{method.Name}",
+            _ => written.ToString(0, MaxWrittenLength) + "…",
+        };
+
+        return name;
+    }
+
+    /// <summary>
+    /// The first text an expression reads as it's evaluated, or <see langword="null"/>. A lambda or a local function
+    /// isn't looked into, unless the lambda runs as the initializer does.
+    /// </summary>
+    /// <param name="isEnumerated">Whether the initializer enumerates what the expression gives, as <c>ToList()</c> does.</param>
     /// <param name="runsLambdas">Whether a lambda the expression is runs as the initializer does.</param>
     private static IOperation? FindText(IOperation operation, INamedTypeSymbol text, bool isEnumerated, bool runsLambdas)
     {
@@ -112,10 +132,8 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
         if (IsTextRead(operation, text))
             return operation;
 
-        // How the parts of the expression run: what a part of a query of LINQ gives is enumerated when the query is,
-        // and its lambdas run then. A method that takes a query, such as ToList() or string.Join, enumerates it, and so
-        // does a collection, but a lambda handed to another method may run later or never. Lazy<T> runs its lambda once
-        // and keeps the value, as an initializer does. A lambda's body runs anew, as code of its own.
+        // A LINQ query runs its lambdas only when it's enumerated, as ToList() or a collection does. A lambda handed to
+        // another method may run later or never. Lazy<T> runs its lambda once and keeps the value, as an initializer does.
         var (enumeratesParts, runsLambdasOfParts) = operation switch
         {
             IAnonymousFunctionOperation => (false, false),
@@ -143,14 +161,14 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether a method of LINQ gives a query, which runs its lambdas only when it's enumerated, such as <c>Select</c>.
-    /// One that gives a list, a value or a dictionary, such as <c>ToList</c> or <c>First</c>, runs them as it's called.
+    /// Whether a method of LINQ gives a query that runs its lambdas only when it's enumerated, such as <c>Select</c> or
+    /// <c>OrderBy</c>. <c>ToLookup</c> gives an <c>ILookup</c>, which it fills at once.
     /// </summary>
     private static bool IsQuery(IMethodSymbol method)
     {
         var isQuery = IsOfLinq(method)
                       && method.ReturnType is INamedTypeSymbol { IsGenericType: true, TypeKind: TypeKind.Interface } returned
-                      && returned.ConstructedFrom.ContainingNamespace?.ToDisplayString() is "System.Collections.Generic" or "System.Linq";
+                      && returned.ConstructedFrom.ToDisplayString() is "System.Collections.Generic.IEnumerable<T>" or "System.Linq.IOrderedEnumerable<TElement>";
 
         return isQuery;
     }
@@ -159,7 +177,6 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     /// Whether an operation reads a text itself: a text of a generated class, or a call of a method that gives one
     /// (<see cref="IsTextMethod"/>).
     /// </summary>
-    /// <param name="operation">The operation.</param>
     /// <param name="text">The class <c>LocalizedText</c>.</param>
     internal static bool IsTextRead(IOperation operation, INamedTypeSymbol text)
     {
@@ -182,30 +199,16 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
         if (method.ReturnType.SpecialType is not SpecialType.System_String)
             return false;
 
-        if (SymbolEqualityComparer.Default.Equals(method.ContainingType, text) || UnnamedLanguageAnalyzer.IsFactory(method))
-            return true;
+        var isTextMethod = SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
+                           || AnalyzerSupport.IsFactory(method)
+                           || IsTextOfGeneratedClass(method)
+                           || AnalyzerSupport.IsGetTextOfLocalizedMembers(method);
 
-        if (IsTextOfGeneratedClass(method))
-            return true;
-
-        // An extension member's method lies in a block inside the static class that holds it.
-        for (var type = method.ContainingType; type is not null; type = type.ContainingType)
-        {
-
-            // The class the source generator writes for an enum with [Localized] members.
-            if (String.Equals(method.Name, LocalizedMembers.ExtensionName, StringComparison.Ordinal)
-                && type.Name.EndsWith(LocalizedMembers.ExtensionHolderSuffix, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return isTextMethod;
     }
 
     /// <summary>
-    /// Whether a class is one the source generator writes for a set, such as <c>ShopLocalization</c>: a static class
-    /// whose namespace holds its contract, <c>IShopLocalization</c>, which the generator marks.
+    /// Whether a class is a generated class, such as <c>ShopLocalization</c>, whose namespace holds its marked contract.
     /// </summary>
     internal static bool IsGeneratedClass(INamedTypeSymbol? type)
     {
@@ -213,14 +216,13 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether a member of a generated class gives a text: one of its texts, which its contract has too, or a method
-    /// the generator writes next to them (<c>GetTextByKey</c>, and <c>GetTextByValue</c> and <c>GetText()</c> for an
-    /// enum). A helper written next to them in the partial class gives none.
+    /// Whether a member of a generated class gives a text: one its contract has, or a lookup the generator writes. A
+    /// helper written in the partial class gives none.
     /// </summary>
     internal static bool IsTextOfGeneratedClass(ISymbol member)
     {
         // An extension member's method lies in a block inside the static class that holds it.
-        for (var type = member.ContainingType; type is not null; type = type.ContainingType)
+        foreach (var type in AnalyzerSupport.GetContainingTypes(member))
         {
             if (FindContractOfGeneratedClass(type) is not { } contract)
                 continue;
@@ -235,7 +237,7 @@ public sealed class KeptTextAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The contract of a class the source generator writes for a set, or <see langword="null"/> for any other type.
+    /// The contract of a generated class, or <see langword="null"/> for any other type.
     /// </summary>
     private static INamedTypeSymbol? FindContractOfGeneratedClass(INamedTypeSymbol? type)
     {

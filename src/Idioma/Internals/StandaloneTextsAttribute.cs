@@ -13,7 +13,6 @@ namespace CodeChops.Idioma.Internals;
 // Located by its metadata-name string.
 [Obsolete("Don't use this attribute directly. Only generated code applies this attribute. The source generator writes it for an assembly that uses LocalizedText.Inline or [Localized].")]
 [EditorBrowsable(EditorBrowsableState.Never)]
-// More than once: the generated factory's file applies it for LocalizedText.Inline, and the file with the texts of
-// members applies it for [Localized].
+// The generated factory's file and the file with the texts of members each apply it.
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 public sealed class StandaloneTextsAttribute : Attribute;

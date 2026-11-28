@@ -3,37 +3,27 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a set whose <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't match the enums of its contract (<c>LOC205</c>):
+/// Reports a set whose <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't match the enums of its contract (<c>LOC206</c>):
 /// a Dutch set that lists <c>ILocalizationSet</c> where the contract is of an enum, or a set that lists
 /// <c>ILocalizationSet&lt;TEnum&gt;</c> for an enum its contract has no texts of.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The contract of a set of an enum names its enums, as in <c>[LocalizationContract(typeof(OrderStatus))]</c>. Every
-/// set of it lists <c>ILocalizationSet&lt;OrderStatus&gt;</c>, in each language, and no other enum, so each set shows
-/// which enum it words. It compiles either way, because the interface has no members, so this is a warning.
-/// </para>
-/// <para>
-/// A missing enum is reported once per set: at the <c>ILocalizationSet</c> or the wrong enum it takes the place of, or
-/// else at the set. Each other wrong enum is reported where it's listed. These aren't reported:
-/// </para>
+/// A missing enum is reported once per set, at what it takes the place of or else at the set. These aren't reported:
 /// <list type="bullet">
-/// <item>An enum missing from a set that lists no such contract itself, as a regional set that only derives from the
-/// set of its language. It lists what that set lists, which is reported there.</item>
-/// <item>An enum the set's assembly can't name, as an internal enum of a library, which no set there can list.</item>
+/// <item>An enum missing from a set that doesn't list the contract itself, because its base set is reported.</item>
+/// <item>An enum the set's assembly can't name.</item>
 /// <item>A contract written by hand.</item>
 /// </list>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
 {
-    public const string SetOfEnumDiagnosticId = "LOC205";
+    public const string SetOfEnumDiagnosticId = "LOC206";
 
     private const string Title = "Set whose enums don't match its contract";
     private const string Description = "The contract of a set of an enum has a text for each member of the enum. Every set of it lists ILocalizationSet<TEnum>, in each language, and no other enum, so each set shows which enum it words. List it in place of ILocalizationSet.";
 
-    // One descriptor for both cases, an enum the set lacks and one it lists too many, so that an IDE lists the code once.
-    // What's wrong is the first argument, and what to do the second.
+    // One descriptor for a missing enum and an extra one, so an IDE lists the code once.
     private static readonly DiagnosticDescriptor SetOfEnumRule = new(
         id: SetOfEnumDiagnosticId,
         title: Title,
@@ -50,7 +40,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
     {
         context.EnableConcurrentExecution();
 
-        // A set is written by hand, and what a generator writes is not its author's to change.
+        // A set is written by hand.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.RegisterCompilationStartAction(Start);
     }
@@ -60,7 +50,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
         if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizationSet) is null)
             return;
 
-        // Each part of a class, with the model that binds what its base list names.
+        // Per part, so each base list binds with its own model.
         context.RegisterSyntaxNodeAction(AnalyzePart, SyntaxKind.ClassDeclaration, SyntaxKind.RecordDeclaration);
     }
 
@@ -85,7 +75,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
                 ReportExtra(context, set, plan, extra, entry.GetLocation());
         }
 
-        // Next to the contract, as nothing takes its place: at the first part of the set.
+        // Nothing to replace, so at the first part of the set.
         if (plan is { Missing.IsEmpty: false, Replaced: null } && IsFirstPart(set, part))
             ReportMissing(context, set, plan, part.Identifier.GetLocation());
     }
@@ -132,17 +122,15 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists, and what the fix does about it, or
-    /// <see langword="null"/> when nothing is. The fix lists each missing enum in the place of <c>ILocalizationSet</c>,
-    /// or else of the first wrong enum, or else next to the contract. It removes every other wrong enum. A set that
-    /// would then implement <c>ILocalizationSet</c> no more gets it in the place of its first wrong enum.
+    /// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists, and how the fix changes it, or
+    /// <see langword="null"/> when nothing is.
     /// </summary>
     internal static SetOfEnumPlan? Plan(INamedTypeSymbol set, Compilation compilation)
     {
         if (!set.AllInterfaces.Any(PackageNames.IsLocalizationSet))
             return null;
 
-        // The generated contracts, which name their enums. A contract written by hand names none, and isn't checked.
+        // Only a generated contract names its enums.
         var contracts = set.AllInterfaces
             .Where(PackageNames.IsGeneratedContract)
             .Select(contract => new GeneratedContract(contract, PackageNames.GetContractEnums(contract), SymbolEqualityComparer.Default.Equals(contract.ContainingAssembly, compilation.Assembly)))
@@ -151,7 +139,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
         if (contracts.Length is 0)
             return null;
 
-        // An enum is missing only where the set lists the contract itself: a set deriving from another lists its enums.
+        // Missing only where the set lists the contract itself, because a derived set inherits its base's enums.
         var missing = contracts
             .Where(contract => set.Interfaces.Contains(contract.Contract, SymbolEqualityComparer.Default))
             .SelectMany(static contract => contract.Enums)
@@ -159,7 +147,6 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
             .Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default)
             .ToImmutableArray();
 
-        // An enum is wrong where none of the set's contracts names it.
         var extras = set.Interfaces
             .Where(static @interface => PackageNames.IsLocalizationSetOfEnum(@interface) && @interface.TypeArguments[0].TypeKind is TypeKind.Enum)
             .Where(setOfEnum => !contracts.Any(contract => contract.Enums.Any(@enum => SymbolEqualityComparer.Default.Equals(@enum, setOfEnum.TypeArguments[0]))))
@@ -172,8 +159,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
             ? null
             : set.Interfaces.FirstOrDefault(PackageNames.IsLocalizationSet) ?? extras.FirstOrDefault();
 
-        // Without its wrong enums, the set still implements ILocalizationSet through a missing enum the fix lists, another
-        // interface it lists, or a class it derives from.
+        // Whether the set still implements ILocalizationSet once its wrong enums are gone.
         var keepsSetInterface = !missing.IsEmpty
                                 || set.BaseType?.AllInterfaces.Any(PackageNames.IsLocalizationSet) is true
                                 || set.Interfaces.Any(@interface => !extras.Contains(@interface, SymbolEqualityComparer.Default)
@@ -205,8 +191,7 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The interfaces a message names: <c>'ILocalizationSet&lt;OrderStatus&gt;'</c>, or two or more joined with
-    /// <c>and</c>.
+    /// The interfaces a message names, joined with <c>and</c>.
     /// </summary>
     private static string JoinNames(ImmutableArray<INamedTypeSymbol> enums)
     {
@@ -223,19 +208,20 @@ public sealed class SetOfEnumAnalyzer : DiagnosticAnalyzer
 }
 
 /// <summary>
-/// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists (<c>LOC205</c>), as
+/// What's wrong with the <c>ILocalizationSet&lt;TEnum&gt;</c> a set lists (<c>LOC206</c>), as
 /// <see cref="SetOfEnumAnalyzer.Plan"/> finds it.
 /// </summary>
 /// <param name="Contract">The contract a message names: the first the set lists itself.</param>
-/// <param name="Missing">The enums of the contracts the set lists itself, which it doesn't list.</param>
-/// <param name="Extras">Each <c>ILocalizationSet&lt;TEnum&gt;</c> the set lists for an enum its contracts don't
-/// have.</param>
-/// <param name="Replaced">The interface the missing enums take the place of: <c>ILocalizationSet</c>, or else the
-/// first of <paramref name="Extras"/>. <see langword="null"/> where they go next to the contract.</param>
-/// <param name="KeepsSetInterface">Whether the set implements <c>ILocalizationSet</c> without
-/// <paramref name="Extras"/>.</param>
-/// <param name="IsOwnContract">Whether this assembly generates <paramref name="Contract"/>, so that its default-language
-/// set can list an enum too.</param>
+/// <param name="Extras">
+/// Each <c>ILocalizationSet&lt;TEnum&gt;</c> the set lists for an enum its contracts don't have.
+/// </param>
+/// <param name="Replaced">
+/// The interface the missing enums take the place of, or <see langword="null"/> where they go next to the contract.
+/// </param>
+/// <param name="KeepsSetInterface">
+/// Whether the set implements <c>ILocalizationSet</c> without <paramref name="Extras"/>.
+/// </param>
+/// <param name="IsOwnContract">Whether this assembly generates <paramref name="Contract"/>.</param>
 internal sealed record SetOfEnumPlan(
     INamedTypeSymbol Contract,
     ImmutableArray<INamedTypeSymbol> Missing,
@@ -245,8 +231,8 @@ internal sealed record SetOfEnumPlan(
     bool IsOwnContract)
 {
     /// <summary>
-    /// The enum of a listed interface that is one of <see cref="Extras"/>, other than the one the missing enums take the
-    /// place of. <see langword="null"/> for any other interface.
+    /// The enum of a listed interface that's one of <see cref="Extras"/> but not <see cref="Replaced"/>, or
+    /// <see langword="null"/>.
     /// </summary>
     public INamedTypeSymbol? FindExtra(INamedTypeSymbol listed)
     {
@@ -257,8 +243,7 @@ internal sealed record SetOfEnumPlan(
     }
 
     /// <summary>
-    /// Whether the fix puts <c>ILocalizationSet</c> in the place of the interface of this enum: the first wrong enum of a
-    /// set that would implement <c>ILocalizationSet</c> no more.
+    /// Whether the fix puts <c>ILocalizationSet</c> in the place of this enum's interface, so the set keeps implementing it.
     /// </summary>
     public bool IsReplacedBySetInterface(INamedTypeSymbol @enum)
     {

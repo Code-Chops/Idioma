@@ -1,24 +1,23 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// A diagnostic to report: which rule, where, and the arguments of its message. A finding a name resolves carries it,
-/// for the code fix to apply: the name the class should carry (<c>LOC200</c>), the language to list
-/// (<c>LOC202</c>), the contract it should implement (<c>LOC204</c>), or the set to add (<c>LOC201</c> and
-/// <c>LOC700</c>), which also carries how to write that set.
+/// A diagnostic to report. <see cref="SuggestedName"/> is the name a code fix applies: the class name (<c>LOC200</c>),
+/// the language to list (<c>LOC202</c>) or the contract to implement (<c>LOC205</c>). <see cref="AlternativeName"/> is
+/// a second language a fix of <c>LOC202</c> offers, where a name can mean either. <see cref="NewSet"/> is the set it
+/// adds (<c>LOC201</c>, <c>LOC700</c>).
 /// </summary>
 internal readonly record struct LocalizationSetsFinding(
     LocalizationSetsRule Rule,
     DiagnosticLocation Location,
     EquatableArray<string> Arguments,
     string? SuggestedName = null,
-    NewLocalizationSet? NewSet = null);
+    NewLocalizationSet? NewSet = null,
+    string? AlternativeName = null);
 
 /// <summary>
-/// A set the code fix of <c>LOC201</c> or <c>LOC700</c> adds in a file of its own: its namespace, empty for the global
-/// one, and its declaration without a body, such as
-/// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>. The namespace is
-/// <see langword="null"/> for a set of a library's contract (<c>LOC700</c>), which the fix gives the namespace of the
-/// app.
+/// A set the code fix of <c>LOC201</c> or <c>LOC700</c> adds in its own file, with its declaration without a body. The
+/// namespace is empty for the global one, and <see langword="null"/> for a set of a library's contract, which gets the
+/// app's namespace.
 /// </summary>
 internal readonly record struct NewLocalizationSet(
     string? Namespace,

@@ -1,66 +1,47 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes the texts of the members marked <c>[Localized]</c> (<see cref="LocalizedMembers"/>): the
-/// wording of each member per language, as its attribute gives it, and one function that finds
-/// a member's wording by its type and name. The assembly's registrar registers that function
-/// (<see cref="LocalizationRegistrationPart"/>, which also writes this file), so
-/// <c>LocalizedText.GetTextByMember</c> finds the text without reading an attribute at run time. For an enum with a
-/// marked member it also writes the extension method that gives a value its text: <c>status.GetText()</c>.
+/// Writes the texts of the <c>[Localized]</c> members (<see cref="LocalizedMembers"/>), and one function that finds a
+/// member's wording by type and name, so <c>LocalizedText.GetTextByMember</c> reads no attribute at run time. The
+/// registrar registers that function. An enum also gets <c>status.GetText()</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The code lies in one file, at the top level of the assembly. A type it can't name from there, which is a private
-/// or protected nested type or a file-local one, gets no text, and <c>LocalizedMemberAnalyzer</c> says so
-/// (<c>LOC502</c>).
-/// </para>
-/// <para>
-/// The file marks its assembly <c>[assembly: StandaloneTexts]</c>, because a text on a member is a standalone text,
-/// which carries its wording itself. So no assembly referencing this one can add a language to it (<c>LOC701</c>).
-/// </para>
+/// A type the file can't name from the top level gets no text (<c>LOC502</c>). The file marks the assembly
+/// <c>[assembly: StandaloneTexts]</c>, so no referencing assembly can add a language (<c>LOC701</c>).
 /// </remarks>
 internal static class LocalizedMembersSource
 {
-    /// <summary>
-    /// The name of the file the texts are written to.
-    /// </summary>
     public const string HintName = "LocalizedMembers.g.cs";
 
     /// <summary>
-    /// The class that finds the texts, outside the namespace of the class that registers them, at the top level of the
-    /// file.
+    /// The class that finds the texts, at the top level of the file.
     /// </summary>
     private const string OwnMembersName = "OwnLocalizedMembers";
 
     /// <summary>
-    /// The start of the name of a class that holds the texts of one type, which its number ends.
+    /// The name of a class of one type's texts, before its number.
     /// </summary>
     private const string TextsName = "LocalizedTexts";
 
     private const string OwnTextName = "OwnText";
 
     /// <summary>
-    /// The assembly's languages, the default first, in the class of <c>LocalizedText.Inline</c>. Each text has its
-    /// wording in this order.
+    /// The assembly's languages in the class of <c>LocalizedText.Inline</c>, in the order of each text's wordings.
     /// </summary>
-    // That array, and not one of this file, because the package keeps its last pick for one array (StandaloneLanguage).
-    // With two, a page that shows inline texts and texts on members in turn picked again for every text.
-    // LocalizedTextFactoryGenerator writes that class from the same languages, wherever this file is written.
+    // Shared with inline texts, because the package caches its last pick for one array (StandaloneLanguage).
     private const string LanguagesReference = LocalizedTextFactoryGenerator.ClassName + "." + LocalizedTextFactoryGenerator.LanguagesName;
 
     public static string Generate(LocalizedMembersModel model)
     {
         var sb = new StringBuilder();
 
-        // The pragma also covers a type or a member of an enum marked [Obsolete] or [Experimental], which this file names
-        // for as long as it has a text.
-        var warnings = GeneratedFile.WithSuppressed(GeneratedFile.ObsoleteWarnings, model.SuppressedDiagnostics);
+        // The pragma also covers an obsolete type or enum member the file names.
+        const string warnings = GeneratedFile.ObsoleteWarnings;
 
         sb.AppendLine(GeneratedFile.GetHeader(warnings, "Only generated code calls GeneratedCode and applies StandaloneTexts."));
         sb.AppendLine();
 
-        // The namespaces of the attributes that mark generated code, which stand by their names alone, because a class
-        // that gives an enum GetText() lies in the enum's namespace (GeneratedFile.ImportedCodeAttributes).
+        // For GeneratedFile.ImportedCodeAttributes, because a GetText() class lies in the enum's namespace.
         foreach (var imported in GeneratedFile.CodeAttributeNamespaces)
             sb.AppendLine($"using {imported};");
 
@@ -152,11 +133,9 @@ internal static class LocalizedMembersSource
     }
 
     /// <summary>
-    /// Writes the class that holds the texts of one type, each with its wording per language. For an enum it
-    /// also holds the text of each value, which the extension method gives.
+    /// Writes the class of one type's texts. For an enum, it also holds the switch the extension method calls.
     /// </summary>
-    // The fields are numbered, and not named after their members: a field named like the start of a namespace would
-    // stand before that namespace in this class.
+    // Numbered fields, because a field named like a namespace would hide it in this class.
     private static void AppendTexts(StringBuilder sb, LocalizedMembersModel model, int index)
     {
         var type = model.Types[index];
@@ -174,7 +153,6 @@ internal static class LocalizedMembersSource
 
         foreach (var text in type.Texts)
         {
-            // The wording per language, in the order of the assembly's languages.
             var wordings = String.Join(", ", model.Codes.Select((_, language) => SymbolDisplay.FormatLiteral(text.Wordings[language], quote: true)));
 
             sb.AppendLine($"    internal static readonly string[] {GetFieldName(text, ref number)} = [{wordings}];");
@@ -182,15 +160,14 @@ internal static class LocalizedMembersSource
 
         if (type.Extension is not null)
         {
-            // The texts of a set of the enum first, which an app that references this assembly may have registered, so
-            // that it can give the enum its own languages.
+            // A set of the enum that a referencing app registered goes first, so it can add its own languages.
             sb.AppendLine($$"""
 
                     internal static string Get({{type.Reference}} value) => CodeChops.Idioma.Internals.GeneratedCode.GetEnumText(value) ?? value switch
                     {
                 """);
 
-            // Of two members of one value, the first gives its text: a switch takes a value once.
+            // Of two members of one value, the first gives its text.
             var values = new HashSet<string>(StringComparer.Ordinal);
             number = 0;
 
@@ -201,13 +178,7 @@ internal static class LocalizedMembersSource
                 if (text.MemberName is null || (text.EnumValue is not null && !values.Add(text.EnumValue)))
                     continue;
 
-                // A member marked [Obsolete] as an error can't be named (CS0619), so its arm names its value, which a
-                // parenthesis keeps whole when it's negative.
-                var pattern = text is { IsObsoleteAsError: true, EnumValue: { } value }
-                    ? $"({type.Reference})({value})"
-                    : $"{type.Reference}.{CodeEscaping.EscapeIdentifier(text.MemberName)}";
-
-                sb.AppendLine($"        {pattern} => {OwnMembersName}.Word({field}),");
+                sb.AppendLine($"        {type.Reference}.{CodeEscaping.EscapeIdentifier(text.MemberName)} => {OwnMembersName}.Word({field}),");
             }
 
             sb.AppendLine($$"""
@@ -220,8 +191,7 @@ internal static class LocalizedMembersSource
     }
 
     /// <summary>
-    /// Writes the extension method that gives a value of an enum its text, in a class in the enum's namespace, so
-    /// that the method is in reach wherever the enum is.
+    /// Writes <c>GetText()</c> in the enum's namespace, so it's in reach wherever the enum is.
     /// </summary>
     private static void AppendExtension(StringBuilder sb, LocalizedEnumExtension extension, int index)
     {
@@ -269,7 +239,7 @@ internal static class LocalizedMembersSource
     }
 
     /// <summary>
-    /// The field of a text in the class of its type: the type's own text by name, and each member by its number.
+    /// The type's own text by name, and each member's by number.
     /// </summary>
     private static string GetFieldName(LocalizedText text, ref int number)
     {

@@ -6,15 +6,24 @@ namespace CodeChops.Idioma.CodeFixes;
 public sealed partial class MissingLanguageCodeFixProvider
 {
     /// <summary>
-    /// A set to add: the document its diagnostic is in, next to which its file goes, its name and namespace, its
-    /// declaration without a body, the namespaces its file imports for the types it names, and the name and path of its
-    /// file.
+    /// A set to add, whose file goes next to <c>Document</c>. <c>Declaration</c> has no body, and names each type as the
+    /// diagnostic does, which <see cref="NameTypes"/> shortens once the fix is chosen.
     /// </summary>
-    private sealed record NewSet(Document Document, string Name, string Namespace, string Declaration, ImmutableSortedSet<string> Usings, string FileName, string? FilePath)
+    private sealed record NewSet(Document Document, string Name, string Namespace, string Declaration, string FileName, string? FilePath)
     {
         /// <summary>
-        /// The set a diagnostic asks for, or <see langword="null"/> when the diagnostic names none, or a type or a file
-        /// of the set's name exists already.
+        /// The declaration with each type named as the new file reaches it, with the usings that takes
+        /// (<see cref="NameTypesAsFileCan"/>).
+        /// </summary>
+        // Not when the light bulb asks, because each name tried compiles the project with the new file once more.
+        public (string Declaration, ImmutableSortedSet<string> Usings) NameTypes(Compilation compilation, CancellationToken cancellationToken)
+        {
+            var named = NameTypesAsFileCan(this.Declaration, this.Namespace, compilation, cancellationToken);
+            return named;
+        }
+
+        /// <summary>
+        /// The set a diagnostic asks for, or <see langword="null"/> when it names none or the name is taken.
         /// </summary>
         public static async Task<NewSet?> ReadAsync(Document document, Compilation compilation, Diagnostic diagnostic, CancellationToken cancellationToken)
         {
@@ -30,31 +39,23 @@ public sealed partial class MissingLanguageCodeFixProvider
 
             var fileName = $"{name}.cs";
             var filePath = document.FilePath is { } path && Path.GetDirectoryName(path) is { } directory ? Path.Combine(directory, fileName) : null;
-            var set = new NewSet(document, name, @namespace, declaration, ImmutableSortedSet.Create<string>(StringComparer.Ordinal), fileName, filePath);
+            var set = new NewSet(document, name, @namespace, declaration, fileName, filePath);
 
             if (compilation.GetTypeByMetadataName(@namespace.Length > 0 ? $"{@namespace}.{name}" : name) is not null || IsTaken(document.Project, set))
                 return null;
 
-            var (shortened, usings) = NameTypesAsFileCan(declaration, @namespace, compilation, cancellationToken);
-            return set with { Declaration = shortened, Usings = usings };
+            return set;
         }
 
         /// <summary>
-        /// The declaration with each type it names by its full name, as the contract of a library or the enum of
-        /// <c>ILocalizationSet&lt;TEnum&gt;</c>, named as the new file reaches it, with the namespaces the file then
-        /// imports. Each name is the first of these that the compiler binds to the type in that file:
-        /// <list type="number">
-        /// <item>The name alone, as where a global using imports its namespace.</item>
-        /// <item>The name alone, with a <see langword="using"/> of its namespace.</item>
-        /// <item>The full name, as the diagnostic writes it.</item>
-        /// </list>
+        /// The declaration with each fully named type renamed as the new file reaches it, with the usings it then needs.
+        /// Each name is the first that binds of: the name alone, the name alone with a <see langword="using"/>, and the
+        /// full name.
         /// </summary>
         /// <remarks>
-        /// The full name isn't the first choice, because a namespace around the set can take its first part:
+        /// The full name comes last, because a namespace around the set can take its first part:
         /// <c>Shop.IShopLocalization</c> means <c>Contoso.Shop.IShopLocalization</c> inside <c>namespace Contoso.Shop</c>.
-        /// A <see langword="using"/> at the top of the file reads its namespace from the global namespace, so it isn't
-        /// taken. A type it can't find stays as it is written, such as a contract the generator writes, which a workspace
-        /// may not hold yet.
+        /// A type the compilation lacks, such as a generated contract, stays as written.
         /// </remarks>
         private static (string Declaration, ImmutableSortedSet<string> Usings) NameTypesAsFileCan(string declaration, string @namespace, Compilation compilation,
             CancellationToken cancellationToken)
@@ -72,9 +73,7 @@ public sealed partial class MissingLanguageCodeFixProvider
 
             for (var i = 0; i < names.Length; i++)
             {
-                // A contract, or the enum of ILocalizationSet<Shop.OrderStatus>, which a namespace around the set can
-                // take the first part of just the same. Each name it tries stands in the place of the full one: alone,
-                // or as the type argument.
+                // A contract, or the enum of ILocalizationSet<Shop.OrderStatus>.
                 QualifiedNameSyntax written;
                 Func<string, string> around;
 
@@ -114,7 +113,7 @@ public sealed partial class MissingLanguageCodeFixProvider
                         break;
                     }
 
-                    // As the diagnostic writes it until one binds, and when none does.
+                    // The full name, until one binds or when none does.
                     names[i] = around(written.ToString());
                 }
             }
@@ -123,8 +122,7 @@ public sealed partial class MissingLanguageCodeFixProvider
         }
 
         /// <summary>
-        /// The name the compiler finds a type of a namespace by, without the <c>@</c> that escapes a keyword:
-        /// <c>Shop.IShopLocalization</c>.
+        /// The metadata name, without the <c>@</c> that escapes a keyword.
         /// </summary>
         private static string ToMetadataName(QualifiedNameSyntax name)
         {
@@ -133,9 +131,8 @@ public sealed partial class MissingLanguageCodeFixProvider
         }
 
         /// <summary>
-        /// Whether a base type of the new set binds to <paramref name="type"/>, or its type argument does, in the file as
-        /// it would be added to the project. The argument by itself, because the file imports the package's namespace
-        /// only once the names are settled, so <c>ILocalizationSet&lt;TEnum&gt;</c> binds to nothing yet.
+        /// Whether a base type of the new file, or its type argument, binds to <paramref name="type"/>. Only the argument
+        /// is checked, because the package's using is added later, so <c>ILocalizationSet&lt;TEnum&gt;</c> doesn't bind yet.
         /// </summary>
         private static bool Binds(string file, int index, INamedTypeSymbol type, Compilation compilation, CancellationToken cancellationToken)
         {
@@ -147,13 +144,27 @@ public sealed partial class MissingLanguageCodeFixProvider
 
             var written = types[index].Type is GenericNameSyntax { TypeArgumentList.Arguments: [var argument] } ? argument : types[index].Type;
 
-            var binds = SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(written, cancellationToken).Symbol, type);
+            var binds = IsSameType(model.GetSymbolInfo(written, cancellationToken).Symbol, type);
             return binds;
         }
 
         /// <summary>
-        /// The namespace for a set next to a document: the first namespace the document declares, and else the
-        /// project's default namespace, which is empty when it has none.
+        /// Whether a type bound in the compilation with the new file is <paramref name="type"/> of the compilation without
+        /// it: the same full name in the same assembly.
+        /// </summary>
+        // Not by symbol, because the compilation with the new file declares the project's own types anew, and a type of
+        // one compilation never equals one of another. Only a type of a reference is shared.
+        private static bool IsSameType(ISymbol? bound, INamedTypeSymbol type)
+        {
+            var isSame = bound is INamedTypeSymbol named
+                         && String.Equals(named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparison.Ordinal)
+                         && String.Equals(named.ContainingAssembly?.Name, type.ContainingAssembly?.Name, StringComparison.Ordinal);
+
+            return isSame;
+        }
+
+        /// <summary>
+        /// The document's first namespace, else the project's default namespace, else empty.
         /// </summary>
         private static async Task<string> FindNamespaceAsync(Document document, CancellationToken cancellationToken)
         {
@@ -166,10 +177,8 @@ public sealed partial class MissingLanguageCodeFixProvider
             if (declared is null)
                 return document.Project.DefaultNamespace ?? "";
 
-            // A namespace inside another is named with the ones around it.
-            var parts = declared.AncestorsAndSelf().OfType<BaseNamespaceDeclarationSyntax>().Reverse()
-                .SelectMany(static part => part.Name.ToString().Split('.'))
-                .Select(static part => part.Trim().TrimStart('@'));
+            // The outermost, which the walk meets first.
+            var parts = declared.Name.ToString().Split('.').Select(static part => part.Trim().TrimStart('@'));
 
             return String.Join(".", parts);
         }

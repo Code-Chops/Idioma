@@ -195,7 +195,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetDerivedFromOtherLanguageOfGeneratedContract_ShouldReportLOC203Only()
+    public void SetDerivedFromOtherLanguageOfGeneratedContract_ShouldReportLOC204Only()
     {
         // Arrange & Act: the Dutch set implements the contract generated here, so the German set only reaches it through
         // its base; deriving still leaves its texts in Dutch.
@@ -226,7 +226,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetDerivedFromOtherLanguageWithoutDeclaredLanguages_ShouldReportLOC203()
+    public void SetDerivedFromOtherLanguageWithoutDeclaredLanguages_ShouldReportLOC204()
     {
         // Arrange & Act: an app rewording a library needs no languages of its own, and this set's name makes it Dutch.
         // Without a word, it would register under nl, and every text it doesn't override would stay English there.
@@ -248,16 +248,15 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void SetListingILocalizationSetAgainWithoutDeclaredLanguages_ShouldReportNothing()
     {
-        // Arrange & Act: listing ILocalizationSet again is how a set deriving from another implements LocalizationLanguageCode, so
-        // it does not start a contract that would need languages (LOC100).
+        // Arrange & Act: a set deriving from another that lists ILocalizationSet again doesn't start a contract, so it needs
+        // no languages (LOC100).
         var result = Run("""
             using CodeChops.Idioma;
 
             namespace TestApp;
 
-            public sealed class MyGridTexts : GridLibrary.GridLocalizationEn, ILocalizationSet
+            public sealed class MyGridTextsEn :GridLibrary.GridLocalizationEn, ILocalizationSet
             {
-                public string LocalizationLanguageCode => "en";
                 public override string First => "Begin";
             }
             """, GridLibrary);
@@ -267,10 +266,10 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetWithLanguageCodeImplementingNothing_ShouldReportNoLanguageErrorOfItsOwn()
+    public void SetNamedAfterUnlistedRegionOfListedLanguage_ShouldBeCheckedAsThatRegion()
     {
-        // Arrange & Act: the property implements nothing (LOC206, reported by the registration), and the language checks
-        // go by what it says rather than adding LOC202 for the language its name gives (sh).
+        // Arrange & Act: en-GB isn't listed, so the name gives a region of en. That's no LOC202 for gb, no LOC204 for
+        // deriving from English, and no other contract needs a British set.
         var result = Run($$"""
             {{Header}}
 
@@ -281,9 +280,8 @@ public sealed partial class LocalizationSetsPartTests
 
             {{DutchSet}}
 
-            public sealed class ShopLocalizationBritish : ShopLocalizationEn
+            public sealed class ShopLocalizationEnGb : ShopLocalizationEn
             {
-                public string LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -292,7 +290,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetDerivedFromOtherLanguage_ShouldReportLOC203Only()
+    public void SetDerivedFromOtherLanguage_ShouldReportLOC204Only()
     {
         // Arrange & Act: compiles, with every text it does not override left in English.
         var result = Run($$"""
@@ -312,14 +310,80 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert: this already says what to do about Dutch, so no LOC201 on top.
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC203");
+        diagnostic.Id.ShouldBe("LOC204");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("'ShopLocalizationNl' is a set for 'nl' but derives from 'ShopLocalizationEn'");
         diagnostic.GetMessage().ShouldContain("stays in 'en'");
     }
 
     [Test]
-    public void SetDerivedFromOtherLanguageOfLibrary_ShouldReportLOC203()
+    public void SetEndingInOtherLanguageDerivedFromRegionalSet_ShouldKeepItsLanguageAndReportLOC204()
+    {
+        // Arrange & Act: the German set derives from the British one by mistake. It used to take en-GB from it, so
+        // British users saw its German, and LOC201 asked for the ShopLocalizationDe it already was.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "de", "en-GB")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationEnGb : ShopLocalizationEn
+            {
+            }
+
+            public sealed class ShopLocalizationDe : ShopLocalizationEnGb
+            {
+                public override string Checkout => "Zur Kasse";
+            }
+            """);
+
+        // Assert
+        var diagnostic = DiagnosticIds(result).ShouldHaveSingleItem();
+        diagnostic.ShouldBe("LOC204");
+        SingleDiagnostic(result, LocalizationSetsPart.DerivedFromOtherLanguageDiagnosticId).GetMessage()
+            .ShouldContain("'ShopLocalizationDe' is a set for 'de' but derives from 'ShopLocalizationEnGb'");
+    }
+
+    [Test]
+    public void SetEndingInLanguageOfRegionalSetItDerivesFrom_ShouldServeThatRegion()
+    {
+        // Arrange & Act: a rewording of the British set that ends in En, the language of en-GB, stays British.
+        var result = Run("""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "en-GB")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public virtual string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationEnGb : ShopLocalizationEn
+            {
+                public override string Checkout => "Pay";
+            }
+
+            [ExcludeFromLocalizationDiscovery]
+            public sealed class BrandedShopLocalizationEn : ShopLocalizationEnGb
+            {
+                public override string Checkout => "Pay at Contoso";
+            }
+            """);
+
+        // Assert: no LOC204, because it serves en-GB as the set it derives from does.
+        DiagnosticIds(result).ShouldBeEmpty();
+    }
+
+    [Test]
+    public void SetDerivedFromOtherLanguageOfLibrary_ShouldReportLOC204()
     {
         // Arrange & Act
         var result = Run("""

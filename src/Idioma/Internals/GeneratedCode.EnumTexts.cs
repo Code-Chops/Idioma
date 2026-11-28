@@ -25,7 +25,7 @@ public static partial class GeneratedCode
         if (EnumTexts<TEnum>.Chosen is not { } chosen)
             return null;
 
-        // Chosen again where a registration came since, or the app registered its languages, which may change which one wins.
+        // A registration since, or the app registering its languages, may change which one wins.
         if (!chosen.IsCurrent)
             chosen = EnumTexts<TEnum>.Choose();
 
@@ -73,20 +73,18 @@ public static partial class GeneratedCode
     }
 
     /// <summary>
-    /// Per enum, what gives its values the texts of a set of it (<see cref="RegisterEnumTexts{TEnum, TContract}"/>):
-    /// every registration, and the one that wins.
+    /// Per enum, every registration of <see cref="RegisterEnumTexts{TEnum, TContract}"/> and the one that wins.
     /// </summary>
     private static class EnumTexts<TEnum>
         where TEnum : struct, Enum
     {
         /// <summary>
-        /// The registration that gives the texts, or <see langword="null"/> where none registered. A field per enum,
-        /// which a text reads without a lookup: the enum's own <c>GetText()</c> asks on every call.
+        /// A static field per enum, so <c>GetText()</c> reads it on every call without a lookup.
         /// </summary>
         public static ChosenTexts? Chosen { get; private set; }
 
         /// <summary>
-        /// Every registration, in the order they came.
+        /// In the order they came.
         /// </summary>
         private static ImmutableArray<Registration> Registered = [];
 
@@ -101,13 +99,12 @@ public static partial class GeneratedCode
         }
 
         /// <summary>
-        /// Chooses the registration that gives the texts: the app's last one, or else the last one. The app's wins also
-        /// over that of a library that loaded later.
+        /// The app's last registration, or else the last one. The app's wins also over a library that loaded later.
         /// </summary>
         public static ChosenTexts Choose()
         {
-            // Read once, so that the choice holds what it was made from. A registration that comes in meanwhile makes the
-            // next read choose again (ChosenTexts.IsCurrent).
+            // Read once, so the choice holds what it was made from. A registration meanwhile makes the next read choose
+            // again (ChosenTexts.IsCurrent).
             var registered = Registered;
             var application = LocalizationRegistry.ApplicationAssembly;
 
@@ -128,9 +125,6 @@ public static partial class GeneratedCode
             return chosen;
         }
 
-        /// <summary>
-        /// A registration: the assembly of the set, and what gives a value its text.
-        /// </summary>
         public sealed class Registration(Assembly assembly, Func<TEnum, string?> getText)
         {
             public Assembly Assembly { get; } = assembly;
@@ -145,7 +139,6 @@ public static partial class GeneratedCode
             public Func<TEnum, string?>? GetText { get; } = getText;
 
             /// <summary>
-            /// Whether the choice still holds: no registration came since, and the app is the one it was made for.
             /// Compared by reference, because the registrations are replaced as a whole.
             /// </summary>
             public bool IsCurrent => this.From == Registered && ReferenceEquals(this.Application, LocalizationRegistry.ApplicationAssembly);

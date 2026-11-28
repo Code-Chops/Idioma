@@ -41,7 +41,7 @@ public sealed class UnlistedLanguageCodeFixProviderTests
 
     [Test]
     [Arguments("public class ShopLocalizationDe : ILocalizationSet, IShopLocalization { public string Color => \"Farbe\"; }", "de")]
-    [Arguments("public class ShopLocalizationEnGb : ShopLocalizationEn { public override string Color => \"Colour\"; }", "en-GB")]
+    [Arguments("public class ShopLocalizationFrBE : ILocalizationSet, IShopLocalization { public string Color => \"Couleur\"; }", "fr-BE")]
     public async Task SetOfAnUnlistedLanguage_ShouldListIt(string set, string language)
     {
         // Arrange & Act
@@ -55,6 +55,26 @@ public sealed class UnlistedLanguageCodeFixProviderTests
         source.ShouldBe(Source($"\"en\", \"nl\", \"{language}\"", set));
         GeneratorTestHelper.GetGeneratorDiagnostics(source).ShouldBeEmpty();
         GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
+    }
+
+    [Test]
+    public async Task SetEndingInRegionAfterUnlistedLanguage_ShouldOfferBothLanguages()
+    {
+        // Arrange: ShopLocalizationFrBe may be Belgian French, or Belarusian (be) after a word. It used to offer be alone.
+        const string set = "public class ShopLocalizationFrBe : ILocalizationSet, IShopLocalization { public string Color => \"Couleur\"; }";
+
+        // Act
+        var fixes = await FixAsync(Source("\"en\", \"nl\"", set));
+
+        // Assert: the long code first, which the name ends in, and either one leaves nothing to report.
+        fixes.Select(static fix => fix.Title).ShouldBe(["Add 'fr-BE' to [assembly: SupportedLanguages]", "Add 'be' to [assembly: SupportedLanguages]"]);
+
+        foreach (var (fix, language) in fixes.Zip(["fr-BE", "be"]))
+        {
+            var source = fix.Sources.ShouldHaveSingleItem();
+            source.ShouldBe(Source($"\"en\", \"nl\", \"{language}\"", set));
+            GeneratorTestHelper.CompileWithGenerators(source).ShouldBeEmpty();
+        }
     }
 
     [Test]

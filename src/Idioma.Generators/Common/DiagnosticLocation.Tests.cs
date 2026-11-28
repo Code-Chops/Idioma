@@ -59,8 +59,8 @@ public sealed class DiagnosticLocationTests
 
     [Test]
     [Arguments("", false)]
-    [Arguments("#pragma warning disable LOC208", true)]
-    [Arguments("[System.Diagnostics.CodeAnalysis.SuppressMessage(\"Design\", \"LOC208\")]", true)]
+    [Arguments("#pragma warning disable LOC207", true)]
+    [Arguments("[System.Diagnostics.CodeAnalysis.SuppressMessage(\"Design\", \"LOC207\")]", true)]
     public void DiagnosticAtSet_ShouldFollowSuppressionInItsSource(string suppression, bool expected)
     {
         // Arrange: a Dutch set that can't be registered automatically, which the registration generator reports at
@@ -89,7 +89,7 @@ public sealed class DiagnosticLocationTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC208");
+        diagnostic.Id.ShouldBe("LOC207");
         diagnostic.IsSuppressed.ShouldBe(expected);
     }
 
@@ -128,9 +128,9 @@ public sealed class DiagnosticLocationTests
         const string source = """
             using CodeChops.Idioma;
 
-            #pragma warning disable LOC101
+            #pragma warning disable LOC102
             [assembly: SupportedLanguages("en", "en")]
-            #pragma warning restore LOC101
+            #pragma warning restore LOC102
             """;
 
         // Act
@@ -138,7 +138,7 @@ public sealed class DiagnosticLocationTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC101");
+        diagnostic.Id.ShouldBe("LOC102");
         diagnostic.IsSuppressed.ShouldBeTrue();
     }
 }

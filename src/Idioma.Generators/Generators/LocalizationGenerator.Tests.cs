@@ -166,8 +166,8 @@ public sealed class LocalizationGeneratorTests
     [Test]
     public void RegistrarDiscovery_ShouldHoldNoLocation()
     {
-        // Arrange: a set that can't be registered, a set whose language code is no culture name, a regional set whose
-        // LocalizationLanguageCode implements nothing, and a nested class that reads as a default-language set.
+        // Arrange: a set that can't be registered, a set whose language code is no culture name, a regional set marked
+        // with its language, and a nested class that reads as a default-language set.
         const string source = """
             using CodeChops.Idioma;
 
@@ -187,13 +187,11 @@ public sealed class LocalizationGeneratorTests
 
             public sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization
             {
-                public string LocalizationLanguageCode => "de_DE";
                 public string Checkout => "Zur Kasse";
             }
 
             public sealed class ShopLocalizationEnGb : ShopLocalizationEn
             {
-                public string LocalizationLanguageCode => "en-GB";
                 public override string Checkout => "Checkout";
             }
 
@@ -213,8 +211,6 @@ public sealed class LocalizationGeneratorTests
 
         // Assert: the share the diagnostics are reported from holds where each is reported.
         contractDiscovery.Sets.ShouldAllBe(static set => set.Location.Tree != null && set.Locations.BaseTypes.Length > 0);
-        contractDiscovery.Sets.Count(static set => set.Locations.InvalidLanguageCode is not null).ShouldBe(1);
-        contractDiscovery.Sets.Count(static set => set.Locations.UnmappedLanguageCode is not null).ShouldBe(1);
         contractDiscovery.UnextendableSets.ShouldHaveSingleItem().Location.Tree.ShouldNotBeNull();
 
         // The registrar's share holds the same sets and base types, and no location at all.
@@ -225,31 +221,25 @@ public sealed class LocalizationGeneratorTests
         unextendable.BaseTypeLocations.ShouldBeEmpty();
         unextendable.UnresolvedBaseTypes.ShouldHaveSingleItem().Name.ShouldBe("IAdminLocalization");
         registrarDiscovery.UnnameableOverrides.ShouldBeEmpty();
+        registrarDiscovery.NestedSets.ShouldHaveSingleItem().FullyQualifiedName.ShouldBe("TestApp.Holder.AdminLocalizationEn");
     }
 
     [Test]
     public void EditOfWording_ShouldReportInTheNewTreeAndLeaveTheRegistrar()
     {
-        // Arrange & Act: a Dutch set that can't be registered (LOC208), and a German set whose language code is no
-        // culture name (LOC207). Both are reported by the registrar's part, which writes the registrar from a share
-        // without locations.
+        // Arrange & Act: a Dutch set that can't be registered (LOC207), which the registrar's part reports, though it
+        // writes the registrar from a share without locations.
         var (run, edited) = RunAcrossEdit(
             $$"""
             {{Sets.Replace("\"en\", \"nl\"", "\"en\", \"nl\", \"de\"", StringComparison.Ordinal).Replace("public class ShopLocalizationNl", "public class ShopLocalizationNl(string wording)", StringComparison.Ordinal)}}
-
-            public class ShopLocalizationDe : ILocalizationSet, IShopLocalization
-            {
-                public string LocalizationLanguageCode => "de_DE";
-                public string Checkout => "Zur Kasse";
-            }
             """,
             EditWording);
 
-        // Assert: each diagnostic lies in the tree the file has now, where a pragma of that file applies to it.
-        var diagnostics = run.Diagnostics.Where(static diagnostic => diagnostic.Id is "LOC207" or "LOC208").ToArray();
-        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC207", "LOC208"], ignoreOrder: true);
+        // Assert: the diagnostic lies in the tree the file has now, where a pragma of that file applies to it.
+        var diagnostics = run.Diagnostics.Where(static diagnostic => diagnostic.Id is "LOC207").ToArray();
+        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC207"]);
         diagnostics.ShouldAllBe(diagnostic => diagnostic.Location.SourceTree == edited);
-        diagnostics.Single(static diagnostic => diagnostic.Id is "LOC208").Location.SourceSpan.ShouldBe(TextSpan.FromBounds(
+        diagnostics.Single(static diagnostic => diagnostic.Id is "LOC207").Location.SourceSpan.ShouldBe(TextSpan.FromBounds(
             edited.ToString().IndexOf("ShopLocalizationNl", StringComparison.Ordinal),
             edited.ToString().IndexOf("ShopLocalizationNl", StringComparison.Ordinal) + "ShopLocalizationNl".Length));
         GetReasons(run, LocalizationRegistrationPart.RegistrarTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
@@ -292,8 +282,8 @@ public sealed class LocalizationGeneratorTests
 
         // Assert: the Dutch set still counts for the admin's contract, and the contracts are not worked out again.
         var provided = run.GeneratedSources.Single(static generated => generated.HintName is "LocalizationSets.g.cs").SourceText.ToString();
-        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
-        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
+        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\", ");
+        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\", ");
         run.Diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC201"]);
         GetReasons(run, LocalizationDiscovery.BindingQuestionTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);
         GetReasons(run, LocalizationDiscovery.GeneratedContractsTrackingName).ShouldBe([IncrementalStepRunReason.Cached]);

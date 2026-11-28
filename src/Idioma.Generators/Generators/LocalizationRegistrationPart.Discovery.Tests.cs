@@ -37,11 +37,11 @@ public sealed partial class LocalizationRegistrationPartTests
         var text = GeneratedText(Run(source));
 
         // Assert
-        text.ShouldContain("RegisterSets(asDefaults: true,");
+        text.ShouldContain("RegisterSets(CodeChops.Idioma.Internals.SetTier.LibrarySets,");
         text.ShouldContain("new TestApp.ShopLocalizationEn()");
         text.ShouldContain("new TestApp.ShopLocalizationNl()");
         text.ShouldNotContain("ShopLocalizationDe");
-        text.ShouldNotContain("RegisterSets(asDefaults: false,");
+        text.ShouldNotContain("RegisterSets(CodeChops.Idioma.Internals.SetTier.Rewordings,");
     }
 
     [Test]
@@ -183,7 +183,7 @@ public sealed partial class LocalizationRegistrationPartTests
     [Test]
     [Arguments("public abstract class ShopLocalizationDe : ILocalizationSet, IShopLocalization { public string Checkout => \"\"; }")]
     [Arguments("public sealed class ShopLocalizationDe<T> : ILocalizationSet, IShopLocalization { public string Checkout => \"\"; }")]
-    [Arguments("public static class Container { public sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization { public string Checkout => \"\"; } }")]
+    [Arguments("public static class Container { private sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization { public string Checkout => \"\"; } }")]
     [Arguments("public sealed class ShopWording : System.IEquatable<ShopWording> { public bool Equals(ShopWording? other) => true; }")]
     public void SetThatDoesNotRegisterItself_EmitsNothing(string declaration)
     {

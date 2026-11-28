@@ -117,8 +117,8 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         string[] members = ["string Caption { get; }", "string Delivered { get; }", "string Pending { get; }", "string Shipped { get; }"];
         members.Select(member => text.IndexOf(member, StringComparison.Ordinal)).ShouldBeInOrder();
-        text.ShouldContain("public static string Caption => GetLocalizationSet<IOrderStatusLocalization>(0, 4)?.Caption");
-        text.ShouldContain("public static string Shipped => GetLocalizationSet<IOrderStatusLocalization>(3, 4)?.Shipped");
+        text.ShouldContain("public static string Caption => GetLocalizationSet<IOrderStatusLocalization>()?.Caption");
+        text.ShouldContain("public static string Shipped => GetLocalizationSet<IOrderStatusLocalization>()?.Shipped");
     }
 
     [Test]
@@ -154,108 +154,6 @@ public sealed partial class LocalizationSetsPartTests
         text.ShouldContain("    string Waiting { get; }");
         text.ShouldContain("        OrderStatus.Pending => OrderStatusLocalization.Pending,");
         text.ShouldNotContain("OrderStatus.Waiting =>");
-    }
-
-    [Test]
-    [Arguments("[System.Obsolete(\"Use Shipped.\", error: true)]", "", "")]
-    [Arguments("[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]", "", "")]
-    [Arguments("[System.Obsolete(\"Use Shipped.\", DiagnosticId = \"SHOP002\")]", "", "")]
-    [Arguments("", "[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]", "")]
-    [Arguments("", "[System.Obsolete(\"Use the new status.\", DiagnosticId = \"SHOP002\")]", "")]
-    [Arguments("", "", "[System.Diagnostics.CodeAnalysis.Experimental(\"SHOP001\")]")]
-    [Arguments("", "", "[System.Obsolete(\"Use an amount.\", DiagnosticId = \"SHOP002\")]")]
-    public void EnumMemberEnumOrParameterTypeWithDiagnosticOfItsOwn_LeavesNothingInGeneratedCode(string onMember, string onEnum, string onParameterType)
-    {
-        // Arrange: the generated code names the enum, each of its members, and the type of each parameter. Naming them
-        // reports a diagnostic of its author's choosing, which a build treats as an error (Experimental, and Obsolete
-        // as an error) or stops at when it treats warnings as errors (Obsolete). The pragma of the sets' file doesn't
-        // reach a generated file.
-        var source = $$"""
-            #pragma warning disable SHOP001, SHOP002
-            using CodeChops.Idioma;
-
-            [assembly: SupportedLanguages("en", "nl")]
-
-            namespace TestApp;
-
-            {{onEnum}}
-            public enum OrderStatus { Pending, {{onMember}} Sent, Shipped }
-
-            {{onParameterType}}
-            public sealed record Money(decimal Amount);
-
-            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
-            {
-                public string Pending => "Pending";
-                public string Sent => "Sent";
-                public string Shipped => "Shipped";
-            }
-
-            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
-            {
-                public string Pending => "In behandeling";
-                public string Sent => "Verstuurd";
-                public string Shipped => "Verzonden";
-            }
-
-            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
-            {
-                public string Total(Money money, System.Collections.Generic.List<Money>[] earlier) => $"Total: {money.Amount}, after {earlier.Length}";
-            }
-
-            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
-            {
-                public string Total(Money money, System.Collections.Generic.List<Money>[] earlier) => $"Totaal: {money.Amount}, na {earlier.Length}";
-            }
-            """;
-
-        // Act
-        var errors = GeneratorTestHelper.CompileWithGenerators(source);
-        var warnings = GeneratorTestHelper.GetWarningsWithGenerators(source);
-
-        // Assert
-        errors.ShouldBeEmpty();
-        warnings.ShouldBeEmpty();
-    }
-
-    [Test]
-    public void EnumMemberMarkedObsoleteAsError_ShouldGiveItsTextByItsValue()
-    {
-        // Arrange: generated code can't name the member, whose value stored data may still hold.
-        var source = $$"""
-            {{Header}}
-
-            public enum OrderStatus
-            {
-                Pending,
-                Shipped,
-                [System.Obsolete("Use Shipped.", error: true)]
-                Sent = -1,
-            }
-
-            public sealed class OrderStatusLocalizationEn : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
-            {
-                public string Pending => "Pending";
-                public string Sent => "Sent";
-                public string Shipped => "Shipped";
-            }
-
-            public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization
-            {
-                public string Pending => "In behandeling";
-                public string Sent => "Verstuurd";
-                public string Shipped => "Verzonden";
-            }
-            """;
-
-        // Act
-        var text = ContractText(Run(source));
-        var errors = GeneratorTestHelper.CompileWithGenerators(source);
-
-        // Assert: the parentheses keep the negative value whole.
-        errors.ShouldBeEmpty();
-        text.ShouldContain("        (OrderStatus)(-1) => OrderStatusLocalization.Sent,");
-        text.ShouldContain("        OrderStatus.Shipped => OrderStatusLocalization.Shipped,");
     }
 
     [Test]
@@ -362,6 +260,47 @@ public sealed partial class LocalizationSetsPartTests
         contracts.ShouldContain(static contract => contract.Contains("internal static string GetTextByValue(Shipping.Speed value)"));
         contracts.ShouldContain(static contract => contract.Contains("extension(Domain.Orders.OrderStatus value)") && contract.Contains("        public string GetText() =>"));
         contracts.ShouldContain(static contract => contract.Contains("extension(Shipping.Speed value)") && contract.Contains("        internal string GetText() =>"));
+    }
+
+    [Test]
+    public void PublicSetOfEnumOfAnotherAssembly_ShouldWriteAnInternalGetTextAndAPublicGetTextByValue()
+    {
+        // Arrange: a public set of DayOfWeek. Two libraries that each export a GetText() on it would make every call
+        // that sees both ambiguous (CS0121).
+        const string source = """
+            using System;
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en")]
+
+            namespace TestApp
+            {
+                public sealed class DayLocalizationEn : ILocalizationSet<DayOfWeek>, IDayLocalization
+                {
+                    public string Sunday => "Sunday";
+                    public string Monday => "Monday";
+                    public string Tuesday => "Tuesday";
+                    public string Wednesday => "Wednesday";
+                    public string Thursday => "Thursday";
+                    public string Friday => "Friday";
+                    public string Saturday => "Saturday";
+                }
+
+                public static class Usage
+                {
+                    public static string Day => DayOfWeek.Monday.GetText();
+                }
+            }
+            """;
+
+        // Act
+        var errors = GeneratorTestHelper.CompileWithGenerators(source);
+        var contracts = Run(source).Results.ShouldHaveSingleItem().GeneratedSources.Select(static generated => generated.SourceText.ToString()).ToArray();
+
+        // Assert: the assembly still calls GetText() itself, and other assemblies call GetTextByValue.
+        errors.ShouldBeEmpty();
+        contracts.ShouldContain(static contract => contract.Contains("public static string GetTextByValue(System.DayOfWeek value)"));
+        contracts.ShouldContain(static contract => contract.Contains("extension(System.DayOfWeek value)") && contract.Contains("        internal string GetText() =>"));
     }
 
     [Test]
@@ -534,7 +473,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetOfEnumInOtherLanguageWithoutContract_ShouldReportLOC204Only()
+    public void SetOfEnumInOtherLanguageWithoutContract_ShouldReportLOC205Only()
     {
         // Arrange & Act
         var result = Run($$"""

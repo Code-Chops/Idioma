@@ -6,8 +6,8 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// A name ending in what looks like a longer code (<see cref="GuessLongCode"/>): a capitalized language of two or
-    /// three letters, then a region of two letters or a script of four, starting with a capital.
+    /// A name ending in a language and a region or script, such as <c>EnGb</c> or <c>ZhHans</c>
+    /// (<see cref="GuessLongCode"/>).
     /// </summary>
     private static readonly Regex LongCodeSuffix = new("(?<=.)([A-Z][a-z]{1,2})([A-Z][a-z]{3}|[A-Z][A-Za-z])$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -31,7 +31,7 @@ internal sealed partial record LocalizationSetsAnalysis
             {
                 findings.Add(DerivedFromOtherLanguage(set, language));
             }
-            // A type of the contract's name, which the default-language set's LOC200 reports, is what it lists.
+            // A type of the contract's name is what it lists, and LOC200 reports that already.
             else if (IsMissingContract(set, defaultLanguage) && set.OfContract.TypeNamedLikeContract is null)
             {
                 var baseName = LocalizationDiscovery.DeriveBaseName(set.Name, language) ?? set.Name;
@@ -39,8 +39,7 @@ internal sealed partial record LocalizationSetsAnalysis
                 var contract = $"I{baseName}";
                 var isGenerated = generatedContracts.Contains(LocalizationDiscovery.GetContractFullName(set.Namespace, baseName));
 
-                // Without a default-language set the generator can use, there's no contract to add. Naming one, or the
-                // set it would come from, would send the developer after types that don't exist.
+                // Without a usable default-language set, there's no contract to add, so the advice names none.
                 var (problem, advice) = isGenerated
                     ? (MissesContract(contract), AddContract(contract, defaultSet))
                     : ("implements no contract", $"Its contract would be '{contract}', which the generator writes from a default-language set named '{defaultSet}' that it can use. Write that set, or remove ILocalizationSet if '{set.Name}' isn't a set.");
@@ -49,14 +48,14 @@ internal sealed partial record LocalizationSetsAnalysis
                     LocalizationSetsRule.MissingContract,
                     set.Location,
                     new EquatableArray<string>([set.Name, language, problem, advice]),
-                    // Only a contract this build generates: a fix naming one that does not exist would not compile.
+                    // A fix naming a contract that doesn't exist wouldn't compile.
                     SuggestedName: isGenerated ? contract : null));
             }
         }
     }
 
     /// <summary>
-    /// What a set lacks, as the clause of the <c>LOC204</c> message, for a contract this build generates.
+    /// The problem in the <c>LOC205</c> message for a generated contract.
     /// </summary>
     private static string MissesContract(string contract)
     {
@@ -64,7 +63,7 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// What to add, as the advice of the <c>LOC204</c> message, for a contract this build generates from a set.
+    /// The advice in the <c>LOC205</c> message for a generated contract.
     /// </summary>
     private static string AddContract(string contract, string defaultSet)
     {
@@ -72,11 +71,9 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Reports a set marked <c>[ExcludeFromLocalizationDiscovery]</c> that serves a language the attribute doesn't
-    /// list (<c>LOC202</c>).
+    /// Reports an excluded set that serves an unlisted language (<c>LOC202</c>). An app shows an unlisted culture in
+    /// its default language, so the set would never show.
     /// </summary>
-    // Registered by hand, a set still serves only a listed language: an application shows a culture outside its
-    // list in its default language, so a set for another language would never show, without a word.
     private static void ReportExcludedSetsOfUnlistedLanguages(
         ImmutableArray<DiscoveredLocalization> excluded,
         EquatableArray<string> codes,
@@ -88,9 +85,8 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// A set in another language than the set it derives from keeps that language for every text it does not override.
-    /// A regional set on top of its language (<c>en-GB</c> on <c>en</c>) is fine. A base that implements
-    /// <c>ILocalizationSet</c> only through a contract generated here is a set once that contract exists.
+    /// Whether a set derives from a set of another language, which it would show for every text it doesn't override.
+    /// A region on top of its language (<c>en-GB</c> on <c>en</c>) is fine.
     /// </summary>
     private static bool IsDerivedFromOtherLanguage(DiscoveredLocalization set, GeneratedContracts generatedContracts)
     {
@@ -112,21 +108,44 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// A set of a language the attribute doesn't list. It carries the language its code fix lists: the longer code its
-    /// name was likely meant for, such as <c>en-GB</c> for <c>ShopLocalizationEnGb</c>, and else its own.
+    /// A set of an unlisted language (<c>LOC202</c>). The fix lists the longer code the name likely meant, such as
+    /// <c>fr-BE</c> for <c>ShopLocalizationFrBe</c>, and else its own language. A code that's no language, such as
+    /// <c>gb</c>, isn't listed, because that would only give <c>LOC103</c>. A near miss, such as <c>en-UK</c> for
+    /// <c>ShopLocalizationEnUk</c>, gets the code it likely meant (<c>en-GB</c>) and the name that gives it.
     /// </summary>
     /// <remarks>
-    /// The language its name gives may be no language at all, such as <c>gb</c>, the last two letters of
-    /// <c>ShopLocalizationEnGb</c>. Listing that would only give <c>LOC104</c>, so it's neither advised nor listed by the
-    /// fix.
+    /// A region after a language that isn't listed, as in <c>ShopLocalizationFrBe</c> without <c>fr</c>, may be either:
+    /// <c>fr-BE</c>, or <c>be</c> (Belarusian) after a word. The message names both, and the fix offers both, the long
+    /// code first.
     /// </remarks>
     private static LocalizationSetsFinding UnlistedLanguage(DiscoveredLocalization set, string language, EquatableArray<string> codes)
     {
         var meant = GuessLongCode(set.Name, codes);
-        var isLanguage = SupportedLanguages.FindUnknownPart(language) is null;
-        var meantAdvice = $"If it's meant for '{meant}', list '{meant}' in the attribute, which its name then gives it, or implement 'string ILocalizationSet.LocalizationLanguageCode => \"{meant}\";'.";
+        var isGuessed = false;
 
-        var advice = (meant, isLanguage) switch
+        if (meant is null && GuessLongCode(set.Name, codes, afterAnyLanguage: true) is { } guessed)
+        {
+            meant = guessed;
+            isGuessed = true;
+        }
+
+        var isLanguage = SupportedLanguages.FindUnknownPart(language) is null;
+        string? nearMiss = null;
+
+        if (meant is not null && SupportedLanguages.FindUnknownPart(meant) is { } unknown)
+        {
+            if (unknown.Corrected is { } corrected)
+            {
+                var stem = set.Name.Substring(0, set.Name.Length - SupportedLanguages.ToTypeSuffix(meant).Length);
+                nearMiss = $"Did you mean '{corrected}'? Then name it {stem}{SupportedLanguages.ToTypeSuffix(corrected)}.";
+            }
+
+            meant = null;
+        }
+
+        var meantAdvice = nearMiss ?? $"If it's meant for '{meant}', list '{meant}' in the attribute, which its name then gives it.";
+
+        var advice = (meant ?? nearMiss, isLanguage) switch
         {
             (not null, true) => $"{meantAdvice} Otherwise add '{language}' to the attribute, or remove the set.",
             (not null, false) => $"{meantAdvice} Otherwise remove the set, because '{language}' is no language.",
@@ -138,14 +157,14 @@ internal sealed partial record LocalizationSetsAnalysis
             LocalizationSetsRule.UnlistedLanguage,
             set.Location,
             new EquatableArray<string>([set.Name, language, advice]),
-            SuggestedName: meant ?? (isLanguage ? language : null));
+            SuggestedName: meant ?? (isLanguage ? language : null),
+            AlternativeName: meant is not null && isGuessed && isLanguage ? language : null);
 
         return unlistedLanguageFinding;
     }
 
     /// <summary>
-    /// A set that lists <c>ILocalizationSet</c> in another language than the default, and implements no contract
-    /// besides, so no text would ever read it. Without a default language to go by, no set is taken for one.
+    /// A set of a non-default language that lists <c>ILocalizationSet</c> but no contract, so no text reads it.
     /// </summary>
     private static bool IsMissingContract(DiscoveredLocalization set, string? defaultLanguage)
     {
@@ -167,13 +186,15 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// A longer code a set's name looks like it ends in, for the advice of <c>LOC202</c> only: a language of two or three
-    /// letters followed by a region (<c>ShopLocalizationEnGb</c>: <c>en-GB</c>) or a script (<c>ShopLocalizationZhHans</c>:
-    /// <c>zh-Hans</c>). A name gives such a code only when the attribute lists it, as a name alone can't tell it from
-    /// <c>AdminUiNl</c>. So a region in PascalCase is guessed only after a language the attribute lists (<c>Nl</c> in
-    /// <c>ShopLocalizationNlBe</c>), and not after a word such as <c>App</c> in <c>MyAppNl</c>.
+    /// The longer code a set's name seems to end in, for the advice of <c>LOC202</c>: <c>en-GB</c> for
+    /// <c>ShopLocalizationEnGb</c>. A region in PascalCase is guessed only after a listed language, so <c>App</c> in
+    /// <c>MyAppNl</c> isn't taken for one.
     /// </summary>
-    private static string? GuessLongCode(string setName, EquatableArray<string> codes)
+    /// <param name="afterAnyLanguage">
+    /// Also after a two-letter language that isn't listed, where both it and the region exist, as <c>fr-BE</c> for
+    /// <c>ShopLocalizationFrBe</c>. The name may then mean the region as a language after a word, so it's a guess.
+    /// </param>
+    private static string? GuessLongCode(string setName, EquatableArray<string> codes, bool afterAnyLanguage = false)
     {
         var match = LongCodeSuffix.Match(setName);
 
@@ -184,17 +205,18 @@ internal sealed partial record LocalizationSetsAnalysis
         var part = match.Groups[2].Value;
 
         // A region in capitals (NlBE) or a script (ZhHans) reads as a code after any word.
-        if (part.Length is 2 && Char.IsLower(part[1]) && !IsListed(language, codes))
+        if (part.Length is 2 && Char.IsLower(part[1]) && !IsListed(language, codes)
+            && !(afterAnyLanguage && language.Length is 2 && SupportedLanguages.FindUnknownPart($"{language}-{part.ToUpperInvariant()}") is null))
+        {
             return null;
+        }
 
-        // A region is in upper case in a culture name, and a script as the name writes it.
         var longCode = $"{language}-{(part.Length is 2 ? part.ToUpperInvariant() : part)}";
         return longCode;
     }
 
     /// <summary>
-    /// Whether a set is of a language itself, and not of one that only serves it: a set of <c>en</c> is no set of
-    /// <c>en-GB</c>.
+    /// Whether a set is of exactly that language: a set of <c>en</c> is no set of <c>en-GB</c>.
     /// </summary>
     private static bool IsSetOf(DiscoveredLocalization set, string code)
     {

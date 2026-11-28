@@ -34,11 +34,12 @@ A library you reference was built with a version of Idioma that your version may
 error LOC702: 'Shop' was built with CodeChops.Idioma 0.14.0, and this project uses 0.15.0. Code built with 0.14.0 may not run with 0.15.0, so update 'Shop' to a version built with 0.15.0, or rebuild it.
 ```
 
-Below 1.0, a new minor version may break a library too, as semantic versioning lets anything change there. So these are reported:
+Below 1.0, a new minor version may break a library too, as semantic versioning lets anything change there. A library built with a newer version than yours may call what your version doesn't have yet. So these are reported:
 
 - another major version, such as 1.x next to 2.x
 - below 1.0, another minor version, such as 0.14 next to 0.15
+- from 1.0, a library built with a newer minor version than yours, such as a library built with 1.9 in an app on 1.2
 
-A patch, such as 0.15.0 next to 0.15.2, isn't reported, and neither is a minor version from 1.0 on, such as 1.2 next to 1.9.
+A patch, such as 0.15.0 next to 0.15.2, isn't reported. Neither is a library built with an older minor version from 1.0 on, such as one built with 1.2 in an app on 1.9.
 
-Update the library to a version built with your version of Idioma, or one it runs. If the library is yours, build it again with your version.
+For a library built with an older version, update the library to a version built with your version of Idioma, or one it runs. If the library is yours, build it again with your version. For a library built with a newer version, update Idioma in your project to that version or later.

@@ -4,13 +4,12 @@ using Microsoft.CodeAnalysis.Formatting;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// What the code fixes for a set share: finding the class a diagnostic sits on, and changing every part of a partial
-/// class, whichever file each part lies in.
+/// Helpers the code fixes share, such as changing every part of a partial class, whichever file it's in.
 /// </summary>
 internal static class CodeFixSupport
 {
     /// <summary>
-    /// The class a diagnostic sits on the name of, or <see langword="null"/> when it sits on none.
+    /// The class a diagnostic sits on, or <see langword="null"/>.
     /// </summary>
     public static async Task<TypeDeclarationSyntax?> FindDeclarationAsync(CodeFixContext context)
     {
@@ -20,7 +19,7 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The document a diagnostic is in: by its tree, and else by its path, for a diagnostic of an earlier compilation.
+    /// The document a diagnostic is in, found by its tree, or by its path for a diagnostic of an earlier compilation.
     /// </summary>
     public static Document? FindDocument(Project project, Diagnostic diagnostic)
     {
@@ -32,8 +31,7 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The diagnostics a "Fix all" covers, with the project of each: those of the document, of the project, or of every
-    /// project of the solution. A project without such a diagnostic is left out.
+    /// The diagnostics a "Fix all" covers, grouped by project. A project without any is left out.
     /// </summary>
     public static async Task<List<(Project Project, ImmutableArray<Diagnostic> Diagnostics)>> GetFixAllDiagnosticsAsync(FixAllContext fixAllContext)
     {
@@ -54,7 +52,7 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The top-level classes of a namespace and of the namespaces inside it. A set is a top-level class.
+    /// The top-level classes of a namespace and its nested namespaces.
     /// </summary>
     public static IEnumerable<INamedTypeSymbol> GetClasses(INamespaceSymbol @namespace)
     {
@@ -68,8 +66,7 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The class a declaration declares, with the semantic model of the document it lies in, or <see langword="null"/>
-    /// when the document has none.
+    /// The class a declaration declares, with its document's semantic model.
     /// </summary>
     public static async Task<(INamedTypeSymbol Type, SemanticModel SemanticModel)?> FindTypeAsync(Document document, TypeDeclarationSyntax declaration, CancellationToken cancellationToken)
     {
@@ -81,7 +78,7 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The declarations of a class, one per part of a partial class.
+    /// The declarations of a class, one per partial part.
     /// </summary>
     public static async Task<ImmutableArray<TypeDeclarationSyntax>> GetPartsAsync(INamedTypeSymbol type, CancellationToken cancellationToken)
     {
@@ -95,8 +92,156 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The declaration with an interface inserted into its base list at an index. The new entry takes over what stood
-    /// around the entry it displaces, such as the space or line break before the class's body.
+    /// The declarations of a class, one per partial part, for a fix that can't wait, such as one a "Fix all" provider
+    /// calls (<see cref="GetPartsAsync"/>).
+    /// </summary>
+    public static ImmutableArray<TypeDeclarationSyntax> GetParts(INamedTypeSymbol type, CancellationToken cancellationToken)
+    {
+        var parts = type.DeclaringSyntaxReferences
+            .Select(reference => reference.GetSyntax(cancellationToken))
+            .OfType<TypeDeclarationSyntax>()
+            .ToImmutableArray();
+
+        return parts;
+    }
+
+    /// <summary>
+    /// Whether a simple name, written at a position, binds to a type that <paramref name="isMeant"/> accepts.
+    /// </summary>
+    public static bool BindsAt(SemanticModel semanticModel, int position, string name, Func<INamedTypeSymbol, bool> isMeant)
+    {
+        var binds = semanticModel.GetSpeculativeTypeInfo(position, SyntaxFactory.IdentifierName(name), SpeculativeBindingOption.BindAsTypeOrNamespace).Type is INamedTypeSymbol bound
+                    && isMeant(bound);
+
+        return binds;
+    }
+
+    /// <summary>
+    /// A type as code at a position names it: by its simple name where that binds to it, and else by its full name.
+    /// </summary>
+    public static string NameAt(SemanticModel semanticModel, int position, INamedTypeSymbol type)
+    {
+        var name = BindsAt(semanticModel, position, type.Name, bound => SymbolEqualityComparer.Default.Equals(bound, type))
+            ? type.Name
+            : type.ToDisplayString();
+
+        return name;
+    }
+
+    /// <summary>
+    /// A declaration with one modifier in place of another, which keeps its trivia, or as it is without that modifier.
+    /// </summary>
+    public static TDeclaration ReplaceModifier<TDeclaration>(TDeclaration declaration, SyntaxKind replaced, SyntaxKind replacement)
+        where TDeclaration : MemberDeclarationSyntax
+    {
+        var index = declaration.Modifiers.IndexOf(replaced);
+
+        if (index < 0)
+            return declaration;
+
+        var old = declaration.Modifiers[index];
+        var result = (TDeclaration)declaration.WithModifiers(declaration.Modifiers.Replace(old, SyntaxFactory.Token(old.LeadingTrivia, replacement, old.TrailingTrivia)));
+
+        return result;
+    }
+
+    /// <summary>
+    /// A declaration without a modifier (<see cref="RemoveModifiers"/>).
+    /// </summary>
+    public static TDeclaration RemoveModifier<TDeclaration>(TDeclaration declaration, SyntaxKind modifier)
+        where TDeclaration : MemberDeclarationSyntax
+    {
+        return RemoveModifiers(declaration, token => token.IsKind(modifier));
+    }
+
+    /// <summary>
+    /// A declaration without the modifiers that match. The leading trivia of a removed modifier, such as the
+    /// indentation, moves to the token after it: the next modifier, or else the token after the modifiers, such as the
+    /// keyword of a class or the type of a property.
+    /// </summary>
+    public static TDeclaration RemoveModifiers<TDeclaration>(TDeclaration declaration, Func<SyntaxToken, bool> remove)
+        where TDeclaration : MemberDeclarationSyntax
+    {
+        var kept = new List<SyntaxToken>();
+        var carried = SyntaxTriviaList.Empty;
+
+        foreach (var modifier in declaration.Modifiers)
+        {
+            if (remove(modifier))
+            {
+                carried = carried.AddRange(modifier.LeadingTrivia);
+                continue;
+            }
+
+            kept.Add(carried.Count > 0 ? modifier.WithLeadingTrivia(carried.AddRange(modifier.LeadingTrivia)) : modifier);
+            carried = SyntaxTriviaList.Empty;
+        }
+
+        if (kept.Count == declaration.Modifiers.Count)
+            return declaration;
+
+        var result = (TDeclaration)declaration.WithModifiers(SyntaxFactory.TokenList(kept));
+
+        if (carried.Count > 0)
+        {
+            var next = FindTokenAfterModifiers(result);
+            result = result.ReplaceToken(next, next.WithLeadingTrivia(carried.AddRange(next.LeadingTrivia)));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// A declaration with a modifier after its last accessibility modifier, or first. A first modifier takes over the
+    /// indentation of what came first.
+    /// </summary>
+    public static TDeclaration InsertModifier<TDeclaration>(TDeclaration declaration, SyntaxKind modifier)
+        where TDeclaration : MemberDeclarationSyntax
+    {
+        var modifiers = declaration.Modifiers;
+        var index = 0;
+
+        for (var i = 0; i < modifiers.Count; i++)
+        {
+            if (SyntaxFacts.IsAccessibilityModifier(modifiers[i].Kind()))
+                index = i + 1;
+        }
+
+        var keyword = SyntaxFactory.Token(modifier).WithTrailingTrivia(SyntaxFactory.Space);
+
+        if (index is 0 && modifiers.Count > 0)
+        {
+            keyword = keyword.WithLeadingTrivia(modifiers[0].LeadingTrivia);
+            modifiers = modifiers.Replace(modifiers[0], modifiers[0].WithLeadingTrivia());
+        }
+        else if (modifiers.Count is 0)
+        {
+            var next = FindTokenAfterModifiers(declaration);
+            keyword = keyword.WithLeadingTrivia(next.LeadingTrivia);
+            declaration = declaration.ReplaceToken(next, next.WithLeadingTrivia());
+        }
+
+        var result = (TDeclaration)declaration.WithModifiers(modifiers.Insert(index, keyword));
+        return result;
+    }
+
+    /// <summary>
+    /// The token a declaration's modifiers stand before: the keyword of a class, or the type of a property or method.
+    /// </summary>
+    private static SyntaxToken FindTokenAfterModifiers(MemberDeclarationSyntax declaration)
+    {
+        var token = declaration.Modifiers.Count > 0
+            ? declaration.Modifiers[^1].GetNextToken()
+            : declaration.AttributeLists.Count > 0
+                ? declaration.AttributeLists[^1].GetLastToken().GetNextToken()
+                : declaration.GetFirstToken();
+
+        return token;
+    }
+
+    /// <summary>
+    /// Inserts an interface into the base list at an index. The new entry takes over the trivia of the entry it
+    /// displaces, such as the line break before the body.
     /// </summary>
     public static TypeDeclarationSyntax InsertBaseType(TypeDeclarationSyntax declaration, int index, BaseTypeSyntax added)
     {
@@ -116,9 +261,8 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The declaration without its base list. What stood after the base list, such as the line break before the body,
-    /// goes to the token before it, in place of the space that stood between the two: <c>class X : Y</c> becomes
-    /// <c>class X</c>, and not <c>class X :</c>.
+    /// Removes the base list and moves its trailing trivia to the token before it, so <c>class X : Y</c> becomes
+    /// <c>class X</c>.
     /// </summary>
     public static TypeDeclarationSyntax RemoveBaseList(TypeDeclarationSyntax declaration)
     {
@@ -134,16 +278,12 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// Replaces nodes, each with what <paramref name="replace"/> makes of it, in every document they lie in. A node of
-    /// a file that is no document of the solution, such as generated code, is left as it is.
+    /// Replaces nodes in every document they're in. A node outside the solution's documents, such as generated code,
+    /// stays as it is.
     /// </summary>
     /// <remarks>
-    /// A node may lie inside another node that is replaced too, as a named argument does inside a method that a
-    /// "Fix all" renames the parameters of. Its replacement is then written into that of the node around it
-    /// (<see cref="Nest"/>).
-    /// <para>
-    /// A replacement marked <see cref="FormatAnnotation"/> is formatted, with the line endings its file has.
-    /// </para>
+    /// A node inside another replaced node is written into that node's replacement (<see cref="Nest"/>). A replacement
+    /// marked <see cref="FormatAnnotation"/> is formatted with its file's line endings.
     /// </remarks>
     public static async Task<Solution> ReplaceNodesAsync<TNode>(Solution solution, IEnumerable<TNode> nodes, Func<TNode, SyntaxNode> replace, CancellationToken cancellationToken)
         where TNode : SyntaxNode
@@ -167,9 +307,8 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// Marks a replacement to be formatted with the line endings of its file (<see cref="ReplaceNodesAsync"/>), in place of
-    /// <see cref="Formatter.Annotation"/>. The IDE formats what that one marks with the line endings of .editorconfig, or
-    /// else of the machine, so a file with other line endings would get one line that differs from the rest.
+    /// Marks a replacement to be formatted with its file's line endings (<see cref="ReplaceNodesAsync"/>). Use it in
+    /// place of <see cref="Formatter.Annotation"/>, which takes the line endings of .editorconfig or the machine.
     /// </summary>
     public static SyntaxAnnotation FormatAnnotation { get; } = new(nameof(FormatAnnotation));
 
@@ -183,17 +322,13 @@ internal static class CodeFixSupport
     }
 
     /// <summary>
-    /// The replacements of the nodes of one file, with each node that lies inside another one written into the
-    /// replacement of that other node, and left out itself.
+    /// Writes each replaced node that lies inside another replaced node into that node's replacement, and drops it.
     /// </summary>
-    // ReplaceNodes replaces the inner node first and then the outer one with what it was given, which was made from the
-    // outer node as it was. So the change of the inner node would be lost. The inner node is found in the outer node's
-    // replacement by the way down to it, child by child. A replacement that has another node there, or that changed
-    // the node itself, keeps what it has.
+    // ReplaceNodes would replace the outer node with a replacement made from its original, losing the inner change.
+    // The inner node is found in the outer replacement by its child path.
     private static Dictionary<SyntaxNode, SyntaxNode> Nest(Dictionary<SyntaxNode, SyntaxNode> replacements)
     {
-        // The smallest first, so that a node is written into the one around it after the nodes inside it were written
-        // into it.
+        // Smallest first, so a node holds its own nested changes before it's written into the one around it.
         foreach (var inner in replacements.Keys.OrderBy(static node => node.Span.Length).ToArray())
         {
             var outer = inner.Ancestors().FirstOrDefault(replacements.ContainsKey);
@@ -246,12 +381,12 @@ internal static class CodeFixSupport
             found = child;
         }
 
-        // Only a node the replacement left as it was: one it changed holds a change that writing over it would lose.
+        // A node the replacement changed keeps that change.
         return found.IsEquivalentTo(inner) ? found : null;
     }
 
     /// <summary>
-    /// The line break a file uses, for a line a fix adds to it: its first one, and else the one of this machine.
+    /// The file's first line break, or the machine's when it has none.
     /// </summary>
     public static SyntaxTrivia FindEndOfLine(SyntaxNode root)
     {

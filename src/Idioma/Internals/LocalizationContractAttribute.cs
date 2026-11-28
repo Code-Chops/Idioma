@@ -7,13 +7,13 @@ namespace CodeChops.Idioma.Internals;
 /// <para>
 /// Marks an interface as the contract of a set, such as <c>IShopLocalization</c>. The source generator writes this on
 /// every contract it generates. The contract doesn't derive from <see cref="ILocalizationSet"/>, so this is how the
-/// build recognizes it, in its own assembly and in every assembly that references it. The build then holds each set
+/// build discovers it, in its own assembly and in every assembly that references it. The build then holds each set
 /// that implements the contract to its texts.
 /// </para>
 /// <para>
 /// The contract of a set of an enum names its enums, as in <c>[LocalizationContract(typeof(OrderStatus))]</c>. The
 /// build then warns about a set of it that doesn't list <see cref="ILocalizationSet{TEnum}"/> of each enum, or that
-/// lists another enum (<c>LOC205</c>).
+/// lists another enum (<c>LOC206</c>).
 /// </para>
 /// </summary>
 // Matched by its name and namespaces, part by part, and read by constructor position.
@@ -45,7 +45,7 @@ public sealed class LocalizationContractAttribute : Attribute
     [EditorBrowsable(EditorBrowsableState.Never)]
     public LocalizationContractAttribute(params Type[] enums)
     {
-        // Checked, though only generated code calls it, because an attribute is created once and Enums promises a list.
+        // Checked, though only generated code calls it, because Enums promises a list.
         ArgumentNullException.ThrowIfNull(enums);
 
         this.Enums = enums;

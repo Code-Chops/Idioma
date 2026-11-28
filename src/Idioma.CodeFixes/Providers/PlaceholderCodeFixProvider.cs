@@ -7,46 +7,35 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a text of a set whose wording holds a placeholder of a format string (<c>LOC403</c>). It writes a parameter in
-/// place of each placeholder, so that the wording shows the value. A property becomes a method that takes the values,
-/// in every language of this assembly at once, and a method uses its own parameters, the first for <c>{0}</c>.
+/// Fixes a text of a set whose wording holds a format-string placeholder (<c>LOC403</c>) by writing a parameter in
+/// place of each placeholder. A property becomes a method in every language of this assembly at once. A method uses
+/// its own parameters, the first for <c>{0}</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A property takes the parameters of the contract's method by its name, when the contract has one. Otherwise it takes
-/// one parameter per placeholder number, <c>arg0</c> for <c>{0}</c>, of type <c>object?</c>, as
-/// <see cref="string.Format(string, object?)"/> does. It counts the numbers in every language's wording of the text,
-/// so each language gets the same parameters, whichever is fixed. That holds for a wording that has its
-/// placeholders in another order, and for one that shows fewer of them.
+/// A property takes the parameters of the contract's method of that name, if there is one. Otherwise it takes one
+/// <c>object?</c> parameter per placeholder number (<c>arg0</c> for <c>{0}</c>), counted over every language, so each
+/// language gets the same parameters.
 /// </para>
 /// <para>
-/// The same text of every other set of this assembly becomes a method with it, also one without a placeholder, so
-/// that each set still implements the contract. The fix finds each through the contract, so the default-language set
-/// changes whichever language is fixed. An explicit implementation changes too, and so do an override and an abstract
-/// property. A set without a placeholder then leaves the value out, which the build reports (<c>LOC402</c>). A wording
-/// in a raw string keeps its placeholder, and its warning.
+/// The same text of every other set of this assembly becomes a method too, so each set still implements the contract.
+/// A set without a placeholder then leaves the value out, which the build reports (<c>LOC402</c>). A read of
+/// <c>base.Greeting</c> becomes <c>base.Greeting(arg0)</c>.
 /// </para>
-/// <para>
-/// A set that reads the text of the set it derives from, as a regional set does in
-/// <c>base.Greeting.Replace("color", "colour")</c>, passes the values on: <c>base.Greeting(arg0)</c>.
-/// </para>
-/// <para>
-/// The fix changes every language or none. There's no fix for:
-/// </para>
+/// <para>The fix changes every language or none. There's no fix for:</para>
 /// <list type="bullet">
-/// <item>An inline text, because its wording has no parameter to take the value.</item>
-/// <item>A wording in a raw string, unless the fix of another language makes its property a method.</item>
-/// <item>A text that a language can't write as a method, such as one with a setter or one the constructor assigns.</item>
-/// <item>A text that other code of the project uses as a property of a set, such as another text that shows it. That code would no longer compile.</item>
-/// <item>A text that code names as a property of the generated class: in <c>nameof</c>, or as a resource of an attribute, as <c>[Display(Name = nameof(ShopLocalization.Name), ResourceType = typeof(ShopLocalization))]</c> does. That code would go on compiling, and fail at run time.</item>
-/// <item>A text of a member of an enum, because the contract takes it from the enum.</item>
-/// <item>A text that takes no values, of another assembly's contract or one written by hand, because the fix doesn't change a contract.</item>
-/// <item>A property that overrides one of another assembly, because that property doesn't change with it.</item>
-/// <item>A placeholder whose number has no parameter, or a ninth value, which a text can't take.</item>
+/// <item>a standalone text, which has no parameter to take the value.</item>
+/// <item>a wording in a raw string, unless another language's fix makes its property a method.</item>
+/// <item>a text that can't be a method, such as one with a setter or one the constructor assigns.</item>
+/// <item>a text other code uses as a property of a set, because that code would stop compiling.</item>
+/// <item>a text code names on the generated class, in <c>nameof</c> or as an attribute's resource, because that would fail at run time.</item>
+/// <item>a text of an enum member, which the contract takes from the enum.</item>
+/// <item>a text of a contract the build doesn't generate here, because the fix doesn't change a contract.</item>
+/// <item>a property that overrides one of another assembly.</item>
+/// <item>a placeholder without a parameter.</item>
 /// </list>
 /// <para>
-/// A string passed to a method, such as the format of <c>string.Format</c>, stays as it is. The method may fill its
-/// placeholders in, so the build doesn't report it.
+/// A string passed to a method, such as <c>string.Format</c>, stays as it is, because the method may fill it in.
 /// </para>
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(PlaceholderCodeFixProvider))]
@@ -58,10 +47,8 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [PlaceholderAnalyzer.PlaceholderDiagnosticId];
 
     /// <summary>
-    /// Changes each text once, however many of its wordings and languages hold a placeholder, because each such wording
-    /// has a diagnostic of its own. A diagnostic of a text that an earlier fix changed already is skipped, and the
-    /// project is read once for all of them (<see cref="ProjectTexts"/>). A migration from resx files has hundreds of
-    /// such texts.
+    /// Changes each text once, though each of its wordings has a diagnostic. The project is read once for all of them
+    /// (<see cref="ProjectTexts"/>).
     /// </summary>
     private static readonly FixAllProvider FixAll = new ReplaceNodesFixAllProvider<MemberDeclarationSyntax>(
         "Replace the placeholders with parameters",
@@ -69,7 +56,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
         static (root, semanticModel, diagnostic, cancellationToken) => FindText(root, diagnostic) is { } text ? Fix(text, semanticModel, cancellationToken) : null,
         prepare: static (root, semanticModel, diagnostic) =>
         {
-            // The name of each property that may become a method, so that one pass finds the code that uses any of them.
+            // So one pass finds the uses of every property that may become a method.
             if (FindText(root, diagnostic) is PropertyDeclarationSyntax property)
                 ProjectTexts.Of(semanticModel.Compilation).ExpectUsesOf(property.Identifier.ValueText);
         },
@@ -88,8 +75,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            // Whether a property gets the fix depends on the other languages and on the code that uses the text, so
-            // the fix is found here. It's found once per text and compilation (ProjectTexts), so asking again is cheap.
+            // Whether there's a fix depends on the other languages and the text's uses. It's cached (ProjectTexts).
             if (FindText(root, diagnostic) is not { } text || Fix(text, semanticModel, context.CancellationToken) is not { } fixedTexts)
                 continue;
 
@@ -107,9 +93,8 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The property or method of a set that a diagnostic sits in, or <see langword="null"/> for an inline text, whose
-    /// diagnostic sits on the argument of a language: of <c>LocalizedText.Inline</c>, or of <c>[Localized]</c> on a
-    /// member, which is no text of a set either.
+    /// The property or method of a set a diagnostic sits in, or <see langword="null"/> for a standalone text, whose
+    /// diagnostic sits on an argument.
     /// </summary>
     private static MemberDeclarationSyntax? FindText(SyntaxNode root, Diagnostic diagnostic)
     {
@@ -132,9 +117,8 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The text with a parameter in place of each placeholder, or <see langword="null"/> when there's no fix (see the
-    /// remarks of this class). For a property, also the same text of every other set of this assembly, each as the
-    /// method it becomes.
+    /// The text with a parameter in place of each placeholder, and for a property also every other set's text. Gives
+    /// <see langword="null"/> when there's no fix (see the class remarks).
     /// </summary>
     private static Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? Fix(MemberDeclarationSyntax text, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
@@ -157,8 +141,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A property and the same text of every other set of this assembly, each as the method it becomes, or
-    /// <see langword="null"/> when there's no fix (see the remarks of this class).
+    /// A property and the same text of every other set of this assembly, each as a method, or <see langword="null"/>.
     /// </summary>
     private static Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? ToMethods(PropertyDeclarationSyntax property, SemanticModel semanticModel,
         ProjectTexts projectTexts, CancellationToken cancellationToken)
@@ -174,8 +157,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
 
         var fixedTexts = new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>();
 
-        // Every language or none, also where the wording holds no placeholder. A set that kept the property would no
-        // longer implement the contract, or override the text.
+        // Every language or none, because a set that kept the property would no longer implement the contract.
         foreach (var language in languages)
         {
             var languageModel = language.SyntaxTree == property.SyntaxTree ? semanticModel : compilation.GetSemanticModel(language.SyntaxTree);
@@ -193,16 +175,15 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A property as the method that takes <paramref name="parameters"/>, with a parameter in place of each placeholder
-    /// of <paramref name="wordings"/>, and each of <paramref name="baseReads"/> as a call that passes them on.
-    /// <see langword="null"/> when the property can't become one.
+    /// A property as a method with its placeholders filled in and its <paramref name="baseReads"/> passing the values
+    /// on, or <see langword="null"/> when it can't become one.
     /// </summary>
     private static MethodDeclarationSyntax? ToMethod(PropertyDeclarationSyntax property, ImmutableArray<ExpressionSyntax> wordings,
         ImmutableArray<MemberAccessExpressionSyntax> baseReads, ParameterListSyntax parameters)
     {
         var names = parameters.Parameters.Select(static parameter => parameter.Identifier.ValueText).ToArray();
 
-        // A name the text already uses, such as a field of the set, would then mean the parameter.
+        // A name the text already uses, such as a field, would then bind to the parameter.
         if (property.DescendantNodes().OfType<IdentifierNameSyntax>().Any(identifier => names.Contains(identifier.Identifier.ValueText, StringComparer.Ordinal)))
             return null;
 
@@ -212,8 +193,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Where a property reads the text of the set its set derives from, as in <c>base.Greeting</c>, which becomes a method
-    /// too. Each such read becomes a call that passes the values on (<see cref="PassOn"/>).
+    /// The reads of the base set's text, as in <c>base.Greeting</c>, which become calls (<see cref="PassOn"/>).
     /// </summary>
     private static ImmutableArray<MemberAccessExpressionSyntax> FindBaseReads(PropertyDeclarationSyntax language, ImmutableHashSet<IPropertySymbol> properties,
         SemanticModel semanticModel, CancellationToken cancellationToken)
@@ -229,8 +209,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Whether an identifier is the name in a read of <c>base</c> inside the text in one of the languages, as in
-    /// <c>base.Greeting</c>. Such a read becomes a call along with the text (<see cref="FindBaseReads"/>).
+    /// Whether an identifier is a <c>base.Greeting</c> read inside one of the languages (<see cref="FindBaseReads"/>).
     /// </summary>
     private static bool IsReadOfBaseInLanguage(IdentifierNameSyntax identifier, ImmutableArray<PropertyDeclarationSyntax> languages)
     {
@@ -242,28 +221,25 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The parameters each language's property takes as a method, as the file of that property writes them: those of
-    /// the contract's method by the name of the text, or one per placeholder number of the text in any language.
-    /// <see langword="null"/> when the text takes no value, or more than a text can take.
+    /// Writes the parameter list for each language's method: the contract method's parameters, or one per placeholder
+    /// number in any language. Gives <see langword="null"/> when the text takes no value.
     /// </summary>
-    /// <param name="text">The property the fix starts from.</param>
     /// <param name="implementsContractText">Whether the properties implement a property of a contract.</param>
-    /// <param name="languages">The text in every language that changes with it (<see cref="FindLanguages"/>).</param>
+    /// <param name="languages">The text in every language (<see cref="FindLanguages"/>).</param>
     private static Func<PropertyDeclarationSyntax, SemanticModel, ParameterListSyntax>? ReadParameters(IPropertySymbol text, bool implementsContractText,
         ImmutableArray<PropertyDeclarationSyntax> languages)
     {
-        // The default language made the text a method, and this language still words it as a property.
+        // The contract already has a method, and this language still has a property.
         if (!implementsContractText && FindContractMethod(text) is { } method)
         {
             return (property, semanticModel) => ParameterList(method.Parameters.Select(parameter =>
                 (Type(parameter.Type, property, semanticModel, AnnotationsEnabled(property, semanticModel)), parameter.Name)));
         }
 
-        // One parameter per number up to the highest in any language, also for a number no wording of a language
-        // shows. Dutch that shows {0} alone then takes what English takes for {0} and {1}.
+        // One parameter per number up to the highest in any language, so Dutch with only {0} takes English's {1} too.
         var count = 0;
 
-        // A raw string gets no fix, and so no say in the count.
+        // A raw string gets no fix, so it doesn't count.
         foreach (var language in languages)
             foreach (var wording in FindWordings(language) ?? [])
                 FillIn(wording, Count);
@@ -283,8 +259,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     private static bool AnnotationsEnabled(SyntaxNode at, SemanticModel semanticModel) => semanticModel.GetNullableContext(at.SpanStart).AnnotationsEnabled();
 
     /// <summary>
-    /// The method of a contract of the property's set that has the name of the text and returns a string, or
-    /// <see langword="null"/> when no contract has one.
+    /// The contract method with the text's name that returns a string, or <see langword="null"/>.
     /// </summary>
     private static IMethodSymbol? FindContractMethod(IPropertySymbol text)
     {
@@ -293,7 +268,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
             if (!PackageNames.IsContract(contract))
                 continue;
 
-            foreach (var member in contract.GetMembers(GetTextName(text)))
+            foreach (var member in contract.GetMembers(AnalyzerSupport.GetTextName(text)))
                 if (member is IMethodSymbol { ReturnType.SpecialType: SpecialType.System_String } method)
                     return method;
         }
@@ -302,18 +277,16 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The text as each set of this assembly words it, starting from the property of one language: the property itself,
-    /// the property each set implements the same text of the contract with, also explicitly, and each property one of
-    /// these overrides or is overridden by. Each is found through the symbol, so an explicit implementation counts too.
+    /// The text in every set of this assembly, starting from one language's property: the implementations of the same
+    /// contract text, explicit ones included, and the properties they override or are overridden by.
     /// </summary>
     /// <returns>
-    /// The declaration of each property, and whether they implement a property of a contract. <see langword="null"/>
-    /// when one of them can't change with the others:
+    /// The declarations, and whether they implement a contract text. <see langword="null"/> when one can't change:
     /// <list type="bullet">
-    /// <item>A property of another assembly, such as one that a set here overrides.</item>
-    /// <item>A text of a contract the build doesn't write here, such as another assembly's or one written by hand.</item>
-    /// <item>A text of a member of an enum, which the contract takes from the enum.</item>
-    /// <item>A property that's declared other than as a property, such as a parameter of a record.</item>
+    /// <item>a property of another assembly.</item>
+    /// <item>a text of a contract the build doesn't generate here.</item>
+    /// <item>a text of an enum member.</item>
+    /// <item>a property not declared as a property, such as a record parameter.</item>
     /// </list>
     /// </returns>
     private static (ImmutableArray<PropertyDeclarationSyntax> Languages, ImmutableHashSet<IPropertySymbol> Properties, bool ImplementsContractText)? FindLanguages(
@@ -348,7 +321,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
             if (property.OverriddenProperty is { } overridden)
                 pending.Push(overridden);
 
-            // An override is a member of a class that derives from the property's class, so only those are read.
+            // Only derived classes can hold an override.
             foreach (var set in projectTexts.FindClassesDerivingFrom(property.ContainingType))
                 foreach (var member in set.GetMembers(property.Name))
                     if (member is IPropertySymbol overriding && SymbolEqualityComparer.Default.Equals(overriding.OverriddenProperty, property))
@@ -364,8 +337,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
                 if (!contractTexts.Add(contractText))
                     continue;
 
-                // A set that derives from another implements the text through the property of that set. Its own
-                // property is found as the override of that one.
+                // A derived set implements the text through its base's property, so its own is found as an override.
                 foreach (var set in projectTexts.FindClassesImplementing(contract))
                     if (set.FindImplementationForInterfaceMember(contractText) is IPropertySymbol implementation)
                         pending.Push(implementation);
@@ -376,38 +348,27 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Whether code of this project uses one of the properties as a property, other than the contract does: another
-    /// text that shows it, an assignment in a constructor, or code that reads it from a set. As a method, the property
-    /// is gone, and that code would no longer compile.
+    /// Whether project code uses one of the properties as a property of a set, which would stop compiling once it's a
+    /// method.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Code that reads the text through the contract or the generated class, as in <c>ShopLocalization.Greeting</c>,
-    /// doesn't count. It reads another member, which becomes a method that takes the value, and the compiler then
-    /// points at each place that has to pass it. Neither does a reference in a doc comment, nor a read of
-    /// <c>base.Greeting</c> in the text itself, which passes the values on once both are methods.
+    /// A read through the contract or the generated class doesn't count, because the compiler then points at each
+    /// place that must pass the value. Neither does a <c>base.Greeting</c> read in the text itself.
     /// </para>
-    /// <para>
-    /// Code that names the text of the generated class does count, because it goes on compiling while it no longer
-    /// works:
-    /// </para>
+    /// <para>These uses of the generated class do count, because they keep compiling but fail at run time:</para>
     /// <list type="bullet">
-    /// <item><c>nameof(ShopLocalization.NameRequired)</c>, which names a method as well as a property.</item>
-    /// <item>An attribute that reads the text as a resource, as <c>[Required]</c> with <c>ErrorMessageResourceName</c>
-    /// and <c>[Display]</c> with <c>Name</c> do (<see cref="ResourceNamedTexts"/>). It finds the property by its name
-    /// at run time, and throws where there's a method.</item>
-    /// <item><c>ShopLocalization.GetTextByKey("Greeting")</c>, which passes no values, and throws once the text takes
-    /// them (<see cref="IsAskedForByKeyWithoutValues"/>). A key the code only has at run time, such as one from a
-    /// database, can't be seen here.</item>
+    /// <item><c>nameof(ShopLocalization.NameRequired)</c>.</item>
+    /// <item>an attribute that reads the text as a resource (<see cref="ResourceNamedTexts"/>).</item>
+    /// <item><c>ShopLocalization.GetTextByKey("Greeting")</c> with a constant key (<see cref="IsAskedForByKeyWithoutValues"/>).</item>
     /// </list>
     /// </remarks>
-    // By name first, which binds nothing, and then by the compiler for a name that matches: one of a few in a project.
+    // Matches by name first, which binds nothing, and binds only the few names that match.
     private static bool IsUsedAsProperty(ImmutableHashSet<IPropertySymbol> properties, ImmutableArray<PropertyDeclarationSyntax> languages,
         ProjectTexts projectTexts, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var models = new Dictionary<SyntaxTree, SemanticModel> { [semanticModel.SyntaxTree] = semanticModel };
 
-        // The generated class of each contract whose text the properties implement.
         var generatedClasses = properties
             .SelectMany(FindImplementedMembers)
             .Select(ResourceNamedTexts.FindGeneratedClass)
@@ -415,9 +376,9 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
             .ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
 
         var resourceNamed = ResourceNamedTexts.Of(projectTexts.Compilation);
-        var names = properties.Select(GetTextName).ToImmutableHashSet(StringComparer.Ordinal);
+        var names = properties.Select(AnalyzerSupport.GetTextName).ToImmutableHashSet(StringComparer.Ordinal);
 
-        // So that one pass over each file finds the uses of every name.
+        // So one pass over each file finds every name.
         foreach (var name in names)
             projectTexts.ExpectUsesOf(name);
 
@@ -452,16 +413,15 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Whether code asks a generated class for one of the texts by its key, written as a constant, and passes no values,
-    /// as in <c>ShopLocalization.GetTextByKey("Greeting")</c>. That goes on compiling once the text is a method, and
-    /// throws, because the text then takes values.
+    /// Whether code gets one of the texts by a constant key without values, as in
+    /// <c>ShopLocalization.GetTextByKey("Greeting")</c>, which would throw once the text takes values.
     /// </summary>
     private static bool IsAskedForByKeyWithoutValues(ImmutableHashSet<string> names, ImmutableHashSet<INamedTypeSymbol> generatedClasses,
         ProjectTexts projectTexts, Dictionary<SyntaxTree, SemanticModel> models, CancellationToken cancellationToken)
     {
         foreach (var identifier in projectTexts.FindUsesOf(LocalizationSetsAnalysis.GetName, cancellationToken))
         {
-            // The method by its name alone, inside the generated class, or after the class.
+            // Called by its simple name or after the class name.
             var invocation = identifier.Parent is MemberAccessExpressionSyntax access && access.Name == identifier
                 ? access.Parent as InvocationExpressionSyntax
                 : identifier.Parent as InvocationExpressionSyntax;
@@ -484,9 +444,6 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
         return false;
     }
 
-    /// <summary>
-    /// Whether a name stands inside <c>nameof(...)</c> in the expression around it.
-    /// </summary>
     private static bool IsInNameof(IdentifierNameSyntax identifier)
     {
         for (var node = identifier.Parent; node is ExpressionSyntax or ArgumentSyntax or ArgumentListSyntax; node = node.Parent)
@@ -497,8 +454,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The properties of interfaces that a property implements: explicitly, or as the member its class implements
-    /// them through.
+    /// The interface properties a property implements, explicitly or implicitly.
     /// </summary>
     private static IEnumerable<IPropertySymbol> FindImplementedMembers(IPropertySymbol property)
     {
@@ -513,12 +469,12 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// Whether a property is the text of a member of an enum, in a set that lists <c>ILocalizationSet&lt;TEnum&gt;</c>.
-    /// The contract takes such a text from the enum, so it stays a property.
+    /// Whether a property is an enum member's text in a set that lists <c>ILocalizationSet&lt;TEnum&gt;</c>. It stays
+    /// a property, because the contract takes it from the enum.
     /// </summary>
     private static bool IsTextOfEnumMember(IPropertySymbol property)
     {
-        var name = GetTextName(property);
+        var name = AnalyzerSupport.GetTextName(property);
 
         return property.ContainingType.AllInterfaces.Any(@interface => PackageNames.IsLocalizationSetOfEnum(@interface)
                                                                        && @interface.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Enum } @enum
@@ -526,13 +482,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The name of the text a property words, without the contract an explicit implementation carries in front of it.
-    /// </summary>
-    private static string GetTextName(IPropertySymbol property) => property.Name.Substring(property.Name.LastIndexOf('.') + 1);
-
-    /// <summary>
-    /// Whether a symbol is declared in the assembly being fixed. A project an IDE references is compiled from source
-    /// too, but its symbols don't change with this one.
+    /// Whether a symbol is declared in the assembly being fixed, and not in a referenced project.
     /// </summary>
     private static bool IsOwn(ISymbol symbol, Compilation compilation) => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, compilation.Assembly);
 
@@ -552,16 +502,15 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A name as code writes it: with an <c>@</c> in front of a keyword, as in <c>@class</c>.
+    /// Prefixes a keyword with <c>@</c>.
     /// </summary>
     private static string Escape(string name) => SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None ? name : "@" + name;
 
     /// <summary>
-    /// The strings and interpolated strings of a text that hold a placeholder, where the analyzer reads them
-    /// (<see cref="WrittenWording"/>). <see langword="null"/> when one of them is a raw string, which the fix leaves
-    /// alone.
+    /// The strings of a text that hold a placeholder, as the analyzer reads them (<see cref="WrittenWording"/>). Gives
+    /// <see langword="null"/> when one is a raw string.
     /// </summary>
-    // A string passed to a method isn't among them, so it stays as it is: the method may fill its placeholders in.
+    // Leaves out a string passed to a method, because the method may fill it in.
     private static ImmutableArray<ExpressionSyntax>? FindWordings(MemberDeclarationSyntax text)
     {
         var wordings = ImmutableArray.CreateBuilder<ExpressionSyntax>();
@@ -600,20 +549,19 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The text with each of its wordings filled in (<see cref="FillIn(ExpressionSyntax, Func{int, string?})"/>), and
-    /// each of <paramref name="baseReads"/> as a call that passes <paramref name="arguments"/> on. <see langword="null"/>
-    /// when a placeholder has no parameter.
+    /// The text with its wordings filled in (<see cref="FillIn(ExpressionSyntax, Func{int, string?})"/>) and its
+    /// <paramref name="baseReads"/> passing <paramref name="arguments"/> on. Gives <see langword="null"/> when a
+    /// placeholder has no parameter.
     /// </summary>
     private static MemberDeclarationSyntax? FillIn(MemberDeclarationSyntax text, ImmutableArray<ExpressionSyntax> wordings, Func<int, string?> name,
         ImmutableArray<MemberAccessExpressionSyntax> baseReads, IReadOnlyList<string> arguments)
     {
-        // Checked on the wordings as written. A wording inside another changes what that one holds in a value, and not
-        // its text, so the filled-in one has the same placeholders.
+        // Checked on the wordings as written, because filling in a nested wording doesn't change the outer one's text.
         if (wordings.Any(wording => FillIn(wording, name) is null))
             return null;
 
-        // Each from what it holds after the nodes inside it changed, so that a wording inside another one, as in
-        // $"Hey {{0}}{(more ? " and {1}" : "")}", or a read of base inside a wording, changes too.
+        // Each from its changed node, so a nested wording or base read changes too, as in
+        // $"Hey {{0}}{(more ? " and {1}" : "")}".
         return text.ReplaceNodes(
             wordings.Cast<SyntaxNode>().Concat(baseReads),
             (original, changed) => original is MemberAccessExpressionSyntax
@@ -622,8 +570,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A read of the text of the set a set derives from as a call that passes the values on: <c>base.Greeting</c>
-    /// becomes <c>base.Greeting(arg0)</c>.
+    /// <c>base.Greeting</c> becomes <c>base.Greeting(arg0)</c>.
     /// </summary>
     private static InvocationExpressionSyntax PassOn(ExpressionSyntax read, IReadOnlyList<string> arguments)
     {
@@ -633,9 +580,8 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A wording as an interpolated string that shows the parameter <paramref name="name"/> gives for each placeholder
-    /// number: <c>"Hey, {0}!"</c> becomes <c>$"Hey, {arg0}!"</c>. Its other braces are doubled, so they still show.
-    /// <see langword="null"/> when a placeholder has no parameter.
+    /// A wording as an interpolated string: <c>"Hey, {0}!"</c> becomes <c>$"Hey, {arg0}!"</c>, with other braces
+    /// doubled. Gives <see langword="null"/> when a placeholder has no parameter.
     /// </summary>
     private static string? FillIn(ExpressionSyntax wording, Func<int, string?> name)
     {
@@ -670,14 +616,12 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The written text of a string, or of the text of an interpolated string, with an interpolation in place of each
-    /// placeholder, as <see cref="Placeholder.Read"/> reads them, and every other brace written twice.
+    /// Source text with an interpolation in place of each placeholder (<see cref="Placeholder.Read"/>) and every other
+    /// brace doubled.
     /// </summary>
-    /// <param name="written">The text as the source writes it, without its quotes.</param>
-    /// <param name="bracesWrittenTwice">
-    /// Whether the source writes a brace that's text twice, as the text of an interpolated string does.
-    /// </param>
-    /// <param name="name">The parameter for a placeholder number, or <see langword="null"/> when there's none.</param>
+    /// <param name="written">The source text, without quotes.</param>
+    /// <param name="bracesWrittenTwice">Whether a literal brace is written twice, as in an interpolated string.</param>
+    /// <param name="name">The parameter for a placeholder number, or <see langword="null"/>.</param>
     private static string? FillIn(string written, bool bracesWrittenTwice, Func<int, string?> name)
     {
         var filled = new StringBuilder(written.Length + 8);
@@ -704,7 +648,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
                 continue;
             }
 
-            // A brace that's text, written twice in an interpolated string.
+            // A literal brace.
             filled.Append(character, 2);
             i += IsRun(written, i, character, width) ? width : 1;
         }
@@ -722,9 +666,8 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The property as a method that takes <paramref name="parameters"/>, with the body of the property or of its
-    /// getter. An abstract property becomes an abstract method. <see langword="null"/> for a property with a setter,
-    /// which is no text, and for one whose wording the constructor assigns, which has no body to take.
+    /// The property as a method with the body of the property or its getter. Gives <see langword="null"/> for a
+    /// property with a setter, or one the constructor assigns.
     /// </summary>
     private static MethodDeclarationSyntax? ToMethod(PropertyDeclarationSyntax property, ParameterListSyntax parameters)
     {
@@ -772,7 +715,7 @@ public sealed partial class PlaceholderCodeFixProvider : CodeFixProvider
         if (getter.ExpressionBody is { } getterExpressionBody)
             return Arrow(method, getterExpressionBody.Expression, property.GetTrailingTrivia());
 
-        // public string Greeting { get { return "Hey, {0}!"; } }: the block sits deeper than a method's, so it's formatted.
+        // public string Greeting { get { return "Hey, {0}!"; } }, formatted because the block sat deeper.
         return getter.Body is { } body
             ? method
                 .WithParameterList(parameters.WithTrailingTrivia(SyntaxFactory.Space))

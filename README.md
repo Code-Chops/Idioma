@@ -6,7 +6,7 @@
 
 ## Why use Idioma?
 
-Lightweight and fast translations for any .NET app, written in C# and checked at compile time:
+Lightweight and fast translations for any .NET 10+ app, written in C# and checked at compile time:
 
 - The build catches the mistakes that resx files hide until a user sees them:
   - A mistyped key;
@@ -95,7 +95,7 @@ dotnet add package CodeChops.Idioma --prerelease
 
 Keep `--prerelease` while Idioma is in preview. Without it, the command takes the latest release, which is older than the latest preview.
 
-The package needs .NET 10 or later and C# 14. C# 14 is the default on .NET 10. An older `LangVersion` in your project is build error `LOC102`.
+The package needs .NET 10 or later and C# 14. C# 14 is the default on .NET 10. An older `LangVersion` in your project is build error `LOC104`.
 
 ### Declare your languages
 

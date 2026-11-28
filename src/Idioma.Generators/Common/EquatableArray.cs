@@ -1,9 +1,8 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// An immutable array that compares by value, element by element, instead of by the underlying array reference. Use
-/// this rather than a bare <see cref="ImmutableArray{T}"/> for any sequence that flows through an incremental generator
-/// pipeline, because a pipeline step is reused from cache only when its input compares equal.
+/// An immutable array that compares element by element. Use it for any sequence in a generator pipeline, because a step
+/// is reused from cache only when its input compares equal.
 /// </summary>
 internal readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable<EquatableArray<T>>, IReadOnlyList<T>
     where T : IEquatable<T>
@@ -30,7 +29,7 @@ internal readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable
     }
 
     /// <summary>
-    /// Whether an item matches. It takes the place of LINQ's <c>Any</c>, which would box the array to enumerate it.
+    /// Whether an item matches, without the boxing of LINQ's <c>Any</c>.
     /// </summary>
     public bool Any(Func<T, bool> predicate)
     {

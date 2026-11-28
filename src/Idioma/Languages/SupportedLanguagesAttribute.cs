@@ -25,7 +25,7 @@ namespace CodeChops.Idioma;
 /// a text where you show it, because a string kept in a static field stays in the language of the first user.
 /// </para>
 /// <para>
-/// An application always declares its languages, even without texts of its own (<c>LOC103</c>), because they're the
+/// An application always declares its languages, even without texts of its own (<c>LOC101</c>), because they're the
 /// languages its users get. Its first language is the fallback for every text, including the texts of the libraries
 /// it uses. See <see cref="LocalizedText"/>. A library's languages only describe the library's own texts.
 /// </para>
@@ -37,8 +37,7 @@ namespace CodeChops.Idioma;
 /// <para>
 /// To add a language, add it to the list. The build then reports every text without it, including those of the
 /// libraries you use, so you can work through them. Each language is a culture name in any letter case, neutral
-/// (<c>en</c>) or specific (<c>en-GB</c>). <see cref="Languages"/> holds each in the letter case culture names use,
-/// so <c>EN-gb</c> becomes <c>en-GB</c>.
+/// (<c>en</c>) or specific (<c>en-GB</c>). The build checks each one (<c>LOC102</c>).
 /// </para>
 /// <para>
 /// To the build, a specific language is a language of its own, even when its neutral language is listed too. With
@@ -68,11 +67,8 @@ namespace CodeChops.Idioma;
 /// }
 /// </code>
 /// </example>
-// The source generators and the analyzer locate this type by its metadata-name string, and read its constructor
-// arguments by position. A rename, a move or a new order breaks them, and Metadata_ShouldMatchWhatGeneratorsRead fails
-// when that happens.
-// The constructor doesn't check its arguments, because the build already rejects a language that isn't a culture name
-// (LOC101).
+// The generators find this type by its metadata name and read its arguments by position
+// (Metadata_ShouldMatchWhatGeneratorsRead). The arguments aren't checked, because the build does (LOC102).
 [AttributeUsage(AttributeTargets.Assembly)]
 public sealed class SupportedLanguagesAttribute : Attribute
 {
@@ -85,9 +81,10 @@ public sealed class SupportedLanguagesAttribute : Attribute
     public string DefaultLanguage => this.Languages[0];
 
     /// <summary>
-    /// Every language listed, the default language first. Each is in the letter case culture names use, such as
-    /// <c>en-GB</c>, whatever case the attribute lists it in. To let the user choose one of your app's languages, read
-    /// <see cref="LocalizationRegistry.SupportedLanguages"/> instead.
+    /// Every language listed, the default language first, as the attribute writes it. The build checks each one
+    /// (<c>LOC102</c>), so the attribute doesn't. To let the user choose one of your app's languages, read
+    /// <see cref="LocalizationRegistry.SupportedLanguages"/> instead, which writes each in the letter case culture names
+    /// use, such as <c>en-GB</c>.
     /// </summary>
     public ImmutableArray<string> Languages { get; }
 
@@ -102,12 +99,6 @@ public sealed class SupportedLanguagesAttribute : Attribute
     /// </param>
     public SupportedLanguagesAttribute(string defaultLanguage, params string[] otherLanguages)
     {
-        var languages = ImmutableArray.CreateBuilder<string>(otherLanguages.Length + 1);
-        languages.Add(CultureName.Normalize(defaultLanguage));
-
-        foreach (var language in otherLanguages)
-            languages.Add(CultureName.Normalize(language));
-
-        this.Languages = languages.MoveToImmutable();
+        this.Languages = [defaultLanguage, .. otherLanguages];
     }
 }

@@ -98,7 +98,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert
         text.ShouldContain("public static class LocalizationRegistrar_TestAssembly");
-        text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("RegisterSets(asDefaults: true,", StringComparison.Ordinal));
+        text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal).ShouldBeLessThan(text.IndexOf("RegisterSets(CodeChops.Idioma.Internals.SetTier.LibrarySets,", StringComparison.Ordinal));
     }
 
     [Test]

@@ -10,13 +10,7 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <c>{ get; set; } = "Hallo";</c> becomes <c>{ get; } = "Hallo";</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// An auto-property can still be assigned in the constructor of its set. Any other assignment stops compiling, which
-/// marks the code that changed wording after the set was created.
-/// </para>
-/// <para>
-/// A property whose only accessor is the setter gets no fix, because nothing of it would be left.
-/// </para>
+/// Any assignment outside the set's constructor then stops compiling. A property with only a setter gets no fix.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(TextSetterCodeFixProvider))]
 [Shared]
@@ -47,11 +41,11 @@ public sealed class TextSetterCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The code without a setter, and without what belongs to it: its body, and a comment or a blank line above it.
+    /// Removes the setter with its body and the trivia above it.
     /// </summary>
     private static SyntaxNode Remove(SyntaxNode root, AccessorDeclarationSyntax setter)
     {
-        // A directive around the setter that would lose its other half stays, such as an #if with its #endif further on.
+        // Keeps a directive whose other half lies outside the setter, such as an #if.
         var withoutSetter = root.RemoveNode(setter, SyntaxRemoveOptions.KeepUnbalancedDirectives) ?? root;
         return withoutSetter;
     }

@@ -7,12 +7,11 @@ Each code has an example and the fix. The [list of every code](../build-errors.m
 The generator can't use the default-language set, so it writes no texts for it. A default-language set it can use:
 
 - is named after its language, such as `ShopLocalizationEn`, and a regional default language in full, such as `ShopLocalizationEnUs` for `en-US`
-- has no `LocalizationLanguageCode` that gives it another language, or one the build can't read because it isn't a constant
+- has a name that gives no other language, as `ShopLocalizationEnNl` gives `en-NL` where `nl` is the default language and `en-NL` is listed too
 - is top-level, so not nested
 - isn't file-local, generic, or abstract
 - has a public parameterless constructor
 - has no `required` members
-- isn't marked `[Obsolete]` as an error
 - is the only default-language set of its contract
 - is a set of no other contract, such as a library's
 - has a name that gives its generated class a name no other type or namespace has
@@ -22,7 +21,6 @@ The generator still writes the contract when the only problem is one of these:
 
 - the constructor
 - a `required` member
-- `[Obsolete]`
 - the name of the generated class
 
 Otherwise it writes no contract either. The contract your sets list then doesn't exist, so they don't compile (`CS0246`) until you fix this error. The message ends in what to change.
@@ -74,9 +72,34 @@ A set is for a language that `[assembly: SupportedLanguages]` doesn't list. Add 
 
 This also applies to a set you register yourself.
 
-The IDE fix adds the language at the end of the attribute. A set whose name ends in a longer code, such as `ShopLocalizationEnGb`, adds that code (`en-GB`), which its name then gives it. Neither the message nor the fix advises a code that is no language, such as `gb`, because that would only give [LOC104](LOC1XX-languages.md#loc104). Every other contract then lacks a set for that language, which is [LOC201](#loc201), and its fix adds the sets.
+A set whose name ends in a region of a listed language, such as `ShopLocalizationEnGb` where `en` is listed, serves that region, so it isn't LOC202. A region that doesn't exist is a near miss. `ShopLocalizationEnUk` serves `uk`, and the message asks whether you meant `en-GB`.
+
+The IDE fix adds the language at the end of the attribute. A set whose name ends in a longer code of an unlisted language, such as `ShopLocalizationFrBE`, adds that code (`fr-BE`), which its name then gives it. Neither the message nor the fix advises a code that is no language, such as `gb`, because that would only give [LOC103](LOC1XX-languages.md#loc103). Every other contract then lacks a set for that language, which is [LOC201](#loc201), and its fix adds the sets.
+
+A name in PascalCase can mean either of two languages. `ShopLocalizationFrBe` may be Belgian French, or Belarusian (`be`) after a word. Where `fr` isn't listed, the message names both, and the IDE offers a fix for each, `fr-BE` first.
 
 ## LOC203
+
+A contract has two sets for one language, and neither derives from the other. Users see only one of them, so the wording of the other is lost:
+
+```csharp
+public class ShopLocalizationNl : ILocalizationSet, IShopLocalization { ... }
+public class BasketNl : ILocalizationSet, IShopLocalization { ... } // LOC203
+```
+
+```text
+error LOC203: 'BasketNl' is a second set of 'MyApp.IShopLocalization' for 'nl', next to 'ShopLocalizationNl'. Users of 'nl' see only one of them. Remove one of the two, or derive 'BasketNl' from 'ShopLocalizationNl' to reword some of its texts.
+```
+
+Keep one set per language. Two sets aren't reported in these cases:
+
+- A set that derives from another set of its language rewords that set, and always wins over it.
+- A set marked `[ExcludeFromLocalizationDiscovery]` is one you register yourself, and wins because you register it.
+- A set of another assembly, such as a library's, is one an app may reword ([details](../libraries-and-apps.md#changing-a-text-of-a-library)). Two rewordings of it are [LOC209](#loc209) instead.
+
+A test double that lists `ILocalizationSet` is a set too, so it's registered next to the real one. Let it list only the contract.
+
+## LOC204
 
 A set derives from a set of another language, so every text it doesn't override stays in that other language:
 
@@ -92,17 +115,17 @@ A regional set may derive from the set of its language:
 public class ShopLocalizationEnGb : ShopLocalizationEn // Texts it doesn't override fall back to English
 ```
 
-One region can't derive from another, because a region doesn't fall back to another region. `ShopLocalizationEnUs : ShopLocalizationEnGb` is LOC203.
+One region can't derive from another, because a region doesn't fall back to another region. `ShopLocalizationEnUs : ShopLocalizationEnGb` is LOC204.
 
 The IDE fix lists `ILocalizationSet` and the contract in place of the set it derives from. A set of an enum gets `ILocalizationSet<TEnum>` instead. Its texts become `virtual` in place of `override`, so a set that derives from it still compiles. The compiler then names each text the set lacks (`CS0535`). A region that derives from another region also gets a fix that derives from the set of its language instead, as in `ShopLocalizationEnUs : ShopLocalizationEn`.
 
-## LOC204
+## LOC205
 
 A set lists `ILocalizationSet` without its contract, so no text reads it. This also applies to the default-language set. Add the contract next to `ILocalizationSet`, as in `class ShopLocalizationNl : ILocalizationSet, IShopLocalization`. The IDE fix does this for you.
 
-A contract comes from a default-language set. When the build finds none for the set, as for `ShopLocalizationNl` without a `ShopLocalizationEn`, the message names the set to write. Remove `ILocalizationSet` from a class that isn't a set.
+A contract comes from a default-language set. When the build finds none for the set, as for `ShopLocalizationNl` without a `ShopLocalizationEn`, the message names the set to write. That also goes for a set that lists the contract already, as in `ShopLocalizationNl : ILocalizationSet, IShopLocalization`, where the contract doesn't exist without that set. Remove `ILocalizationSet` from a class that isn't a set.
 
-## LOC205
+## LOC206
 
 A set's `ILocalizationSet<TEnum>` doesn't match the enums of its contract. This is a warning, with these causes:
 
@@ -110,7 +133,7 @@ A set's `ILocalizationSet<TEnum>` doesn't match the enums of its contract. This 
 - A set lists `ILocalizationSet<TEnum>` for an enum its contract has no texts of.
 
 ```csharp
-public class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalization // LOC205
+public class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalization // LOC206
 {
     public string Pending => "In behandeling";
     public string Shipped => "Verzonden";
@@ -118,8 +141,8 @@ public class OrderStatusLocalizationNl : ILocalizationSet, IOrderStatusLocalizat
 ```
 
 ```text
-warning LOC205: 'OrderStatusLocalizationNl' doesn't list 'ILocalizationSet<OrderStatus>', which every set of 'IOrderStatusLocalization' lists. List it in place of 'ILocalizationSet'.
-warning LOC205: 'ShopLocalizationNl' lists 'ILocalizationSet<PaymentStatus>', but 'IShopLocalization' has no texts of 'PaymentStatus'. Replace it with 'ILocalizationSet', or list it in the default-language set too.
+warning LOC206: 'OrderStatusLocalizationNl' doesn't list 'ILocalizationSet<OrderStatus>', which every set of 'IOrderStatusLocalization' lists. List it in place of 'ILocalizationSet'.
+warning LOC206: 'ShopLocalizationNl' lists 'ILocalizationSet<PaymentStatus>', but 'IShopLocalization' has no texts of 'PaymentStatus'. Replace it with 'ILocalizationSet', or list it in the default-language set too.
 ```
 
 List the enums the default-language set lists, in every language, and no other. Each set then shows which enum it words. The IDE fix does this for you: it lists a missing enum in place of `ILocalizationSet`, and it removes an enum of no texts. It compiles either way, because `ILocalizationSet<TEnum>` has no members.
@@ -130,66 +153,86 @@ List the enums the default-language set lists, in every language, and no other. 
 - A set of a library's enum lists it too. An internal enum of a library is the exception, because no set outside the library can name it.
 - A contract you wrote by hand names no enum, so its sets aren't checked.
 
-## LOC206
-
-A set derives from another set and declares a `LocalizationLanguageCode`, but doesn't list `ILocalizationSet` itself. Its `LocalizationLanguageCode` then implements nothing, so the set doesn't serve the language it returns:
-
-```csharp
-public class ShopLocalizationBritish : ShopLocalizationEn // LOC206: LocalizationLanguageCode is never read
-{
-    public string LocalizationLanguageCode => "en-GB";
-}
-```
-
-List the interface again: `class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet`. The IDE fix does this for you.
-
-Without the fix, the set serves the language of its name. A name that gives none, as `ShopLocalizationBritish` doesn't, leaves the set without a language, so it isn't registered. LOC206 is then the only code reported, because its fix gives the set its language.
-
 ## LOC207
-
-A set's `LocalizationLanguageCode` isn't a culture name, such as `"en_GB"`. Registering the set would throw when the app starts. Return a culture name such as `en`, `en-GB` or `zh-Hans`.
-
-This also applies to a set marked `[ExcludeFromLocalizationDiscovery]`, which would throw where you register it.
-
-A code that has the form of a culture name but names no language or region, such as `"en-UK"`, is [LOC104](LOC1XX-languages.md#loc104).
-
-## LOC208
 
 A set can't be registered automatically, so its texts won't be found. This is a warning. The generated code that registers sets needs:
 
 - a parameterless constructor
 - no `required` members
-- a language code: the end of its name, starting with a capital, such as `En`, or an implementation of `ILocalizationSet.LocalizationLanguageCode` (see [language codes](../language-codes.md) for a longer code such as `EnGb`)
-- a `LocalizationLanguageCode` that returns a constant, if it has one, because the registry files a set under its language without creating it. A code read at run time doesn't count, and neither does one the set inherits from a set of another assembly.
+- a language code: the end of its name, starting with a capital, such as `En` (see [language codes](../language-codes.md) for a longer code such as `EnGb`)
 - a top-level class that isn't file-local (checked only for a set that rewords another assembly's texts)
-- no `[Obsolete]` marked as an error, because generated code can't name such a class
 
 Fix the cause, or mark the set `[ExcludeFromLocalizationDiscovery]` and register an instance yourself:
 
 - In an app, pass it to `LocalizationRegistry.Register`.
 - In a library, pass it to `LocalizationRegistry.RegisterLibrarySets`, so an app's set still rewords its texts.
 
-A set marked `[Obsolete]` as a warning registers as before, and so does one marked `[Experimental]`. The generated code turns off what naming it reports, so a build that treats warnings as errors doesn't stop there.
+A set marked `[ExcludeFromLocalizationDiscovery]` still needs the language code in its name, because `LocalizationRegistry.Register` throws for a set without a language. Such a set gets this warning too, and the message says it can't be registered by hand. Rename it, or derive a class from it whose name ends in the code.
+
+A set marked `[Obsolete]` registers as before. The generated code turns off the warning that naming it reports, so a build that treats warnings as errors doesn't stop there.
 
 A member marked `[Localized]` whose text can't be registered gets [LOC502](LOC5XX-inline-texts-and-attributes.md#loc502).
 
-## LOC209
+## LOC208
 
-A contract has two sets for one language, and neither derives from the other. Users see only one of them, so the wording of the other is lost:
+A set rewords a library's set for a language, and the library also has a set of that contract for a region of the language. No set of your project rewords that regional set, or otherwise serves the region. This is a warning.
+
+For each contract and language, one set wins and words every text. A British user sees the library's British set, so your rewording of English doesn't reach them:
 
 ```csharp
-public class ShopLocalizationNl : ILocalizationSet, IShopLocalization { ... }
-public class BasketNl : ILocalizationSet, IShopLocalization { ... } // LOC209
+// The library Shop has ShopLocalizationEn and ShopLocalizationEnGb : ShopLocalizationEn.
+public sealed class MyShopLocalizationEn : ShopLocalizationEn // LOC208
+{
+    public override string Checkout => "Pay now";
+}
 ```
 
 ```text
-error LOC209: 'BasketNl' is a second set of 'MyApp.IShopLocalization' for 'nl', next to 'ShopLocalizationNl'. Users of 'nl' see only one of them. Remove one of the two, or derive 'BasketNl' from 'ShopLocalizationNl' to reword some of its texts.
+warning LOC208: 'MyShopLocalizationEn' rewords 'ShopLocalizationEn', but users of 'en-GB' see 'ShopLocalizationEnGb', which it doesn't reach. Add 'class MyShopLocalizationEnGb : ShopLocalizationEnGb' to reword it too.
 ```
 
-Keep one set per language. Two sets aren't reported in these cases:
+Reword the regional set too, with the same changes:
 
-- A set that derives from another set of its language rewords that set, and always wins over it.
-- A set marked `[ExcludeFromLocalizationDiscovery]` is one you register yourself, and wins because you register it.
-- A set of another assembly, such as a library's, is one an app may reword ([details](../libraries-and-apps.md#changing-a-text-of-a-library)). Your app may reword it in several sets, which each show the texts they change. Two of them are reported only where both reword the same text.
+```csharp
+public sealed class MyShopLocalizationEnGb : ShopLocalizationEnGb
+{
+    public override string Checkout => "Pay now";
+}
+```
 
-A test double that lists `ILocalizationSet` is a set too, so it's registered next to the real one. Let it list only the contract.
+A set of your own for the region settles it too, and so does one you register yourself. A set marked `[ExcludeFromLocalizationDiscovery]` isn't reported, because you register it yourself and it wins over every other set. See [changing a text of a library](../libraries-and-apps.md#regional-sets).
+
+## LOC209
+
+Two sets reword the same set for one language, and neither derives from the other. Only one of them shows, so the texts of the other are lost. This is a warning.
+
+For each contract and language, one set wins and words every text. Your app's rewording wins over a library's, and else the one registered last wins:
+
+```csharp
+// The shared library Shared has SharedShopLocalizationEn : ShopLocalizationEn.
+public sealed class AppShopLocalizationEn : ShopLocalizationEn // LOC209
+{
+    public override string Cart => "Bag";
+}
+```
+
+```text
+warning LOC209: 'AppShopLocalizationEn' and 'SharedShopLocalizationEn' both reword 'ShopLocalizationEn', so only 'AppShopLocalizationEn' shows. Derive 'AppShopLocalizationEn' from 'SharedShopLocalizationEn', so both show.
+```
+
+Derive one from the other. The one that derives then wins, with the texts of both:
+
+```csharp
+public sealed class AppShopLocalizationEn : SharedShopLocalizationEn
+{
+    public override string Cart => "Bag";
+}
+```
+
+It's reported where the build sees both rewordings:
+
+- At the rewording of your project, when the other is in a library it references.
+- At the one that doesn't show, when both are in your project. Merge them into one set, or derive one from the other.
+- Without a location, when both are in libraries your project references. Unless one library references the other, the build can't tell which one shows.
+
+A set marked `[ExcludeFromLocalizationDiscovery]` isn't reported, because you register it yourself and it wins over every other set. See [changing a text of a library](../libraries-and-apps.md#several-rewordings-of-one-set).

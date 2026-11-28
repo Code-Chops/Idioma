@@ -8,24 +8,9 @@ namespace CodeChops.Idioma.Generators;
 /// (<c>LOC600</c>). <c>OrderStatus.None.GetText()</c> next to <c>Default = 0</c> gives the text of <c>Default</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <c>GetText()</c> and <c>GetTextByValue</c> find a text by the value, and a value can't tell two members apart. So
-/// each value gives the text of the first member with that value. A call that names a later member in the code gets
-/// another member's text, and the code reads as if it gets its own.
-/// </para>
-/// <para>
-/// A value the code only has at run time, such as <c>order.Status.GetText()</c>, isn't reported, because no member is
-/// named there. The value of a member that has no text of its own isn't reported either. That's a member without
-/// <c>[Localized]</c>, such as <c>Default = Active</c>, which shows the text of the marked member.
-/// </para>
-/// <para>
-/// For an enum with <c>[Localized]</c> members, only an enum of this assembly is checked, because the attribute isn't
-/// kept in a compiled assembly.
-/// </para>
-/// <para>
-/// Generated code is left alone, except what Razor generates from a <c>.razor</c> or <c>.cshtml</c> file, which is the
-/// user's own markup.
-/// </para>
+/// A text is found by value, so each value gives the first member's text. A value known only at run time isn't
+/// reported, and neither is an unmarked member. For an enum with <c>[Localized]</c> members, only an enum of this
+/// assembly is checked, because the attribute isn't kept in a compiled assembly.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
@@ -33,8 +18,8 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
     public const string SharedValueDiagnosticId = "LOC600";
 
     /// <summary>
-    /// The key of the property of a diagnostic that holds the member's own text as code at the call, such as
-    /// <c>OrderStatusLocalization.None</c>. Only a member of a set of the enum has one, which the code fix writes.
+    /// The diagnostic property with code for the member's own text, such as <c>OrderStatusLocalization.None</c>. Only
+    /// a member of an enum with a set has one, which the code fix writes.
     /// </summary>
     public const string OwnTextProperty = "OwnText";
 
@@ -55,14 +40,13 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
 
         // Razor's output counts as generated code, and a call written in markup must be read there.
-        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
+        // AnalyzerSupport.IsHandWritten leaves out the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
 
     private static void Start(CompilationStartAnalysisContext context)
     {
-        // Null in a project that doesn't reference the package, which has no texts.
         if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText) is null)
             return;
 
@@ -74,16 +58,14 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod;
 
-        // By the name of the method first, which costs nothing: nearly every call is another one.
         if (method.Name is not (LocalizationSetsAnalysis.LookupName or LocalizationSetsAnalysis.ExtensionName)
             || method.ReturnType.SpecialType is not SpecialType.System_String
-            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
         {
             return;
         }
 
-        // The value: what GetText() is called on, or what GetTextByValue takes. An extension method takes it as its
-        // first argument.
+        // An extension method takes the value as its first argument.
         var value = invocation.Instance ?? (invocation.Arguments is [var argument] ? argument.Value : null);
 
         while (value is IConversionOperation { IsImplicit: true } conversion)
@@ -93,28 +75,15 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
             return;
 
         // An extension member's method lies in a block inside the static class that holds it.
-        for (var holder = method.ContainingType; holder is not null; holder = holder.ContainingType)
-        {
-            if (KeptTextAnalyzer.IsGeneratedClass(holder))
-            {
-                AnalyzeSetLookup(context, invocation, value, holder, @enum, member);
-                return;
-            }
-
-            // The class the source generator writes for an enum with [Localized] members.
-            if (String.Equals(method.Name, LocalizedMembers.ExtensionName, StringComparison.Ordinal)
-                && holder.Name.EndsWith(LocalizedMembers.ExtensionHolderSuffix, StringComparison.Ordinal))
-            {
-                AnalyzeLocalizedLookup(context, invocation, value, @enum, member);
-                return;
-            }
-        }
+        if (AnalyzerSupport.GetContainingTypes(method).FirstOrDefault(KeptTextAnalyzer.IsGeneratedClass) is { } generatedClass)
+            AnalyzeSetLookup(context, invocation, value, generatedClass, @enum, member);
+        else if (AnalyzerSupport.IsGetTextOfLocalizedMembers(method))
+            AnalyzeLocalizedLookup(context, invocation, value, @enum, member);
     }
 
     /// <summary>
-    /// Reports a call of the generated class of a set of the enum that names a member whose value an earlier member
-    /// has. Every member has a text in the set, so the fix asks the generated class for the member's own:
-    /// <c>OrderStatusLocalization.None</c>.
+    /// Reports a lookup through the generated class of a set of the enum. Every member has a text there, so the fix
+    /// reads it directly.
     /// </summary>
     private static void AnalyzeSetLookup(OperationAnalysisContext context, IInvocationOperation invocation, IOperation value,
         INamedTypeSymbol generatedClass, INamedTypeSymbol @enum, IFieldSymbol member)
@@ -132,9 +101,8 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports a call of the generated <c>GetText()</c> of an enum with <c>[Localized]</c> members that names a marked
-    /// member whose value an earlier marked member has. <c>LocalizedText.GetTextByMember</c> finds the member's own
-    /// text.
+    /// Reports a generated <c>GetText()</c> of an enum with <c>[Localized]</c> members. The advice uses
+    /// <c>LocalizedText.GetTextByMember</c>.
     /// </summary>
     private static void AnalyzeLocalizedLookup(OperationAnalysisContext context, IInvocationOperation invocation, IOperation value,
         INamedTypeSymbol @enum, IFieldSymbol member)
@@ -158,10 +126,10 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The first member of the enum with the value of <paramref name="member"/> that <paramref name="hasText"/> holds
-    /// for, when that's another member. It's <see langword="null"/> when <paramref name="member"/> is the first itself.
+    /// The earlier member with a text and the same value, or <see langword="null"/> when <paramref name="member"/> is
+    /// the first.
     /// </summary>
-    // In the order the members are declared, which is the order the source generator reads them in.
+    // In declaration order, as the source generator reads them.
     private static IFieldSymbol? FindFirstOfValue(INamedTypeSymbol @enum, IFieldSymbol member, Func<IFieldSymbol, bool> hasText)
     {
         foreach (var candidate in @enum.GetMembers())
@@ -180,7 +148,7 @@ public sealed class SharedEnumValueAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports the call on the member it names, with the whole call as the place for the fix to replace.
+    /// Reports on the member, with the whole call as the additional location the fix replaces.
     /// </summary>
     private static void Report(OperationAnalysisContext context, IInvocationOperation invocation, IOperation value, INamedTypeSymbol @enum,
         IFieldSymbol first, IFieldSymbol member, string ownText, ImmutableDictionary<string, string?> properties)

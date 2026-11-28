@@ -1,20 +1,15 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// The descriptors of the codes that more than one generator or analyzer reports. One per code, so that an IDE's list
-/// of rules shows each code once, with one title and one description. What differs between the reporters is a part of
-/// the message, which each one passes as an argument.
+/// The descriptors of codes that more than one generator or analyzer reports, one per code so an IDE lists each once.
+/// Each reporter passes what differs as a message argument.
 /// </summary>
 internal static class SharedRules
 {
     /// <summary>
-    /// <c>LOC100</c>: a set, <c>LocalizedText.Inline</c>, or <c>[Localized]</c> in an assembly that declares no
-    /// languages. The first argument says what was found, as in <c>'ShopLocalizationEn' is a localization set</c>.
+    /// <c>LOC100</c>: a set or a standalone text in an assembly that declares no languages. The generators report it
+    /// for a set and <c>[Localized]</c>, and <c>UnnamedLanguageAnalyzer</c> for <c>LocalizedText.Inline</c>.
     /// </summary>
-    /// <remarks>
-    /// The generators report it for a set and for <c>[Localized]</c>, and <c>UnnamedLanguageAnalyzer</c> for a call
-    /// of <c>LocalizedText.Inline</c>, in Razor markup too.
-    /// </remarks>
     public static readonly DiagnosticDescriptor NoLanguagesDeclared = new(
         id: LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId,
         title: "Text in an assembly without languages",
@@ -26,14 +21,9 @@ internal static class SharedRules
         helpLinkUri: PackageNames.HelpLink(LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId));
 
     /// <summary>
-    /// <c>LOC402</c>: a language leaves out a value the default wording shows, in a text of a set or in an inline
-    /// text. The arguments are what leaves it out, the value, what shows it, the value's name, and the language whose
-    /// users won't see it.
+    /// <c>LOC402</c>: a language leaves out a value the default wording shows. <c>TextParametersAnalyzer</c> reports it
+    /// for a method of a set, and <c>InlineTextValuesAnalyzer</c> for <c>LocalizedText.Inline</c>.
     /// </summary>
-    /// <remarks>
-    /// <c>TextParametersAnalyzer</c> reports it for a method of a set, and <c>InlineTextValuesAnalyzer</c> for a call
-    /// of <c>LocalizedText.Inline</c>. Both have the same fix: use the value in every language.
-    /// </remarks>
     public static readonly DiagnosticDescriptor ValueLeftOut = new(
         id: TextParametersAnalyzer.ValueLeftOutDiagnosticId,
         title: "Value left out of a wording",

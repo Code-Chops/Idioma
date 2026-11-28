@@ -20,14 +20,17 @@ public sealed class LocalizationSetAttributeTests
     }
 
     [Test]
-    public void ShouldHoldContractAndLanguage()
+    public void ShouldHoldContractLanguageSetAndWhatItDerivesFrom()
     {
         // Arrange & Act
-        var attribute = new LocalizationSetAttribute("Shop.IShopLocalization", "nl");
+        var attribute = new LocalizationSetAttribute("Shop.IShopLocalization", "nl", "App.MyShopLocalizationNl", "Shop.ShopLocalizationNl", "Shop.ShopLocalizationNl");
 
         // Assert
         attribute.Contract.ShouldBe("Shop.IShopLocalization");
         attribute.Language.ShouldBe("nl");
+        attribute.Set.ShouldBe("App.MyShopLocalizationNl");
+        attribute.Reworded.ShouldBe("Shop.ShopLocalizationNl");
+        attribute.Bases.ShouldBe(["Shop.ShopLocalizationNl"]);
     }
 
     [Test]
@@ -38,6 +41,6 @@ public sealed class LocalizationSetAttributeTests
 
         // Assert: the generator matches the attribute by this name, and reads its arguments by position.
         typeof(LocalizationSetAttribute).FullName.ShouldBe("CodeChops.Idioma.Internals.LocalizationSetAttribute");
-        parameters.Select(parameter => parameter.ParameterType).ShouldBe([typeof(string), typeof(string)]);
+        parameters.Select(parameter => parameter.ParameterType).ShouldBe([typeof(string), typeof(string), typeof(string), typeof(string), typeof(string[])]);
     }
 }

@@ -4,8 +4,7 @@ namespace CodeChops.Idioma.Generators;
 internal static partial class LocalizationContractSource
 {
     /// <summary>
-    /// Writes the generated class with the texts of a contract, and the set they take their default wording from. For
-    /// a set of the texts of an enum, it adds the switch that gives the text of a value to <paramref name="lookups"/>.
+    /// Writes the generated class with its texts. For an enum's texts, it adds the switch to <paramref name="lookups"/>.
     /// </summary>
     private static void AppendTexts(StringBuilder sb, StringBuilder lookups, ContractFile file)
     {
@@ -36,9 +35,8 @@ internal static partial class LocalizationContractSource
             {
             """);
 
-        // Nothing but the texts, so that a text can take any name but the class's own and those of the methods below (LOC300). Each text
-        // passes its position among the texts and their number as literals: a constant for either would take a name
-        // from the texts.
+        // Nothing but the texts, so a text can take any name but those of LOC300. Positions are literals, because a
+        // constant would take a name from the texts.
         for (var i = 0; i < texts.Length; i++)
         {
             var member = texts[i];
@@ -52,26 +50,21 @@ internal static partial class LocalizationContractSource
 
             sb.AppendLine($"    {GeneratedFile.ImportedCodeAttributes}");
 
-            // [Obsolete] and [Experimental] as the set has them, so that the code that shows the text is told.
+            // [Obsolete] as the set has it, so code that shows the text is told.
             if (member.Marks is { } marks)
                 sb.AppendLine($"    {marks}");
 
-            // A text is worded on every read, by the set of the user's language. The package keeps that set per
-            // culture and per position (GetLocalizationSet), so a read is a call of the set's own member. Where no set is kept
-            // yet, or the kept set gives no wording, the package finds the wording in the order the class's doc
-            // comment gives (ResolveWording), which also creates the set of the default language when a text first
-            // needs it. Both are called with a type argument, so that no text can stand before them: a name with a type
-            // argument is not looked for among the texts.
+            // Worded on every read. GetLocalizationSet gives the cached set of the user's language, and else
+            // ResolveWording finds the wording in the fallback order. Both take a type argument, because a name with
+            // one isn't looked up among the texts, so no text can hide them.
             if (!member.IsMethod)
             {
-                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetLocalizationSet<{name}>({i}, {texts.Length})?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({i}, {texts.Length}, {nameLiteral}, static set => set.{memberName});");
+                sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName} => GetLocalizationSet<{name}>()?.{memberName} ?? ResolveWording<{name}, {file.DefaultSet}>({nameLiteral}, static set => set.{memberName});");
                 continue;
             }
 
-            // A text that takes values hands them to the set's method. On the path that finds the wording, the set is
-            // picked by a function that is handed the values and holds none itself: one function then serves every
-            // call. A single value is handed on as it is, with the function's parameter named as the method's. More are
-            // handed on as a tuple. The set and the tuple are named apart from the parameters.
+            // The fallback path takes a static function and the values, so one function serves every call. Several
+            // values go as a tuple.
             var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
             var set = GetNameApartFrom(member, "set");
             string valuesType, selector, values;
@@ -92,31 +85,24 @@ internal static partial class LocalizationContractSource
                 values = $"({arguments})";
             }
 
-            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetLocalizationSetForValues<{name}>({i}, {texts.Length})?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {valuesType}>({i}, {texts.Length}, {nameLiteral}, {selector}, {values});");
+            sb.AppendLine($"    public static {(HidesObjectMember(member) ? "new " : "")}string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => GetLocalizationSetForValues<{name}>()?.{memberName}({arguments}) ?? ResolveWording<{name}, {file.DefaultSet}, {valuesType}>({nameLiteral}, {selector}, {values});");
         }
 
-        // The members that are no texts: for a set of the texts of an enum, the method that gives the text of a value,
-        // and for every set, the method that gives a text by its key.
         foreach (var @enum in contract.Enums)
             AppendLookup(sb, lookups, file, @enum);
 
         AppendGet(sb, file);
 
-        // The end of the texts. The set every text takes its default wording from is the package's to create, when a
-        // text first needs it. Created here, as this class is first used, a set whose constructor throws would fail
-        // the class for good, with an exception that names the class alone.
+        // No static field creates the default-language set here, because a throwing constructor would fail the class
+        // for good. The package creates it when a text first needs it.
         sb.AppendLine("}");
     }
 
     /// <summary>
-    /// Writes the method that gives the text of a value of an enum, for a set of the texts of that enum:
-    /// <c>OrderStatusLocalization.GetTextByValue(order.Status)</c>. Each member of the enum gives the text named after it, and a
-    /// value that is no member, such as a combination of flags, gives a text that shows it as <c>ToString()</c> does.
-    /// Next to it, the extension method that gives a value its text itself, <c>order.Status.GetText()</c>, so that
-    /// markup need not name the generated class.
+    /// Writes <c>GetTextByValue</c> and the extension <c>GetText()</c> for an enum. A value that's no member, such as a
+    /// combination of flags, shows as <c>ToString()</c> writes it.
     /// </summary>
-    // Of two members of one value, the first gives its text: a switch takes a value once. A member whose text the
-    // class doesn't hold, because of its name (LOC300), has no arm, and shows as a value that is no member.
+    // Of two members of one value, the first gives its text. A member with a reserved name (LOC300) has no arm.
     private static void AppendLookup(StringBuilder sb, StringBuilder lookups, ContractFile file, LocalizedEnum @enum)
     {
         var contract = file.Contract;
@@ -128,7 +114,7 @@ internal static partial class LocalizationContractSource
         var properties = new HashSet<string>(texts.Where(static text => !text.IsMethod).Select(static text => text.Name), StringComparer.Ordinal);
         var members = @enum.Members.Where(member => member.IsFirstOfItsValue && properties.Contains(member.Name)).ToArray();
 
-        // A type with type arguments, as an enum inside a generic class has, is no name a cref can hold.
+        // A cref can't hold a type with type arguments, such as an enum inside a generic class.
         var enumLink = type.Contains("<") ? $"<c>{CodeEscaping.EscapeXml(type)}</c>" : $"<see cref=\"{type}\"/>";
         var example = members.Length > 0
             ? $", such as <see cref=\"{CodeEscaping.EscapeIdentifier(members[0].Name)}\"/> for <c>{CodeEscaping.EscapeXml(@enum.Name)}.{members[0].Name}</c>"
@@ -139,8 +125,6 @@ internal static partial class LocalizationContractSource
             ? $"<c>{LocalizationSetsAnalysis.LookupName}</c>"
             : $"<see cref=\"{LocalizationSetsAnalysis.LookupName}({type})\"/>";
 
-        // The switch stands in a class outside the generated one (TextsByValue), which is named with a type argument:
-        // a name with a type argument is not looked for among the texts.
         sb.AppendLine();
         sb.AppendLine($$"""
                 /// <summary>
@@ -153,11 +137,13 @@ internal static partial class LocalizationContractSource
                 {{(@enum.IsPublic ? "public" : "internal")}} static string {{LocalizationSetsAnalysis.LookupName}}({{type}} value) => TextsByValue<{{name}}>.Get(value);
             """);
 
-        // An enum of another assembly that gets GetText() from the [Localized] of its members there: that GetText()
-        // gives this set's texts once they're registered (AppendEnumTextsRegistration), and a second one here would make
-        // every call that reaches both ambiguous (CS0121).
-        if (!@enum.ReachesGetTextOfItsAssembly)
+        // No GetText() where the enum's assembly has one already (AppendEnumTextsRegistration), because a second would
+        // make calls ambiguous (CS0121). For any other enum of another assembly, such as DayOfWeek, it's internal for
+        // the same reason.
+        if (@enum.GetText is not GetTextAccessibility.None)
         {
+            var extensionAccessibility = @enum.GetText is GetTextAccessibility.Public ? "public" : "internal";
+
             sb.AppendLine($$"""
 
                     /// <param name="value">The value to give the text of.</param>
@@ -170,19 +156,16 @@ internal static partial class LocalizationContractSource
                         /// A value that isn't a member of the enum, such as a combination of flags, shows as <c>ToString()</c> writes it.
                         /// </remarks>
                         {{GeneratedFile.ImportedCodeAttributes}}
-                        {{(@enum.IsPublic ? "public" : "internal")}} string {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
+                        {{extensionAccessibility}} string {{LocalizationSetsAnalysis.ExtensionName}}() => TextsByValue<{{name}}>.Get(value);
                     }
                 """);
         }
 
-        // Each text by the name of its class in front, as it stands outside that class. A member marked [Obsolete] as an
-        // error can't be named (CS0619), so its arm names its value, which a parenthesis keeps whole when it's negative.
         var arms = new StringBuilder();
 
         foreach (var member in members)
         {
-            var pattern = member.ObsoleteAsErrorValue is { } value ? $"({type})({value})" : $"{type}.{CodeEscaping.EscapeIdentifier(member.Name)}";
-            arms.AppendLine($"        {pattern} => {NameText(file, texts.First(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal)))},");
+            arms.AppendLine($"        {type}.{CodeEscaping.EscapeIdentifier(member.Name)} => {NameText(file, texts.First(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal)))},");
         }
 
         if (lookups.Length > 0)
@@ -198,9 +181,8 @@ internal static partial class LocalizationContractSource
                 };
             """);
 
-        // For an enum whose assembly gives it GetText() from the [Localized] of its members, what this set registers
-        // there (AppendEnumTextsRegistration). A value this set has no text of gives null, so that GetText() shows the
-        // [Localized] wording of its member, such as one a newer version of that assembly adds.
+        // Registered with the enum's assembly (AppendEnumTextsRegistration). A value without a text here gives null, so
+        // GetText() shows the member's [Localized] wording.
         if (@enum.HasTextsOfItsAssembly)
         {
             lookups.AppendLine($$"""
@@ -217,23 +199,16 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// The method of <c>TextsByValue</c> that gives the text of a value, or <see langword="null"/> for a value the set
-    /// has no text of.
+    /// The method of <c>TextsByValue</c> that gives <see langword="null"/> for a value without a text.
     /// </summary>
     private const string FindName = "Find";
 
     /// <summary>
-    /// Writes the members that give a text by its key, which is its name:
-    /// <c>ShopLocalization.GetTextByKey("Checkout")</c>, or
-    /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c> for a text that takes values. An unknown key
-    /// gives <see langword="null"/>. Values that aren't those the text takes throw. <c>TextKeys</c> lists every key.
+    /// Writes <c>GetTextByKey</c> and <c>TextKeys</c>, such as
+    /// <c>ShopLocalization.GetTextByKey("Greeting", customer.Name)</c>.
     /// </summary>
-    // Each text by the name of its class in front, because the parameters of the method stand before a text named
-    // key or values. What checks the values, and what a null key throws, is called with a type argument, which no text
-    // has. The framework's types stand by their name alone, as the file imports their namespaces.
-    //
-    // The keys stand in a class outside the generated one (TextKeysOf). A static field of the generated class itself
-    // would give that class an initializer, which every read of a text would have to check for.
+    // Texts are qualified by their class, because the parameters key and values would hide a text of that name. The
+    // keys are in TextKeysOf, because a static field here would give every text read an initializer check.
     private static void AppendGet(StringBuilder sb, ContractFile file)
     {
         var contract = file.Contract;
@@ -277,7 +252,7 @@ internal static partial class LocalizationContractSource
             sb.AppendLine($"        {keyLiteral} => {text}({arguments}),");
         }
 
-        // A key that is null is a mistake in the call, so it throws, where an unknown key gives null.
+        // A null key is a mistake in the call, so it throws, while an unknown key gives null.
         sb.AppendLine($$"""
                     null => throw CreateNullKeyException<{{name}}>(key),
                     _ => null,
@@ -292,13 +267,11 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// Writes what gives the values of an enum of another assembly the texts of this set, where that assembly gives the
-    /// enum its <c>GetText()</c> from the <c>[Localized]</c> of its members. That <c>GetText()</c> then gives this set's
-    /// wording, in this app's languages.
+    /// Registers this set's texts for an enum of another assembly whose members are <c>[Localized]</c>, so that
+    /// assembly's <c>GetText()</c> gives them.
     /// </summary>
-    // A module initializer, which runs before any code of this assembly does: also when an app calls this assembly's
-    // registrar as it starts, as it does for every assembly it references. File-local, so that it's no type of the
-    // assembly, and not generic, which a module initializer can't be. Nothing names it, so no text can stand before it.
+    // A module initializer, so it runs before any code of this assembly. Not generic, which a module initializer can't
+    // be, but nothing names it, so no text can hide it.
     private static void AppendEnumTextsRegistration(StringBuilder sb, ContractFile file)
     {
         var contract = file.Contract;
@@ -326,19 +299,14 @@ internal static partial class LocalizationContractSource
             """);
     }
 
-    /// <summary>
-    /// The class that holds the keys of the texts.
-    /// </summary>
     private const string TextKeysName = "TextKeysOf";
 
     /// <summary>
-    /// Writes the class that holds the key of every text, which <c>TextKeys</c> of the generated class gives. File-local,
-    /// so that it's no type of the assembly. Generic, so that no text can stand before it: a name with a type argument
-    /// is not looked for among the texts.
+    /// Writes the class behind <c>TextKeys</c>. Generic, so no text can hide it.
     /// </summary>
     private static void AppendTextKeys(StringBuilder sb, ContractFile file)
     {
-        // Sorted as StringComparer.Ordinal sorts them, so that a search such as ImmutableArray.BinarySearch finds a key.
+        // Sorted ordinally, so a binary search finds a key.
         var keys = String.Join(", ", file.Texts
             .Select(static text => text.Name)
             .OrderBy(static name => name, StringComparer.Ordinal)
@@ -355,64 +323,17 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// A text as the file names it outside its member, by the name of its class in front. A text marked
-    /// <c>[Obsolete]</c> as an error can't be named there (<c>CS0619</c>), so it's named through the class that hands
-    /// it on (<see cref="AppendObsoleteTexts"/>).
+    /// A text qualified by its class.
     /// </summary>
     private static string NameText(ContractFile file, LocalizationMember member)
     {
-        var holder = member.IsObsoleteAsError ? $"{ObsoleteTextsName}<{file.ContractName}>" : file.TextsName;
-
-        var text = $"{holder}.{CodeEscaping.EscapeIdentifier(member.Name)}";
+        var text = $"{file.TextsName}.{CodeEscaping.EscapeIdentifier(member.Name)}";
         return text;
     }
 
     /// <summary>
-    /// The class that hands on the texts marked <c>[Obsolete]</c> as an error.
-    /// </summary>
-    private const string ObsoleteTextsName = "ObsoleteTexts";
-
-    /// <summary>
-    /// Writes the class that hands on each text marked <c>[Obsolete]</c> as an error, for the method that gives a text
-    /// by its key and the one that gives the text of an enum value. Code inside a class marked <c>[Obsolete]</c> may name
-    /// what's obsolete, and naming the class itself is a warning this file turns off (<c>CS0612</c>). File-local, so
-    /// that it's no type of the assembly. Generic, so that no text can stand before it: a name with a type argument is
-    /// not looked for among the texts.
-    /// </summary>
-    private static void AppendObsoleteTexts(StringBuilder sb, ContractFile file)
-    {
-        var contract = file.Contract;
-
-        sb.AppendLine($$"""
-
-            [Obsolete]
-            {{GeneratedFile.ImportedCodeAttributes}}
-            file static class {{ObsoleteTextsName}}<TContract>
-            {
-            """);
-
-        foreach (var member in file.Texts.Where(static text => text.IsObsoleteAsError))
-        {
-            var memberName = CodeEscaping.EscapeIdentifier(member.Name);
-
-            if (!member.IsMethod)
-            {
-                sb.AppendLine($"    internal static string {memberName} => {file.TextsName}.{memberName};");
-                continue;
-            }
-
-            var arguments = String.Join(", ", member.Parameters.Select(static parameter => CodeEscaping.EscapeIdentifier(parameter.Name)));
-            sb.AppendLine($"    internal static string {memberName}({ContractTypeNames.RenderParameters(member, contract.Namespace)}) => {file.TextsName}.{memberName}({arguments});");
-        }
-
-        sb.AppendLine("}");
-    }
-
-    /// <summary>
-    /// Whether a text carries the name of a member every class has, such as <c>Equals</c>, which the generated class
-    /// then hides. Its member says so with <see langword="new"/>, because without it the build warns (<c>CS0108</c>)
-    /// about code its author can't change. A text that takes values hides such a member only when it takes what that
-    /// member takes: <c>Equals(object)</c>, <c>Equals(object, object)</c>, or <c>ReferenceEquals(object, object)</c>.
+    /// Whether a text hides a member of <see cref="object"/>, such as <c>Equals</c>, so it needs <see langword="new"/>
+    /// (<c>CS0108</c>). A method hides one only with the same parameters.
     /// </summary>
     private static bool HidesObjectMember(LocalizationMember member)
     {
@@ -426,8 +347,7 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// The text the doc comment of the generated class shows as its example: the first text that takes no values, as
-    /// it stands in markup by its name alone, and else the first text, with an ellipsis for its values.
+    /// The example text in the generated class's doc comment: the first text without values, and else the first text.
     /// </summary>
     private static string GetSampleText(LocalizationMember[] texts)
     {
@@ -440,8 +360,7 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// A name for something the generated method of a text declares itself, which none of the text's parameters
-    /// carries: the name asked for, with an underscore for each parameter that took it.
+    /// The name with underscores added until no parameter of the text has it.
     /// </summary>
     private static string GetNameApartFrom(LocalizationMember member, string name)
     {

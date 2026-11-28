@@ -7,9 +7,10 @@ namespace CodeChops.Idioma.Internals;
 /// <b>Don't use this attribute directly! It's used by the source generator.</b>
 /// </para>
 /// <para>
-/// Marks that an assembly holds a set of a public contract, and the language the set serves. The build of an app
-/// that references the assembly reads these attributes instead of searching the assembly's types. It reports each
-/// language of the app that a contract has no set for (<c>LOC700</c>).
+/// Marks that an assembly holds a set of a public contract, the language the set serves, and what it derives from. The
+/// build of an app that references the assembly reads these attributes instead of searching the assembly's types. It
+/// reports each language of the app that a contract has no set for (<c>LOC700</c>), and rewordings that leave out a
+/// set (<c>LOC208</c>, <c>LOC209</c>).
 /// </para>
 /// </summary>
 // Matched by its full name and read by constructor position.
@@ -25,29 +26,49 @@ public sealed class LocalizationSetAttribute : Attribute
     public string Contract { get; }
 
     /// <summary>
-    /// The language the set serves, or <c>*</c> when the build couldn't read it. Such a set may serve any language.
-    /// The build can't read the set's <see cref="ILocalizationSet.LocalizationLanguageCode"/> in these cases:
-    /// <list type="bullet">
-    /// <item>It isn't a constant.</item>
-    /// <item>It comes from another assembly.</item>
-    /// <item>It holds a constant that isn't a culture name.</item>
-    /// </list>
+    /// The language the set serves, such as <c>nl</c>.
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public string Language { get; }
 
     /// <summary>
+    /// The full name of the set.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string Set { get; }
+
+    /// <summary>
+    /// The full name of the set of another assembly it rewords, or <see langword="null"/> where it rewords none or is
+    /// registered by hand.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string? Reworded { get; }
+
+    /// <summary>
+    /// The full names of the concrete sets it derives from, nearest first.
+    /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public IReadOnlyList<string> Bases { get; }
+
+    /// <summary>
     /// Marks a set.
     /// </summary>
     /// <param name="contract">The full name of the contract. It's a string, so nothing keeps the type when trimming.</param>
-    /// <param name="language">The language the set serves, or <c>*</c> when the build couldn't read it.</param>
+    /// <param name="language">The language the set serves, such as <c>nl</c>.</param>
+    /// <param name="set">The full name of the set.</param>
+    /// <param name="reworded">The full name of the set of another assembly it rewords, or <see langword="null"/>.</param>
+    /// <param name="bases">The full names of the concrete sets it derives from, nearest first.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public LocalizationSetAttribute(string contract, string language)
+    public LocalizationSetAttribute(string contract, string language, string set, string? reworded, params string[] bases)
     {
         Debug.Assert(!String.IsNullOrWhiteSpace(contract));
         Debug.Assert(!String.IsNullOrWhiteSpace(language));
+        Debug.Assert(!String.IsNullOrWhiteSpace(set));
 
         this.Contract = contract;
         this.Language = language;
+        this.Set = set;
+        this.Reworded = reworded;
+        this.Bases = bases ?? [];
     }
 }

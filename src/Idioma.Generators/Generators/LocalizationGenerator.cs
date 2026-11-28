@@ -1,24 +1,13 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes what the localization sets of an assembly and its members marked <c>[Localized]</c> need, in two parts: the
-/// contract and the generated class of each default-language set (<see cref="LocalizationSetsPart"/>), and the
-/// registrar that adds the sets to <c>LocalizationRegistry</c> (<see cref="LocalizationRegistrationPart"/>). One
-/// generator for both, so that the classes of the compilation are read once per edit, and the languages, the contracts
-/// the sets list, and the contracts the compilation generates are found once.
+/// Writes the contracts and generated classes (<see cref="LocalizationSetsPart"/>) and the registrar
+/// (<see cref="LocalizationRegistrationPart"/>). One generator for both, so the compilation's classes are read once
+/// per edit.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Each part reads only what it uses of a set (<see cref="DiscoveredTexts"/>), so an edit that changes only what one
-/// part uses leaves the other's pipeline as it was. <c>LocalizedText.Inline</c> and <c>[Localized]</c> come from a
-/// generator of their own (<see cref="LocalizedTextFactoryGenerator"/>).
-/// </para>
-/// <para>
-/// An edit of a wording changes the share the contracts are written from, which holds the wordings and every source
-/// location. It leaves the registrar's share as it was, which holds neither. So the steps that read the registrar's
-/// share alone don't run again: the contracts the compilation generates, and the registrar. Both parts report their
-/// diagnostics from the share with the locations.
-/// </para>
+/// Each part reads only what it uses of a set (<see cref="DiscoveredTexts"/>). The registrar's share holds no wording
+/// and no location, so editing a wording doesn't rerun the registrar. Both parts report from the contracts' share.
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
 public sealed class LocalizationGenerator : IIncrementalGenerator
@@ -35,19 +24,20 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
 /// <summary>
 /// What both parts of <see cref="LocalizationGenerator"/> read, each read once.
 /// </summary>
-/// <param name="Languages">The languages of <c>[assembly: SupportedLanguages]</c>, or <see langword="null"/> when the
-/// assembly declares none.</param>
-/// <param name="RegistrarLanguages">The same languages without where the attribute is written, for a step that reports
-/// nothing there. An edit in the attribute's file that leaves the languages as they were leaves this as it was.</param>
-/// <param name="Compiles">Whether the code the generator writes compiles with this project's version of C#
-/// (<see cref="LanguageVersionCheck"/>).</param>
-/// <param name="ContractDiscovery">What discovery found, as the part that writes the contracts reads it
-/// (<see cref="DiscoveredTexts.OfContract"/>). It holds the wordings and every source location, so both parts report
-/// from it.</param>
-/// <param name="RegistrarDiscovery">What discovery found, as the part that writes the registrar reads it
-/// (<see cref="DiscoveredTexts.OfRegistrar"/>). It holds no wording and no location.</param>
-/// <param name="Contracts">The contracts the compilation generates, worked out once for both parts
-/// (<see cref="LocalizationDiscovery.ReadGeneratedContracts"/>).</param>
+/// <param name="Languages"><see langword="null"/> when the assembly declares none.</param>
+/// <param name="RegistrarLanguages">
+/// The languages without the attribute's location, so an edit in its file doesn't rerun the registrar.
+/// </param>
+/// <param name="Compiles">
+/// Whether the generated code compiles with this project's C# version (<see cref="LanguageVersionCheck"/>).
+/// </param>
+/// <param name="ContractDiscovery">
+/// The contracts' share (<see cref="DiscoveredTexts.OfContract"/>), with wordings and locations.
+/// </param>
+/// <param name="RegistrarDiscovery">
+/// The registrar's share (<see cref="DiscoveredTexts.OfRegistrar"/>), without wordings and locations.
+/// </param>
+/// <param name="Contracts">See <see cref="LocalizationDiscovery.ReadGeneratedContracts"/>.</param>
 internal sealed record LocalizationInputs(
     IncrementalValueProvider<DeclaredLanguages?> Languages,
     IncrementalValueProvider<DeclaredLanguages?> RegistrarLanguages,
@@ -61,12 +51,11 @@ internal sealed record LocalizationInputs(
         var languages = SupportedLanguages.Read(context);
         var (contractDiscovery, registrarDiscovery) = LocalizationDiscovery.Read(context);
 
-        // The location of the attribute holds the syntax tree of its file, which every edit in that file renews.
+        // A location holds its syntax tree, which every edit in that file renews.
         var registrarLanguages = languages.Select(static (languages, _) =>
             languages is { } declared ? declared with { Location = default } : (DeclaredLanguages?)null);
 
-        // From what the registrar reads, which a wording leaves as it was. What binds a contract, and where one comes
-        // from, is in both.
+        // From the registrar's share, which editing a wording leaves as it was.
         var bindings = LocalizationDiscovery.BindContracts(context, registrarDiscovery, contractDiscovery, registrarLanguages);
         var contracts = LocalizationDiscovery.ReadGeneratedContracts(registrarDiscovery, registrarLanguages, bindings);
 

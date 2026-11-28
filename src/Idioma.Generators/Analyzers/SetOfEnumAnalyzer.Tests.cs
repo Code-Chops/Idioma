@@ -123,14 +123,14 @@ public sealed class SetOfEnumAnalyzerTests
     [Test]
     [Arguments("ILocalizationSet, IOrderStatusLocalization", "ILocalizationSet, IOrderStatusLocalization")]
     [Arguments("IOrderStatusLocalization, CodeChops.Idioma.ILocalizationSet", "CodeChops.Idioma.ILocalizationSet")]
-    public async Task DutchSetListingILocalizationSet_ShouldReportLOC205AtIt(string dutchBase, string at)
+    public async Task DutchSetListingILocalizationSet_ShouldReportLOC206AtIt(string dutchBase, string at)
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync(Sets(dutchBase));
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC205");
+        diagnostic.Id.ShouldBe("LOC206");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationNl' doesn't list 'ILocalizationSet<OrderStatus>', which every set of 'IOrderStatusLocalization' lists. List it in place of 'ILocalizationSet'.");
         At(diagnostic).ShouldStartWith(at);
@@ -166,7 +166,7 @@ public sealed class SetOfEnumAnalyzerTests
 
         // Assert
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC205");
+        diagnostic.Id.ShouldBe("LOC206");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe("'OrderStatusLocalizationNl' lists 'ILocalizationSet<PaymentStatus>', but 'IOrderStatusLocalization' has no texts of 'PaymentStatus'. Remove it, or list it in the default-language set too.");
         At(diagnostic).ShouldStartWith("ILocalizationSet<PaymentStatus>");
@@ -262,7 +262,7 @@ public sealed class SetOfEnumAnalyzerTests
     }
 
     [Test]
-    public async Task AppSetOfLibraryContractNamingNoEnum_ShouldReportLOC205ForEnumItLists()
+    public async Task AppSetOfLibraryContractNamingNoEnum_ShouldReportLOC206ForEnumItLists()
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync("""
@@ -285,7 +285,7 @@ public sealed class SetOfEnumAnalyzerTests
     }
 
     [Test]
-    public async Task AppSetOfLibraryEnumListingILocalizationSet_ShouldReportLOC205()
+    public async Task AppSetOfLibraryEnumListingILocalizationSet_ShouldReportLOC206()
     {
         // Arrange & Act
         var diagnostics = await AnalyzeAsync("""
@@ -329,7 +329,7 @@ public sealed class SetOfEnumAnalyzerTests
     [Test]
     [Arguments("ILocalizationSet<OrderStatus>, IOrderStatusLocalization")]
     [Arguments("CodeChops.Idioma.ILocalizationSet<TestApp.OrderStatus>, IOrderStatusLocalization")]
-    [Arguments("OrderStatusLocalizationEn")] // Derives from the English set, which LOC203 reports
+    [Arguments("OrderStatusLocalizationEn")] // Derives from the English set, which LOC204 reports
     [Arguments("OrderStatusLocalizationEn, IOrderStatusLocalization")]
     public async Task DutchSetListingOrInheritingSetOfEnum_ShouldReportNothing(string dutchBase)
     {

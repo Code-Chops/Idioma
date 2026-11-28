@@ -104,15 +104,15 @@ Either way:
 
 - **Members with the same value.** The first of them gives the text. So with `Default = 0` and `None = 0`, `OrderStatus.None.GetText()` shows the text of `Default`. The build warns about such a call where `None` has a text of its own ([LOC600](build-errors/LOC6XX-reading-a-text.md#loc600)). To show that text, write `OrderStatusLocalization.None` with a set, or call `GetTextByMember` with attributes.
 - **A value that isn't a member.** It shows as `ToString()` writes it, in every language, such as `Read, Write` for flags.
-- **A member marked `[Obsolete]` as an error.** It still needs a text, because stored data may hold its value.
 
 With a set of the enum:
 
-- **Every language.** Each set lists `ILocalizationSet<TEnum>`, not only the default language's (`LOC205`).
+- **Every language.** Each set lists `ILocalizationSet<TEnum>`, not only the default language's (`LOC206`).
 - **Only members, as properties.** A set of an enum holds a property per member and nothing else (`LOC305`, `LOC400`). Write a caption for the enum, or a text that takes values, in a set of its own.
 - **By name.** `GetTextByKey` takes the member's name: `OrderStatusLocalization.GetTextByKey("Shipped")`.
 - **More than one enum.** A set that lists two enums holds the texts of both, and gets a `GetText` for each. Two members with the same name share a text.
 - **Two sets of one enum.** Each gives the enum a `GetText`, so a call that sees both is ambiguous (`CS0121`). Call `GetTextByValue` of the class you mean.
+- **An enum of another assembly.** A set of an enum you can't change, such as `DayOfWeek`, gives it an internal `GetText`, also when the set is public. So two libraries that each translate `DayOfWeek` don't make your calls ambiguous. Other assemblies call `GetTextByValue`, as in `DayLocalization.GetTextByValue(DayOfWeek.Monday)`.
 - **A set and `[Localized]` members.** The set's texts win, in every language. `GetTextByMember` still finds the attributes' texts. A member the set has no text of keeps the text of its `[Localized]`, such as a member that a newer version of a library adds to its enum.
 - **A library's enum.** An app can add a language to a library's set, and reword a text the library made `virtual`. It adds a language to an enum with `[Localized]` members by writing a set of its own. That set's wording then shows wherever `GetText()` is called, also in the library.
 

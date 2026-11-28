@@ -12,9 +12,8 @@ internal static class SupportedLanguages
     /// <summary>
     /// What the attribute of an assembly declares, read once per assembly (<see cref="ReadAssembly"/>).
     /// </summary>
-    // Discovery asks for the languages of the assembly for every set, on every edit, and the attribute is the same
-    // for all of them. Held by the assembly's symbol, and holding only strings: the entry goes when the compilation
-    // that made the symbol does, and keeps nothing of it alive.
+    // Discovery asks for it for every set on every edit. Held by the assembly's symbol and holding only strings, so it
+    // goes with the compilation and keeps nothing of it alive.
     private static readonly ConditionalWeakTable<IAssemblySymbol, AssemblyLanguages> LanguagesByAssembly = new();
 
     /// <summary>
@@ -41,11 +40,10 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The default language an assembly declares, as <see cref="DeclaredLanguages.DefaultLanguage"/> reads it: the first
-    /// language of its attribute, or <see langword="null"/> when that is no culture name, or when the assembly declares
-    /// none.
+    /// The default language an assembly declares (<see cref="DeclaredLanguages.DefaultLanguage"/>), or
+    /// <see langword="null"/> when it's no culture name or there is none.
     /// </summary>
-    // Two attributes, which don't compile, give none, as the generators may read either.
+    // Two attributes don't compile and give none, because the generators may read either.
     public static string? ReadDefaultLanguage(IAssemblySymbol assembly)
     {
         var defaultLanguage = LanguagesByAssembly.GetValue(assembly, ReadAssembly).DefaultLanguage;
@@ -55,12 +53,8 @@ internal static class SupportedLanguages
     /// <summary>
     /// Reads the attribute of an assembly for <see cref="ReadCodes"/> and <see cref="ReadDefaultLanguage"/>.
     /// </summary>
-    // It builds no string to tell the attribute by: an assembly has many attributes.
-    //
-    // The attribute of an assembly that is being compiled is found by its syntax, and bound alone. GetAttributes binds
-    // every attribute of the assembly, and each analyzer asks for the languages on every edit, of a compilation that
-    // holds a generated [assembly: LocalizationSet] for every set: with 900 sets, that took 8.6 ms an edit. Where the
-    // syntax shows no such attribute, as when it's written through an alias, GetAttributes decides.
+    // In a compilation, the attribute is found by its syntax and bound alone, because GetAttributes binds every assembly
+    // attribute, one per set included. Where the syntax shows none, as through an alias, GetAttributes decides.
     private static AssemblyLanguages ReadAssembly(IAssemblySymbol assembly)
     {
         if (assembly is ISourceAssemblySymbol { Compilation: { } compilation } && ReadFromSyntax(compilation) is { } read)
@@ -82,8 +76,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// What the attribute of a compilation's own assembly declares, read from the attribute's syntax, or
-    /// <see langword="null"/> when no attribute of the assembly is written by that name.
+    /// What the attribute of a compilation's own assembly declares, read from its syntax, or <see langword="null"/> when
+    /// no assembly attribute is written by that name.
     /// </summary>
     private static AssemblyLanguages? ReadFromSyntax(Compilation compilation)
     {
@@ -104,7 +98,7 @@ internal static class SupportedLanguages
 
                 foreach (var attribute in list.Attributes)
                 {
-                    // By its name first, which binds nothing: nearly every attribute of an assembly is another one.
+                    // By its name first, which binds nothing.
                     if (MethodWording.GetRightmostName(attribute.Name) is not ("SupportedLanguages" or "SupportedLanguagesAttribute"))
                         continue;
 
@@ -125,9 +119,6 @@ internal static class SupportedLanguages
         return first is { } arguments ? ToLanguages(arguments, count) : null;
     }
 
-    /// <summary>
-    /// Whether a type is the package's <c>SupportedLanguagesAttribute</c>.
-    /// </summary>
     private static bool IsPackageAttribute(INamedTypeSymbol? type)
     {
         var isPackageAttribute = type is { Name: "SupportedLanguagesAttribute", Arity: 0, ContainingType: null, ContainingNamespace: { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } } };
@@ -135,8 +126,7 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// What the first attribute of an assembly declares, given its arguments and how many such attributes the assembly
-    /// has.
+    /// What the first attribute of an assembly declares. With more than one, there's no default language.
     /// </summary>
     private static AssemblyLanguages ToLanguages(ImmutableArray<(string? Code, bool IsDefault)> arguments, int count)
     {
@@ -149,9 +139,6 @@ internal static class SupportedLanguages
         return new AssemblyLanguages(codes, defaultLanguage);
     }
 
-    /// <summary>
-    /// What the attribute of an assembly declares: its languages in order, and its default language.
-    /// </summary>
     private sealed class AssemblyLanguages(ImmutableArray<string> codes, string? defaultLanguage)
     {
         public static AssemblyLanguages None { get; } = new(ImmutableArray<string>.Empty, defaultLanguage: null);
@@ -162,9 +149,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// Whether a set for <paramref name="provided"/> serves <paramref name="requested"/>: the same language, or a culture
-    /// that resolves through it at run time (<c>en</c> serves <c>en-GB</c>, <c>zh-Hant</c> serves <c>zh-TW</c>, and
-    /// <c>zh-TW</c> serves <c>zh-Hant-TW</c>).
+    /// Whether a set for <paramref name="provided"/> serves <paramref name="requested"/>: <c>en</c> serves <c>en-GB</c>,
+    /// <c>zh-Hant</c> serves <c>zh-TW</c>, and <c>zh-TW</c> serves <c>zh-Hant-TW</c>.
     /// </summary>
     public static bool Serves(string provided, string requested)
     {
@@ -177,14 +163,12 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// A Chinese region written with its script, without that script: <c>zh-TW</c> for <c>zh-Hant-TW</c>, and
-    /// <c>zh-CN</c> for <c>zh-Hans-CN</c>. At run time a text tries that name right after the culture. It's
-    /// <see langword="null"/> for every other code, and for a region with the other script, such as <c>zh-Hant-CN</c>,
-    /// which writes in another script than <c>zh-CN</c> does.
+    /// A Chinese region with its script, without that script: <c>zh-TW</c> for <c>zh-Hant-TW</c>. At run time a text
+    /// tries that name right after the culture. <see langword="null"/> for any other code, and for a region with the
+    /// other script, such as <c>zh-Hant-CN</c>.
     /// </summary>
-    // Only the Chinese regions of FindScriptParentOfChineseRegion, whose scripts are known without the cultures of this
-    // machine. At run time a text compares the scripts of any language (CultureFallback), which a build can't, for the
-    // reason given there.
+    // Only Chinese, whose regions have a script as their parent culture. At run time CultureFallback compares the scripts
+    // the build passes for the app's languages (LikelyScripts).
     internal static string? FindChineseRegionWithoutScript(string code)
     {
         if (code.Length is not 10 || !code.StartsWith("zh-", StringComparison.OrdinalIgnoreCase) || code[7] is not '-')
@@ -198,14 +182,13 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The parent culture of a Chinese region written without its script, which its name does not start with:
-    /// <c>zh-Hans</c> for <c>zh-CN</c> and <c>zh-SG</c>, and <c>zh-Hant</c> for <c>zh-HK</c>, <c>zh-MO</c>, and
-    /// <c>zh-TW</c>; <see langword="null"/> for every other code, whose parents are what its name starts with.
+    /// The parent culture of a Chinese region without its script, which its name doesn't start with: <c>zh-Hans</c> for
+    /// <c>zh-CN</c> and <c>zh-SG</c>, and <c>zh-Hant</c> for <c>zh-HK</c>, <c>zh-MO</c> and <c>zh-TW</c>. Else
+    /// <see langword="null"/>.
     /// </summary>
-    // The parents .NET itself gives these five on every platform (CultureInfo.Parent), which a text follows at run time.
-    // Written out, and not asked of the cultures of this machine, because a compiler may run under invariant
-    // globalization, and a build must not report on one machine what it accepts on another. SupportedLanguages.Tests.cs
-    // fails when a runtime gives any culture a parent this table and the prefix rule don't.
+    // The parents .NET gives these on every platform. Written out, because a compiler may run under invariant
+    // globalization, and a build must report the same on every machine. SupportedLanguages.Tests.cs fails when a runtime
+    // gives a culture a parent this table and the prefix rule don't.
     internal static string? FindScriptParentOfChineseRegion(string code)
     {
         if (code.Length is not 5 || !code.StartsWith("zh-", StringComparison.OrdinalIgnoreCase))
@@ -221,9 +204,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The parameter a language has in the generated factory: the suffix of its set (<see cref="ToTypeSuffix"/>) in
-    /// camelCase, so <c>nl</c> where a set ends in <c>Nl</c>, <c>enGb</c> for <c>EnGb</c>, and <c>zhHans</c> for
-    /// <c>ZhHans</c>. A keyword is escaped: <c>@is</c>.
+    /// The parameter a language has in the generated factory: its set's suffix (<see cref="ToTypeSuffix"/>) in
+    /// camelCase, such as <c>enGb</c>. A keyword is escaped: <c>@is</c>.
     /// </summary>
     public static string ToParameterName(string code)
     {
@@ -234,8 +216,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The language a parameter of the generated factory stands for among the languages an assembly lists, such as
-    /// <c>en-GB</c> for <c>enGb</c>. The name of the parameter itself when none of them gives it.
+    /// The language a parameter of the generated factory stands for, such as <c>en-GB</c> for <c>enGb</c>, else the
+    /// parameter's name.
     /// </summary>
     public static string FindLanguageOfParameter(string parameterName, IEnumerable<string> codes)
     {
@@ -248,9 +230,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The suffix a set's name carries for a language, which is its code in PascalCase: <c>Nl</c> for <c>nl</c>,
-    /// <c>EnGb</c> for <c>en-GB</c>, and <c>ZhHans</c> for <c>zh-Hans</c>. Each part of the code starts with a capital,
-    /// and the rest of it is in lower case, however the attribute writes the code.
+    /// The suffix a set's name carries for a language, which is its code in PascalCase: <c>Nl</c> for <c>nl</c>, and
+    /// <c>EnGb</c> for <c>en-GB</c>, however the attribute writes the code.
     /// </summary>
     public static string ToTypeSuffix(string code)
     {
@@ -265,15 +246,11 @@ internal static class SupportedLanguages
 
     /// <summary>
     /// The set to add for a language, as a diagnostic names it:
-    /// <c>'class ShopLocalizationNl : ILocalizationSet, IShopLocalization'</c>.
-    /// The name alone gives the language, also for a code that is not two letters (<c>ShopLocalizationEnGb</c>), as
-    /// every language a diagnostic suggests a set for is one the assembly declares (<see cref="FindNamedLanguage"/>).
+    /// <c>'class ShopLocalizationNl : ILocalizationSet, IShopLocalization'</c>. The name alone gives the language,
+    /// because a suggested language is always declared (<see cref="FindNamedLanguage"/>).
     /// </summary>
-    /// <param name="setName">The name of the set to add.</param>
-    /// <param name="contract">The contract the set implements.</param>
     /// <param name="setInterface">
-    /// What the set lists before its contract: <c>ILocalizationSet</c>, or <c>ILocalizationSet&lt;OrderStatus&gt;</c>
-    /// for a set of the texts of an enum.
+    /// What the set lists before its contract, such as <c>ILocalizationSet&lt;OrderStatus&gt;</c> for a set of an enum.
     /// </param>
     public static string SuggestSet(string setName, string contract, string setInterface = SetInterface)
     {
@@ -286,18 +263,14 @@ internal static class SupportedLanguages
     public const string SetInterface = "ILocalizationSet";
 
     /// <summary>
-    /// Whether a type's name ends in the suffix of a language (<see cref="ToTypeSuffix"/>), with something before it.
-    /// The suffix is written in PascalCase (<c>ShopLocalizationNl</c>, <c>ShopLocalizationEnGb</c>). It counts in any
-    /// letter case that starts with a capital, so <c>ShopLocalizationNL</c> and <c>ShopLocalizationENGB</c> end in it
-    /// too.
+    /// Whether a type's name ends in the suffix of a language (<see cref="ToTypeSuffix"/>), with something before it. Any
+    /// letter case counts if it starts with a capital, so <c>ShopLocalizationNL</c> does.
     /// </summary>
-    // The capital marks where the suffix starts. Without it MessagesAr, an Arabic set, would end in the suffix of es-AR
-    // (the "es" of Messages, then Ar), and ReceiptBr, a Breton one, in that of pt-BR.
+    // The capital marks where the suffix starts, so MessagesAr is Arabic and not es-AR.
     public static bool EndsInTypeSuffix(string typeName, string code)
     {
         var suffix = ToTypeSuffix(code);
 
-        // No suffix at all for a code without a letter or digit, which no name ends in.
         if (suffix.Length is 0 || typeName.Length <= suffix.Length)
             return false;
 
@@ -305,26 +278,61 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The language a type's name gives it among declared languages that are not two letters: the longest code whose
-    /// suffix the name ends in (<see cref="EndsInTypeSuffix"/>), such as <c>en-GB</c> for <c>ShopLocalizationEnGb</c>
-    /// or <c>fil</c> for <c>ShopLocalizationFil</c>; <see langword="null"/> when none does. A two-letter code needs no
-    /// such match, because the last two letters of a name give it at run time.
+    /// The code a type's name gives among the declared codes, or <see langword="null"/> when only its last two letters
+    /// can give one:
+    /// <list type="number">
+    /// <item>The longest declared code of more than two letters whose suffix the name ends in
+    /// (<see cref="EndsInTypeSuffix"/>), such as <c>en-GB</c> for <c>ShopLocalizationEnGb</c>.</item>
+    /// <item>Else a declared code without a region, followed by a region, such as <c>en-GB</c> for
+    /// <c>ShopLocalizationEnGb</c> where only <c>en</c> is declared. The region is two letters that start with a capital,
+    /// and a region a culture has (<see cref="RegionCodes"/>).</item>
+    /// </list>
+    /// The second rule gives way where the last two letters are another declared code. So <c>YesNoDe</c> is German where
+    /// <c>no</c> and <c>de</c> are declared, and <c>ShopLocalizationDeDe</c> stays <c>de-DE</c>.
     /// </summary>
-    // Only declared codes: a name alone can't tell ShopLocalizationEnGb (en-GB) from AdminUiNl (nl).
+    // Only declared languages, because a name alone can't tell ShopLocalizationEnGb (en-GB) from AdminUiNl (nl).
     public static string? FindNamedLanguage(string typeName, IEnumerable<string> codes)
     {
         string? found = null;
+        string? language = null;
+        var region = typeName.Length > 2 && typeName[typeName.Length - 2] is >= 'A' and <= 'Z' && Ascii.IsLetter(typeName[typeName.Length - 1])
+            ? typeName.Substring(typeName.Length - 2).ToUpperInvariant()
+            : null;
+        var withoutRegion = region is not null && RegionCodes.Contains(region) ? typeName.Substring(0, typeName.Length - 2) : null;
+        var regionIsDeclared = false;
 
         foreach (var code in codes)
         {
-            if (code.Length is 2 || !IsCultureName(code) || (found is not null && found.Length >= code.Length))
+            regionIsDeclared |= String.Equals(code, region, StringComparison.OrdinalIgnoreCase);
+
+            if (!IsCultureName(code))
                 continue;
 
-            if (EndsInTypeSuffix(typeName, code))
+            if (code.Length > 2 && (found is null || found.Length < code.Length) && EndsInTypeSuffix(typeName, code))
                 found = code;
+
+            if (withoutRegion is not null && !HasRegion(code) && (language is null || language.Length < code.Length) && EndsInTypeSuffix(withoutRegion, code))
+                language = code;
         }
 
-        return found;
+        // Another declared language at the end wins, as it did before the region rule. Declaring fr-CA gives
+        // ShopLocalizationFrCa its region where ca is declared too.
+        if (language is not null && regionIsDeclared && !String.Equals(language, region, StringComparison.OrdinalIgnoreCase))
+            language = null;
+
+        return found ?? (language is null ? null : $"{language}-{region}");
+    }
+
+    /// <summary>
+    /// Whether a culture name has a region: two letters or three digits after its language or script, as in <c>en-GB</c>
+    /// and <c>es-419</c>.
+    /// </summary>
+    private static bool HasRegion(string code)
+    {
+        var parts = code.Split('-');
+        var hasRegion = parts.Skip(1).Any(static part => (part.Length is 2 && part.All(Ascii.IsLetter)) || (part.Length is 3 && part.All(static c => c is >= '0' and <= '9')));
+
+        return hasRegion;
     }
 
     private static DeclaredLanguages FromAttribute(AttributeData attribute)
@@ -360,7 +368,6 @@ internal static class SupportedLanguages
             }
         }
 
-        // From the reference itself, which holds the tree and the span: the node isn't needed for its location.
         var location = attribute.ApplicationSyntaxReference is { } reference
             ? DiagnosticLocation.From(Location.Create(reference.SyntaxTree, reference.Span))
             : default;
@@ -373,9 +380,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The languages the attribute lists, in order, each with whether it is the default language, and with
-    /// <see langword="null"/> for each one written as <c>null</c>; a list of other languages written as <c>null</c>
-    /// counts as one. A constant the compiler can't read yet, while the user is still typing, is left out.
+    /// The languages the attribute lists, in order, with <see langword="null"/> for one written as <c>null</c>. A null
+    /// list of other languages counts as one. A constant the compiler can't read yet is left out.
     /// </summary>
     private static IEnumerable<(string? Code, bool IsDefault)> ReadArguments(AttributeData attribute)
     {
@@ -389,7 +395,7 @@ internal static class SupportedLanguages
         if (attribute.ConstructorArguments.Length < 2 || attribute.ConstructorArguments[1].Kind is not TypedConstantKind.Array)
             yield break;
 
-        // SupportedLanguages("en", null) passes no array at all, whose Values would throw.
+        // SupportedLanguages("en", null) passes no array, whose Values would throw.
         if (attribute.ConstructorArguments[1].IsNull)
         {
             yield return (null, IsDefault: false);
@@ -409,14 +415,12 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// The languages of the attribute as its syntax binds them (<see cref="ReadFromSyntax"/>), as
-    /// <see cref="ReadArguments(AttributeData)"/> reads them: a language that isn't a constant is left out, and
-    /// <see langword="null"/> stands for one that is <see langword="null"/>.
+    /// The languages of the attribute as its syntax binds them (<see cref="ReadFromSyntax"/>), read as
+    /// <see cref="ReadArguments(AttributeData)"/> reads them.
     /// </summary>
     private static IEnumerable<(string? Code, bool IsDefault)> ReadArguments(IObjectCreationOperation creation)
     {
-        // By the parameter each argument goes to, which a named argument may write in another order:
-        // (string defaultLanguage, params string[] otherLanguages).
+        // By parameter, because named arguments can come in another order.
         if (creation.Arguments.FirstOrDefault(static argument => argument.Parameter?.Ordinal is 0) is not { } first)
             yield break;
 
@@ -465,8 +469,8 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// Whether two languages are the same once their hyphens are left out, as <c>sr-Latn-RS</c> and <c>sr-LatnRS</c>
-    /// are. A parameter and the suffix of a set are written without hyphens, so neither could tell the two apart.
+    /// Whether two languages are the same without hyphens, as <c>sr-Latn-RS</c> and <c>sr-LatnRS</c> are. A parameter
+    /// and a set's suffix have no hyphens, so they couldn't tell them apart.
     /// </summary>
     private static bool DifferInHyphensAlone(string code, string other)
     {
@@ -474,11 +478,11 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
-    /// A first part of two to eight ASCII letters, and further parts of one to eight ASCII letters or digits: what fits
-    /// a parameter name, and what a culture name looks like. Not checked against the cultures of this machine, because
-    /// a compiler may run under invariant globalization.
+    /// Whether a code has the form of a culture name: a first part of two to eight ASCII letters, and further parts of one
+    /// to eight ASCII letters or digits. Not checked against the machine's cultures, because a compiler may run under
+    /// invariant globalization.
     /// </summary>
-    // The rule CultureName.IsValid applies at run time, so that a code the build accepts is one the registry accepts.
+    // The only check of a code, because the registry takes the codes the generated code passes as they are.
     public static bool IsCultureName(string code)
     {
         var parts = code.Split('-');
@@ -494,10 +498,47 @@ internal static class SupportedLanguages
     }
 
     /// <summary>
+    /// Returns a code in the letter case that culture names use, so <c>ZH-hans-tw</c> becomes <c>zh-Hans-TW</c>. Each
+    /// part is cased as follows:
+    /// <list type="bullet">
+    /// <item>The language is lower case.</item>
+    /// <item>Each later part of four letters is capitalized, as a script is.</item>
+    /// <item>Each later part of two letters is upper case, as a region is.</item>
+    /// <item>Every other part is lower case.</item>
+    /// </list>
+    /// Every part after a part of one character, such as an extension or private use, is lower case. So
+    /// <c>EN-ca-X-CA</c> becomes <c>en-CA-x-ca</c>.
+    /// </summary>
+    // RFC 5646 (section 2.1.1), not CultureInfo.Name, which depends on the machine. The generated code passes every code
+    // cased this way, so the registry compares them as they are.
+    public static string Normalize(string code)
+    {
+        var parts = code.Split('-');
+        var isAfterSingleCharacter = false;
+
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var part = parts[i];
+            var hasCaseOfItsOwn = i > 0 && !isAfterSingleCharacter;
+
+            if (hasCaseOfItsOwn && part.Length is 2 && part.All(Ascii.IsLetter))
+                parts[i] = part.ToUpperInvariant();
+            else if (hasCaseOfItsOwn && part.Length is 4 && part.All(Ascii.IsLetter))
+                parts[i] = Char.ToUpperInvariant(part[0]) + part.Substring(1).ToLowerInvariant();
+            else
+                parts[i] = part.ToLowerInvariant();
+
+            isAfterSingleCharacter |= part.Length is 1;
+        }
+
+        return String.Join("-", parts);
+    }
+
+    /// <summary>
     /// The two-letter language codes of ISO 639-1, without the ones it withdrew, such as <c>iw</c> for Hebrew.
     /// </summary>
-    // Written out, and not asked of the cultures of this machine, for the reason IsCultureName gives.
-    // SupportedLanguages.Tests.cs fails when the runtime has a culture this table doesn't know.
+    // Written out, for the reason IsCultureName gives. SupportedLanguages.Tests.cs fails when the runtime has a culture
+    // this table doesn't know.
     private static readonly HashSet<string> LanguageCodes = new(
         ("aa ab ae af ak am an ar as av ay az ba be bg bi bm bn bo br bs ca ce ch co cr cs cu cv cy da de dv dz "
          + "ee el en eo es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz "
@@ -508,9 +549,8 @@ internal static class SupportedLanguages
         StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The two-letter region codes of ISO 3166-1, and the four others that .NET cultures use: <c>XK</c> for Kosovo,
-    /// and <c>DG</c>, <c>EA</c>, and <c>IC</c> for parts of a country. <c>UK</c> isn't among them, because the United
-    /// Kingdom is <c>GB</c>.
+    /// The two-letter region codes of ISO 3166-1, and the four others .NET cultures use: <c>XK</c>, <c>DG</c>,
+    /// <c>EA</c> and <c>IC</c>. The United Kingdom is <c>GB</c>, not <c>UK</c>.
     /// </summary>
     private static readonly HashSet<string> RegionCodes = new(
         ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ "
@@ -525,22 +565,12 @@ internal static class SupportedLanguages
         StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The part of a culture name that no culture has, with what the message of <c>LOC104</c> says about it, or
-    /// <see langword="null"/> when the build knows every part it checks. <c>dk</c> has the form of a culture name, but
-    /// Danish is <c>da</c>, so a set for <c>dk</c> matches no user's culture.
+    /// The first part of a culture name that no culture has, for <c>LOC103</c>, or <see langword="null"/>. <c>dk</c> has
+    /// the form of a culture name, but Danish is <c>da</c>, so a set for <c>dk</c> matches no user's culture.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Only two parts are checked, each against a table the build carries itself:
-    /// </para>
-    /// <list type="bullet">
-    /// <item>A language of two letters is a code of ISO 639-1.</item>
-    /// <item>A region of two letters is a code of ISO 3166-1, or one of the four others .NET uses.</item>
-    /// </list>
-    /// <para>
-    /// A language of three letters or more, a script, a region of three digits such as <c>419</c>, and everything after
-    /// the region aren't checked. The first unknown part is given, the language before the region.
-    /// </para>
+    /// Only a two-letter language (<see cref="LanguageCodes"/>) and a two-letter region (<see cref="RegionCodes"/>) are
+    /// checked.
     /// </remarks>
     /// <param name="code">A culture name (<see cref="IsCultureName"/>).</param>
     public static UnknownLanguagePart? FindUnknownPart(string code)
@@ -565,18 +595,18 @@ internal static class SupportedLanguages
                 _ => ((string Name, string Code)?)null,
             };
 
-            return new UnknownLanguagePart(code, language, "ISO 639-1 language", Advise(parts, index: 0, meant));
+            return new UnknownLanguagePart(code, language, "ISO 639-1 language", Advise(parts, index: 0, meant), Correct(parts, index: 0, meant));
         }
 
-        // A region stands right after the language, or after the script that follows it: en-GB, sr-Latn-RS. Two letters
-        // further on are something else, as the 'ca' of en-US-u-ca-gregory.
+        // A region follows the language or its script: en-GB, sr-Latn-RS. Two letters further on are something else, as
+        // the 'ca' of en-US-u-ca-gregory.
         var regionIndex = parts.Length > 2 && parts[1].Length is 4 ? 2 : 1;
 
         if (parts.Length > regionIndex && parts[regionIndex] is { Length: 2 } region && region.All(Ascii.IsLetter) && !RegionCodes.Contains(region))
         {
             var meant = region.ToUpperInvariant() switch
             {
-                // Ukrainian, and not English, so the region meant is Ukraine.
+                // uk-UK is Ukrainian, so the region meant is Ukraine.
                 "UK" when String.Equals(language, "uk", StringComparison.OrdinalIgnoreCase) => ("Ukraine", "UA"),
                 "UK" => ("The United Kingdom", "GB"),
                 "CS" => ("Czechia", "CZ"),
@@ -589,42 +619,47 @@ internal static class SupportedLanguages
                 _ => ((string Name, string Code)?)null,
             };
 
-            return new UnknownLanguagePart(code, region, "ISO 3166-1 region", Advise(parts, regionIndex, meant));
+            return new UnknownLanguagePart(code, region, "ISO 3166-1 region", Advise(parts, regionIndex, meant), Correct(parts, regionIndex, meant));
         }
 
         return null;
 
-        // The whole code with the part put right, so that it can be copied: 'en-GB' for 'en-UK'.
+        // The whole code corrected, so it can be copied: 'en-GB' for 'en-UK'.
         static string Advise(string[] parts, int index, (string Name, string Code)? meant)
         {
             if (meant is not { } known)
                 return $"Check the code. If it's right, turn {LocalizedTextFactoryGenerator.UnknownLanguageCodeDiagnosticId} off where it's reported";
 
-            var corrected = String.Join("-", parts.Select((part, i) => i == index ? known.Code : part));
-            return $"{known.Name} is '{known.Code}', so write '{corrected}'";
+            return $"{known.Name} is '{known.Code}', so write '{Correct(parts, index, known)}'";
+        }
+
+        static string? Correct(string[] parts, int index, (string Name, string Code)? meant)
+        {
+            return meant is { } known ? String.Join("-", parts.Select((part, i) => i == index ? known.Code : part)) : null;
         }
     }
 }
 
 /// <summary>
-/// A part of a culture name that no culture has: the whole code, the part, the kind of code the part should be, as
-/// the message of <c>LOC104</c> names it (<c>ISO 639-1 language</c>), and its advice, which names the code that was
-/// likely meant when the mistake is a known one.
+/// A part of a culture name that no culture has (<c>LOC103</c>). <see cref="Kind"/> is what the part should be, such as
+/// <c>ISO 639-1 language</c>, and <see cref="Advice"/> names the likely code when the mistake is a known one.
+/// <see cref="Corrected"/> is that code, or <see langword="null"/>.
 /// </summary>
 internal readonly record struct UnknownLanguagePart(
     string Code,
     string Part,
     string Kind,
-    string Advice);
+    string Advice,
+    string? Corrected);
 
 /// <summary>
-/// What an assembly's attribute declares: the default language, the valid languages in order, what is wrong with the
+/// What an assembly's attribute declares: the default language, the valid languages in order, what's wrong with the
 /// others, and where the attribute is.
 /// </summary>
 /// <remarks>
-/// The default language is <see langword="null"/> when the attribute's first argument is no language the build can use
-/// (<c>LOC101</c>), or can't be read yet. The next language does not take its place: nothing is held to a default
-/// language then, and the valid languages are all other languages. With a default language, it is the first of them.
+/// The default language is <see langword="null"/> when the first argument isn't a usable language (<c>LOC102</c>). The
+/// next language doesn't take its place, so nothing is held to a default language then. Otherwise it's the first of
+/// <see cref="Codes"/>.
 /// </remarks>
 internal readonly record struct DeclaredLanguages(
     string? DefaultLanguage,

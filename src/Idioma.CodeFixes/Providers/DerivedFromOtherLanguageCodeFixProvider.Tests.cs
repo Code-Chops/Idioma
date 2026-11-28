@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="DerivedFromOtherLanguageCodeFixProvider"/>: a set that derives from a set of another language
-/// (<c>LOC203</c>) implements the contract instead, and a region that derives from another region derives from the set
+/// (<c>LOC204</c>) implements the contract instead, and a region that derives from another region derives from the set
 /// of its language.
 /// </summary>
 public sealed class DerivedFromOtherLanguageCodeFixProviderTests
@@ -230,7 +230,7 @@ public sealed class DerivedFromOtherLanguageCodeFixProviderTests
         // Act
         var fixes = await FixAsync(source);
 
-        // Assert: no LOC205 follows.
+        // Assert: no LOC206 follows.
         var fixedSource = fixes.ShouldHaveSingleItem().Sources.ShouldHaveSingleItem();
         fixedSource.ShouldContain("public sealed class OrderStatusLocalizationNl : ILocalizationSet<OrderStatus>, IOrderStatusLocalization");
         GeneratorTestHelper.GetGeneratorDiagnostics(fixedSource).ShouldBeEmpty();

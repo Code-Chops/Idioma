@@ -31,3 +31,23 @@ Before and after:
 
 > ~~Each language chooses its wording for a number itself, in C#: English and Dutch have two forms, and a Polish set writes the conditions for its own. Idioma has no plural rules.~~
 > Idioma has no plural rules. Each language writes its own conditions in C#: English and Dutch have two forms, and Polish has more.
+
+## Code style
+
+1. **Put `<summary>` and `</summary>` each on a line of their own,** also for a summary of one sentence. The generator writes the summaries of generated code the same way.
+
+```csharp
+/// <summary>
+/// The class a diagnostic sits on, or <see langword="null"/>.
+/// </summary>
+```
+
+2. **Put the tags of a `<param>` or `<exception>` each on a line of their own when its description takes more than one line.** A description of one line can stay between its tags.
+
+```csharp
+/// <param name="scripts">
+/// The default script of each language, such as <c>Hant</c> for <c>zh-TW</c>, or <see langword="null"/> where the
+/// build knows none. In the order of <paramref name="languages"/>.
+/// </param>
+/// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
+```

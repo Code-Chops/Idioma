@@ -95,7 +95,6 @@ public sealed partial class LocalizationSetsPartTests
             {
                 public string Greeting(string name) => $"Hello, {name}!";
                 public virtual string Farewell(string name) => $"Goodbye, {name}!";
-                public string LocalizationLanguageCode(int unused) => "en";
                 internal string Hidden(string name) => name;
                 private string Secret(string name) => name;
                 public static string Shared(string name) => name;
@@ -115,7 +114,7 @@ public sealed partial class LocalizationSetsPartTests
         text.ShouldContain("    string Farewell(string name);");
         ShownValues(text, "Greeting").ShouldBe(["name"]);
         ShownValues(text, "Farewell").ShouldBe(["name"]);
-        foreach (var name in new[] { "Inherited", "LocalizationLanguageCode", "Hidden", "Secret", "Shared", "Count", "Nothing", "Reference" })
+        foreach (var name in new[] { "Inherited", "Hidden", "Secret", "Shared", "Count", "Nothing", "Reference" })
             text.ShouldNotContain($" {name}(", customMessage: name);
     }
 
@@ -198,6 +197,63 @@ public sealed partial class LocalizationSetsPartTests
         ContractText(result).ShouldContain("    string Checkout { get; }");
         ContractText(result).ShouldNotContain("Greeting");
         errors.Select(static error => error.Id).ShouldBe(["LOC400"]);
+    }
+
+    [Test]
+    public void TextWrittenAsMethodWithArglist_ShouldReportLOC400NamingArglist()
+    {
+        // Arrange: __arglist has no parameter symbol, so the method looks like one that takes none. Writing it as a
+        // property would be the wrong advice.
+        const string source = $$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+                public string Greeting(__arglist) => "Hello";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+
+        // Assert
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnsupportedTextDiagnosticId);
+        diagnostic.GetMessage().ShouldBe("'ShopLocalizationEn.Greeting' is a public method that returns a string, which makes it a text with parameters, but it takes __arglist, which the generated class can't pass on. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].");
+        ContractText(result).ShouldNotContain("Greeting");
+    }
+
+    [Test]
+    public void TextWrittenAsMethodWithParameterAndArglist_ShouldReportLOC400NamingArglist()
+    {
+        // Arrange: a parameter before __arglist, so the method has a parameter symbol and looks like a text.
+        const string source = $$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+                public string Greeting(string name, __arglist) => "Hello";
+            }
+
+            public sealed class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """;
+
+        // Act
+        var result = Run(source);
+
+        // Assert
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnsupportedTextDiagnosticId);
+        diagnostic.GetMessage().ShouldBe("'ShopLocalizationEn.Greeting' is a public method that returns a string, which makes it a text with parameters, but it takes __arglist, which the generated class can't pass on. No text is generated for it. Fix the method. If it isn't a text, make it internal or private, or mark it [ExcludeFromLocalizationDiscovery].");
+        ContractText(result).ShouldNotContain("Greeting");
     }
 
     [Test]

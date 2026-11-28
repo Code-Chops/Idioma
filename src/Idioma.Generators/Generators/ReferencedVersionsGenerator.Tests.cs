@@ -86,6 +86,22 @@ public sealed class ReferencedVersionsGeneratorTests
     }
 
     [Test]
+    public void LibraryBuiltWithANewerVersion_ShouldReportLOC702AdvisingToUpdateThePackage()
+    {
+        // Arrange: the next major version, which below 1.0 is the next minor version.
+        var builtWith = PackageVersion.Major > 0 ? $"{PackageVersion.Major + 1}.0.0" : $"0.{PackageVersion.Minor + 1}.0";
+        var library = LibraryBuiltWith($"{builtWith}.0");
+
+        // Act
+        var run = GeneratorTestHelper.Run(new ReferencedVersionsGenerator(), "namespace TestApp;", library);
+
+        // Assert
+        var used = PackageVersion.ToString(3);
+        run.Diagnostics.ShouldHaveSingleItem().GetMessage(CultureInfo.InvariantCulture).ShouldBe(
+            $"'Shop' was built with CodeChops.Idioma {builtWith}, and this project uses {used}. Code built with {builtWith} may not run with {used}, so update CodeChops.Idioma in this project to {builtWith} or later.");
+    }
+
+    [Test]
     public void LibraryBuiltWithAnotherPatchOfThisVersion_ShouldReportNothing()
     {
         // Arrange
@@ -100,16 +116,18 @@ public sealed class ReferencedVersionsGeneratorTests
 
     [Test]
     [Arguments("1.2.0", "1.9.4", true)]
-    [Arguments("1.9.4", "1.2.0", true)]
+    [Arguments("1.9.4", "1.2.0", false)]
+    [Arguments("1.2.5", "1.2.0", true)]
     [Arguments("1.0.0", "2.0.0", false)]
     [Arguments("2.0.0", "1.0.0", false)]
     [Arguments("0.14.0", "0.14.3", true)]
     [Arguments("0.13.0", "0.14.0", false)]
     [Arguments("0.14.0", "1.0.0", false)]
-    public void AreCompatible_ShouldCompareTheMajorVersionAndBelowOneTheMinorVersion(string builtWith, string used, bool expected)
+    public void AreCompatible_ShouldCompareTheMajorVersionAndTheMinorVersion(string builtWith, string used, bool expected)
     {
         // Act & Assert: a new major version may break a library, and below 1.0 so may a new minor version, as semantic
-        // versioning lets anything change there.
+        // versioning lets anything change there. From 1.0, a library built with a newer minor version may call what that
+        // version added.
         ReferencedVersionsGenerator.AreCompatible(Version.Parse(builtWith), Version.Parse(used)).ShouldBe(expected);
     }
 

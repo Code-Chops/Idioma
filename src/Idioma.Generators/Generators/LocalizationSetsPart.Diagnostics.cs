@@ -7,9 +7,11 @@ public static partial class LocalizationSetsPart
     public const string CannotExtendDiagnosticId = "LOC200";
     public const string MissingLanguageDiagnosticId = "LOC201";
     public const string UnlistedLanguageDiagnosticId = "LOC202";
-    public const string DerivedFromOtherLanguageDiagnosticId = "LOC203";
-    public const string MissingContractDiagnosticId = "LOC204";
-    public const string RepeatedLanguageDiagnosticId = "LOC209";
+    public const string RepeatedLanguageDiagnosticId = "LOC203";
+    public const string DerivedFromOtherLanguageDiagnosticId = "LOC204";
+    public const string MissingContractDiagnosticId = "LOC205";
+    public const string UnreachedRegionalSetDiagnosticId = "LOC208";
+    public const string RewordingsDontAddUpDiagnosticId = "LOC209";
     public const string LibraryMissingLanguageDiagnosticId = "LOC700";
     public const string LibraryCannotBeTranslatedDiagnosticId = "LOC701";
     public const string ReservedTextNameDiagnosticId = "LOC300";
@@ -17,23 +19,24 @@ public static partial class LocalizationSetsPart
     public const string UnsupportedTextDiagnosticId = "LOC400";
 
     /// <summary>
-    /// The property of a diagnostic that holds the name that resolves it, for its code fix to apply: the name the class
-    /// should carry (<c>LOC200</c>, when a rename resolves it), the language to list in
-    /// <c>[assembly: SupportedLanguages]</c> (<c>LOC202</c>), the contract to add next to <c>ILocalizationSet</c>
-    /// (<c>LOC204</c>, when this build generates that contract), or the set to add (<c>LOC201</c> and <c>LOC700</c>).
+    /// The diagnostic property with the name a code fix applies (<see cref="LocalizationSetsFinding.SuggestedName"/>).
     /// </summary>
     public const string SuggestedNameProperty = "SuggestedName";
 
     /// <summary>
-    /// The property of <c>LOC201</c> that holds the namespace of the set to add, empty for the global namespace.
-    /// <c>LOC700</c> has none, because the set of a library's contract lies in a namespace of the app, which the fix
-    /// chooses.
+    /// The diagnostic property with a second language a fix of <c>LOC202</c> offers
+    /// (<see cref="LocalizationSetsFinding.AlternativeName"/>).
+    /// </summary>
+    public const string AlternativeNameProperty = "AlternativeName";
+
+    /// <summary>
+    /// The property of <c>LOC201</c> with the new set's namespace, empty for the global one. <c>LOC700</c> has none,
+    /// because the fix chooses an app namespace.
     /// </summary>
     public const string SuggestedNamespaceProperty = "SuggestedNamespace";
 
     /// <summary>
-    /// The property of <c>LOC201</c> and <c>LOC700</c> that holds the declaration of the set to add, without a body:
-    /// <c>public class ShopLocalizationDe : ILocalizationSet, IShopLocalization</c>.
+    /// The property of <c>LOC201</c> and <c>LOC700</c> with the new set's declaration, without a body.
     /// </summary>
     public const string SuggestedDeclarationProperty = "SuggestedDeclaration";
 
@@ -58,7 +61,7 @@ public static partial class LocalizationSetsPart
     private static readonly DiagnosticDescriptor DerivedFromOtherLanguageRule = Error(
         DerivedFromOtherLanguageDiagnosticId,
         "Localization set derives from a set of another language",
-        "'{0}' is a set for '{1}' but derives from '{2}', so every text it doesn't override stays in '{3}'. To translate, implement the contract instead, which requires every text. To reword '{2}', give '{0}' the language '{3}': end its name in it, or implement LocalizationLanguageCode.",
+        "'{0}' is a set for '{1}' but derives from '{2}', so every text it doesn't override stays in '{3}'. To translate, implement the contract instead, which requires every text. To reword '{2}', give '{0}' the language '{3}' by ending its name in it.",
         "Derive from a set only to reword some of its texts in the same language. In another language, it compiles with texts left untranslated. A regional set may derive from the set of its language, as en-GB from en. Reported in every assembly, with or without [assembly: SupportedLanguages].");
 
     private static readonly DiagnosticDescriptor MissingContractRule = Error(
@@ -72,6 +75,18 @@ public static partial class LocalizationSetsPart
         "Second set of a contract for one language",
         "'{0}' is a second set of '{1}' for '{2}', next to '{3}'. Users of '{2}' see only one of them. Remove one of the two, or derive '{0}' from '{3}' to reword some of its texts.",
         "A contract has one set per language. Of two sets of one language, the one whose name sorts last would show, and the other would be left out without a word. A set that derives from a set of the same language rewords it, and always wins over it.");
+
+    private static readonly DiagnosticDescriptor UnreachedRegionalSetRule = Warning(
+        UnreachedRegionalSetDiagnosticId,
+        "Rewording doesn't reach a regional set",
+        "'{0}' rewords '{1}', but users of '{2}' see '{3}', which it doesn't reach. Add 'class {4} : {3}' to reword it too.",
+        "For each contract and language, one set wins and words every text. A user of a region sees the set for that region where there is one, so a rewording of the language doesn't reach them. Derive a set from the regional set too, with the same changes.");
+
+    private static readonly DiagnosticDescriptor RewordingsDontAddUpRule = Warning(
+        RewordingsDontAddUpDiagnosticId,
+        "Rewordings that don't add up",
+        "'{0}' and '{1}' both reword '{2}', so only {3} shows. {4}.",
+        "For each contract and language, one set wins and words every text. Of two sets that reword the same set, an app's wins over a library's, and else the one registered last. The texts of the other don't show. Derive one from the other, so the one that wins carries the texts of both.");
 
     private static readonly DiagnosticDescriptor LibraryMissingLanguageRule = Error(
         LibraryMissingLanguageDiagnosticId,
@@ -113,6 +128,12 @@ public static partial class LocalizationSetsPart
         return error;
     }
 
+    private static DiagnosticDescriptor Warning(string id, string title, string message, string description)
+    {
+        var warning = new DiagnosticDescriptor(id, title, message, "Design", DiagnosticSeverity.Warning, isEnabledByDefault: true, description, PackageNames.HelpLink(id));
+        return warning;
+    }
+
     private static void Report(SourceProductionContext context, EquatableArray<LocalizationSetsFinding> findings)
     {
         foreach (var finding in findings)
@@ -126,14 +147,15 @@ public static partial class LocalizationSetsPart
                 LocalizationSetsRule.DerivedFromOtherLanguage => DerivedFromOtherLanguageRule,
                 LocalizationSetsRule.MissingContract => MissingContractRule,
                 LocalizationSetsRule.RepeatedLanguage => RepeatedLanguageRule,
+                LocalizationSetsRule.UnreachedRegionalSet => UnreachedRegionalSetRule,
+                LocalizationSetsRule.RewordingsDontAddUp => RewordingsDontAddUpRule,
                 LocalizationSetsRule.LibraryMissingLanguage => LibraryMissingLanguageRule,
                 LocalizationSetsRule.LibraryCannotBeTranslated => LibraryCannotBeTranslatedRule,
                 LocalizationSetsRule.UnsupportedText => UnsupportedTextRule,
                 LocalizationSetsRule.ReservedTextName => ReservedTextNameRule,
                 LocalizationSetsRule.UndeclaredText => UndeclaredTextRule,
                 LocalizationSetsRule.TextOutsideEnum => TextOutsideContractAnalyzer.TextOutsideEnumRule,
-                // A rule added without a descriptor here. The generator fails with CS8785, and a test of the new rule
-                // shows it, where reporting it under another code would go unnoticed.
+                // Fails loudly (CS8785), so a test of a new rule shows its missing descriptor.
                 _ => throw new ArgumentOutOfRangeException(nameof(findings), finding.Rule, "A rule without a descriptor."),
             };
 
@@ -141,6 +163,9 @@ public static partial class LocalizationSetsPart
 
             if (finding.SuggestedName is { } suggestedName)
                 properties = properties.Add(SuggestedNameProperty, suggestedName);
+
+            if (finding.AlternativeName is { } alternativeName)
+                properties = properties.Add(AlternativeNameProperty, alternativeName);
 
             if (finding.NewSet is { } newSet)
             {

@@ -1,25 +1,19 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Holds the generated code to the C# version it needs. The code generated for an assembly that declares languages
-/// uses extension members, which C# 14 brings, so a project with an older <c>LangVersion</c> gets none of it. It gets
-/// <c>LOC102</c> instead, which says why, and not a dozen errors inside generated files.
+/// Holds the generated code to C# 14, which its extension members need. An older <c>LangVersion</c> gets none of it,
+/// and <c>LOC104</c> instead of errors inside generated files.
 /// </summary>
 /// <remarks>
-/// An assembly that declares no languages gets only its registrar, which compiles with any version. So a project that
-/// merely references a library that uses this package builds with an older version too.
+/// An assembly that declares no languages gets only its registrar, which compiles with any version.
 /// </remarks>
 internal static class LanguageVersionCheck
 {
-    /// <summary>
-    /// The version the generated code needs.
-    /// </summary>
     public const LanguageVersion Required = LanguageVersion.CSharp14;
 
     /// <summary>
-    /// Whether code generated for this assembly compiles: it declares no languages, or it compiles with C# 14 or later.
+    /// Whether code generated for this assembly compiles: it declares no languages, or it uses C# 14 or later.
     /// </summary>
-    /// <param name="context">The generator's context, for the version of C#.</param>
     /// <param name="languages">The languages the assembly declares (<see cref="SupportedLanguages.Read"/>).</param>
     public static IncrementalValueProvider<bool> Read(IncrementalGeneratorInitializationContext context, IncrementalValueProvider<DeclaredLanguages?> languages)
     {
@@ -31,9 +25,6 @@ internal static class LanguageVersionCheck
         return provider;
     }
 
-    /// <summary>
-    /// Whether a project compiles with a version of C# older than the generated code needs.
-    /// </summary>
     public static bool IsTooOld(ParseOptions options)
     {
         var isTooOld = options is CSharpParseOptions { LanguageVersion: < Required };

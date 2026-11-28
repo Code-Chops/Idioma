@@ -31,7 +31,7 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void ExcludedSet_ShouldCountAsSetOfItsLanguage()
     {
-        // Arrange & Act: the fix LOC208 names for a set that needs a constructor argument; registering it is up to the
+        // Arrange & Act: the fix LOC207 names for a set that needs a constructor argument; registering it is up to the
         // app.
         var result = Run($$"""
             {{Header}}
@@ -51,7 +51,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert: no LOC201, the language is listed for the assemblies referencing this one, and the generated text
         // links to its wording.
         DiagnosticIds(result).ShouldBeEmpty();
-        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl\", ");
         ContractText(result).ShouldContain("<see cref=\"ShopLocalizationNl.Checkout\">nl</see>");
     }
 
@@ -108,7 +108,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         DiagnosticIds(result).ShouldBeEmpty();
-        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\", ");
     }
 
     [Test]
@@ -116,8 +116,8 @@ public sealed partial class LocalizationSetsPartTests
     [Arguments("[ExcludeFromLocalizationDiscovery] public sealed class CartLocalizationNl : ILocalizationSet { public string Checkout => \"Afrekenen\"; }")]
     public void ExcludedSet_ShouldReportNothingAboutItself(string declaration)
     {
-        // Arrange & Act: a set deriving from a set of another language (LOC203), and one listing ILocalizationSet in
-        // another language than the default (LOC204), were either not excluded. A language not listed is still LOC202.
+        // Arrange & Act: a set deriving from a set of another language (LOC204), and one listing ILocalizationSet in
+        // another language than the default (LOC205), were either not excluded. A language not listed is still LOC202.
         var result = Run($"""
             {ShopSets}
 

@@ -6,14 +6,12 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a call that asks for the text of an enum member by its value, where an earlier member has that value too
-/// (<c>LOC600</c>). It asks the generated class for the member's own text instead:
+/// Fixes a call that gets an enum member's text by a value an earlier member shares (<c>LOC600</c>):
 /// <c>OrderStatus.None.GetText()</c> becomes <c>OrderStatusLocalization.None</c>.
 /// </summary>
 /// <remarks>
-/// Only a member of a set of the enum gets the fix. The text of a member marked <c>[Localized]</c> is found with
-/// <c>LocalizedText.GetTextByMember</c>, which gives a <c>string?</c>, so code that took a <c>string</c> might no
-/// longer compile.
+/// Only a member of a set of the enum gets the fix. A <c>[Localized]</c> member's text would come from
+/// <c>LocalizedText.GetTextByMember</c> as a <c>string?</c>, which could break code that takes a <c>string</c>.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(SharedEnumValueCodeFixProvider))]
 [Shared]

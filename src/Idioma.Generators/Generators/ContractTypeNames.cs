@@ -1,14 +1,12 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes the types the file of a contract names: each by its name alone where the file can, and by its full name
-/// elsewhere.
+/// Writes the types a contract's file names, by their name alone where the file can, and else by their full name.
 /// </summary>
 internal static class ContractTypeNames
 {
     /// <summary>
-    /// What the file of a contract writes in front of the name of a type: nothing for a type of its own namespace,
-    /// where the file lies, or of the global namespace, and else the full name of the type's namespace and a dot.
+    /// The namespace and a dot, or nothing for the contract's own namespace or the global one.
     /// </summary>
     public static string GetNamespacePrefix(string contractNamespace, string typeNamespace)
     {
@@ -29,9 +27,8 @@ internal static class ContractTypeNames
     }
 
     /// <summary>
-    /// The type of a parameter as the file of a contract names it: like a class a cref names (<see cref="ContractDocComments.GetCrefType"/>),
-    /// a type of the contract's own namespace by its name alone, and a type of another namespace by its full name, as
-    /// in <c>System.DateOnly</c>.
+    /// A parameter's type as the contract's file names it, as <see cref="ContractDocComments.GetCrefType"/> does, such
+    /// as <c>System.DateOnly</c>.
     /// </summary>
     public static string RenderType(EquatableArray<TypeNamePart> type, string @namespace)
     {

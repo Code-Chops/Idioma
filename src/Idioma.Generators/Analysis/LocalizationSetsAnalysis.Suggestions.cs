@@ -4,9 +4,8 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// The name to give a default-language set whose name does not end in the suffix of its language: the suffix in
-    /// place of an ending that spells it without a capital (<c>ShopLocalizationen</c> becomes
-    /// <c>ShopLocalizationEn</c>), and else the suffix added (<c>ShopTexts</c> becomes <c>ShopTextsEn</c>).
+    /// A name that ends in the suffix: <c>ShopLocalizationen</c> becomes <c>ShopLocalizationEn</c>, and
+    /// <c>ShopTexts</c> becomes <c>ShopTextsEn</c>.
     /// </summary>
     private static string SuggestNameEndingIn(string name, string suffix)
     {
@@ -18,7 +17,7 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Whether a set's name is the suffix of the default language and nothing else, as a class named <c>En</c> is.
+    /// Whether a set's name is the suffix alone, as a class named <c>En</c> is.
     /// </summary>
     private static bool IsSuffixAlone(string name, string suffix)
     {
@@ -27,10 +26,9 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Reports a default-language set whose name is the suffix of its language alone (<c>LOC200</c>).
+    /// Reports a default-language set named only its language suffix (<c>LOC200</c>). No name is suggested, because
+    /// only its author knows what the set holds.
     /// </summary>
-    // Its name does end in the suffix, so the message of a name without one would be wrong, and the name that message
-    // suggests, EnEn, is none its author meant. No name is suggested, because only its author knows what the set holds.
     private static LocalizationSetsFinding SuffixAlone(DiscoveredLocalization set, string suffix)
     {
         var finding = new LocalizationSetsFinding(
@@ -42,22 +40,17 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// The set to add for a language a contract of this assembly misses: as the diagnostic names it, and as the code fix
-    /// writes it (<see cref="NewLocalizationSet"/>). A region of a language that has a set derives from that set, to hold
-    /// only the texts that differ: <c>'class ShopLocalizationEnGb : ShopLocalizationEn'</c>. Any other language
-    /// implements the contract.
+    /// The set to add for a missing language, as the diagnostic names it and as the code fix writes it. A region of a
+    /// language that has a set derives from that set: <c>'class ShopLocalizationEnGb : ShopLocalizationEn'</c>.
     /// </summary>
-    /// <param name="setName">The name of the set to add.</param>
     /// <param name="setInterface">What the set lists before its contract (<see cref="GetLocalizationSetInterface"/>).</param>
     /// <param name="contract">The contract as the namespace of the new set names it.</param>
-    /// <param name="code">The language the set is for.</param>
-    /// <param name="namespace">The namespace of the new set: that of the contract.</param>
-    /// <param name="isPublic">Whether a set that implements the contract is public, as the contract's sets are.</param>
-    /// <param name="sets">The sets of the contract, among which a set of a language above the region.</param>
+    /// <param name="isPublic">Whether a set that implements the contract is public.</param>
+    /// <param name="sets">The sets of the contract, to find one of the region's language.</param>
     private static (string Suggestion, NewLocalizationSet NewSet) SuggestSet(string setName, string setInterface, string contract, string code, string @namespace, bool isPublic,
         IEnumerable<DiscoveredLocalization> sets)
     {
-        // The nearest one: zh-Hans before zh for zh-Hans-CN. A sealed set has nothing deriving from it.
+        // The nearest unsealed one: zh-Hans before zh for zh-Hans-CN.
         var above = sets
             .Where(set => set is { Language: not null, IsSealed: false } && !IsSetOf(set, code) && SupportedLanguages.Serves(set.Language, code))
             .OrderByDescending(static set => set.Language!.Length)
@@ -70,8 +63,7 @@ internal sealed partial record LocalizationSetsAnalysis
             return (SupportedLanguages.SuggestSet(setName, contract, setInterface), new NewLocalizationSet(@namespace, declaration));
         }
 
-        // As accessible as the set it derives from, which a derived class can't exceed. Named by its full name where it
-        // lies in another namespace than the new set.
+        // As accessible as its base, which a derived class can't exceed.
         var keyword = above.IsRecord ? "record" : "class";
         var baseClass = String.Equals(above.Namespace, @namespace, StringComparison.Ordinal)
             ? CodeEscaping.EscapeIdentifier(above.Name)
@@ -84,9 +76,8 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// What a set of a contract lists before the contract, as its default-language set does: <c>ILocalizationSet</c>,
-    /// or <c>ILocalizationSet&lt;OrderStatus&gt;</c> for a set of the texts of an enum. The enum stands by its name
-    /// alone where it lies in the namespace of the set, and by its full name elsewhere.
+    /// What a set lists before its contract: <c>ILocalizationSet</c>, or <c>ILocalizationSet&lt;OrderStatus&gt;</c>
+    /// for an enum's texts.
     /// </summary>
     private static string GetLocalizationSetInterface(DiscoveredLocalization defaultSet)
     {
@@ -106,7 +97,7 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// The set an app would add for a contract of a library: <c>GridLocalizationDe</c> for <c>Lib.IGridLocalization</c>.
+    /// <c>GridLocalizationDe</c> for <c>Lib.IGridLocalization</c>.
     /// </summary>
     private static string SuggestSetName(string contract, string code)
     {
@@ -115,12 +106,11 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// The name a contract's sets share before their language suffix: <c>GridLocalization</c> for
-    /// <c>Lib.IGridLocalization</c>.
+    /// The name a contract's sets share before their suffix: <c>GridLocalization</c> for <c>Lib.IGridLocalization</c>.
     /// </summary>
     internal static string GetContractBaseName(string contract)
     {
-        var name = contract.Substring(contract.LastIndexOf('.') + 1);
+        var name = LocalizationDiscovery.GetSimpleName(contract);
 
         var baseName = name.Length > 1 && name[0] == 'I' && Char.IsUpper(name[1]) ? name.Substring(1) : name;
         return baseName;

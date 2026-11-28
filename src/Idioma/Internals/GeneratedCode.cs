@@ -10,8 +10,8 @@ namespace CodeChops.Idioma.Internals;
 /// Write a text as <c>LocalizedText.Inline</c>, or in a set per language (see <see cref="ILocalizationSet"/>).
 /// </para>
 /// </summary>
-// Public, because generated code lies in the consumer's assembly and can only call what is public. A class of its own,
-// so these entry points don't show among the members of LocalizedText and LocalizationRegistry.
+// Public, because generated code lies in the consumer's assembly. A class of its own keeps these entry points out of
+// LocalizedText and LocalizationRegistry.
 [Obsolete("Don't use this class directly. Only generated code should call this. Write a text as LocalizedText.Inline, or in a set per language.")]
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static partial class GeneratedCode
@@ -53,11 +53,11 @@ public static partial class GeneratedCode
     /// <para>
     /// The set that words a text without parameters for <see cref="CultureInfo.CurrentUICulture"/>, or
     /// <see langword="null"/> where none is kept yet. A property of the generated class reads its wording from it, and
-    /// words the text with <see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/>
+    /// words the text with <see cref="ResolveWording{TContract, TDefaultSet}(string, Func{TContract, string})"/>
     /// otherwise:
     /// <code>
-    /// GetLocalizationSet&lt;IShopLocalization&gt;(1, 3)?.Checkout
-    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;(1, 3, "Checkout", static set => set.Checkout)
+    /// GetLocalizationSet&lt;IShopLocalization&gt;()?.Checkout
+    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn&gt;("Checkout", static set => set.Checkout)
     /// </code>
     /// </para>
     /// </summary>
@@ -65,15 +65,11 @@ public static partial class GeneratedCode
     /// Nothing is allocated.
     /// </remarks>
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
-    /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
-    /// <param name="textCount">The number of texts the generated class has.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? GetLocalizationSet<TContract>(int textIndex, int textCount)
+    public static TContract? GetLocalizationSet<TContract>()
         where TContract : class
     {
-        var sets = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount).Sets;
-
-        var set = (uint)textIndex < (uint)sets.Length ? sets[textIndex] : null;
+        var set = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture).Set;
         return set;
     }
 
@@ -86,8 +82,8 @@ public static partial class GeneratedCode
     /// <see langword="null"/> where none is kept yet. A method of the generated class calls the set's method with its
     /// values, and words the text with <c>ResolveWording</c> otherwise:
     /// <code>
-    /// GetLocalizationSetForValues&lt;IShopLocalization&gt;(2, 3)?.Greeting(name)
-    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;(2, 3, "Greeting", static (set, name) => set.Greeting(name), name)
+    /// GetLocalizationSetForValues&lt;IShopLocalization&gt;()?.Greeting(name)
+    ///     ?? ResolveWording&lt;IShopLocalization, ShopLocalizationEn, string&gt;("Greeting", static (set, name) => set.Greeting(name), name)
     /// </code>
     /// </para>
     /// </summary>
@@ -96,15 +92,11 @@ public static partial class GeneratedCode
     /// has to run in the culture of a fallback language isn't given here. <c>ResolveWording</c> runs it in that culture.
     /// </remarks>
     /// <typeparam name="TContract">The contract the text belongs to.</typeparam>
-    /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
-    /// <param name="textCount">The number of texts the generated class has.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TContract? GetLocalizationSetForValues<TContract>(int textIndex, int textCount)
+    public static TContract? GetLocalizationSetForValues<TContract>()
         where TContract : class
     {
-        var sets = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount).SetsForValues;
-
-        var set = (uint)textIndex < (uint)sets.Length ? sets[textIndex] : null;
+        var set = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture).SetForValues;
         return set;
     }
 
@@ -127,18 +119,16 @@ public static partial class GeneratedCode
     /// The contract the text belongs to. Every registered set implementing it provides the text.
     /// </typeparam>
     /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
-    /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
-    /// <param name="textCount">The number of texts the generated class has.</param>
     /// <param name="name">The name of the text, such as <c>Checkout</c>.</param>
     /// <param name="selector">Picks the text from a set.</param>
     /// <exception cref="InvalidOperationException">
     /// When the set that words the text gives <see langword="null"/> as the wording. Return a string, such as an empty
     /// one where a value is missing. Also when the constructor of the set of the default language throws, or that set
-    /// has no language code (<c>LOC208</c>).
+    /// has no language code (<c>LOC207</c>).
     /// </exception>
-    // A property is never kept as a fallback, so there's none to look for. LocalizationRegistry.KeepSet says why.
+    // A property is never kept as a fallback (LocalizationRegistry.KeepSet).
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet>(int textIndex, int textCount, string name,
+    public static string ResolveWording<TContract, TDefaultSet>(string name,
         Func<TContract, string?> selector)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
@@ -146,9 +136,9 @@ public static partial class GeneratedCode
         Debug.Assert(name is not null);
         Debug.Assert(selector is not null);
 
-        var resolved = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount);
+        var resolved = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture);
 
-        var wording = LookUp<TContract, TDefaultSet>(resolved, textIndex, name, selector, takesValues: false);
+        var wording = LookUp<TContract, TDefaultSet>(resolved, name, selector, takesValues: false);
         return wording;
     }
 
@@ -162,7 +152,7 @@ public static partial class GeneratedCode
     /// <see cref="GetLocalizationSetForValues{TContract}"/> doesn't give. The values come as one: the value itself for
     /// a text with one parameter, and a tuple of them for more:
     /// <code>
-    /// ResolveWording&lt;IShopLocalization, ShopLocalizationEn, (string, int)&gt;(2, 3, "Order",
+    /// ResolveWording&lt;IShopLocalization, ShopLocalizationEn, (string, int)&gt;("Order",
     ///     static (set, values) => set.Order(values.Item1, values.Item2), (name, count))
     /// </code>
     /// </para>
@@ -170,11 +160,11 @@ public static partial class GeneratedCode
     /// <remarks>
     /// <para>
     /// The text falls back as a text without parameters does
-    /// (<see cref="ResolveWording{TContract, TDefaultSet}(int, int, string, Func{TContract, string})"/>).
+    /// (<see cref="ResolveWording{TContract, TDefaultSet}(string, Func{TContract, string})"/>).
     /// </para>
     /// <para>
     /// A set that words the text on every call in a language the text falls back to is called in a scope of that
-    /// language, without a lookup (<see cref="ResolvedSets{TContract}.GetFallback"/>). Any other text is looked up in
+    /// language, without a lookup (<see cref="ResolvedSets{TContract}.Fallback"/>). Any other text is looked up in
     /// the registry (<see cref="LocalizationRegistry.Word"/>), which keeps its set where the same set words it on every
     /// call.
     /// </para>
@@ -184,8 +174,6 @@ public static partial class GeneratedCode
     /// </typeparam>
     /// <typeparam name="TDefaultSet">The contract's set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
     /// <typeparam name="TValues">The type of the value, or the tuple of the values.</typeparam>
-    /// <param name="textIndex">The position of the text among the texts of its generated class.</param>
-    /// <param name="textCount">The number of texts the generated class has.</param>
     /// <param name="name">The name of the text, such as <c>Greeting</c>.</param>
     /// <param name="selector">
     /// Picks the text from a set of the contract, with the values. It's handed those values, so it holds none itself
@@ -194,10 +182,10 @@ public static partial class GeneratedCode
     /// <param name="values">The value, or the tuple of the values.</param>
     /// <exception cref="InvalidOperationException">
     /// When the set that words the text gives <see langword="null"/> as the wording. Also when the constructor of the
-    /// set of the default language throws, or that set has no language code (<c>LOC208</c>).
+    /// set of the default language throws, or that set has no language code (<c>LOC207</c>).
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static string ResolveWording<TContract, TDefaultSet, TValues>(int textIndex, int textCount, string name,
+    public static string ResolveWording<TContract, TDefaultSet, TValues>(string name,
         Func<TContract, TValues, string?> selector, TValues values)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
@@ -205,9 +193,9 @@ public static partial class GeneratedCode
         Debug.Assert(name is not null);
         Debug.Assert(selector is not null);
 
-        var resolved = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture, textCount);
+        var resolved = ResolvedSets<TContract>.Get(CultureInfo.CurrentUICulture);
 
-        if (resolved.GetFallback(textIndex) is { } fallback)
+        if (resolved.Fallback is { } fallback)
         {
             // Where the language has no culture on this machine, no scope is entered, as in the lookup.
             using var scope = new WordingScope(fallback.Culture);
@@ -216,26 +204,24 @@ public static partial class GeneratedCode
             return fallbackWording;
         }
 
-        var wording = LookUpWithValues<TContract, TDefaultSet, TValues>(resolved, textIndex, name, selector, values);
+        var wording = LookUpWithValues<TContract, TDefaultSet, TValues>(resolved, name, selector, values);
         return wording;
     }
 
-    // A method of its own, because C# creates the closure over a method's parameters as that method starts, also where
-    // the lambda is never reached. In ResolveWording, a text kept as a fallback would allocate it on every call.
-    private static string LookUpWithValues<TContract, TDefaultSet, TValues>(ResolvedSets<TContract> resolved, int textIndex,
-        string name, Func<TContract, TValues, string?> selector, TValues values)
+    // A method of its own, because C# creates a closure as the method starts, even where the lambda isn't reached.
+    private static string LookUpWithValues<TContract, TDefaultSet, TValues>(ResolvedSets<TContract> resolved, string name,
+        Func<TContract, TValues, string?> selector, TValues values)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var wording = LookUp<TContract, TDefaultSet>(resolved, textIndex, name, set => selector(set, values), takesValues: true);
+        var wording = LookUp<TContract, TDefaultSet>(resolved, name, set => selector(set, values), takesValues: true);
         return wording;
     }
 
     /// <summary>
-    /// Words a text of a contract for the user of this thread, from the sets of the whole app. Every
-    /// <c>ResolveWording</c> ends here.
+    /// Words a text from the sets of the whole app. Every <c>ResolveWording</c> ends here.
     /// </summary>
-    private static string LookUp<TContract, TDefaultSet>(ResolvedSets<TContract> resolved, int textIndex, string name,
+    private static string LookUp<TContract, TDefaultSet>(ResolvedSets<TContract> resolved, string name,
         Func<TContract, string?> select, bool takesValues)
         where TContract : class
         where TDefaultSet : class, ILocalizationSet, TContract, new()
@@ -249,8 +235,7 @@ public static partial class GeneratedCode
             defaultSetType: typeof(TDefaultSet),
             getDefaultSet: static () => GetDefaultSet<TDefaultSet>(),
             takesValues: takesValues,
-            resolved: resolved,
-            textIndex: textIndex);
+            resolved: resolved);
 
         return wording;
     }
@@ -376,21 +361,22 @@ public static partial class GeneratedCode
     /// </para>
     /// </summary>
     /// <param name="registrar">The registrar of the application, which tells its assembly.</param>
-    /// <param name="defaultLanguage">The default language: a culture name such as <c>en</c> or <c>en-GB</c>.</param>
-    /// <param name="otherLanguages">The other languages, each a culture name.</param>
-    /// <exception cref="ArgumentException">
-    /// When a language isn't a culture name, such as an empty string or <c>en_GB</c>. Pass a culture name such as
-    /// <c>en</c> or <c>en-GB</c>. Also when a language is listed twice, as <c>en</c> and <c>EN</c> are.
-    /// </exception>
-    /// <exception cref="ArgumentNullException">
-    /// When <paramref name="registrar"/> or a language is <see langword="null"/>.
-    /// </exception>
+    /// <param name="languages">
+    /// The languages, the default first, each a culture name in the letter case RFC 5646 recommends, such as
+    /// <c>en-GB</c>. The build checks them (<c>LOC102</c>), so they're taken as they are.
+    /// </param>
+    /// <param name="scripts">
+    /// The default script of each language, such as <c>Hant</c> for <c>zh-TW</c>, or <see langword="null"/> where the
+    /// build knows none, in the order of <paramref name="languages"/>. A user's culture with its script, such as
+    /// <c>zh-Hant-TW</c>, tries the language without it only where that's the same script.
+    /// </param>
+    /// <exception cref="ArgumentNullException">When <paramref name="registrar"/> is <see langword="null"/>.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RegisterLanguages(Type registrar, string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
+    public static void RegisterLanguages(Type registrar, ReadOnlySpan<string> languages, ReadOnlySpan<string?> scripts)
     {
         ArgumentNullException.ThrowIfNull(registrar);
 
-        LocalizationRegistry.RegisterLanguages(registrar.Assembly, defaultLanguage, otherLanguages);
+        LocalizationRegistry.RegisterLanguages(registrar.Assembly, languages, scripts);
     }
 
     /// <summary>
@@ -398,32 +384,31 @@ public static partial class GeneratedCode
     /// <b>Don't use this method directly! This code is called by source-generated code.</b>
     /// </para>
     /// <para>
-    /// Describes a set as the build read it, before the set registers. That's its language, such as <c>nl</c> for
-    /// <c>ShopLocalizationNl</c>, or <c>en-GB</c> for <c>ShopLocalizationEnGb</c> in an assembly that declares
-    /// <c>en-GB</c>. For a set that derives from another, it's also the texts its own class words, so the registry knows
-    /// which texts the set rewords without calling it. A set has one code, described once.
+    /// Describes a set's language as the build read it from the set's name, such as <c>en-GB</c> for
+    /// <c>ShopLocalizationEnGb</c>. Every set is described before it registers, because the registry reads no name.
+    /// A set has one code, described once.
     /// </para>
     /// </summary>
     /// <param name="languageCode">
-    /// The language: a culture name such as <c>en-GB</c>. <see langword="null"/> for a set that implements
-    /// <see cref="ILocalizationSet.LocalizationLanguageCode"/> with something other than a constant the build can read.
+    /// The language. It's a culture name in the letter case RFC 5646 recommends, such as <c>en-GB</c>. The build
+    /// checks it (<c>LOC102</c>), so it's taken as it is.
     /// </param>
-    /// <param name="ownTexts">
-    /// The names of the texts the set's own class words, such as <c>Checkout</c>, for a set that derives from another.
+    /// <param name="script">
+    /// The default script of the language, such as <c>Cyrl</c> for <c>sr-RS</c>, or <see langword="null"/> where the
+    /// build knows none. A user's culture with its script, such as <c>sr-Latn-RS</c>, tries the language without it
+    /// only where that's the same script.
     /// </param>
     /// <exception cref="ArgumentException">
-    /// When <paramref name="languageCode"/> isn't a culture name, such as an empty string or <c>en_GB</c>. Pass a
-    /// culture name such as <c>en-GB</c>. Also when the set already has another code, because a set's code is described
-    /// once.
+    /// When the set already has another code, because a set's code is described once.
     /// </exception>
     /// <exception cref="ArgumentNullException">
-    /// When <paramref name="ownTexts"/> is <see langword="null"/>.
+    /// When <paramref name="languageCode"/> is <see langword="null"/>.
     /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void DescribeSet<TSet>(string? languageCode, params string[] ownTexts)
+    public static void DescribeSet<TSet>(string languageCode, string? script = null)
         where TSet : class, ILocalizationSet
     {
-        LocalizationRegistry.DescribeSet<TSet>(languageCode, ownTexts);
+        LocalizationRegistry.DescribeSet<TSet>(languageCode, script);
     }
 
     /// <summary>
@@ -433,20 +418,32 @@ public static partial class GeneratedCode
     /// <para>
     /// Registers the sets of an assembly, which the registry creates when it's first read: when the first text is
     /// shown. So a set whose constructor throws throws from there, and not before the app's <c>Main</c> runs, where
-    /// nothing could catch it. Each set is filed under the language its type is described with (<see cref="DescribeSet"/>),
-    /// or under the one it gives once it's created.
+    /// nothing could catch it. Each set is filed under the language that <see cref="DescribeSet"/> described for its
+    /// type, or for the nearest class it derives from.
     /// </para>
     /// </summary>
-    /// <param name="asDefaults">
-    /// Whether the sets give the wording of a contract in their own assembly. Every other set wins over them, such as a
-    /// set from <see cref="LocalizationRegistry.Register(ReadOnlySpan{ILocalizationSet})"/>.
+    /// <param name="tier">
+    /// Where the sets come from. A set of a later tier wins over them whole, as does a set from
+    /// <see cref="LocalizationRegistry.Register(ReadOnlySpan{ILocalizationSet})"/>.
     /// </param>
     /// <param name="sets">Each set's type, with what creates it, in the order they apply.</param>
     /// <exception cref="ArgumentNullException">When a type or what creates it is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">When <paramref name="tier"/> isn't one of its values.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// When neither a set's type nor a class it derives from is described.
+    /// </exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static void RegisterSets(bool asDefaults, params ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets)
+    public static void RegisterSets(SetTier tier, params ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets)
     {
-        LocalizationRegistry.RegisterSets(sets, asDefaults);
+        var registrationTier = tier switch
+        {
+            SetTier.LibrarySets => LocalizationRegistry.RegistrationTier.LibrarySets,
+            SetTier.Rewordings => LocalizationRegistry.RegistrationTier.Rewordings,
+            SetTier.ApplicationRewordings => LocalizationRegistry.RegistrationTier.ApplicationRewordings,
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "Pass a tier the generated code writes."),
+        };
+
+        LocalizationRegistry.RegisterSets(sets, registrationTier);
     }
 
     /// <summary>

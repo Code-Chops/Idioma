@@ -4,51 +4,48 @@ namespace CodeChops.Idioma;
 public sealed partial class LocalizationRegistry
 {
     /// <summary>
-    /// The sets of one language, and per contract the ones implementing it.
+    /// The sets of one language, and per contract the one that wins.
     /// </summary>
-    // A language holds the sets of every contract of the app, and a text needs only those of its own: found once per
-    // contract and kept, so that a lookup does not test every set of the language against the contract, on every text
-    // of every render. Never dropped, as a registry never changes: a registration builds a new one.
+    // Found once per contract and kept, so a lookup doesn't test every set of the language on every text. Never dropped,
+    // because a registry never changes.
     internal sealed class SetsOfLanguage(ImmutableArray<Registration> registrations)
     {
+        /// <summary>
+        /// In order of precedence, so the last one wins.
+        /// </summary>
         private ImmutableArray<Registration> Registrations { get; } = registrations;
 
-        // Never written to once added, so an array is as safe here as an immutable one.
-        private ConcurrentDictionary<Type, ContractSet[]> ByContract { get; } = new();
+        // Null for a contract that no set of this language implements. Never written to once added.
+        private ConcurrentDictionary<Type, ILocalizationSet?> ByContract { get; } = new();
 
         /// <summary>
-        /// The sets of this language that implement a contract, in the order they apply, each with the set it derives
-        /// from. Empty when none implements it.
+        /// The set of this language that words every text of a contract. It's the last that implements it, so a
+        /// rewording wins whole.
         /// </summary>
         /// <exception cref="InvalidOperationException">
-        /// When the constructor of such a set throws, with that exception inside. Nothing is kept then, so the next text
-        /// of the contract tries again.
+        /// When the constructor of that set throws, with that exception inside. Nothing is kept then, so the next text
+        /// tries again.
         /// </exception>
-        public ContractSet[] Of(Type contract)
+        public ILocalizationSet? Of(Type contract)
         {
-            var contractSets = this.ByContract.TryGetValue(contract, out var known)
+            var set = this.ByContract.TryGetValue(contract, out var known)
                 ? known
                 : this.ByContract.GetOrAdd(contract, static (contract, setsOfLanguage) => setsOfLanguage.Get(contract), this);
 
-            return contractSets;
+            return set;
         }
 
-        // Each set is created here, at the first text of its contract in this language, so a set whose constructor
-        // throws fails the texts of its own contract alone.
-        private ContractSet[] Get(Type contract)
+        // Created here, so a constructor that throws fails only its own contract's texts, and the sets it wins over are
+        // never created.
+        private ILocalizationSet? Get(Type contract)
         {
-            var implementing = this.Registrations.Where(registration => contract.IsAssignableFrom(registration.Type)).ToImmutableArray();
-            var found = new ContractSet[implementing.Length];
+            var registrations = this.Registrations;
 
-            for (var i = 0; i < implementing.Length; i++)
-            {
-                var type = implementing[i].Type;
-                var basis = implementing.LastOrDefault(other => type.IsSubclassOf(other.Type));
+            for (var i = registrations.Length - 1; i >= 0; i--)
+                if (contract.IsAssignableFrom(registrations[i].Type))
+                    return registrations[i].Set;
 
-                found[i] = new ContractSet(implementing[i].Set, basis?.Set);
-            }
-
-            return found;
+            return null;
         }
     }
 }

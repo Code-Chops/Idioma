@@ -157,7 +157,7 @@ This also needs all globalization data, because the app can start in a culture o
 
 ## A browser language the app doesn't have
 
-When none of your app's languages serves the browser's language, make the default language the UI culture. A German visitor of an app in English and Dutch sees English texts either way, but a text with parameters then shows faster. The method of a set always runs with a UI culture of the set's own language. So with German as the UI culture, Idioma switches the UI culture to English while each such method runs.
+When none of your app's languages serves the browser's language, every text shows your default language. A German visitor of an app in English and Dutch sees English texts. Anything else that follows the UI culture still shows German, such as the resx messages of another library, or a picker that marks the current language. To show one language throughout, make the default language the UI culture.
 
 Add this to the `Program.cs` of the WebAssembly project, with usings for `System.Globalization` and `CodeChops.Idioma`. Put it right before the host runs: before `await host.RunAsync();` with the code of [Remembering the choice](#remembering-the-choice), or before `await builder.Build().RunAsync();` without it.
 
@@ -170,10 +170,7 @@ if (!LocalizationRegistry.IsServed(CultureInfo.CurrentUICulture))
 
 `IsServed` follows the same fallback order as a text. So `en` serves `en-GB`, and `zh-TW` serves `zh-Hant-TW` ([details](advanced-topics.md#fallback-order)).
 
-What changes for such a user:
-
-- Only the UI culture changes. Dates and numbers keep the format of the browser's language, so a German visitor still reads a date as 20.11.2026.
-- Anything else that follows the UI culture shows the default language too, such as the resx messages of another library.
+Only the UI culture changes. Dates and numbers keep the format of the browser's language, so a German visitor still reads a date as 20.11.2026.
 
 A server needs nothing of this. Its request localization already gives such a user the default language, for dates and numbers too.
 

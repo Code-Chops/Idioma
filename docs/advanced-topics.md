@@ -8,6 +8,7 @@ The [getting started guide](../README.md#getting-started) covers what most apps 
 - [Registration](#registration): how sets register, and registering a set by hand
 - [Reading sets yourself](#reading-sets-yourself): the wording of one set, whatever the user's culture
 - [Native AOT](#native-aot): the languages of an app published without globalization data
+- [Testing](#testing): reading a text in a test, and the languages a test project declares
 
 Other subjects have a page of their own, listed in the [README](../README.md#documentation).
 
@@ -15,7 +16,7 @@ Other subjects have a page of their own, listed in the [README](../README.md#doc
 
 A text is a `string`. Each time you read it, it gives the wording for `CultureInfo.CurrentUICulture`, the first it finds:
 
-1. The wording for that culture, or else for its parent culture. An `en` wording serves `en-US` and `en-GB` alike, and an `en-GB` wording wins over it in Britain. A culture whose name holds its script, as `zh-Hant-TW` does on Apple platforms, tries the name without it right after itself, so a `zh-TW` wording serves it.
+1. The wording for that culture, or else for its parent culture. An `en` wording serves `en-US` and `en-GB` alike, and an `en-GB` wording wins over it in Britain. A culture whose name holds its script, as `zh-Hant-TW` does on Apple platforms, tries the name without it right after itself, so a `zh-TW` wording serves it. It skips that name when the app declares it and writes it in another script by default. The build knows that script for the languages written in more than one, such as Chinese and Serbian. So `zh-Hans-TW` skips `zh-TW`, and `sr-Latn-RS` skips `sr-RS`, which is written in Cyrillic.
 2. The wording for the app's default language, which is the first language it declares. Library texts fall back to it too, so no screen ends up in two languages. A culture that none of the app's languages serves starts here, even when a library has its language. For example, an app declaring `("en", "fr")` shows a Dutch user a library's texts in English, like its own.
 3. The wording for the default language of the project that wrote the text.
 
@@ -77,7 +78,9 @@ public interface IShopLocalization
 }
 ```
 
-Each call of `ShopLocalization.ItemsInCart` hands the values to the method of the set for the user's language, and returns its wording. Nothing is kept. A call allocates only the string the set's method makes. A text that runs in a culture the thread doesn't have, such as a language it falls back to, also copies the execution context the first time in each context, such as once per request ([details](performance.md#what-the-numbers-mean)).
+Each call of `ShopLocalization.ItemsInCart` hands the values to the method of the set for the user's language, and returns its wording. Nothing is kept. A call allocates only the string the set's method makes. That holds for a user whose language falls back to your default language too, such as a German user of an app in English and Dutch.
+
+A text whose contract lacks a set of one of your languages falls back alone, such as a text of a plugin without Dutch for a Dutch user. Your build doesn't check a plugin's contract (`LOC700`), because it doesn't reference it. Its method then runs in the UI culture of the language it falls back to, so a text its wording shows is in that language too. Switching the culture copies the execution context the first time in each context, such as once per request.
 
 Write a text without values as a property, because a method without parameters isn't a text. The build rejects such a method in the default-language set (`LOC400`), unless it's an override such as `ToString()` or implements an interface member.
 
@@ -144,7 +147,7 @@ A set is registered by its type, and created when a text of its contract is firs
 - A text that needs the set throws an `InvalidOperationException` that names the set, with the set's own exception inside.
 - The next text of that contract creates the set again. So a constructor that failed once, such as on a setting that wasn't loaded yet, doesn't fail its texts for good.
 
-A set that can't be registered automatically gets build warning `LOC208`, such as a set without a parameterless constructor. [LOC208](build-errors/LOC2XX-sets.md#loc208) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC502](build-errors/LOC5XX-inline-texts-and-attributes.md#loc502).
+A set that can't be registered automatically gets build warning `LOC207`, such as a set without a parameterless constructor. [LOC207](build-errors/LOC2XX-sets.md#loc207) lists every case and its fix. A member marked `[Localized]` whose text can't be registered, such as a member of a private nested type, gets warning [LOC502](build-errors/LOC5XX-inline-texts-and-attributes.md#loc502).
 
 A nested, generic, or file-local class with your own texts isn't discovered, so its language is reported as missing (`LOC201`). Make it a top-level class that isn't generic.
 
@@ -160,6 +163,8 @@ public sealed class BrandedShopLocalizationEn(string shopName) : ShopLocalizatio
 // At startup:
 LocalizationRegistry.Register(new BrandedShopLocalizationEn(configuration["ShopName"]!));
 ```
+
+For its contract and language, a set you register by hand wins over every set that registered itself. Of several, the one registered last wins ([which set wins](libraries-and-apps.md#which-set-wins)).
 
 The build still counts it as a set of its language, and still requires that language to be listed (`LOC202`).
 
@@ -197,12 +202,9 @@ string? checkout = LocalizationRegistry.GetLocalizationSet<IShopLocalization>(du
 
 `GetLocalizationSet` gives the set of the culture, or else of its parent culture, as the `nl` set for `nl-NL`. It doesn't fall back to a default language, as a text does ([fallback order](#fallback-order)). So a culture without a set gives `null`.
 
-The set's wording isn't always what a user of the culture sees, because a text of a generated class, such as `ShopLocalization.Checkout`, can take its wording from another set:
+For each contract and language, one set wins and words every text, and `GetLocalizationSet` gives that set ([which set wins](libraries-and-apps.md#which-set-wins)). So it's the set a user of the culture sees, where one of the app's languages serves the culture.
 
-- A culture that none of the app's languages serves gets the app's default language. In an app declaring `("en", "fr")`, `GetLocalizationSet` still gives a library's Dutch set, where a Dutch user's texts are English.
-- A rewording of a language reaches its regional sets. `GetLocalizationSet` still gives the library's British set, also for a text it leaves to English and that an app rewords.
-
-For the wording a user of a culture sees, read the text inside [`UseCulture`](#another-language).
+A culture that none of the app's languages serves is the exception, because it gets the app's default language. In an app declaring `("en", "fr")`, `GetLocalizationSet` still gives a library's Dutch set, where a Dutch user's texts are English. For the wording a user of any culture sees, read the text inside [`UseCulture`](#another-language).
 
 ## Native AOT
 
@@ -228,7 +230,7 @@ using (LocalizationRegistry.UseCulture(CultureInfo.GetCultureInfo("nl-NL")))
 
 What to know:
 
-- **A test project declares its languages.** It's an app, so it needs `[assembly: SupportedLanguages]` ([LOC103](build-errors/LOC1XX-languages.md#loc103)). List the languages your tests read, because the languages of the app it tests don't count in the test process.
+- **A test project declares its languages.** It's an app, so it needs `[assembly: SupportedLanguages]` ([LOC101](build-errors/LOC1XX-languages.md#loc101)). List the languages your tests read, because the languages of the app it tests don't count in the test process.
 - **Choose the culture with `UseCulture`.** It flows with the test, so tests that run in parallel each keep their own culture. Setting `CultureInfo.CurrentUICulture` works too.
 - **A text always reads the sets of the whole app.** A test can't give `ShopLocalization.Checkout` a registry of its own. To read the set a culture gets, use `LocalizationRegistry.GetLocalizationSet<IShopLocalization>(culture)`.
 - **`LocalizationRegistry.Register` is for the whole process and has no undo.** A set a test registers stays for every test after it, also those that run in parallel. Register in a fixture that runs once, or keep such tests out of parallel runs.

@@ -4,40 +4,25 @@ using System.Runtime.CompilerServices;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reads the members marked <c>[Localized]</c>: a property, a field, a member of an enum, or a type, each with the
-/// wording its attribute writes per language.
+/// Reads the members marked <c>[Localized]</c>: a property, a field, an enum member or a type, each with its wording per
+/// language.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The attribute is generated per assembly, from its languages (<see cref="LocalizedTextFactoryGenerator"/>), so it
-/// doesn't exist in the compilation a generator sees. An attribute named <c>Localized</c> is taken for it when the
-/// build will bind it to the generated one (<see cref="WillBindToGenerated"/>). That's so when it binds to nothing
-/// here, or when the namespace <c>CodeChops.Idioma</c> is in reach before the namespace of the attribute it binds to.
-/// </para>
-/// <para>
-/// The wording is read here, as the build runs, and written into the assembly as code
-/// (<see cref="LocalizedMembersSource"/>). So nothing reads the attribute at run time, and the attribute itself stays
-/// out of the compiled assembly.
-/// </para>
-/// <para>
-/// One part of one generator reads the members (<see cref="LocalizationRegistrationPart"/>), because a generator
-/// binds every attribute of that name again on each edit. What it reads holds no location, so that an edit that only moves an
-/// attribute leaves every step after it as it was. <c>LocalizedMemberAnalyzer</c> reports a member that gets no text.
-/// </para>
+/// The attribute is generated per assembly (<see cref="LocalizedTextFactoryGenerator"/>), so it doesn't exist yet when a
+/// generator runs (<see cref="WillBindToGenerated"/>). The wording is written into the assembly as code
+/// (<see cref="LocalizedMembersSource"/>), so nothing reads the attribute at run time. Only
+/// <see cref="LocalizationRegistrationPart"/> reads the members, and without locations, so moving an attribute leaves
+/// the later steps as they were.
 /// </remarks>
 internal static class LocalizedMembers
 {
     /// <summary>
-    /// Per enum, the position of each of its members among them, in the order they're written.
+    /// Per enum, the position of each of its members, in the order they're written.
     /// </summary>
-    // Each marked member of an enum is read by itself and asks for its own position. Counted anew for each, an enum of
-    // a thousand members would be walked a thousand times. Held by the enum's symbol, and holding only its own
-    // members, so the entry goes when the compilation that made the symbol does.
+    // Cached, because each marked member asks for its own position. Held by the enum's symbol, so it goes with the
+    // compilation.
     private static readonly ConditionalWeakTable<INamedTypeSymbol, Dictionary<ISymbol, int>> EnumOrdinals = new();
 
-    /// <summary>
-    /// The name of the generated attribute class.
-    /// </summary>
     public const string AttributeTypeName = "LocalizedAttribute";
 
     /// <summary>
@@ -46,13 +31,12 @@ internal static class LocalizedMembers
     public const string AttributeName = "Localized";
 
     /// <summary>
-    /// The name of the extension method that gives a value of an enum its text: <c>status.GetText()</c>. The one a set
-    /// of the texts of an enum gets has the same name.
+    /// The name of the extension method that gives an enum value its text: <c>status.GetText()</c>.
     /// </summary>
     public const string ExtensionName = LocalizationSetsAnalysis.ExtensionName;
 
     /// <summary>
-    /// What the name of the class that holds the extension method of an enum ends in.
+    /// The suffix of the class that holds an enum's extension method.
     /// </summary>
     public const string ExtensionHolderSuffix = "LocalizedExtensions";
 
@@ -62,8 +46,7 @@ internal static class LocalizedMembers
     public const string MemberTextsNamespace = PackageNames.Namespace + ".Generated";
 
     /// <summary>
-    /// The members marked <c>[Localized]</c> in the current compilation, each as its attribute writes it. A member
-    /// whose attribute doesn't compile is among them.
+    /// The members marked <c>[Localized]</c> in the current compilation, also those whose attribute doesn't compile.
     /// </summary>
     private static IncrementalValueProvider<EquatableArray<LocalizedMember>> Read(IncrementalGeneratorInitializationContext context)
     {
@@ -78,7 +61,6 @@ internal static class LocalizedMembers
     /// The texts to generate: every member whose attribute gives a wording for each language of the assembly, grouped
     /// by type.
     /// </summary>
-    /// <param name="context">The generator's context, for the attributes and the assembly's name.</param>
     /// <param name="languages">The languages the assembly declares (<see cref="SupportedLanguages.Read"/>).</param>
     public static IncrementalValueProvider<LocalizedMembersModel> ReadModel(IncrementalGeneratorInitializationContext context,
         IncrementalValueProvider<DeclaredLanguages?> languages)
@@ -93,9 +75,9 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// The model without the extension method of an enum that a set of the assembly holds the texts of
-    /// (<c>ILocalizationSet&lt;TEnum&gt;</c>). The generated class of that set gives the enum its <c>GetText</c>
-    /// already, and two would make every call ambiguous (<c>CS0121</c>). The texts of its members are still registered.
+    /// The model without the extension method of an enum that a set of the assembly lists
+    /// (<c>ILocalizationSet&lt;TEnum&gt;</c>), because that set's generated class gives it a <c>GetText</c> already
+    /// (<c>CS0121</c>). The texts of its members are still registered.
     /// </summary>
     public static LocalizedMembersModel WithoutExtensionsOf(LocalizedMembersModel model, EquatableArray<string> enumsWithSets)
     {
@@ -111,8 +93,7 @@ internal static class LocalizedMembers
 
     /// <summary>
     /// The name of the class that registers an assembly's member texts: <c>LocalizedMembers_My_App</c> for
-    /// <c>My-App</c>. Built from the assembly's name, as its registrar's is, so that a test project that sees the
-    /// internals of the library it tests has a class of another name.
+    /// <c>My-App</c>. Built from the assembly's name, so a test project that sees a library's internals has another one.
     /// </summary>
     public static string GetMemberTextsClassName(string? assemblyName)
     {
@@ -121,8 +102,8 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// Whether a type is the generated attribute, as an analyzer sees it in the compilation that holds the generated
-    /// code: a class of that name in the namespace <c>CodeChops.Idioma</c>, declared in this assembly.
+    /// Whether a type is the generated attribute, as an analyzer sees it: a class of that name in
+    /// <c>CodeChops.Idioma</c>, declared in this assembly.
     /// </summary>
     public static bool IsGeneratedAttribute(INamedTypeSymbol? type, IAssemblySymbol assembly)
     {
@@ -133,9 +114,6 @@ internal static class LocalizedMembers
         return isGeneratedAttribute;
     }
 
-    /// <summary>
-    /// Whether a namespace is <c>CodeChops.Idioma</c>, which holds the generated attribute.
-    /// </summary>
     private static bool IsPackageNamespace(INamespaceSymbol? @namespace)
     {
         var isPackageNamespace = @namespace is { Name: "Idioma", ContainingNamespace: { Name: "CodeChops", ContainingNamespace.IsGlobalNamespace: true } };
@@ -143,8 +121,8 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// Whether a node is an attribute written as <c>Localized</c> or <c>LocalizedAttribute</c>, by its name alone or
-    /// behind its namespace: <c>CodeChops.Idioma.Localized</c>, also with <c>global::</c>. All the syntax can tell.
+    /// Whether a node is an attribute written as <c>Localized</c> or <c>LocalizedAttribute</c>, alone or behind
+    /// <c>CodeChops.Idioma</c>, as far as the syntax tells.
     /// </summary>
     public static bool IsNamedLocalized(SyntaxNode node)
     {
@@ -176,21 +154,13 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// Whether the build will bind an attribute named <c>Localized</c> to the generated one, as seen from the
-    /// compilation a generator sees, which doesn't hold it yet.
+    /// Whether the build will bind an attribute named <c>Localized</c> to the generated one, which doesn't exist yet.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The generated attribute lies in the namespace <c>CodeChops.Idioma</c>, as the package's own types do. An
-    /// attribute that binds to nothing here is taken for it. In the build it binds to the generated one, or to nothing
-    /// in a file without a using of that namespace, which the compiler reports (<c>CS0246</c>).
-    /// </para>
-    /// <para>
-    /// An attribute that binds to one of another namespace here is the code's own, unless the generated one is in
-    /// reach before it. C# looks for a name from the inside out: in each namespace around the attribute, then in the
-    /// usings written inside its declaration, and at last in the usings at the top of the file. Where both are in reach
-    /// at the same place, the compiler reports the name as ambiguous (<c>CS0104</c>), and the attribute is left alone.
-    /// </para>
+    /// An attribute that binds to nothing here counts. Without a using of <c>CodeChops.Idioma</c>, the compiler then
+    /// reports <c>CS0246</c>. One that binds to another namespace's attribute counts only when <c>CodeChops.Idioma</c>
+    /// is found first, from the inside out. Where both are found at the same level, it's <c>CS0104</c>, and it doesn't
+    /// count.
     /// </remarks>
     public static bool WillBindToGenerated(AttributeSyntax attribute, SemanticModel model, CancellationToken cancellationToken)
     {
@@ -199,7 +169,7 @@ internal static class LocalizedMembers
         if (symbol.Symbol is null && symbol.CandidateSymbols.IsEmpty)
             return true;
 
-        // A name written with its namespace names a type that exists already, which the generated one isn't.
+        // A qualified name names a type that exists already, which the generated one doesn't.
         if (attribute.Name is not IdentifierNameSyntax
             || (symbol.Symbol ?? symbol.CandidateSymbols[0]).ContainingType is not { ContainingType: null, ContainingNamespace: { IsGlobalNamespace: false } otherNamespace })
         {
@@ -213,8 +183,7 @@ internal static class LocalizedMembers
             if (node is not BaseNamespaceDeclarationSyntax declaration)
                 continue;
 
-            // The innermost declaration first: namespace Shop.Domain looks in Shop.Domain, then in the usings written
-            // inside it, then in Shop.
+            // Innermost first: namespace Shop.Domain looks in Shop.Domain, then its usings, then Shop.
             declared ??= model.GetDeclaredSymbol(declaration, cancellationToken) as INamespaceSymbol;
             var outer = node.Parent?.AncestorsAndSelf().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault() is { } outerDeclaration
                 ? model.GetDeclaredSymbol(outerDeclaration, cancellationToken) as INamespaceSymbol
@@ -246,7 +215,7 @@ internal static class LocalizedMembers
             if (importsGenerated || importsOther)
                 return importsGenerated && !importsOther;
 
-            // The namespaces the declaration's dotted name holds besides its last part, up to the next declaration.
+            // The outer parts of a dotted namespace name, up to the next declaration.
             for (var around = declared?.ContainingNamespace; around is { IsGlobalNamespace: false } && !SymbolEqualityComparer.Default.Equals(around, outer); around = around.ContainingNamespace)
                 if (Finds(around) is { } foundAround)
                     return foundAround;
@@ -254,7 +223,7 @@ internal static class LocalizedMembers
             declared = outer;
         }
 
-        // At the top of the file the other one is in reach, as it binds, and the generated one at most beside it.
+        // At the top of the file the other one is in reach, and the generated one at most beside it.
         return false;
 
         // Whether a namespace holds the generated attribute (true) or the other one (false), or neither (null).
@@ -265,9 +234,8 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// The members an attribute marks: a type, a property, a member of an enum, each field of a declaration of
-    /// fields, or the property a record's parameter declares. Empty for an attribute on anything else, such as an
-    /// indexer, or the field behind a property.
+    /// The members an attribute marks: a type, a property, an enum member, each field of a field declaration, or the
+    /// property a record's parameter declares. Empty for anything else.
     /// </summary>
     public static ImmutableArray<ISymbol> FindMarked(AttributeSyntax attribute, SemanticModel model, CancellationToken cancellationToken)
     {
@@ -318,8 +286,8 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// Why generated code can't name the type of a marked member, or the marked type itself, with what to do about
-    /// it, or <see langword="null"/> when it can. The code lies in a file of its own at the top level of the assembly.
+    /// Why generated code at the top level can't name the type of a marked member, or the marked type, with advice, or
+    /// <see langword="null"/>.
     /// </summary>
     public static UnnameableType? DescribeUnnameable(ISymbol marked)
     {
@@ -329,22 +297,27 @@ internal static class LocalizedMembers
         return unnameable;
     }
 
-    /// <summary>
-    /// The members an attribute marks, as the generator works with them.
-    /// </summary>
+    // Given again where no declaration changed (TransformCache), because binding every attribute on every edit cost about
+    // a tenth of an edit.
     private static EquatableArray<LocalizedMember> ReadMembers(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
         var attribute = (AttributeSyntax)context.Node;
 
-        if (!WillBindToGenerated(attribute, context.SemanticModel, cancellationToken))
+        return TransformCache.GetOrRead(attribute, context.SemanticModel.Compilation, (attribute, context.SemanticModel),
+            static (state, cancellationToken) => ReadMembers(state.attribute, state.SemanticModel, cancellationToken), cancellationToken);
+    }
+
+    private static EquatableArray<LocalizedMember> ReadMembers(AttributeSyntax attribute, SemanticModel semanticModel, CancellationToken cancellationToken)
+    {
+        if (!WillBindToGenerated(attribute, semanticModel, cancellationToken))
             return default;
 
-        var symbols = FindMarked(attribute, context.SemanticModel, cancellationToken);
+        var symbols = FindMarked(attribute, semanticModel, cancellationToken);
 
         if (symbols.Length is 0)
             return default;
 
-        var wordings = ReadWordings(attribute, context.SemanticModel, cancellationToken);
+        var wordings = ReadWordings(attribute, semanticModel, cancellationToken);
         var members = ImmutableArray.CreateBuilder<LocalizedMember>(symbols.Length);
 
         foreach (var symbol in symbols)
@@ -354,9 +327,6 @@ internal static class LocalizedMembers
         return new EquatableArray<LocalizedMember>(members.ToImmutable());
     }
 
-    /// <summary>
-    /// The arguments of the attribute, each with the language parameter it names and the constant it holds.
-    /// </summary>
     private static EquatableArray<LocalizedArgument> ReadWordings(AttributeSyntax attribute, SemanticModel model, CancellationToken cancellationToken)
     {
         if (attribute.ArgumentList is not { } arguments)
@@ -366,7 +336,7 @@ internal static class LocalizedMembers
 
         foreach (var argument in arguments.Arguments)
         {
-            // The attribute has no properties, so an argument written as "name = value" compiles to nothing.
+            // The attribute has no properties, so "name = value" doesn't compile.
             var constant = argument.NameEquals is null ? model.GetConstantValue(argument.Expression, cancellationToken) : default;
 
             wordings.Add(new LocalizedArgument(
@@ -403,12 +373,12 @@ internal static class LocalizedMembers
             ? containing.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted))
             : "";
 
-        // Without the @ of an escaped keyword (namespace Shop.@event), as a set's key: a key is a name, not code.
+        // Without the @ of an escaped keyword, because a key is a name, not code.
         var keyNamespace = type.ContainingNamespace is { IsGlobalNamespace: false } ? type.ContainingNamespace.ToDisplayString().Replace("@", "") + "." : "";
         var prefix = @namespace.Length is 0 ? "" : @namespace + ".";
         var isInGenericType = chain.Any(static part => part.Arity > 0);
 
-        // As code names the type: Shop.Domain.Page<> for a typeof, where a type with type parameters has no other name.
+        // As a typeof names it: Shop.Domain.Page<> for a generic type.
         var reference = prefix + String.Join(".", chain.Select(static part =>
             CodeEscaping.EscapeIdentifier(part.Name) + (part.Arity > 0 ? $"<{new string(',', part.Arity - 1)}>" : "")));
 
@@ -424,29 +394,25 @@ internal static class LocalizedMembers
                 Namespace: @namespace,
                 Name: String.Join(".", chain.Select(static part => CodeEscaping.EscapeIdentifier(part.Name))),
                 HolderName: String.Join("_", chain.Select(static part => part.Name)) + ExtensionHolderSuffix,
-                IsPublic: chain.All(static part => part.DeclaredAccessibility is Accessibility.Public),
+                IsPublic: chain.TrueForAll(static part => part.DeclaredAccessibility is Accessibility.Public),
                 CanExtend: !isInGenericType,
                 Ordinal: field is null ? -1 : GetOrdinal(type, field),
-                Value: field is { HasConstantValue: true } ? Convert.ToString(field.ConstantValue, CultureInfo.InvariantCulture) : null,
-                IsObsoleteAsError: field is not null && LocalizationDiscovery.IsObsoleteAsError(field));
+                Value: field is { HasConstantValue: true } ? Convert.ToString(field.ConstantValue, CultureInfo.InvariantCulture) : null);
         }
 
         var member = new LocalizedMember(
             TypeReference: reference,
             TypeKey: keyNamespace + String.Join(".", chain.Select(static part => part.MetadataName)),
-            TypeName: type.Name,
             MemberName: isMember ? symbol.Name : null,
             Wordings: wordings,
             IsNameable: DescribeUnnameable(chain) is null,
-            SuppressedDiagnostics: new EquatableArray<string>(GetSuppressedDiagnostics(symbol, chain)),
             Enum: enumMember);
 
         return member;
     }
 
     /// <summary>
-    /// The position of a member of an enum among its members, in the order they're written, or -1 for a field that
-    /// isn't one of them.
+    /// The position of an enum member in the order they're written, or -1.
     /// </summary>
     private static int GetOrdinal(INamedTypeSymbol @enum, IFieldSymbol field)
     {
@@ -463,21 +429,6 @@ internal static class LocalizedMembers
 
         var ordinal = ordinals.TryGetValue(field, out var found) ? found : -1;
         return ordinal;
-    }
-
-    /// <summary>
-    /// The diagnostics that the generated code of a member reports by naming what its author marked
-    /// <c>[Experimental]</c>, or <c>[Obsolete]</c> with an id of its own: the member's type, a type around it, or the
-    /// member itself where it's a member of an enum, which <c>GetText()</c> names. The generated file turns them off.
-    /// </summary>
-    private static ImmutableArray<string> GetSuppressedDiagnostics(ISymbol symbol, List<INamedTypeSymbol> chain)
-    {
-        var suppressed = chain.SelectMany(static part => LocalizationDiscovery.GetSuppressedDiagnostics(part));
-
-        if (symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum })
-            suppressed = suppressed.Concat(LocalizationDiscovery.GetSuppressedDiagnostics(symbol));
-
-        return [.. suppressed.Distinct(StringComparer.Ordinal)];
     }
 
     private static UnnameableType? DescribeUnnameable(List<INamedTypeSymbol> chain)
@@ -497,10 +448,6 @@ internal static class LocalizedMembers
 
             if (kind is not null)
                 return new UnnameableType(part.Name, kind, $"Make '{part.Name}' internal or public");
-
-            // Naming it is an error (CS0619), which no pragma turns off.
-            if (LocalizationDiscovery.IsObsoleteAsError(part))
-                return new UnnameableType(part.Name, "marked [Obsolete] as an error", $"Make the [Obsolete] of '{part.Name}' a warning, or remove [Localized]");
         }
 
         return null;
@@ -511,18 +458,15 @@ internal static class LocalizedMembers
         var memberTextsClassName = GetMemberTextsClassName(assemblyName);
 
         if (codes.Length is 0 || members.Length is 0)
-            return new LocalizedMembersModel(memberTextsClassName, codes, default, default);
+            return new LocalizedMembersModel(memberTextsClassName, codes, default);
 
         var types = new SortedDictionary<string, List<(LocalizedMember Member, EquatableArray<string> Wordings)>>(StringComparer.Ordinal);
         var seen = new HashSet<(string Type, string? Member)>();
-        var suppressed = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var member in members)
         {
             if (!member.IsNameable || ResolveWordings(member, codes) is not { } wordings || !seen.Add((member.TypeKey, member.MemberName)))
                 continue;
-
-            suppressed.UnionWith(member.SuppressedDiagnostics);
 
             if (!types.TryGetValue(member.TypeKey, out var texts))
                 types.Add(member.TypeKey, texts = []);
@@ -536,29 +480,28 @@ internal static class LocalizedMembers
         {
             var first = type[0].Member;
 
-            // The type's own text first, then the members of an enum in the order it declares them, and the members of
-            // any other type by name: an order that doesn't depend on which file of a partial type comes first.
+            // The type's own text first, then enum members in declared order, and other members by name. That order
+            // doesn't depend on which file of a partial type comes first.
             var texts = type
                 .OrderBy(static text => text.Member.MemberName is null ? 0 : 1)
                 .ThenBy(static text => text.Member.Enum?.Ordinal ?? 0)
                 .ThenBy(static text => text.Member.MemberName, StringComparer.Ordinal)
-                .Select(static text => new LocalizedText(text.Member.MemberName, text.Wordings, text.Member.Enum?.Value, text.Member.Enum?.IsObsoleteAsError ?? false))
+                .Select(static text => new LocalizedText(text.Member.MemberName, text.Wordings, text.Member.Enum?.Value))
                 .ToImmutableArray();
 
             var extension = first.Enum is { CanExtend: true } @enum && texts.Any(static text => text.MemberName is not null)
                 ? new LocalizedEnumExtension(@enum.Namespace, @enum.Name, @enum.HolderName, @enum.IsPublic)
                 : (LocalizedEnumExtension?)null;
 
-            model.Add(new LocalizedType(first.TypeReference, first.TypeKey, first.TypeName, new EquatableArray<LocalizedText>(texts), extension));
+            model.Add(new LocalizedType(first.TypeReference, new EquatableArray<LocalizedText>(texts), extension));
         }
 
-        return new LocalizedMembersModel(memberTextsClassName, codes, new EquatableArray<LocalizedType>(model.ToImmutable()), new EquatableArray<string>([.. suppressed]));
+        return new LocalizedMembersModel(memberTextsClassName, codes, new EquatableArray<LocalizedType>(model.ToImmutable()));
     }
 
     /// <summary>
     /// The wording of a member for each language, in the order of <paramref name="codes"/>, or <see langword="null"/>
-    /// when its attribute doesn't give every language a wording. That's an attribute that doesn't compile, as one
-    /// that leaves a language out, or one that passes <see langword="null"/>.
+    /// when its attribute doesn't compile, such as one that leaves a language out.
     /// </summary>
     private static EquatableArray<string>? ResolveWordings(LocalizedMember member, EquatableArray<string> codes)
     {
@@ -568,7 +511,7 @@ internal static class LocalizedMembers
         {
             var argument = member.Wordings[i];
 
-            // An argument without a name takes the parameter of its place, as the compiler has it (LOC500 reports it).
+            // An argument without a name takes the parameter of its place (LOC500).
             var index = argument.Parameter is null ? i : FindParameter(codes, argument.Parameter);
 
             if (index < 0 || index >= codes.Length || wordings[index] is not null || argument.Wording is null)
@@ -584,8 +527,7 @@ internal static class LocalizedMembers
     }
 
     /// <summary>
-    /// The language a parameter of the generated attribute stands for, as its place among the languages, or -1 for a
-    /// name that is no parameter.
+    /// The index of the language a parameter of the generated attribute stands for, or -1.
     /// </summary>
     private static int FindParameter(EquatableArray<string> codes, string parameter)
     {
@@ -599,56 +541,38 @@ internal static class LocalizedMembers
 }
 
 /// <summary>
-/// A member marked <c>[Localized]</c>, as its attribute writes it: the type that declares it, its name, or
-/// <see langword="null"/> for the type's own text, and its arguments.
+/// A member marked <c>[Localized]</c>, as its attribute writes it.
 /// </summary>
-/// <param name="TypeReference">The type as code at the top level of the assembly names it, such as <c>Shop.Domain.Page&lt;&gt;</c>.</param>
-/// <param name="TypeKey">The full name of the type as the key of a text writes it, such as <c>Shop.Domain.Page`1</c>.</param>
-/// <param name="TypeName">The name of the type, such as <c>Page</c>.</param>
+/// <param name="TypeReference">The type as top-level code names it, such as <c>Shop.Domain.Page&lt;&gt;</c>.</param>
+/// <param name="TypeKey">The type's full name as a text's key writes it, such as <c>Shop.Domain.Page`1</c>.</param>
 /// <param name="MemberName">The name of the member, or <see langword="null"/> for the type's own text.</param>
 /// <param name="Wordings">The arguments of the attribute, in the order they're written.</param>
-/// <param name="IsNameable">Whether generated code can name the type.</param>
-/// <param name="SuppressedDiagnostics">
-/// What naming the type, or a member of an enum, reports besides <c>CS0612</c> and <c>CS0618</c>: the id of
-/// <c>[Experimental]</c>, and the <c>DiagnosticId</c> of <c>[Obsolete]</c>.
-/// </param>
-/// <param name="Enum">What the extension method of an enum needs, for a member of an enum or an enum's own text.</param>
+/// <param name="Enum">What an enum's extension method needs, for an enum member or an enum's own text.</param>
 internal readonly record struct LocalizedMember(
     string TypeReference,
     string TypeKey,
-    string TypeName,
     string? MemberName,
     EquatableArray<LocalizedArgument> Wordings,
     bool IsNameable,
-    EquatableArray<string> SuppressedDiagnostics,
     LocalizedMemberEnum? Enum);
 
 /// <summary>
-/// An argument of <c>[Localized]</c>: the language parameter it names, or <see langword="null"/> for one without a
-/// name, and the wording it holds. The wording is <see langword="null"/> for an argument that is no constant, and for
-/// the constant <see langword="null"/>.
+/// An argument of <c>[Localized]</c>. <see cref="Parameter"/> is <see langword="null"/> for an argument without a name,
+/// and <see cref="Wording"/> for one that isn't a non-null constant.
 /// </summary>
 internal readonly record struct LocalizedArgument(string? Parameter, string? Wording);
 
 /// <summary>
-/// A type generated code can't name, what kind of type that makes it, such as <c>private</c>, and what to do about it.
+/// A type generated code can't name, its kind, such as <c>private</c>, and advice.
 /// </summary>
 internal readonly record struct UnnameableType(string Name, string Kind, string Advice);
 
 /// <summary>
-/// What the extension method of an enum needs to know about a member of it, or about the enum's own text.
+/// What an enum's extension method needs to know about a member of it, or about the enum's own text.
 /// </summary>
-/// <param name="Namespace">The namespace of the enum, or empty for the global namespace.</param>
 /// <param name="Name">The enum as code in its namespace names it, such as <c>Order.Status</c>.</param>
-/// <param name="HolderName">The name of the class that holds the extension method.</param>
-/// <param name="IsPublic">Whether code outside the assembly can name the enum.</param>
-/// <param name="CanExtend">Whether an extension method can take the enum: not one inside a type with type parameters.</param>
-/// <param name="Ordinal">The place of the member among the members of its enum, or -1 for the enum's own text.</param>
-/// <param name="Value">The number of the member, or <see langword="null"/> where it has none to read.</param>
-/// <param name="IsObsoleteAsError">
-/// Whether the member is marked <c>[Obsolete]</c> as an error. Generated code can't name such a member, so
-/// <c>GetText()</c> finds it by its <paramref name="Value"/>.
-/// </param>
+/// <param name="CanExtend">False for an enum inside a generic type.</param>
+/// <param name="Ordinal">The place of the member in its enum, or -1 for the enum's own text.</param>
 internal readonly record struct LocalizedMemberEnum(
     string Namespace,
     string Name,
@@ -656,19 +580,15 @@ internal readonly record struct LocalizedMemberEnum(
     bool IsPublic,
     bool CanExtend,
     int Ordinal,
-    string? Value,
-    bool IsObsoleteAsError);
+    string? Value);
 
 /// <summary>
-/// The texts to generate for the members of an assembly: the name of the class that registers them, the languages, the
-/// types with their texts, in the order of their full names, and what naming those types and members reports besides
-/// <c>CS0612</c> and <c>CS0618</c>, in the order of the ids (<see cref="LocalizedMember.SuppressedDiagnostics"/>).
+/// The texts to generate for the members of an assembly. <see cref="Types"/> are ordered by full name.
 /// </summary>
 internal readonly record struct LocalizedMembersModel(
     string MemberTextsClassName,
     EquatableArray<string> Codes,
-    EquatableArray<LocalizedType> Types,
-    EquatableArray<string> SuppressedDiagnostics)
+    EquatableArray<LocalizedType> Types)
 {
     /// <summary>
     /// Whether the assembly has a text to register, and so gets the class that registers them.
@@ -677,25 +597,21 @@ internal readonly record struct LocalizedMembersModel(
 }
 
 /// <summary>
-/// A type with texts: how code names it, its full name for the keys, its own name, its texts, and the extension
-/// method to write for an enum.
+/// A type with texts, and the extension method to write for an enum.
 /// </summary>
 internal readonly record struct LocalizedType(
     string Reference,
-    string Key,
-    string Name,
     EquatableArray<LocalizedText> Texts,
     LocalizedEnumExtension? Extension);
 
 /// <summary>
-/// A text of a member: the member's name, or <see langword="null"/> for the type's own text, its wording per language
-/// in the order of the assembly's languages, the number of a member of an enum, and whether that member is marked
-/// <c>[Obsolete]</c> as an error, so that generated code names its number instead of the member.
+/// A text of a member, or of the type when <see cref="MemberName"/> is <see langword="null"/>. <see cref="Wordings"/>
+/// follow the assembly's languages. <see cref="EnumValue"/> is an enum member's value as a literal, so members that
+/// share a value get one arm.
 /// </summary>
-internal readonly record struct LocalizedText(string? MemberName, EquatableArray<string> Wordings, string? EnumValue, bool IsObsoleteAsError);
+internal readonly record struct LocalizedText(string? MemberName, EquatableArray<string> Wordings, string? EnumValue);
 
 /// <summary>
-/// The extension method that gives a value of an enum its text: where to write it, how to name the enum there, the
-/// class that holds it, and whether it's public.
+/// The extension method that gives an enum value its text.
 /// </summary>
 internal readonly record struct LocalizedEnumExtension(string Namespace, string EnumName, string HolderName, bool IsPublic);

@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="MissingContractCodeFixProvider"/>: a set that lists <c>ILocalizationSet</c> without its contract
-/// (<c>LOC204</c>) gets the contract next to it, when the build generates one.
+/// (<c>LOC205</c>) gets the contract next to it, when the build generates one.
 /// </summary>
 public sealed class MissingContractCodeFixProviderTests
 {

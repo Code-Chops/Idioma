@@ -13,9 +13,8 @@ namespace CodeChops.Idioma.Internals;
 /// writes this on a method of a contract it generates, once for each value the default wording shows.
 /// </para>
 /// </summary>
-// Located by its metadata-name string, and read by constructor position. On the method and not on the parameter,
-// because an IDE's "Implement interface" copies the attributes of a parameter into the set it writes, where this one
-// would warn that it's obsolete. It leaves those of a method out.
+// Read by constructor position. On the method, not the parameter, because an IDE's "Implement interface" copies a
+// parameter's attributes into the set, where this one would warn that it's obsolete.
 [Obsolete("Don't use this attribute directly. Only generated code applies this attribute on a method of a contract, for each value the default wording shows.")]
 [EditorBrowsable(EditorBrowsableState.Never)]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]

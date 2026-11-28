@@ -135,35 +135,6 @@ namespace CodeChops.Idioma.Tests.GeneratedSets
     }
 
     /// <summary>
-    /// How an order is delivered: an enum with a member marked [Obsolete] as an error, which generated code can't name,
-    /// and one marked [Experimental], whose id generated code turns off.
-    /// </summary>
-    public enum Delivery
-    {
-        Standard,
-
-        [Obsolete("Use Express.", error: true)]
-        Rush,
-
-        [System.Diagnostics.CodeAnalysis.Experimental("IDIOMA_TEST")]
-        Express,
-    }
-
-    public sealed class DeliveryLocalizationEn : ILocalizationSet<Delivery>, IDeliveryLocalization
-    {
-        public string Standard => "Standard";
-        public string Rush => "Rush";
-        public string Express => "Express";
-    }
-
-    public sealed class DeliveryLocalizationNl : ILocalizationSet<Delivery>, IDeliveryLocalization
-    {
-        public string Standard => "Standaard";
-        public string Rush => "Spoed";
-        public string Express => "Snel";
-    }
-
-    /// <summary>
     /// A text with more values than a tuple holds before it nests the rest. The generated class hands them on as one.
     /// </summary>
     public sealed class DigitsLocalizationEn : ILocalizationSet, IDigitsLocalization
@@ -839,16 +810,6 @@ namespace CodeChops.Idioma.Tests
 
             using (new UICultureScope("en-GB"))
                 OrderStatus.Shipped.GetText().ShouldBe("Shipped");
-        }
-
-        [Test]
-        public void GeneratedExtensionOfEnumValue_OfMemberMarkedObsoleteAsError_ShouldGiveTheTextOfTheValue()
-        {
-            // Arrange
-            using var _ = new UICultureScope("nl-NL");
-
-            // Act & Assert: code can't name the member, but stored data may hold its value.
-            ((Delivery)1).GetText().ShouldBe("Spoed");
         }
 
         [Test]

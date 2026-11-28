@@ -4,13 +4,12 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// Builds the contract of every default-language set, and holds it to the languages: each must have a set of its
-    /// own. Without <paramref name="findings"/> nothing is reported, and the contracts are written all the same.
+    /// Builds the contract of every default-language set, and checks that each language has a set of it. Without
+    /// <paramref name="findings"/>, nothing is reported, but the contracts are still written.
     /// </summary>
     private static void AnalyzeContracts(
         ImmutableArray<DiscoveredLocalization> sets,
         ImmutableArray<DiscoveredLocalization> excluded,
-        ImmutableArray<DiscoveredLocalization> unreadable,
         DeclaredLanguages declared,
         GeneratedContracts generatedContracts,
         ImmutableArray<LocalizationContract>.Builder contracts,
@@ -18,7 +17,7 @@ internal sealed partial record LocalizationSetsAnalysis
         ImmutableArray<LocalizationSetsFinding>.Builder? findings,
         CancellationToken cancellationToken)
     {
-        var pass = new ContractsPass(sets, excluded, unreadable, declared, generatedContracts, contracts, provided, findings);
+        var pass = new ContractsPass(sets, excluded, declared, generatedContracts, contracts, provided, findings);
 
         foreach (var set in sets)
         {
@@ -32,15 +31,13 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// What <see cref="AnalyzeContracts"/> holds while it goes through the default-language sets: what it was given,
-    /// and what it keeps from one set to the next.
+    /// The state <see cref="AnalyzeContracts"/> keeps across the default-language sets.
     /// </summary>
     private sealed class ContractsPass
     {
         public ContractsPass(
             ImmutableArray<DiscoveredLocalization> sets,
             ImmutableArray<DiscoveredLocalization> excluded,
-            ImmutableArray<DiscoveredLocalization> unreadable,
             DeclaredLanguages declared,
             GeneratedContracts generatedContracts,
             ImmutableArray<LocalizationContract>.Builder contracts,
@@ -54,11 +51,9 @@ internal sealed partial record LocalizationSetsAnalysis
             this.Provided = provided;
             this.Findings = findings;
 
-            // Asked once for all contracts, and not of every set for each contract: that took seconds on each edit in a
-            // project with hundreds of contracts.
+            // Indexed once for all contracts, so a project with hundreds of contracts doesn't scan every set per contract.
             this.SetImplementers = new Implementers(sets, generatedContracts);
             this.ExcludedSetImplementers = new Implementers(excluded, generatedContracts);
-            this.UnreadableSetImplementers = new Implementers(unreadable, generatedContracts);
 
             var defaultLanguage = this.DefaultLanguage;
             this.MisdeclaredSets = sets
@@ -77,7 +72,7 @@ internal sealed partial record LocalizationSetsAnalysis
         public ImmutableArray<ProvidedLocalizationSet>.Builder Provided { get; }
 
         /// <summary>
-        /// Where the findings go, or <see langword="null"/> when nothing is reported.
+        /// <see langword="null"/> when nothing is reported.
         /// </summary>
         public ImmutableArray<LocalizationSetsFinding>.Builder? Findings { get; }
 
@@ -87,8 +82,7 @@ internal sealed partial record LocalizationSetsAnalysis
         public Dictionary<string, string> Written { get; } = new(StringComparer.Ordinal);
 
         /// <summary>
-        /// The hint names taken so far. A hint name tells the files of two contracts apart, and the compiler compares
-        /// it without regard to case.
+        /// The hint names taken so far, ignoring case as the compiler does.
         /// </summary>
         public HashSet<string> HintNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -96,17 +90,14 @@ internal sealed partial record LocalizationSetsAnalysis
 
         public Implementers ExcludedSetImplementers { get; }
 
-        public Implementers UnreadableSetImplementers { get; }
-
         /// <summary>
-        /// The sets reported for their base or for their missing contract, which says what to do about their language.
+        /// The sets reported for their base or their missing contract, which already says what to do about their language.
         /// </summary>
         public DiscoveredLocalization[] MisdeclaredSets { get; }
     }
 
     /// <summary>
-    /// Builds the contract of one default-language set, and reports what is wrong with the set, its texts, and the
-    /// languages of its contract.
+    /// Builds the contract of one default-language set, and reports problems with the set, its texts and its languages.
     /// </summary>
     private static void AnalyzeContract(DiscoveredLocalization set, ContractsPass pass)
     {
@@ -124,8 +115,7 @@ internal sealed partial record LocalizationSetsAnalysis
 
         var hasTexts = CanHoldTexts(set, baseName, pass.Findings);
 
-        // The default-language set lists its contract next to ILocalizationSet, as every set does: the generated
-        // texts read its wording through the contract.
+        // The generated texts read the default wording through the contract, so the set must list it.
         var listsContract = LocalizationDiscovery.ListsGeneratedContract(set, pass.GeneratedContracts, contractFullName);
 
         if (!listsContract)
@@ -141,10 +131,8 @@ internal sealed partial record LocalizationSetsAnalysis
 
         var implementers = pass.SetImplementers.Of(set, contractFullName).Where(static other => other.Language is not null).ToArray();
         var excludedImplementers = pass.ExcludedSetImplementers.Of(set, contractFullName);
-        var hasUnreadableImplementer = pass.UnreadableSetImplementers.Of(set, contractFullName).Length > 0;
 
-        // Not with a set of a language the build can't read among them: it may be the set of any language.
-        if (pass.Findings is not null && !hasUnreadableImplementer)
+        if (pass.Findings is not null)
             ReportMissingLanguages(set, baseName, contractName, implementers, excludedImplementers, pass, pass.Findings);
 
         var otherSets = implementers
@@ -152,15 +140,12 @@ internal sealed partial record LocalizationSetsAnalysis
             .OrderBy(static other => other.MetadataName, StringComparer.Ordinal)
             .ToArray();
 
-        // Internal: an assembly referencing this one could not implement it anyway.
+        // A referencing assembly can't implement an internal contract.
         if (set.IsPublic)
         {
-            pass.Provided.Add(new ProvidedLocalizationSet(contractFullName, set.Language!));
+            pass.Provided.Add(ProvidedLocalizationSet.Of(contractFullName, set));
             foreach (var otherSet in otherSets)
-                pass.Provided.Add(new ProvidedLocalizationSet(contractFullName, otherSet.Language!));
-
-            if (hasUnreadableImplementer)
-                pass.Provided.Add(new ProvidedLocalizationSet(contractFullName, ProvidedLocalizationSet.UnreadableLanguage));
+                pass.Provided.Add(ProvidedLocalizationSet.Of(contractFullName, otherSet));
         }
 
         var links = otherSets
@@ -180,13 +165,11 @@ internal sealed partial record LocalizationSetsAnalysis
             HasTexts: hasTexts,
             DefaultSetListsContract: listsContract,
             Usings: set.OfContract.Usings,
-            Enums: set.OfContract.Enums,
-            SuppressedDiagnostics: GetContractSuppressedDiagnostics(set)));
+            Enums: set.OfContract.Enums));
     }
 
     /// <summary>
-    /// Reports a default-language set whose name doesn't end in the suffix of its language (<c>LOC200</c>), so that
-    /// its generated class would carry the set's own name.
+    /// Reports a default-language set whose name doesn't end in its language suffix (<c>LOC200</c>).
     /// </summary>
     private static void ReportNameWithoutLanguageSuffix(DiscoveredLocalization set, ContractsPass pass)
     {
@@ -208,19 +191,15 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Whether a default-language set starts its contract, which it's then noted for. It starts none when another set
-    /// has started that contract, or when a type carries the contract's name already. Both are reported
-    /// (<c>LOC200</c>).
+    /// Whether a default-language set starts its contract. It doesn't when another set started it or a type has its
+    /// name (<c>LOC200</c>).
     /// </summary>
     private static bool StartsContract(DiscoveredLocalization set, string contractName, string contractFullName, ContractsPass pass)
     {
         var findings = pass.Findings;
 
-        // A contract comes from one set, the first by name. Two sets start one when their names differ only in
-        // the case of the language suffix, as ShopLocalizationEn and ShopLocalizationEN do. The second is
-        // reported, and gets no contract and no texts of its own, which would carry the names of the first's.
-        // Without a default language two sets can start one contract too, the Dutch set listing ILocalizationSet
-        // as the English one does. Nothing is reported then, as nothing is held to a default language.
+        // A contract comes from the first set by name, such as ShopLocalizationEn next to ShopLocalizationEN. The
+        // second is reported only when there's a default language to hold it to.
         if (pass.Written.TryGetValue(contractFullName, out var firstSet))
         {
             if (pass.DefaultLanguage is not null)
@@ -236,9 +215,7 @@ internal sealed partial record LocalizationSetsAnalysis
 
         pass.Written.Add(contractFullName, set.Name);
 
-        // A type of the contract's name, such as an interface written by hand that doesn't derive from
-        // ILocalizationSet, would meet the generated contract (CS0101). So neither the contract nor its texts are
-        // written, and the sets that list that type aren't told to add it (LOC204).
+        // A type of the contract's name would clash with it (CS0101), so neither the contract nor its texts are written.
         if (set.OfContract.TypeNamedLikeContract is { } typeOfContractName)
         {
             findings?.Add(new LocalizationSetsFinding(
@@ -253,30 +230,23 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Whether the generated class of a default-language set holds its texts. It holds none when generated code can't
-    /// create the set, or when a type or namespace carries the class's name already. Both are reported
-    /// (<c>LOC200</c>), and the contract is written all the same.
+    /// Whether the generated class holds the texts. It doesn't when generated code can't create the set or a type or
+    /// namespace has its name (<c>LOC200</c>). The contract is still written.
     /// </summary>
     private static bool CanHoldTexts(DiscoveredLocalization set, string baseName, ImmutableArray<LocalizationSetsFinding>.Builder? findings)
     {
-        // The generated texts take their default wording from an instance the generated code creates, so a set it
-        // can't create gets no texts. It still gets its contract, which it lists, as every other language does.
-        // Reported here, and not as LOC208: that one advises to exclude the set and register it by hand, which a
-        // default-language set must never be. A default-language set has its language, so only how it is created
-        // can keep it from registering.
+        // The texts take their default wording from an instance the generated code creates. This isn't LOC207,
+        // because that advises excluding the set, which a default-language set must never be.
         var hasTexts = true;
         if (LocalizationDiscovery.GetCreationProblem(set) is { } problem)
         {
-            var advice = String.Equals(problem, LocalizationDiscovery.ObsoleteAsErrorProblem, StringComparison.Ordinal)
-                ? "Mark it [Obsolete] as a warning while code still uses it, or remove it."
-                : "Generated code creates it, so give it a public parameterless constructor and no required members.";
+            const string advice = "Generated code creates it, so give it a public parameterless constructor and no required members.";
 
             findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.CannotExtend, set.Location, new EquatableArray<string>([set.Name, problem, advice])));
             hasTexts = false;
         }
 
-        // The generated class would be a second type of its name (CS0101), so it isn't written. The contract is, as
-        // for a set that can't be created: the sets list it.
+        // The generated class would clash with that type (CS0101).
         if (set.OfContract.TypeNamedLikeTexts is { } typeOfName)
         {
             var that = typeOfName.StartsWith("the namespace ", StringComparison.Ordinal) ? "that namespace" : "that type";
@@ -293,9 +263,8 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Reports the texts of a default-language set that its contract or its generated class can't hold: a text with a
-    /// reserved name (<c>LOC300</c>), a method that can't be a text (<c>LOC400</c>), and a text the set only inherits
-    /// (<c>LOC303</c>).
+    /// Reports the texts the contract or generated class can't hold (<c>LOC300</c>, <c>LOC303</c>, <c>LOC305</c>,
+    /// <c>LOC400</c>), each at the text to change.
     /// </summary>
     private static void ReportTexts(DiscoveredLocalization set, string baseName, ImmutableArray<LocalizationSetsFinding>.Builder? findings)
     {
@@ -314,30 +283,26 @@ internal sealed partial record LocalizationSetsAnalysis
                 _ => $"the generated method '{baseName}.{LookupName}', which gives the text of an enum value. The text '{baseName}.{member.Name}' isn't generated",
             };
 
-            // At the text, which is what to rename, and not at the set.
             var reserved = set.OfContract.ReservedTexts.FirstOrDefault(text => String.Equals(text.Name, member.Name, StringComparison.Ordinal));
             var location = reserved.Name is null ? set.Location : reserved.Location;
 
             findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.ReservedTextName, location, new EquatableArray<string>([set.Name, member.Name, taken])));
         }
 
-        // At the method, which is what to change, and not at the set.
         foreach (var method in set.OfContract.UnsupportedTexts)
             findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UnsupportedText, method.Location, new EquatableArray<string>([set.Name, method.Name, method.Problem])));
 
-        // At the text that's left out, which says where it's written. Its contract would lack it, and so every other
-        // language would too, without a word.
+        // Otherwise the contract, and so every other language, would lack the text silently.
         foreach (var text in set.OfContract.UndeclaredTexts)
             findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.UndeclaredText, text.Location, new EquatableArray<string>([set.Name, text.Name, text.DeclaringType])));
 
-        // At the text that isn't a member of the enum. The contract has it, so every other language that lacks it fails
-        // to compile, and only this says where it comes from.
+        // Every other language that lacks the text fails to compile, and only this says where it comes from.
         foreach (var text in set.OfContract.TextsOutsideEnums)
             findings?.Add(new LocalizationSetsFinding(LocalizationSetsRule.TextOutsideEnum, text.Location, new EquatableArray<string>([set.Name, text.Name, text.Enums, text.Advice])));
     }
 
     /// <summary>
-    /// Reports every language the attribute lists that a contract has no set of (<c>LOC201</c>), with the set to add.
+    /// Reports every listed language a contract has no set of (<c>LOC201</c>), with the set to add.
     /// </summary>
     private static void ReportMissingLanguages(
         DiscoveredLocalization set,
@@ -355,11 +320,9 @@ internal sealed partial record LocalizationSetsAnalysis
 
         foreach (var code in pass.Declared.Codes)
         {
-            // A set of the language itself, also for a region of a language that has a set (en-GB next to en):
-            // listing it says it has wording of its own, as every inline text takes one. At run time the set
-            // of its language would serve it, but so it would without listing it. An excluded set counts as
-            // well: it gets no LOC203 or LOC204 to say what is wrong with it, so only the language it plainly
-            // is of is not reported as missing. The default-language set is the set of its own language.
+            // A listed region (en-GB next to en) needs a set of its own, because listing it says it has its own
+            // wording. An excluded set counts only for the language it plainly serves, because it gets no LOC204 or
+            // LOC205.
             if (IsSetOf(set, code)
                 || implementers.Any(other => IsSetOf(other, code))
                 || excludedImplementers.Any(other => IsSetOf(other, code))
@@ -381,30 +344,11 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// What the file of a contract turns off besides <c>CS0612</c> and <c>CS0618</c>: what naming the default-language
-    /// set reports, then what naming its enums and their members reports, what writing the types of its texts'
-    /// parameters reports, and what naming a text marked <c>[Obsolete]</c> or <c>[Experimental]</c> reports. Each id
-    /// once, in that order.
+    /// The hint name of a contract's file: the set's full name without <c>@</c>, such as
+    /// <c>MyApp.Localization.ShopLocalizationEn</c>. The compiler ignores case in hint names, so a name taken but for
+    /// case gets a number, such as <c>shop.TextsEn_2</c>.
     /// </summary>
-    private static EquatableArray<string> GetContractSuppressedDiagnostics(DiscoveredLocalization set)
-    {
-        var ofEnums = set.OfContract.Enums.SelectMany(static @enum => @enum.SuppressedDiagnostics);
-        var ofParameters = set.OfContract.Texts.SelectMany(static text => text.Parameters).SelectMany(static parameter => parameter.SuppressedDiagnostics);
-        var ofTexts = set.OfContract.Texts.SelectMany(static text => text.SuppressedDiagnostics);
-
-        var suppressed = set.SuppressedDiagnostics.Concat(ofEnums).Concat(ofParameters).Concat(ofTexts).Distinct(StringComparer.Ordinal).ToImmutableArray();
-        return new EquatableArray<string>(suppressed);
-    }
-
-    /// <summary>
-    /// The name of the file a contract is written to, without its extension: the full name of the default-language set,
-    /// as in <c>MyApp.Localization.ShopLocalizationEn</c>. A name that another contract's file has already, but for
-    /// its letter case, gets a number: <c>shop.TextsEn_2</c> next to <c>Shop.TextsEn</c>.
-    /// </summary>
-    // Qualified by namespace: two sets sharing a simple name must not collide on the hint name. Without the @ of an
-    // escaped keyword (namespace Shop.@event), which a hint name can't hold. The compiler compares hint names without
-    // regard to case, and refuses the second of two that are equal to it, while C# tells Shop from shop. The contracts
-    // come in the order of their sets' names, so the same file gets the number on every build.
+    // The contracts come in the order of their sets' names, so the same file gets the number on every build.
     private static string GetHintName(string @namespace, string className, HashSet<string> taken)
     {
         var name = (@namespace.Length > 0 ? $"{@namespace}.{className}" : className).Replace("@", "");

@@ -3,13 +3,13 @@ namespace CodeChops.Idioma.Tests;
 public sealed partial class LocalizationRegistrationPartTests
 {
     [Test]
-    public void SetsNamedAfterDeclaredLongCodes_AreDescribedWithTheirCodesBeforeRegistering()
+    public void SetOfLanguageWithDefaultScript_IsDescribedWithThatScript()
     {
-        // Arrange & Act
+        // Arrange & Act: Serbian is Cyrillic in Serbia, which the registry can't tell from the name sr-RS.
         var text = GeneratedText(Run("""
             using CodeChops.Idioma;
 
-            [assembly: SupportedLanguages("en", "nl-BE", "zh-Hans")]
+            [assembly: SupportedLanguages("sr", "sr-Latn")]
 
             namespace TestApp;
 
@@ -18,92 +18,102 @@ public sealed partial class LocalizationRegistrationPartTests
                 string Checkout { get; }
             }
 
-            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            public class ShopLocalizationSr : ILocalizationSet, IShopLocalization
             {
-                public string Checkout => "Checkout";
+                public virtual string Checkout => "Каса";
             }
 
-            public sealed class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
+            public class ShopLocalizationSrLatn : ILocalizationSet, IShopLocalization
             {
-                public string Checkout => "Afrekenen";
+                public string Checkout => "Kasa";
             }
 
-            public sealed class ShopLocalizationZhHans : ILocalizationSet, IShopLocalization
-            {
-                public string Checkout => "Jiezhang";
-            }
+            public class ShopLocalizationSrRs : ShopLocalizationSr;
             """));
 
-        // Assert: before the sets register, as the registry files each under the code it reads from it. A two-letter
-        // code is described too, so that the run time never reads a set's name.
-        text.ShouldContain("GeneratedCode.DescribeSet<");
-        text.ShouldContain("ShopLocalizationNlBe>(\"nl-BE\");");
-        text.ShouldContain("ShopLocalizationZhHans>(\"zh-Hans\");");
-        text.ShouldContain("ShopLocalizationEn>(\"en\");");
-        text.LastIndexOf("DescribeSet<", StringComparison.Ordinal)
-            .ShouldBeLessThan(text.IndexOf("RegisterSets(asDefaults: true,", StringComparison.Ordinal));
+        // Assert: so a user of sr-Latn-RS gets the Latin set, not the regional one.
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationSrRs>(\"sr-RS\", \"Cyrl\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationSr>(\"sr\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationSrLatn>(\"sr-Latn\");");
     }
 
     [Test]
-    public void SetDerivingFromAnother_IsDescribedWithTheTextsItsOwnClassWords()
+    public void EverySet_IsDescribedWithTheLanguageOfItsNameBeforeRegistering()
     {
-        // Arrange & Act: a regional set overriding a property and a method, an app's rewording implementing a text
-        // explicitly, and a British set implementing its own LocalizationLanguageCode, which the build describes with no language.
+        // Arrange & Act: a plain suffix, a listed longer code, an unlisted region of a listed language, a region of a
+        // listed script, a region that doesn't exist (EnUk gives uk), a name whose ui isn't a listed language, and an
+        // inherited language.
         var text = GeneratedText(Run("""
             using CodeChops.Idioma;
 
-            [assembly: SupportedLanguages("en", "nl", "en-GB")]
+            [assembly: SupportedLanguages("en", "nl", "nl-BE", "zh-Hans")]
 
             namespace TestApp;
 
             public interface IShopLocalization : ILocalizationSet
             {
-                string Cart { get; }
                 string Checkout { get; }
-                string Greeting(string name);
             }
 
             public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
             {
-                public virtual string Cart => "Cart";
                 public virtual string Checkout => "Checkout";
-                public virtual string Greeting(string name) => $"Hello, {name}!";
             }
 
-            public sealed class ShopLocalizationEnGb : ShopLocalizationEn
+            public class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
             {
-                public override string Cart => "Basket";
-                public override string Greeting(string name) => $"Hello, {name}!";
+                public virtual string Checkout => "Afrekenen";
             }
 
-            public sealed class MyShopLocalizationEn : ShopLocalizationEn, IShopLocalization
+            public class ShopLocalizationEnGb : ShopLocalizationEn
             {
-                string IShopLocalization.Checkout => "Pay";
+                public override string Checkout => "Pay";
             }
 
-            public sealed class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet
+            public sealed class ShopLocalizationZhHansTw : ILocalizationSet, IShopLocalization
             {
-                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
-
-                public override string Cart => "Basket";
+                public string Checkout => "Jiezhang";
             }
+
+            public sealed class ShopLocalizationEnUk : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public sealed class AdminUiNl : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+
+            public sealed class BelgianRewording : ShopLocalizationNlBe;
+
+            public sealed class BritishRewording : ShopLocalizationEnGb;
             """));
 
-        // Assert: by name and in order, and nothing of the texts for a set deriving from none.
-        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationEnGb>(\"en-GB\", \"Cart\", \"Greeting\");");
-        text.ShouldContain("DescribeSet<TestApp.MyShopLocalizationEn>(\"en\", \"Checkout\");");
-        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationBritish>(\"en-GB\", \"Cart\");");
+        // Assert: the registry reads no name, so each set is described before the sets register.
         text.ShouldContain("DescribeSet<TestApp.ShopLocalizationEn>(\"en\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationNlBe>(\"nl-BE\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationEnGb>(\"en-GB\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationZhHansTw>(\"zh-Hans-TW\");");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationEnUk>(\"uk\");");
+        text.ShouldContain("DescribeSet<TestApp.AdminUiNl>(\"nl\");");
+        text.ShouldContain("DescribeSet<TestApp.BelgianRewording>(\"nl-BE\");");
+        text.ShouldContain("DescribeSet<TestApp.BritishRewording>(\"en-GB\");");
+        text.LastIndexOf("DescribeSet<", StringComparison.Ordinal)
+            .ShouldBeLessThan(text.IndexOf("RegisterSets(CodeChops.Idioma.Internals.SetTier.LibrarySets,", StringComparison.Ordinal));
     }
 
     [Test]
-    public void ExcludedSetNamedAfterDeclaredLongCode_IsDescribedWithItsCodeWithoutRegistering()
+    [Arguments("\"en\", \"nl\"", "ShopLocalizationNlBe>(\"nl-BE\");")]
+    [Arguments("\"en\", \"nl-BE\"", "ShopLocalizationNlBe>(\"nl-BE\");")]
+    [Arguments("\"en\"", "ShopLocalizationNlBe>(\"be\");")]
+    public void SetWhoseNameEndsInRegion_IsDescribedWithWhatTheBuildReads(string languages, string described)
     {
-        // Arrange & Act: registered by hand, it must serve the language the build counted it for.
-        var text = GeneratedText(Run("""
+        // Arrange & Act: Dutch or Belgian Dutch declared gives nl-BE. Without either, the name alone gives 'be'.
+        var text = GeneratedText(Run($$"""
             using CodeChops.Idioma;
 
-            [assembly: SupportedLanguages("en", "nl-BE")]
+            [assembly: SupportedLanguages({{languages}})]
 
             namespace TestApp;
 
@@ -112,64 +122,18 @@ public sealed partial class LocalizationRegistrationPartTests
                 string Checkout { get; }
             }
 
-            [ExcludeFromLocalizationDiscovery]
             public sealed class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
             {
                 public string Checkout => "Afrekenen";
             }
             """));
-
-        // Assert: a registrar with nothing to register is internal.
-        text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.ShouldContain("ShopLocalizationNlBe>(\"nl-BE\");");
-        text.ShouldNotContain("ShopLocalizationNlBe()");
-    }
-
-    [Test]
-    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";", "ShopLocalizationNlBe>(\"nl-BE\");")]
-    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl-BE\")]", "string ILocalizationSet.LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"SHOP_LANGUAGE\") ?? \"nl-BE\";", null)]
-    [Arguments("[assembly: SupportedLanguages(\"en\", \"nl\")]", "", "ShopLocalizationNlBe>(\"be\");")]
-    public void SetWhoseNameGivesNoDeclaredLongCode_IsDescribedWithWhatTheBuildReads(string attribute, string languageCode, string? described)
-    {
-        // Arrange & Act: a set implementing its code is described with it where it's a constant, so that the registry needn't
-        // create the set to file it. One the build can't read gets no description, and doesn't register (LOC208). Without
-        // nl-BE declared, the name gives 'be'.
-        var run = Run($$"""
-            using CodeChops.Idioma;
-
-            {{attribute}}
-
-            namespace TestApp;
-
-            public interface IShopLocalization : ILocalizationSet
-            {
-                string Checkout { get; }
-            }
-
-            public sealed class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
-            {
-                {{languageCode}}
-                public string Checkout => "Afrekenen";
-            }
-            """).Results.ShouldHaveSingleItem();
 
         // Assert
-        var text = String.Concat(run.GeneratedSources.Select(static source => source.SourceText.ToString()));
-
-        if (described is null)
-        {
-            text.ShouldNotContain("DescribeSet");
-            text.ShouldNotContain("ShopLocalizationNlBe()");
-            run.Diagnostics.ShouldContain(static diagnostic => diagnostic.Id == "LOC208");
-        }
-        else
-        {
-            text.ShouldContain(described);
-        }
+        text.ShouldContain(described);
     }
 
     [Test]
-    public void SetNamedAfterTwoLetterCode_IsDescribedWithNoLongerCodeItsNameHappensToEndIn()
+    public void SetNamedAfterTwoLetterCode_IsNotDescribedWithLongerCodeItsNameHappensToEndIn()
     {
         // Arrange & Act: "MessagesAr" ends in the letters of EsAr, the suffix of es-AR, but not at a capital, so it is
         // the Arabic set its last two letters say; "MessagesEsAr" is the Argentinian one.
@@ -208,29 +172,7 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    [Arguments("public string LocalizationLanguageCode => \"de\";")]
-    [Arguments("string ILocalizationSet.LocalizationLanguageCode => \"de\";")]
-    public void SetImplementingLanguageCode_NeedsNoLanguageInItsName(string languageCode)
-    {
-        // Arrange & Act
-        var result = Run($$"""
-            {{ShopContract}}
-
-            public sealed class ShopLocalization1 : ILocalizationSet, IShopLocalization
-            {
-                {{languageCode}}
-                public string Checkout => "Zur Kasse";
-            }
-            """);
-
-        // Assert
-        var run = result.Results.ShouldHaveSingleItem();
-        run.Diagnostics.ShouldBeEmpty();
-        run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString().ShouldContain("new TestApp.ShopLocalization1()");
-    }
-
-    [Test]
-    public void ExcludedSet_IsDescribedWithItsLanguageWithoutRegistering()
+    public void ExcludedSet_IsDescribedWithoutRegistering()
     {
         // Arrange & Act: registered by hand, it must serve the language the build counted it for.
         var result = Run($$"""
@@ -246,9 +188,63 @@ public sealed partial class LocalizationRegistrationPartTests
         // Assert: a registrar with nothing to register is internal.
         var run = result.Results.ShouldHaveSingleItem();
         run.Diagnostics.ShouldBeEmpty();
-        var text = run.GeneratedSources.ShouldHaveSingleItem().SourceText.ToString();
+        var text = GeneratedText(result);
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.ShouldContain("ShopLocalizationDe>(\"de\");");
-        text.ShouldNotContain("new TestApp.ShopLocalizationDe(");
+        text.ShouldContain("DescribeSet<TestApp.ShopLocalizationDe>(\"de\");");
+        text.ShouldNotContain("ShopLocalizationDe()");
+    }
+
+    [Test]
+    public void NestedSetGeneratedCodeCanName_IsDescribedWithoutRegistering()
+    {
+        // Arrange & Act: nested sets are registered by hand. Only those that generated code can name are described.
+        var result = Run($$"""
+            {{ShopContract}}
+
+            public static class Sets
+            {
+                public sealed class ShopLocalizationDe : ILocalizationSet, IShopLocalization
+                {
+                    public string Checkout => "Zur Kasse";
+                }
+
+                internal sealed class ShopLocalizationFr : ILocalizationSet, IShopLocalization
+                {
+                    public string Checkout => "Payer";
+                }
+
+                private sealed class ShopLocalizationIt : ILocalizationSet, IShopLocalization
+                {
+                    public string Checkout => "Paga";
+                }
+
+                public sealed class Generic<T> : ILocalizationSet, IShopLocalization
+                {
+                    public string Checkout => "Checkout";
+                }
+            }
+
+            internal static class Hidden
+            {
+                private static class Inner
+                {
+                    public sealed class ShopLocalizationEs : ILocalizationSet, IShopLocalization
+                    {
+                        public string Checkout => "Pagar";
+                    }
+                }
+            }
+            """);
+
+        // Assert
+        var run = result.Results.ShouldHaveSingleItem();
+        run.Diagnostics.ShouldBeEmpty();
+        var text = GeneratedText(result);
+        text.ShouldContain("DescribeSet<TestApp.Sets.ShopLocalizationDe>(\"de\");");
+        text.ShouldContain("DescribeSet<TestApp.Sets.ShopLocalizationFr>(\"fr\");");
+        text.ShouldNotContain("ShopLocalizationIt");
+        text.ShouldNotContain("Generic");
+        text.ShouldNotContain("ShopLocalizationEs");
+        text.ShouldNotContain("RegisterSets(");
     }
 }

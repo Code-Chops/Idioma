@@ -28,27 +28,19 @@ namespace CodeChops.Idioma;
 /// </example>
 public sealed class CultureScope : IDisposable
 {
-    // The innermost scope the code that runs now is in. It flows with the code, as the cultures of the thread do, so a
-    // scope still holds after an await. Each flow keeps its own: a scope disposed in one, such as the code that started
-    // a task, still holds in a task started inside it, whose thread cultures are still the scope's. No text reads it,
-    // because the thread's UI culture is the scope's already. It only tells Dispose which scopes are still open.
+    // The innermost scope. It flows with the code, as the thread's cultures do, so each flow keeps its own. It only tells
+    // Dispose which scopes are still open, because texts read the UI culture.
     private static AsyncLocal<CultureScope?> Entered { get; } = new();
 
-    /// <summary>
-    /// The scope this one was entered in, or <see langword="null"/> for one entered outside every scope.
-    /// </summary>
     private CultureScope? Surrounding { get; }
 
     // ReSharper disable once InconsistentNaming - Same casing as the property of CultureInfo.
     private CultureInfo PreviousUICulture { get; }
     private CultureInfo PreviousCulture { get; }
 
-    // The execution context from before the scope, and the one the scope made. A culture is an AsyncLocal, and a thread
-    // that never set one follows the default cultures of the process, such as CultureInfo.DefaultThreadCurrentUICulture.
-    // Setting the culture from before back would set it explicitly, so the thread would stop following those defaults.
-    // Restoring the context from before leaves it as it was instead. That's done only where the context is still the
-    // one the scope made, because restoring it would also undo an AsyncLocal that the code inside the scope set. Both are
-    // null where the flow of the context is suppressed, because Capture gives none then.
+    // Restoring the context from before keeps a thread that never set a culture following the process's defaults, which
+    // setting the culture back wouldn't. It's done only where the context is still the one the scope made, so an
+    // AsyncLocal set inside isn't undone. Both are null where the flow is suppressed.
     private ExecutionContext? ContextBefore { get; }
     private ExecutionContext? ContextEntered { get; }
 
@@ -59,8 +51,7 @@ public sealed class CultureScope : IDisposable
 
         var before = ExecutionContext.Capture();
 
-        // The UI culture first, because only its setter can throw, on the name of a culture of a derived class.
-        // Nothing has changed yet then.
+        // The UI culture first, because only its setter can throw, and nothing has changed yet then.
         CultureInfo.CurrentUICulture = culture;
         CultureInfo.CurrentCulture = culture;
 
@@ -107,10 +98,8 @@ public sealed class CultureScope : IDisposable
         if (!this.IsOpen())
             return;
 
-        // Nothing changed the context since the scope made it, so the context from before puts back the cultures and the
-        // surrounding scope as they were, also a culture the thread didn't set itself. Every AsyncLocal the code inside
-        // set makes a new context, even one it set back, such as a logging scope. Then the cultures are set one by one
-        // below.
+        // Nothing changed the context since the scope made it, so restoring it puts everything back as it was. Any
+        // AsyncLocal set inside makes a new context, and then the cultures are set one by one.
         if (this.ContextBefore is not null && ReferenceEquals(ExecutionContext.Capture(), this.ContextEntered))
         {
             ExecutionContext.Restore(this.ContextBefore);
@@ -122,9 +111,6 @@ public sealed class CultureScope : IDisposable
         CultureInfo.CurrentCulture = this.PreviousCulture;
     }
 
-    /// <summary>
-    /// Whether the code that runs now is in this scope. That's so when this is the innermost scope or one around it.
-    /// </summary>
     private bool IsOpen()
     {
         for (var scope = Entered.Value; scope is not null; scope = scope.Surrounding)

@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed partial class LocalizationSetsPartTests
 {
     [Test]
-    public void DefaultSetWithoutItsContract_ShouldReportLOC204AndStillGenerateIt()
+    public void DefaultSetWithoutItsContract_ShouldReportLOC205AndStillGenerateIt()
     {
         // Arrange & Act: the shape a default-language set had while the generator declared its contract for it.
         var result = Run($$"""
@@ -28,6 +28,10 @@ public sealed partial class LocalizationSetsPartTests
         diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe("IShopLocalization");
         ContractText(result).ShouldContain("public interface IShopLocalization");
         ContractText(result).ShouldNotContain("partial class ShopLocalizationEn");
+
+        // The class that implements the contract for the set is file-local, so neither the generator nor the registry
+        // takes it for a set.
+        ContractText(result).ShouldContain("file sealed class ShopLocalizationEnAsContract : CodeChops.Idioma.ILocalizationSet, IShopLocalization");
     }
 
     [Test]
@@ -50,7 +54,33 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void DefaultSetWithoutItsContract_ShouldLeaveLOC204TheOnlyErrorOfTheBuild()
+    [Arguments("ShopLocalizationNl", "nl")]
+    [Arguments("ShopLocalizationEnGb", "en-GB")]
+    public void SetListingContractThatNoDefaultSetGives_ShouldBeToldToWriteTheDefaultSet(string name, string language)
+    {
+        // Arrange & Act: the set lists its contract, but there's no English set to give it. The build used to show
+        // only CS0246 for the contract.
+        var result = Run($$"""
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "en-GB")]
+
+            namespace TestApp;
+
+            public sealed class {{name}} : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Afrekenen";
+            }
+            """);
+
+        // Assert: one error, that names the default-language set to write, without a fix that adds a contract.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingContractDiagnosticId);
+        diagnostic.GetMessage().ShouldBe($"'{name}' is a set for '{language}' but its contract 'IShopLocalization' doesn't exist, so no text reads it. The generator writes 'IShopLocalization' from a default-language set named 'ShopLocalizationEn' that it can use. Write that set, or check the name of the one you have.");
+        diagnostic.Properties.ContainsKey(LocalizationSetsPart.SuggestedNameProperty).ShouldBeFalse();
+    }
+
+    [Test]
+    public void DefaultSetWithoutItsContract_ShouldLeaveLOC205TheOnlyErrorOfTheBuild()
     {
         // Arrange & Act: a property and a method, and a text named like a member of a class, which the class that
         // implements the contract for the set mustn't clash with.
@@ -204,7 +234,7 @@ public sealed partial class LocalizationSetsPartTests
             }
             """, library);
 
-        // Assert: it translates the library's contract, so it needs no languages (LOC100), and lists its contract (LOC204).
+        // Assert: it translates the library's contract, so it needs no languages (LOC100), and lists its contract (LOC205).
         DiagnosticIds(result).ShouldBeEmpty();
     }
 
@@ -230,7 +260,7 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetListingILocalizationSetInOtherLanguage_ShouldReportLOC204Only()
+    public void SetListingILocalizationSetInOtherLanguage_ShouldReportLOC205Only()
     {
         // Arrange & Act: it compiles, and no text would ever read it.
         var result = Run($$"""
@@ -249,7 +279,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.MissingContractDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC204");
+        diagnostic.Id.ShouldBe("LOC205");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain("Add 'IShopLocalization', the contract generated from 'ShopLocalizationEn', next to ILocalizationSet.");
     }

@@ -68,11 +68,10 @@ public sealed class CannotExtendCodeFixProviderTests
         var set = File("""
             public sealed class ShopLocalization : ILocalizationSet, IShopLocalization
             {
-                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
             }
             """);
-        const string User = """
+        const string user = """
             namespace TestApp;
 
             public static class Shop
@@ -82,25 +81,24 @@ public sealed class CannotExtendCodeFixProviderTests
             """;
 
         // Act
-        var fixes = await FixAsync(set, User);
+        var fixes = await FixAsync(set, user);
 
         // Assert: the class carries its language, also where another file names it.
         var fix = fixes.ShouldHaveSingleItem();
         fix.Title.ShouldBe("Rename to 'ShopLocalizationEn'");
         fix.Sources[0].ShouldBe(set.Replace("class ShopLocalization ", "class ShopLocalizationEn ", StringComparison.Ordinal));
-        fix.Sources[1].ShouldBe(User.Replace("new ShopLocalization()", "new ShopLocalizationEn()", StringComparison.Ordinal));
+        fix.Sources[1].ShouldBe(user.Replace("new ShopLocalization()", "new ShopLocalizationEn()", StringComparison.Ordinal));
         ShouldBeExtended([.. fix.Sources]);
     }
 
     [Test]
     public async Task SetNamedAfterItsLanguageWithoutCapital_ShouldGetItsSuffixInPlaceOfThatEnding()
     {
-        // Arrange: LocalizationLanguageCode gives the set its language. Its name ends in that code without the capital that starts
-        // a suffix, so the name gives no language.
+        // Arrange: its name ends in the default language without the capital that starts a suffix, so the name gives no
+        // language.
         var set = File("""
             public sealed class ShopLocalizationen : ILocalizationSet, IShopLocalization
             {
-                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
             }
             """);
@@ -207,7 +205,7 @@ public sealed class CannotExtendCodeFixProviderTests
     [Test]
     public async Task SetWhoseNameGivesNoLanguage_ShouldBeRenamedAfterTheDefaultLanguage()
     {
-        // Arrange: no LocalizationLanguageCode gives the set a language, and its name ends in none.
+        // Arrange: its name ends in no language.
         var set = File("""
             public sealed class ShopLocalization : ILocalizationSet, IShopLocalization
             {

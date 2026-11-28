@@ -11,7 +11,7 @@ namespace CodeChops.Idioma.Tests;
 /// <summary>
 /// Tests for <see cref="LocalizedTextFactoryGenerator"/>: <c>LocalizedText.Inline</c> gets one required parameter
 /// per language of <c>[assembly: SupportedLanguages]</c>, so leaving one out does not compile, and an invalid language
-/// gets <c>LOC101</c>; an assembly calling it is marked <c>[assembly: StandaloneTexts]</c>. The attribute
+/// gets <c>LOC102</c>; an assembly calling it is marked <c>[assembly: StandaloneTexts]</c>. The attribute
 /// <c>[Localized]</c> gets the same parameters.
 /// </summary>
 public sealed class LocalizedTextFactoryGeneratorTests
@@ -118,7 +118,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
     #endregion
 
     [Test]
-    public void ProjectBelowCSharp14_ShouldReportLOC102AndWriteNoCodeForItsLanguages()
+    public void ProjectBelowCSharp14_ShouldReportLOC104AndWriteNoCodeForItsLanguages()
     {
         // Arrange & Act: a set, an inline text and a text on a member, each of which needs code written with C# 14.
         var (diagnostics, generatedErrors, hintNames) = RunAsVersion(LanguageVersion.CSharp13, """
@@ -150,7 +150,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         // Assert: one error that says why at the attribute, and none in generated files, as only the attribute that
         // marks embedded types is written.
         var diagnostic = diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC102");
+        diagnostic.Id.ShouldBe("LOC104");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldBe("Idioma needs C# 14 or later, and this project uses C# 13.0. Remove <LangVersion> from the project file, or set it to 14 or later.");
         diagnostic.Location.GetLineSpan().StartLinePosition.Line.ShouldBe(2);
@@ -162,7 +162,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
     public void ProjectBelowCSharp14WithoutLanguages_ShouldBuild()
     {
         // Arrange & Act: a library that only references a library using the package declares no languages, and its
-        // registrar needs no C# 14. An app declares its languages (LOC103), so it needs C# 14.
+        // registrar needs no C# 14. An app declares its languages (LOC101), so it needs C# 14.
         var library = GeneratorTestHelper.CompileLibraryWithGenerators("VersionLibrary", """
             using CodeChops.Idioma;
 
@@ -544,7 +544,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
     [Arguments("\"en\", \"zh-Hans\", \"zhhans\"", "'zhhans' and 'zh-Hans' differ only in their hyphens")]
     [Arguments("\"en\", \"nl\", null", "null isn't a culture name")]
     [Arguments("\"en\", null", "null isn't a culture name")]
-    public void InvalidLanguage_ShouldReportLOC101AndKeepValidOnes(string languages, string expected)
+    public void InvalidLanguage_ShouldReportLOC102AndKeepValidOnes(string languages, string expected)
     {
         // Arrange & Act
         var result = Run(Source(languages));
@@ -552,7 +552,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         // Assert: the factory still comes, so this stays the only error.
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizedTextFactoryGenerator.InvalidLanguagesDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC101");
+        diagnostic.Id.ShouldBe("LOC102");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Error);
         diagnostic.GetMessage().ShouldContain(expected);
         Factory(result).ShouldNotBeNull().ShouldContain("string en");
@@ -567,9 +567,9 @@ public sealed class LocalizedTextFactoryGeneratorTests
     [Arguments("DK-dk", "'DK-dk' won't match any user's culture, because 'DK' isn't an ISO 639-1 language code. Danish is 'da', so write 'da-dk'.")]
     [Arguments("en-UK", "'en-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. The United Kingdom is 'GB', so write 'en-GB'.")]
     [Arguments("uk-UK", "'uk-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. Ukraine is 'UA', so write 'uk-UA'.")]
-    [Arguments("sr-Latn-YU", "'sr-Latn-YU' won't match any user's culture, because 'YU' isn't an ISO 3166-1 region code. Check the code. If it's right, turn LOC104 off where it's reported.")]
-    [Arguments("xx", "'xx' won't match any user's culture, because 'xx' isn't an ISO 639-1 language code. Check the code. If it's right, turn LOC104 off where it's reported.")]
-    public void LanguageNoCultureHas_ShouldReportLOC104AndKeepTheLanguage(string language, string expected)
+    [Arguments("sr-Latn-YU", "'sr-Latn-YU' won't match any user's culture, because 'YU' isn't an ISO 3166-1 region code. Check the code. If it's right, turn LOC103 off where it's reported.")]
+    [Arguments("xx", "'xx' won't match any user's culture, because 'xx' isn't an ISO 639-1 language code. Check the code. If it's right, turn LOC103 off where it's reported.")]
+    public void LanguageNoCultureHas_ShouldReportLOC103AndKeepTheLanguage(string language, string expected)
     {
         // Arrange & Act: the code has the form of a culture name, so the build uses it as written.
         var result = Run(Source($"\"en\", \"{language}\""));
@@ -577,7 +577,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         // Assert: a warning at the attribute, which a pragma there turns off.
         var diagnostic = result.Results.ShouldHaveSingleItem().Diagnostics.ShouldHaveSingleItem();
         diagnostic.Id.ShouldBe(LocalizedTextFactoryGenerator.UnknownLanguageCodeDiagnosticId);
-        diagnostic.Id.ShouldBe("LOC104");
+        diagnostic.Id.ShouldBe("LOC103");
         diagnostic.Severity.ShouldBe(DiagnosticSeverity.Warning);
         diagnostic.GetMessage().ShouldBe(expected);
         diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan).ShouldStartWith("SupportedLanguages(");
@@ -611,20 +611,20 @@ public sealed class LocalizedTextFactoryGeneratorTests
     }
 
     [Test]
-    public void LanguageNoCultureHasAsDefault_ShouldReportLOC104ForEachCode()
+    public void LanguageNoCultureHasAsDefault_ShouldReportLOC103ForEachCode()
     {
         // Arrange & Act
         var result = Run(Source("\"jp\", \"en-UK\""));
 
         // Assert
         var diagnostics = result.Results.ShouldHaveSingleItem().Diagnostics;
-        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC104", "LOC104"]);
+        diagnostics.Select(static diagnostic => diagnostic.Id).ShouldBe(["LOC103", "LOC103"]);
         diagnostics[0].GetMessage().ShouldStartWith("'jp' won't match");
         diagnostics[1].GetMessage().ShouldStartWith("'en-UK' won't match");
     }
 
     [Test]
-    public void NullListOfLanguages_ShouldReportLOC101WithoutStoppingAnyGenerator()
+    public void NullListOfLanguages_ShouldReportLOC102WithoutStoppingAnyGenerator()
     {
         // Arrange: null for the other languages passes no array at all, which every generator reads.
         const string source = """
@@ -650,7 +650,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
 
         // Assert: a generator that throws leaves its output out, and Inline or ShopLocalization missing.
-        errors.Select(static error => error.Id).ShouldBe(["LOC101"]);
+        errors.Select(static error => error.Id).ShouldBe(["LOC102"]);
     }
 
     [Test]
@@ -960,7 +960,7 @@ public sealed class LocalizedTextFactoryGeneratorTests
         // Assert: the diagnostic lies in the tree the file has now, where a pragma of that file applies to it, and
         // neither the factory nor the marker for inline texts is written again.
         var diagnostic = run.Diagnostics.ShouldHaveSingleItem();
-        diagnostic.Id.ShouldBe("LOC101");
+        diagnostic.Id.ShouldBe("LOC102");
         diagnostic.Location.SourceTree.ShouldBeSameAs(edited);
         var reasons = GeneratorTestHelper.GetSourceOutputReasons(run);
         reasons.Length.ShouldBe(2);

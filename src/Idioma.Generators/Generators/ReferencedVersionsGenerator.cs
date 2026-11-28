@@ -1,27 +1,18 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports each referenced library that was built with a version of the package that the version this compilation
-/// references may not run (<c>LOC702</c>): another major version, or below 1.0 another minor version. It writes no
-/// code.
+/// Reports each referenced library built with a package version this one may not run (<c>LOC702</c>,
+/// <see cref="AreCompatible"/>). It writes no code.
 /// </summary>
 /// <remarks>
 /// <para>
-/// NuGet gives an app one version of the package for every library, the highest any of them asks for, without a word.
-/// A library built with such a version may call what this version no longer has: the code the source generator
-/// wrote into it, which calls the package's <c>Internals</c>, and the package's own API. Such a library fails where
-/// that code first runs. Its registrar runs from the app's module initializer, so the app stops before <c>Main</c>,
-/// with a <c>TypeInitializationException</c> that names no library.
+/// NuGet silently gives an app one package version for every library. A library's generated code may call what that
+/// version lacks, and its registrar runs from the app's module initializer, so the app would stop before <c>Main</c>
+/// with an exception that names no library.
 /// </para>
 /// <para>
-/// A library stores the version of the package it was built with in its reference to the package's assembly, whose
-/// version is that of the package (Directory.Build.props). A new major version may break it, and below 1.0 so may a new
-/// minor version, as semantic versioning lets anything change there (<see cref="AreCompatible"/>). A version that changed
-/// nothing the library calls is reported all the same.
-/// </para>
-/// <para>
-/// A generator rather than an analyzer, because the diagnostic belongs to no syntax or symbol of the compilation, which
-/// an analyzer is handed. A generator reports it on every run, in an IDE too.
+/// The version is read from the library's reference to the package's assembly, which has the package version
+/// (Directory.Build.props). A generator rather than an analyzer, because the diagnostic belongs to no syntax or symbol.
 /// </para>
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
@@ -32,34 +23,32 @@ public sealed class ReferencedVersionsGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor OtherVersionRule = new(
         id: OtherVersionDiagnosticId,
         title: "Library built with an incompatible version of Idioma",
-        messageFormat: "'{0}' was built with CodeChops.Idioma {1}, and this project uses {2}. Code built with {1} may not run with {2}, so update '{0}' to a version built with {2}, or rebuild it.",
+        messageFormat: "'{0}' was built with CodeChops.Idioma {1}, and this project uses {2}. Code built with {1} may not run with {2}, so {3}.",
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "An app runs every library with the one version of the package it references. A new major version may change what a library built with an earlier one calls: the code the source generator wrote into it, and the package's own API. Below 1.0, so may a new minor version. So such a library could fail when the app starts, and the build reports it instead.",
+        description: "An app runs every library with the one version of the package it references. A new major version may change what a library built with an earlier one calls: the code the source generator wrote into it, and the package's own API. Below 1.0, so may a new minor version. A library built with a newer version may call what the app's version doesn't have yet. So such a library could fail when the app starts, and the build reports it instead.",
         helpLinkUri: PackageNames.HelpLink(OtherVersionDiagnosticId));
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Runs on every change of the compilation in an IDE, so it reads no more than the references of the referenced
-        // assemblies, and ends in a plain value that keeps everything after it cached.
+        // Runs on every compilation change, so it reads only assembly references into a plain, cacheable value.
         var otherVersions = context.CompilationProvider.Select(static (compilation, cancellationToken) => ReadOtherVersions(compilation, cancellationToken));
 
         // Without a location, because nothing in the source names the library.
         context.RegisterSourceOutput(otherVersions, static (context, libraries) =>
         {
             foreach (var library in libraries)
-                context.ReportDiagnostic(Diagnostic.Create(OtherVersionRule, Location.None, library.AssemblyName, library.BuiltWith, library.Used));
+                context.ReportDiagnostic(Diagnostic.Create(OtherVersionRule, Location.None, library.AssemblyName, library.BuiltWith, library.Used, GetAdvice(library)));
         });
     }
 
     /// <summary>
-    /// The referenced assemblies that were built with a version of the package that the version this compilation
-    /// references may not run, in a fixed order.
+    /// The referenced assemblies built with an incompatible package version, sorted by name.
     /// </summary>
     internal static EquatableArray<OtherVersionLibrary> ReadOtherVersions(Compilation compilation, CancellationToken cancellationToken)
     {
-        // The version this compilation references, which the app runs every library with.
+        // The app runs every library with the version this compilation references.
         if (compilation.ReferencedAssemblyNames.FirstOrDefault(static name => String.Equals(name.Name, PackageNames.Assembly, StringComparison.Ordinal)) is not { } used)
             return default;
 
@@ -75,26 +64,39 @@ public sealed class ReferencedVersionsGenerator : IIncrementalGenerator
             if (builtWith is null || AreCompatible(builtWith.Version, used.Version))
                 continue;
 
-            libraries.Add(new OtherVersionLibrary(assembly.Identity.Name, FormatVersion(builtWith.Version), FormatVersion(used.Version)));
+            libraries.Add(new OtherVersionLibrary(assembly.Identity.Name, FormatVersion(builtWith.Version), FormatVersion(used.Version), IsNewer: builtWith.Version > used.Version));
         }
 
         return new EquatableArray<OtherVersionLibrary>([.. libraries.OrderBy(static library => library.AssemblyName, StringComparer.Ordinal)]);
     }
 
     /// <summary>
-    /// Whether a library built with one version of the package runs with another: both of one major version, and below
-    /// 1.0, of one minor version too, as semantic versioning lets anything change there. So 1.2 runs with 1.9, and 0.14.0
-    /// with 0.14.3, but 0.13 doesn't run with 0.14, nor 1.x with 2.x.
+    /// Whether a library built with one version runs with another. The major version must match. Below 1.0, the minor
+    /// version must match too, because semantic versioning lets anything change there. From 1.0, the library's minor
+    /// version must be no newer. So 1.2 runs with 1.9, but 1.9 doesn't run with 1.2.
     /// </summary>
     internal static bool AreCompatible(Version builtWith, Version used)
     {
-        var areCompatible = builtWith.Major == used.Major && (used.Major > 0 || builtWith.Minor == used.Minor);
+        var areCompatible = builtWith.Major == used.Major
+                            && (used.Major > 0 ? builtWith.Minor <= used.Minor : builtWith.Minor == used.Minor);
+
         return areCompatible;
     }
 
     /// <summary>
-    /// A version as the package numbers its releases, such as <c>0.15.0</c>, without the revision the assembly version
-    /// adds.
+    /// The advice that ends the <c>LOC702</c> message.
+    /// </summary>
+    private static string GetAdvice(OtherVersionLibrary library)
+    {
+        var advice = library.IsNewer
+            ? $"update CodeChops.Idioma in this project to {library.BuiltWith} or later"
+            : $"update '{library.AssemblyName}' to a version built with {library.Used}, or rebuild it";
+
+        return advice;
+    }
+
+    /// <summary>
+    /// A version such as <c>0.15.0</c>, without the assembly version's revision.
     /// </summary>
     private static string FormatVersion(Version version)
     {
@@ -104,10 +106,7 @@ public sealed class ReferencedVersionsGenerator : IIncrementalGenerator
 }
 
 /// <summary>
-/// A referenced library that was built with a version of the package that the version the compilation references may
-/// not run (<c>LOC702</c>).
+/// A referenced library built with an incompatible package version (<c>LOC702</c>).
 /// </summary>
-/// <param name="AssemblyName">The name of the library's assembly.</param>
-/// <param name="BuiltWith">The version of the package the library was built with.</param>
-/// <param name="Used">The version of the package the compilation references.</param>
-internal readonly record struct OtherVersionLibrary(string AssemblyName, string BuiltWith, string Used);
+/// <param name="Used">The package version the compilation references.</param>
+internal readonly record struct OtherVersionLibrary(string AssemblyName, string BuiltWith, string Used, bool IsNewer);

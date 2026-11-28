@@ -82,22 +82,22 @@ public sealed partial class LocalizationRegistryTests
         var first = new RegistryCountingCulture("nl-NL");
         var other = new RegistryCountingCulture("nl-NL");
 
-        var resolved = ResolvedSets<IRegistryLocalization>.Get(first, textCount: 1);
+        var resolved = ResolvedSets<IRegistryLocalization>.Get(first);
         var kept = resolved.Lookup.Culture!;
-        ResolvedSets<IRegistryLocalization>.Get(other, textCount: 1).ShouldBeSameAs(resolved);
+        ResolvedSets<IRegistryLocalization>.Get(other).ShouldBeSameAs(resolved);
         var otherReads = other.NameReads;
 
         // Act: the lookup's own culture and the other object in turn.
         for (var i = 0; i < 10; i++)
         {
-            ResolvedSets<IRegistryLocalization>.Get(kept, textCount: 1).ShouldBeSameAs(resolved);
-            ResolvedSets<IRegistryLocalization>.Get(other, textCount: 1).ShouldBeSameAs(resolved);
+            ResolvedSets<IRegistryLocalization>.Get(kept).ShouldBeSameAs(resolved);
+            ResolvedSets<IRegistryLocalization>.Get(other).ShouldBeSameAs(resolved);
         }
 
         var readsInTurn = other.NameReads - otherReads;
 
-        LocalizationRegistry.Register(new RegistryConfiguredLocalization("it"));
-        var afterRegistration = ResolvedSets<IRegistryLocalization>.Get(other, textCount: 1);
+        LocalizationRegistry.Register(new RegistryLocalizationIt());
+        var afterRegistration = ResolvedSets<IRegistryLocalization>.Get(other);
 
         // Assert: told by reference, so the name wasn't read again. A registration drops what the thread kept.
         readsInTurn.ShouldBe(0);
@@ -117,6 +117,19 @@ public sealed partial class LocalizationRegistryTests
         withDutch.Resolve(Culture("nl-NL")).Levels.Length.ShouldBe(1);
         withoutDutch.Resolve(Culture("nl-NL")).Levels.ShouldBeEmpty();
         withDutch.ResolveLanguage("en").Names.ShouldBe(["en"]);
+    }
+
+    [Test]
+    public void Resolve_OfCultureWithScript_ShouldReachAppLanguageOfSameScriptAlone()
+    {
+        // Arrange: an app that declares zh-TW, which the build gives the script Hant.
+        var scripts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["zh-TW"] = "Hant" }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        var registry = LocalizationRegistry.Create([], scripts, "en", "zh-TW");
+
+        // Act & Assert: zh-Hant-TW reaches zh-TW, and zh-Hans-TW, in the other script, gets the default language.
+        registry.Resolve(Culture("zh-Hant-TW")).Names[..2].ShouldBe(["zh-Hant-TW", "zh-TW"]);
+        registry.Resolve(Culture("zh-Hant-TW")).ShowsCulture.ShouldBeTrue();
+        registry.Resolve(Culture("zh-Hans-TW")).ShowsCulture.ShouldBeFalse();
     }
 
     [Test]

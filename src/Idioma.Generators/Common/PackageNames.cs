@@ -1,11 +1,11 @@
+using System.Reflection;
+
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// The names of this package's own types and namespaces, as the generators, the analyzers, and the code fixes find them
-/// in a compilation, and as generated code writes them.
+/// The names of this package's types and namespaces, as the build finds them and generated code writes them.
 /// </summary>
-// One place for each name: a type that is renamed in the package is then renamed here once, and the tests of that type
-// pin the name it is found by (Metadata_ShouldMatchWhatGeneratorReads).
+// The tests pin each name to its type (Metadata_ShouldMatchWhatGeneratorReads).
 internal static class PackageNames
 {
     public const string Assembly = "CodeChops.Idioma";
@@ -26,19 +26,35 @@ internal static class PackageNames
     public const string ShownValueAttribute = InternalsNamespace + ".ShownValueAttribute";
 
     /// <summary>
-    /// The folder of the pages of build errors and warnings. Each page holds the codes of one subject, with an example
-    /// and the fix of each.
+    /// The docs of the release this assembly ships in, under the tag the publish workflow requires, such as
+    /// <c>v0.17.0-preview</c>. A build without a package version links to <c>main</c>.
     /// </summary>
-    private const string BuildErrorsFolder = "https://github.com/Code-Chops/Idioma/blob/main/docs/build-errors/";
+    // Pinned to the release, because below 1.0 a code can move or change its meaning in the next one. So a link from an
+    // IDE that runs an older package still lands on the section of its own code. The informational version is the
+    // package version (Directory.Build.props), with the commit after a '+'.
+    private static string BuildErrorsFolder { get; } = $"https://github.com/Code-Chops/Idioma/blob/{ReadReleaseTag()}/docs/build-errors/";
 
     /// <summary>
-    /// The help link of a diagnostic: the section of its code on the page of its subject, such as
-    /// <c>LOC2XX-sets.md#loc201</c> for <c>LOC201</c>. The first digit of a code names its subject. An IDE opens the
-    /// link from the code in its error list.
+    /// The tag of this assembly's package version, such as <c>v0.17.0-preview</c>, or <c>main</c> without a version.
     /// </summary>
-    // On main, and not at the tag of a version as the README of the package links: this assembly doesn't know the
-    // version of the package it ships in. So a page or a section that a released version links to stays where it is.
-    // GitHub tells the case of a path apart, so each page is named here as its file is.
+    internal static string ReadReleaseTag()
+    {
+        var version = typeof(PackageNames).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+        if (String.IsNullOrWhiteSpace(version))
+            return "main";
+
+        var commit = version!.IndexOf('+');
+        var tag = $"v{(commit < 0 ? version : version.Substring(0, commit))}";
+
+        return tag;
+    }
+
+    /// <summary>
+    /// The help link of a diagnostic, such as <c>LOC2XX-sets.md#loc201</c> for <c>LOC201</c>, in the docs of this
+    /// release. The first digit of a code names its page.
+    /// </summary>
+    // Paths are case-sensitive on GitHub.
     public static string HelpLink(string diagnosticId)
     {
         var page = diagnosticId[3] switch
@@ -58,8 +74,8 @@ internal static class PackageNames
     }
 
     /// <summary>
-    /// Whether a type is <c>ILocalizationSet</c> itself. Told by its name and namespaces, part by part, which builds no
-    /// string, because discovery asks this of every interface of every class with a base list, on every edit.
+    /// Whether a type is <c>ILocalizationSet</c> itself. Compared part by part without building a string, because
+    /// discovery asks it of every interface on every edit.
     /// </summary>
     public static bool IsLocalizationSet(INamedTypeSymbol type)
     {
@@ -67,8 +83,7 @@ internal static class PackageNames
     }
 
     /// <summary>
-    /// Whether a type is <c>ILocalizationSet&lt;TEnum&gt;</c>, which a set of the texts of an enum lists in place of
-    /// <c>ILocalizationSet</c>. Told part by part as <see cref="IsLocalizationSet(INamedTypeSymbol)"/> is.
+    /// Whether a type is <c>ILocalizationSet&lt;TEnum&gt;</c>, which a set of an enum's texts lists.
     /// </summary>
     public static bool IsLocalizationSetOfEnum(INamedTypeSymbol type)
     {
@@ -90,9 +105,8 @@ internal static class PackageNames
     }
 
     /// <summary>
-    /// Whether a type is the contract of a set, such as <c>IShopLocalization</c>: an interface the source generator
-    /// marks <c>[LocalizationContract]</c>, or one written by hand, which derives from <c>ILocalizationSet</c>.
-    /// <c>ILocalizationSet&lt;TEnum&gt;</c> derives from it too, and is no contract.
+    /// Whether a type is a contract: generated with <c>[LocalizationContract]</c>, or written by hand deriving from
+    /// <c>ILocalizationSet</c>. <c>ILocalizationSet&lt;TEnum&gt;</c> is no contract.
     /// </summary>
     public static bool IsContract(INamedTypeSymbol type)
     {
@@ -110,9 +124,7 @@ internal static class PackageNames
     }
 
     /// <summary>
-    /// Whether a type is a contract the source generator writes, which it marks <c>[LocalizationContract]</c>. The
-    /// generator writes it from the default-language set on every build, so its texts change with that set. A contract
-    /// written by hand doesn't.
+    /// Whether a type is a generated contract, whose texts follow the default-language set.
     /// </summary>
     public static bool IsGeneratedContract(INamedTypeSymbol type)
     {
@@ -127,8 +139,7 @@ internal static class PackageNames
     }
 
     /// <summary>
-    /// The enums a generated contract names, as in <c>[LocalizationContract(typeof(OrderStatus))]</c>: those whose
-    /// members it has a text for, which each of its sets lists as <c>ILocalizationSet&lt;TEnum&gt;</c>. Empty for any
+    /// The enums a generated contract names, as in <c>[LocalizationContract(typeof(OrderStatus))]</c>. Empty for any
     /// other contract.
     /// </summary>
     public static ImmutableArray<INamedTypeSymbol> GetContractEnums(INamedTypeSymbol contract)
@@ -138,7 +149,6 @@ internal static class PackageNames
             if (attribute.AttributeClass is not { } attributeClass || !IsLocalizationContractAttribute(attributeClass))
                 continue;
 
-            // The enums as the one argument of the params constructor, an array.
             if (attribute.ConstructorArguments is not [{ Kind: TypedConstantKind.Array } enums])
                 return [];
 
@@ -148,10 +158,6 @@ internal static class PackageNames
         return [];
     }
 
-    /// <summary>
-    /// Whether a type is <c>LocalizationContractAttribute</c>, told part by part as
-    /// <see cref="IsLocalizationSet(INamedTypeSymbol)"/> is.
-    /// </summary>
     private static bool IsLocalizationContractAttribute(INamedTypeSymbol type)
     {
         return type is

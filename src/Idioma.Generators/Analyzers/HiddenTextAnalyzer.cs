@@ -6,17 +6,8 @@ namespace CodeChops.Idioma.Generators;
 /// Reports a member of a set that hides a text of a class it derives from, instead of overriding it (<c>LOC302</c>).
 /// </summary>
 /// <remarks>
-/// <para>
-/// A set that derives from another, such as a regional set or an app's rewording of a library's set, implements the
-/// contract through the class it derives from. The contract then calls the member of that class. So a member of the
-/// same name that hides it, as <c>public new string Color => "Colour";</c> does, is never shown. It compiles without a
-/// warning, because <see langword="new"/> is what the IDE adds for the compiler's warning about hiding (<c>CS0108</c>).
-/// </para>
-/// <para>
-/// A set that lists the contract again next to the class it derives from maps the contract to the hiding member, which
-/// then words the text. Such a member isn't reported. Neither is a member that hides something that isn't a text, nor
-/// a method that only shares its name with a text.
-/// </para>
+/// A derived set implements the contract through its base class, so a hiding member is never shown. A set that lists
+/// the contract again maps it to the hiding member, so that member isn't reported.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
@@ -24,8 +15,7 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
     public const string HiddenTextDiagnosticId = "LOC302";
 
     /// <summary>
-    /// The property of a diagnostic that holds the full name of the contract whose text is hidden, such as
-    /// <c>TestApp.IShopLocalization</c>, for the code fix that lists the contract again.
+    /// The diagnostic property with the contract's full name, for the code fix that lists the contract again.
     /// </summary>
     public const string ContractProperty = "Contract";
 
@@ -45,7 +35,7 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
     {
         context.EnableConcurrentExecution();
 
-        // A set is written by hand, and what a generator writes is not its author's to change.
+        // A set is written by hand.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.RegisterCompilationStartAction(Start);
     }
@@ -60,14 +50,12 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeSet(SymbolAnalysisContext context, INamedTypeSymbol localizationSet)
     {
-        // Only a class that derives from another can hide a member.
         if (context.Symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class, BaseType.SpecialType: not SpecialType.System_Object } set
             || !set.AllInterfaces.Contains(localizationSet, SymbolEqualityComparer.Default))
         {
             return;
         }
 
-        // The language of the set as the message names it: 'en-GB', or "that language" when the build can't read it.
         string? language = null;
 
         foreach (var contract in set.AllInterfaces)
@@ -79,7 +67,7 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
 
             foreach (var text in contract.GetMembers())
             {
-                // A text the set implements itself, as it does after listing the contract again, isn't hidden.
+                // A text the set implements itself isn't hidden.
                 if (text is not (IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary })
                     || set.FindImplementationForInterfaceMember(text) is not { } implementation
                     || SymbolEqualityComparer.Default.Equals(implementation.ContainingType, set))
@@ -92,11 +80,12 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
                     if (!Hides(member, implementation))
                         continue;
 
-                    language ??= LocalizationDiscovery.ReadLanguage(set, context.Compilation, context.CancellationToken) is { } code
-                        ? $"'{code}'"
-                        : "that language";
+                    language ??= AnalyzerSupport.DescribeLanguage(set, context.Compilation, context.CancellationToken);
 
                     properties ??= ImmutableDictionary<string, string?>.Empty.Add(ContractProperty, contract.ToDisplayString());
+
+                    // The member an override would override, which may be a sealed override between the two.
+                    var hidden = ContractTexts.IsExplicitImplementation(implementation) ? implementation : FindHidden(member, set) ?? implementation;
 
                     context.ReportDiagnostic(Diagnostic.Create(
                         HiddenTextRule,
@@ -104,36 +93,72 @@ public sealed class HiddenTextAnalyzer : DiagnosticAnalyzer
                         properties,
                         set.Name,
                         text.Name,
-                        implementation.ContainingType.Name,
+                        hidden.ContainingType.Name,
                         language,
-                        GetAdvice(text.Name, implementation, contract.Name, context.Compilation)));
+                        GetAdvice(text.Name, hidden, implementation, set, contract.Name, context.Compilation)));
                 }
             }
         }
     }
 
     /// <summary>
-    /// What to do about a hidden text, without the period that ends the message. A text that can be overridden is overridden. One of this assembly can be made
-    /// virtual first. One of another assembly, such as a library's, can't, so the contract is listed again.
+    /// The advice: override, make virtual or unsealed and override, or list the contract again where nothing can be
+    /// overridden, as for another assembly's member or an explicit implementation.
     /// </summary>
-    private static string GetAdvice(string text, ISymbol implementation, string contract, Compilation compilation)
+    /// <param name="hidden">The member an override would override (<see cref="FindHidden"/>).</param>
+    /// <param name="implementation">The member that implements the text.</param>
+    private static string GetAdvice(string text, ISymbol hidden, ISymbol implementation, INamedTypeSymbol set, string contract, Compilation compilation)
     {
-        var holder = implementation.ContainingType.Name;
-        var listAgain = $"list '{contract}' again next to '{holder}'";
+        // The contract is listed again in the set's own base list, next to the class it derives from.
+        var derivedFrom = set.BaseType!.Name;
+        var listAgain = $"list '{contract}' again next to '{derivedFrom}'";
+        var holder = hidden.ContainingType.Name;
 
-        if (implementation is { IsVirtual: true } or { IsAbstract: true } or { IsOverride: true, IsSealed: false })
+        // An explicit implementation can be neither virtual nor overridden.
+        if (ContractTexts.IsExplicitImplementation(implementation))
+            return $"List '{contract}' again next to '{derivedFrom}', because '{holder}' implements '{text}' explicitly, which can't be overridden";
+
+        // A member of a class in between, such as one marked new, would be overridden instead of the text.
+        if (!Overrides.IsOrOverrides(hidden, implementation))
+            return $"List '{contract}' again next to '{derivedFrom}', because '{holder}.{text}' hides the text too";
+
+        if (hidden is { IsVirtual: true } or { IsAbstract: true } or { IsOverride: true, IsSealed: false })
             return $"Override '{holder}.{text}' instead, or {listAgain}";
 
-        if (SymbolEqualityComparer.Default.Equals(implementation.ContainingAssembly, compilation.Assembly))
+        var isOwn = SymbolEqualityComparer.Default.Equals(hidden.ContainingAssembly, compilation.Assembly);
+
+        if (hidden.IsSealed)
+        {
+            return isOwn
+                ? $"Remove 'sealed' from '{holder}.{text}' and override it, or {listAgain}"
+                : $"List '{contract}' again next to '{derivedFrom}', because '{holder}.{text}' is sealed and lies in another assembly";
+        }
+
+        if (isOwn)
             return $"Make '{holder}.{text}' virtual and override it, or {listAgain}";
 
-        return $"List '{contract}' again next to '{holder}', because '{holder}.{text}' isn't virtual and lies in another assembly";
+        return $"List '{contract}' again next to '{derivedFrom}', because '{holder}.{text}' isn't virtual and lies in another assembly";
     }
 
     /// <summary>
-    /// Whether a member of a set hides the member that implements a text: a public property of its name, or a public
-    /// method of its name with the same parameters, that doesn't override it. The code fix asks the same of each class
-    /// the set derives from, to find the member an override would override.
+    /// The first member of a class the set derives from that a member hides, which an override would override, or
+    /// <see langword="null"/>. The code fix uses it too.
+    /// </summary>
+    internal static ISymbol? FindHidden(ISymbol member, INamedTypeSymbol set)
+    {
+        for (var type = set.BaseType; type is not null; type = type.BaseType)
+        {
+            foreach (var candidate in type.GetMembers(member.Name))
+                if (Hides(member, candidate))
+                    return candidate;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a member hides the member that implements a text: a public, non-override property or method of the same
+    /// signature. The code fix uses it too.
     /// </summary>
     internal static bool Hides(ISymbol member, ISymbol implementation)
     {

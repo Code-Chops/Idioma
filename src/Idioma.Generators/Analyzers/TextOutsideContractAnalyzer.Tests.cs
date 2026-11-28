@@ -426,7 +426,6 @@ public sealed class TextOutsideContractAnalyzerTests
     [Arguments("", """public string Basket() => "Mandje";""")] // No text that takes values, as it takes none
     [Arguments("", """public string Format<T>(T value) => "";""")] // Can't be a text (LOC400)
     [Arguments("", """public string Greeting(string name, int visits) => "";""")] // Another method of a text's name
-    [Arguments("", """public string LocalizationLanguageCode => "nl";""")]
     [Arguments("""public string Format<T>(T value) => "";""", "")] // In the default-language set: LOC400
     [Arguments("""public string GetTextByKey => "Key";""", """public string GetTextByKey => "Sleutel";""")] // LOC300, still in the contract
     public async Task MemberThatIsATextOfTheContractOrNoText_ShouldReportNothing(string english, string dutch)
@@ -494,7 +493,7 @@ public sealed class TextOutsideContractAnalyzerTests
     [Test]
     public async Task SetWithoutContract_ShouldReportNothing()
     {
-        // Arrange & Act: LOC204 tells the set to list its contract.
+        // Arrange & Act: LOC205 tells the set to list its contract.
         var diagnostics = await AnalyzeAsync("""
             using CodeChops.Idioma;
 

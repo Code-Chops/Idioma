@@ -6,200 +6,185 @@ namespace CodeChops.Idioma;
 public sealed partial class LocalizationRegistry
 {
     /// <summary>
-    /// A registered set, with the language it had when it registered. A set the registry creates itself is created
-    /// when a text of its contract is first shown.
+    /// A registered set, with the tier it registered in.
     /// </summary>
-    // A class, for the reason ContractSet is one. As a tuple, it left nine methods of ImmutableArray to the JIT at the
-    // start of every app.
+    // A class, not a struct or tuple, because ReadyToRun can't precompile the framework's generic types for a struct of
+    // this library.
     internal sealed class Registration
     {
         private readonly Lazy<ILocalizationSet> _set;
 
         public Type Type { get; }
 
-        /// <summary>
-        /// The language the set registered with.
-        /// </summary>
-        public string Language { get; }
+        public RegistrationTier Tier { get; }
 
         /// <summary>
-        /// The set, which is created at the first read. A set whose constructor threw is created again at the next read,
-        /// so a constructor that failed once, such as on a setting that wasn't loaded yet, doesn't fail its texts for
-        /// good.
+        /// Created at the first read. A constructor that threw runs again at the next read, so a passing failure, such
+        /// as a setting that wasn't loaded yet, doesn't fail its texts for good.
         /// </summary>
         public ILocalizationSet Set => this._set.Value;
 
-        /// <summary>
-        /// Whether the set exists: one registered as an instance, or one the registry created already.
-        /// </summary>
-        public bool IsCreated => this._set.IsValueCreated;
-
-        private Registration(Type type, Lazy<ILocalizationSet> set, string language)
+        // The language is read here, so a set without one fails at its registration, not at the first text shown.
+        private Registration(Type type, Lazy<ILocalizationSet> set, RegistrationTier tier)
         {
+            _ = GetLanguageCode(type);
+
             this.Type = type;
             this._set = set;
-            this.Language = language;
+            this.Tier = tier;
         }
 
-        public static Registration Of(ILocalizationSet set)
+        public static Registration Of(ILocalizationSet set, RegistrationTier tier)
         {
-            var registration = new Registration(set.GetType(), new Lazy<ILocalizationSet>(set), ReadLanguageCode(set));
+            var registration = new Registration(set.GetType(), new Lazy<ILocalizationSet>(set), tier);
             return registration;
         }
 
-        // PublicationOnly keeps no exception, so a failed constructor runs again at the next read. Two threads may each
-        // create the set, and the first one to finish gives every text its instance, as for the set of a default
-        // language (GeneratedCode.DefaultSet).
-        public static Registration ToCreate(Type type, Func<ILocalizationSet> create, string language)
+        // PublicationOnly keeps no exception, so a failed constructor runs again. Where two threads race, the first to
+        // finish wins.
+        public static Registration ToCreate(Type type, Func<ILocalizationSet> create, RegistrationTier tier)
         {
-            var registration = new Registration(type, new Lazy<ILocalizationSet>(() => CreateSet(type, create), LazyThreadSafetyMode.PublicationOnly), language);
+            var registration = new Registration(type, new Lazy<ILocalizationSet>(() => CreateSet(type, create), LazyThreadSafetyMode.PublicationOnly), tier);
             return registration;
         }
     }
 
     /// <summary>
-    /// The registered sets, and the app with its languages, with the registry built from them. It never changes, so a
-    /// caller always sees sets, an app and languages that belong together, and its registry holds exactly these.
+    /// Where a set comes from. A later tier wins over an earlier one for the same contract and language.
     /// </summary>
-    private sealed class Registrations(
-        ImmutableArray<Registration> defaults,
-        ImmutableArray<Registration> overrides,
-        ImmutableArray<string> languages,
-        Assembly? application)
+    internal enum RegistrationTier
     {
-        // Each set with the language it had when it registered, so that a registration can replace an earlier one of
-        // the same type and language without calling into the sets, which are consumer code.
-        private ImmutableArray<Registration> Defaults { get; } = defaults;
-        private ImmutableArray<Registration> Overrides { get; } = overrides;
+        /// <summary>
+        /// A library's own sets: those the generated code registers next to their contract, and those of
+        /// <see cref="RegisterLibrarySets"/>.
+        /// </summary>
+        LibrarySets,
+
+        /// <summary>
+        /// A library's rewordings of another assembly's set.
+        /// </summary>
+        Rewordings,
+
+        /// <summary>
+        /// The app's rewordings of another assembly's set, which win over a library's.
+        /// </summary>
+        ApplicationRewordings,
+
+        /// <summary>
+        /// The sets of <see cref="Register(ReadOnlySpan{ILocalizationSet})"/>.
+        /// </summary>
+        ByHand,
+    }
+
+    /// <summary>
+    /// The registered sets and the app with its languages, with the registry built from them. It never changes, so a
+    /// caller always sees parts that belong together.
+    /// </summary>
+    private sealed class Registrations(ImmutableArray<Registration> all, ImmutableArray<string> languages,
+        FrozenDictionary<string, string> scripts, Assembly? application)
+    {
+        public static Registrations Empty { get; } = new([], [], FrozenDictionary<string, string>.Empty, application: null);
 
         /// <summary>
         /// The app's languages, the default first. Empty until the app's registrar gives them.
         /// </summary>
         public ImmutableArray<string> Languages { get; } = languages;
 
-        /// <summary>
-        /// The assembly of the app, whose registrar gave the <see cref="Languages"/>, or <see langword="null"/> where
-        /// none did.
-        /// </summary>
         public Assembly? Application { get; } = application;
 
         /// <summary>
-        /// The registry of these sets and languages. Built at the first read, and the same instance from then on.
+        /// Every registered set, in the order it registered.
+        /// </summary>
+        private ImmutableArray<Registration> All { get; } = all;
+
+        /// <summary>
+        /// The default script of each language the build knows one for, such as <c>Hant</c> for <c>zh-TW</c>. The
+        /// languages are <see cref="Languages"/> and those of the described sets, such as a regional set of a language
+        /// the app declares.
+        /// </summary>
+        private FrozenDictionary<string, string> Scripts { get; } = scripts;
+
+        /// <summary>
+        /// Built at the first read, and the same instance from then on.
         /// </summary>
         public LocalizationRegistry Registry => this._registry ?? this.CreateRegistry();
         private LocalizationRegistry? _registry;
 
-        /// <summary>
-        /// These registrations with sets added to the library's own sets or to the sets that reword them.
-        /// </summary>
-        public Registrations With(Registration[] entries, bool asDefaults)
+        public Registrations With(Registration[] entries)
         {
-            var tier = asDefaults ? this.Defaults : this.Overrides;
-
-            // The last registration of each type and language, in the order they came. So a set registered again moves
-            // to the end and wins, and registering again (a second service provider, a test) can't grow the list without
-            // bound. Matched on the language each set registered with: a set whose code was described only after it
-            // registered (DescribeSet) is kept once next to a later registration of its type, and no more than once.
-            // Walked once, from the end: removing each entry from the tier by itself took the square of the number of
-            // sets, 22 ms for 2,000 of them (measured 2026-11-19).
-            var kept = new Registration[tier.Length + entries.Length];
+            // The last registration of each type and tier, in the order they came, so a set registered again moves to
+            // the end and wins, and repeated registrations can't grow the list. Walked once from the end, so it stays
+            // linear.
+            var existing = this.All;
+            var kept = new Registration[existing.Length + entries.Length];
             var start = kept.Length;
-            var seen = new HashSet<Registration>(kept.Length, SameTypeAndLanguage.Instance);
+            var seen = new HashSet<(Type, int)>(kept.Length);
 
             for (var i = entries.Length - 1; i >= 0; i--)
-                if (seen.Add(entries[i]))
+                if (seen.Add((entries[i].Type, (int)entries[i].Tier)))
                     kept[--start] = entries[i];
 
-            for (var i = tier.Length - 1; i >= 0; i--)
-                if (seen.Add(tier[i]))
-                    kept[--start] = tier[i];
+            for (var i = existing.Length - 1; i >= 0; i--)
+                if (seen.Add((existing[i].Type, (int)existing[i].Tier)))
+                    kept[--start] = existing[i];
 
-            tier = ImmutableArray.Create(kept, start, kept.Length - start);
-
-            var registrations = asDefaults
-                ? new Registrations(tier, this.Overrides, this.Languages, this.Application)
-                : new Registrations(this.Defaults, tier, this.Languages, this.Application);
-
+            var registrations = new Registrations(ImmutableArray.Create(kept, start, kept.Length - start), this.Languages, this.Scripts, this.Application);
             return registrations;
         }
 
-        /// <summary>
-        /// These registrations with the app and its languages.
-        /// </summary>
-        public Registrations WithApplication(Assembly application, ImmutableArray<string> appLanguages)
+        public Registrations WithApplication(Assembly application, ImmutableArray<string> appLanguages, FrozenDictionary<string, string> appScripts)
         {
-            var registrations = new Registrations(this.Defaults, this.Overrides, appLanguages, application);
+            // A library's sets may be described before the app's registrar runs, so their scripts stay.
+            var scripts = appScripts;
+
+            if (this.Scripts.Count > 0)
+            {
+                var merged = new Dictionary<string, string>(this.Scripts, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var (language, script) in appScripts)
+                    merged[language] = script;
+
+                scripts = merged.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var registrations = new Registrations(this.All, appLanguages, scripts, application);
             return registrations;
         }
 
         /// <summary>
-        /// The same sets, app and languages, with a registry that is yet to be built.
+        /// With the default script of a described set's language. A script the language already has stays.
+        /// </summary>
+        public Registrations WithScript(string language, string script)
+        {
+            if (this.Scripts.ContainsKey(language))
+                return this.Copy();
+
+            var scripts = new Dictionary<string, string>(this.Scripts, StringComparer.OrdinalIgnoreCase) { [language] = script };
+            var registrations = new Registrations(this.All, this.Languages, scripts.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase), this.Application);
+
+            return registrations;
+        }
+
+        /// <summary>
+        /// The same parts, with a registry that's yet to be built.
         /// </summary>
         public Registrations Copy()
         {
-            var copy = new Registrations(this.Defaults, this.Overrides, this.Languages, this.Application);
+            var copy = new Registrations(this.All, this.Languages, this.Scripts, this.Application);
             return copy;
         }
 
         private LocalizationRegistry CreateRegistry()
         {
-            // Building reads the language code of each set that exists, which is consumer code. A code that reads a
-            // text, or the registry, asks for the registry being built, which built it again, without end, until the
-            // stack overflowed and the process died. Thrown instead, the build files that set under the language it
-            // registered with (GetFilingLanguage).
-            if (IsBuildingRegistry)
-                throw new InvalidOperationException(
-                    $"A set's {nameof(ILocalizationSet)}.{nameof(ILocalizationSet.LocalizationLanguageCode)} reads a text or the registry, which needs the sets of the app that are being built from that code. "
-                    + "Return a culture name without reading a text, such as en-GB.");
+            // By tier, so the last of a contract and language wins whatever order the assemblies loaded in. Within a tier,
+            // in the order they registered, because OrderBy is a stable sort. By int, because ReadyToRun can't precompile
+            // the framework's generic types for an enum of this library.
+            ImmutableArray<Registration> registrations = [.. this.All.OrderBy(static registration => (int)registration.Tier)];
 
-            var registrations = this.Defaults.AddRange(this.Overrides);
-            LocalizationRegistry created;
-
-            // Nothing is held meanwhile, so two threads may build at once. The first one done gives the registry every
-            // caller gets, so that a cache a consumer keys on the instance sees one.
-            IsBuildingRegistry = true;
-
-            try
-            {
-                created = Create(registrations, this.Languages);
-            }
-            finally
-            {
-                IsBuildingRegistry = false;
-            }
+            // Two threads may build at once. The first one done wins, so a cache keyed on the instance sees one.
+            var created = Create(registrations, this.Languages, this.Scripts);
 
             return Interlocked.CompareExchange(ref this._registry, created, comparand: null) ?? created;
-        }
-
-        /// <summary>
-        /// Whether this thread builds a registry (<see cref="CreateRegistry"/>). Per thread, because a build runs on one,
-        /// and another thread may build at the same time.
-        /// </summary>
-        [ThreadStatic]
-        private static bool IsBuildingRegistry;
-
-        /// <summary>
-        /// Tells registrations of the same type and language apart from the others, the language in any letter case.
-        /// </summary>
-        private sealed class SameTypeAndLanguage : IEqualityComparer<Registration>
-        {
-            public static SameTypeAndLanguage Instance { get; } = new();
-
-            public bool Equals(Registration? x, Registration? y)
-            {
-                var areSame = x is not null
-                              && y is not null
-                              && x.Type == y.Type
-                              && String.Equals(x.Language, y.Language, StringComparison.OrdinalIgnoreCase);
-
-                return areSame;
-            }
-
-            public int GetHashCode(Registration registration)
-            {
-                var hash = (registration.Type.GetHashCode() * 31) + StringComparer.OrdinalIgnoreCase.GetHashCode(registration.Language);
-                return hash;
-            }
         }
     }
 }

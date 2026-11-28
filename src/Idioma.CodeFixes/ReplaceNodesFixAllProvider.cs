@@ -4,26 +4,19 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Applies a fix that replaces nodes, also in other documents than the diagnostic's, to every diagnostic of a
-/// document, a project, or the solution at once. Each node changes once, however many diagnostics ask for it.
+/// Applies a fix that replaces nodes, possibly in other documents, to every diagnostic in the scope at once. Each node
+/// changes once, however many diagnostics ask for it.
 /// </summary>
-/// <param name="title">The title of the "Fix all".</param>
-/// <param name="equivalenceKey">The key of the fix it applies.</param>
-/// <param name="fix">The fix of one diagnostic.</param>
 /// <param name="prepare">
-/// Called for every diagnostic before the first fix is computed, or <see langword="null"/>. A fix that reads the whole
-/// project can then read it once for all of them.
+/// Called for every diagnostic before the first fix, so a fix that reads the whole project reads it once.
 /// </param>
 /// <param name="findStart">
-/// The node the fix of a diagnostic starts from, or <see langword="null"/>. A diagnostic whose node an earlier fix
-/// replaced already is skipped then, because its own fix would replace the same nodes.
+/// The node a diagnostic's fix starts from. A diagnostic whose start node was already replaced is skipped.
 /// </param>
 /// <param name="merge">
-/// What a node becomes when two fixes replace it, from the earlier replacement and the later one. Without it, the first
-/// replacement stands, because every diagnostic asks the same of the node.
+/// Combines an earlier and a later replacement of the same node. Without it, the first replacement stands.
 /// </param>
-// Not the batch fixer: that merges the changes of each diagnostic's fix, and two diagnostics of one text change the
-// same nodes.
+// Not the batch fixer, because two diagnostics of one text change the same nodes.
 internal sealed class ReplaceNodesFixAllProvider<TNode>(
     string title,
     string equivalenceKey,
@@ -34,8 +27,7 @@ internal sealed class ReplaceNodesFixAllProvider<TNode>(
     where TNode : SyntaxNode
 {
     /// <summary>
-    /// The nodes the fix of a diagnostic replaces, each with what it becomes, or <see langword="null"/> when the
-    /// diagnostic has no fix.
+    /// The nodes a diagnostic's fix replaces, with their replacements, or <see langword="null"/> when there's no fix.
     /// </summary>
     public delegate Dictionary<TNode, TNode>? Fix(SyntaxNode root, SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken);
 

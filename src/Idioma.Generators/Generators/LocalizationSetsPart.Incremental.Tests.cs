@@ -59,7 +59,6 @@ public sealed partial class LocalizationSetsPartTests
         british.OfContract.Wordings.Select(static wording => wording.Wording).ShouldBe(["Basket", "Hello, {name}!"]);
         british.OfContract.DeclaredTexts.ShouldBe(["Cart"]);
         british.OfContract.InheritedTexts.Select(static text => text.Name).ShouldBe(["Greeting"]);
-        british.OwnTexts.ShouldBeEmpty();
     }
 
     [Test]
@@ -96,7 +95,7 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void Discovery_WithoutDefaultLanguage_ShouldReadTheTextsOfEverySet()
     {
-        // Arrange & Act: a first language that isn't a culture name (LOC101) leaves the default language unknown, and
+        // Arrange & Act: a first language that isn't a culture name (LOC102) leaves the default language unknown, and
         // the build takes a set of any language for the default-language set, so that its contract is still written.
         var discovery = GeneratorTestHelper.GetStepValue<Discovery>(LocalizationParts.Sets(), LocalizationDiscovery.ContractTrackingName, """
             using CodeChops.Idioma;

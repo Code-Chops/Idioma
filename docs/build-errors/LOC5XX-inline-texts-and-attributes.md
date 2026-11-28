@@ -31,7 +31,6 @@ Where a missing text has to be a build error, write a [set of the enum](../enums
 A member marked `[Localized]` has a text that can't be registered, so `LocalizedText.GetTextByMember` won't find it. This is a warning, with these causes:
 
 - Its type is private or protected inside another type, or file-local. The generated code that holds the text can't name such a type. Make the type internal or public.
-- Its type, or a type around it, is marked `[Obsolete]` as an error. Naming such a type is an error that no pragma turns off. Make the `[Obsolete]` a warning, or remove `[Localized]`.
 - A wording is `null`. Write a wording for that language.
 - It's written in a `.razor` file, and the project builds with SDK 10. That goes for a member in `@code`, and for `@attribute [Localized(...)]` on the component. The source generator can't read what Razor generates there. Write the member, or the attribute on the component, in a code-behind file instead, such as `partial class OrderForm` in `OrderForm.razor.cs`. A class declared in `@code` moves to a C# file as a whole. From SDK 11 on, Razor writes both to a file that the source generator reads, so the text is found.
 - The attribute is on an indexer, which has no name to find a text by. Remove it.

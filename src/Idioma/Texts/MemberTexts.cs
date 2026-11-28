@@ -1,64 +1,46 @@
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Finds the texts of members marked <c>[Localized]</c>: a property, a field, an enum member, or a type. Each assembly
-/// registers one function that gives a member's wording per language. This class keeps what those functions find.
+/// Finds the texts of members marked <c>[Localized]</c>, through one function per assembly, and keeps what they find.
 /// Every overload of <c>LocalizedText.GetTextByMember</c> and <c>LocalizedText.GetTextOfType</c> reads from it.
 /// </summary>
 internal static class MemberTexts
 {
     /// <summary>
-    /// What finds a member's text: one function per assembly that marks members <c>[Localized]</c>, and the texts
-    /// found so far. Replaced as a whole when an assembly registers its function, so that a member looked up before
-    /// that isn't kept as one without a text.
+    /// Replaced as a whole when an assembly registers its function, so a member looked up before isn't kept as one
+    /// without a text.
     /// </summary>
     private static MemberTextSources Sources = new([]);
 
     /// <summary>
-    /// The texts of the type this thread asked for last by a <see cref="Type"/>. A form asks for the labels of one
-    /// model's properties one after another, so most lookups by a type find theirs here.
+    /// The texts of the type this thread asked for last, because a form asks for the labels of one model's properties
+    /// one after another.
     /// </summary>
-    // Per thread, because threads of a server render forms of different models at once. Shared by them, every lookup
-    // of another type wrote the field the others read, and a label took 63 to 103 ns where one thread takes 6 to 12 ns
-    // (8 threads, each asking for its own model). A thread keeps the texts of its last type until it asks for another.
+    // Per thread, because threads of a server render forms of different models at once, and a shared field would be
+    // written by every lookup.
     [ThreadStatic]
     private static TypeTexts? LastTextsByType;
 
-    /// <summary>
-    /// The wording of a member of a type the code names, for the current UI culture, or <see langword="null"/> for a
-    /// member without a text.
-    /// </summary>
     public static string? Get<T>(string memberName)
     {
         var text = GetTextsOf<T>().Get(memberName)?.Word();
         return text;
     }
 
-    /// <summary>
-    /// The wording of a member of a type the code holds, for the current UI culture, or <see langword="null"/> for a
-    /// member without a text.
-    /// </summary>
     public static string? Get(Type type, string memberName)
     {
         var text = GetTextsOf(type).Get(memberName)?.Word();
         return text;
     }
 
-    /// <summary>
-    /// The wording of a type itself, for a type the code names, or <see langword="null"/> for a type without a text.
-    /// </summary>
     public static string? GetOwn<T>()
     {
         var text = GetTextsOf<T>().GetOwn()?.Word();
         return text;
     }
 
-    /// <summary>
-    /// The wording of a type itself, for a type the code holds, or <see langword="null"/> for a type without a text.
-    /// </summary>
     public static string? GetOwn(Type type)
     {
         var text = GetTextsOf(type).GetOwn()?.Word();
@@ -66,8 +48,8 @@ internal static class MemberTexts
     }
 
     /// <summary>
-    /// Adds the function that finds the texts of an assembly's members.
-    /// <see cref="Internals.GeneratedCode.RegisterMemberTexts"/> calls this when the assembly registers.
+    /// Adds the function that finds the texts of an assembly's members
+    /// (<see cref="Internals.GeneratedCode.RegisterMemberTexts"/>).
     /// </summary>
     public static void Register(string[] languages, Func<Type, string?, string[]?> find)
     {
@@ -76,9 +58,7 @@ internal static class MemberTexts
 
         var finder = new MemberTextFinder(languages, find);
 
-        // A new whole, without the texts found so far, because a member looked up before its assembly registered was
-        // kept as one without a text. A lookup that started on the old whole keeps what it finds there, where no one
-        // reads it.
+        // A new whole, without the texts found so far, because a member looked up before was kept as one without a text.
         MemberTextSources current, next;
 
         do
@@ -90,7 +70,7 @@ internal static class MemberTexts
     }
 
     /// <summary>
-    /// The texts of a type the code names. Kept per type, so that asking again is a read of a field.
+    /// Kept per type, so asking again reads a field.
     /// </summary>
     private static TypeTexts GetTextsOf<T>()
     {
@@ -103,9 +83,6 @@ internal static class MemberTexts
         return texts;
     }
 
-    /// <summary>
-    /// The texts of a type the code holds.
-    /// </summary>
     private static TypeTexts GetTextsOf(Type type)
     {
         var sources = Volatile.Read(ref Sources);
@@ -128,16 +105,10 @@ internal static class MemberTexts
     }
 
     /// <summary>
-    /// Registers the texts of the assembly of a type, and of the assemblies of the classes it derives from, where they
-    /// aren't yet. Gives whether that registered something.
+    /// Runs the module initializers of a type's assembly and its base classes' assemblies, and gives whether that
+    /// registered something. An assembly that's only read through reflection, such as a plugin's, hasn't run its own.
     /// </summary>
-    /// <remarks>
-    /// An assembly registers its texts as its code first runs, in its module initializer. A plugin, or an assembly an
-    /// app loads lazily, may be read through reflection alone before that, as a table that shows the labels of a
-    /// plugin's model does. Its members then had no text. So the module initializer is run here, which the runtime does
-    /// once per module. Called once per type and registration, where the type's texts are first looked up.
-    /// </remarks>
-    // Not under NativeAOT, which runs every module initializer as the app starts, and loads no assembly later.
+    // Not under NativeAOT, which runs every module initializer as the app starts.
     private static bool RegisterAssembliesOf(Type type)
     {
         if (!RuntimeFeature.IsDynamicCodeSupported)
@@ -147,9 +118,8 @@ internal static class MemberTexts
 
         for (var current = type; current is not null && current != typeof(object); current = current.BaseType)
         {
-            // A module initializer is the consumer's code, and it may throw. So may a type that isn't of the runtime,
-            // which has no module to run. A lookup of a label then finds the texts registered so far, and what the
-            // initializer throws reaches the code of its own assembly when that first runs.
+            // A module initializer may throw, and a type that isn't of the runtime has no module to run. The lookup then
+            // finds the texts registered so far, and the exception reaches the assembly's own code when that first runs.
             try
             {
                 RuntimeHelpers.RunModuleConstructor(current.Module.ModuleHandle);
@@ -164,37 +134,26 @@ internal static class MemberTexts
         return registered;
     }
 
-    /// <summary>
-    /// The texts of <typeparamref name="T"/>, once they were asked for by that type.
-    /// </summary>
     private static class TextsOf<T>
     {
         public static TypeTexts? Value;
     }
 
     /// <summary>
-    /// The function that finds the texts of one assembly's members, with the languages of that assembly, the default
-    /// first.
+    /// The function that finds the texts of one assembly's members, with that assembly's languages, the default first.
     /// </summary>
     private sealed class MemberTextFinder(string[] languages, Func<Type, string?, string[]?> find)
     {
         public string[] Languages { get; } = languages;
 
         /// <summary>
-        /// Gives the wording of a member per language, in the order of <see cref="Languages"/>, or
-        /// <see langword="null"/> for what has no text.
+        /// Gives a member's wording per language, in the order of <see cref="Languages"/>.
         /// </summary>
         public Func<Type, string?, string[]?> Find { get; } = find;
     }
 
-    /// <summary>
-    /// The text of one member: its wording per language of its assembly.
-    /// </summary>
     private sealed class MemberText(string[] languages, string[] wordings)
     {
-        /// <summary>
-        /// The wording for the current UI culture.
-        /// </summary>
         public string Word()
         {
             var index = StandaloneLanguage.IndexOfShownLanguage(languages);
@@ -205,22 +164,15 @@ internal static class MemberTexts
         }
     }
 
-    /// <summary>
-    /// The functions that find a member's text, and the texts found so far, by type.
-    /// </summary>
     private sealed class MemberTextSources(MemberTextFinder[] finders)
     {
         public MemberTextFinder[] Finders { get; } = finders;
 
-        /// <summary>
-        /// The texts found for each type that was asked for. A type with type arguments, such as
-        /// <c>Page&lt;Order&gt;</c>, has those of its definition, <c>Page&lt;T&gt;</c>.
-        /// </summary>
         public ConcurrentDictionary<Type, TypeTexts> TextsByType { get; } = new();
 
         /// <summary>
-        /// Asks every function for the member of the type, and then of each class it derives from. A type's own text
-        /// is asked of the type alone.
+        /// Asks every function for the member of the type, and then of each base class. A type's own text is asked of
+        /// the type alone. A constructed generic type gives the texts of its definition.
         /// </summary>
         public MemberText? Get(Type type, string? member)
         {
@@ -236,55 +188,42 @@ internal static class MemberTexts
             return null;
         }
 
-        /// <summary>
-        /// The texts of a type that wasn't asked for before.
-        /// </summary>
         public TypeTexts AddTextsOf(Type type)
         {
-            // A type with type arguments is kept as it's asked for, and not as its definition. A thread's last lookup
-            // compares the type it was asked for, so it recognizes such a type only this way. Get finds the texts of
-            // the definition.
+            // Kept as asked for, not as its definition, because a thread's last lookup compares the type it was asked for.
             var texts = this.TextsByType.GetOrAdd(type, static (type, sources) => new TypeTexts(sources, type), this);
             return texts;
         }
     }
 
     /// <summary>
-    /// The texts found so far for the members of one type, and for the type itself, a member without a text
-    /// included.
+    /// The texts found so far for one type and its members, a member without a text included.
     /// </summary>
     /// <remarks>
-    /// A name is looked up without hashing all of it. Its place comes from its length and three of its characters.
-    /// It's compared as an object first. Nearly every lookup ends at that comparison, because a name is nearly always
-    /// the same string on every call: one written as <c>nameof(Address.City)</c>, and the name a
-    /// <see cref="PropertyInfo"/> gives. Hashing the whole name took most of the time of a lookup in WebAssembly,
-    /// where the runtime's own hash is interpreted.
+    /// A name is placed by its length and three of its characters, and compared as an object first, because it's nearly
+    /// always the same string, such as <c>nameof(Address.City)</c>. Hashing the whole name is slow in WebAssembly.
     /// </remarks>
     private sealed class TypeTexts(MemberTextSources sources, Type type)
     {
         /// <summary>
-        /// How many names are kept at most. A caller that asks for names it makes up, such as a user's input, would
-        /// otherwise let the names grow without end. A name beyond these is found anew each time.
+        /// So names a caller makes up, such as a user's input, can't grow without end. A name beyond these is found
+        /// anew each time.
         /// </summary>
         private const int MaxKept = 256;
 
         public MemberTextSources Sources { get; } = sources;
         public Type Type { get; } = type;
 
-        // Replaced as a whole when a name is added, so that a thread sees the names before it or after it, and never
-        // half of them. Two threads that add a name at once may lose one, which is then found anew.
+        // Replaced as a whole, so a thread never sees half of it. Two threads adding a name at once may lose one, which
+        // is then found anew.
         private volatile MemberTable _table = MemberTable.Empty;
 
         private MemberText? _ownText;
 
-        // Volatile, so a thread that sees it set also sees _ownText, which is written before it. Without it, a thread
-        // on ARM64 could see the flag before the text, and take a type with a text for one without. The flag can't be
-        // dropped, because a type without a text keeps null in _ownText.
+        // Volatile, so a thread that sees it set also sees _ownText, which is written first. A flag, because a type
+        // without a text keeps null in _ownText.
         private volatile bool _hasOwnText;
 
-        /// <summary>
-        /// The text of the type itself.
-        /// </summary>
         public MemberText? GetOwn()
         {
             if (this._hasOwnText)
@@ -298,9 +237,6 @@ internal static class MemberTexts
             return text;
         }
 
-        /// <summary>
-        /// The text of a member, by its name.
-        /// </summary>
         public MemberText? Get(string member)
         {
             var kept = this._table;
@@ -322,14 +258,13 @@ internal static class MemberTexts
     }
 
     /// <summary>
-    /// Names and the text of each, in places a name's length and three of its characters give. Never changed once made.
+    /// Names and the text of each, in an open-addressed table. Never changed once made.
     /// </summary>
     private sealed class MemberTable
     {
         public static MemberTable Empty { get; } = new(new string?[8], new MemberText?[8], count: 0);
 
-        // Two arrays, and not one of pairs, because an array of a struct of two is code the runtime compiles when the
-        // app starts. Arrays of objects are there already.
+        // Two arrays, not one of pairs, because ReadyToRun can't precompile an array of this library's struct.
         public string?[] Names { get; }
         public MemberText?[] Texts { get; }
         public int Count { get; }
@@ -342,8 +277,7 @@ internal static class MemberTexts
         }
 
         /// <summary>
-        /// This table with one name more. At most half of its places are taken, so that a search is short and always
-        /// ends.
+        /// This table with one name more. At most half of its places are taken, so a search is short and always ends.
         /// </summary>
         public MemberTable With(string name, MemberText? text)
         {
@@ -372,7 +306,7 @@ internal static class MemberTexts
             texts[place] = text;
         }
 
-        // Inlined, because a lookup asks here, and a call costs more than this in WebAssembly's interpreter.
+        // Inlined, because a call costs more than this in WebAssembly's interpreter.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Hash(string name)
         {

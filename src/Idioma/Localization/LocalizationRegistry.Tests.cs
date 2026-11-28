@@ -2,7 +2,7 @@ namespace CodeChops.Idioma.Tests;
 
 /// <summary>
 /// Tests for <see cref="LocalizationRegistry"/>: a registry holding exactly the given sets, lookup by contract with the
-/// culture walk, and the sets of the whole app with their two tiers. The sets of the whole app are process-wide, so
+/// culture walk, and the sets of the whole app with their tiers. The sets of the whole app are process-wide, so
 /// every test registering there uses a contract of its own, and runs apart from the test that compares
 /// <see cref="LocalizationRegistry.Current"/> by reference.
 /// </summary>
@@ -11,11 +11,11 @@ public sealed partial class LocalizationRegistryTests
     #region Fixture
     private interface IRegistryLocalization : ILocalizationSet;
 
-    private sealed class RegistryLocalizationEn : IRegistryLocalization;
+    internal sealed class RegistryLocalizationEn : IRegistryLocalization;
 
-    private sealed class RegistryLocalizationNl : IRegistryLocalization;
+    internal sealed class RegistryLocalizationNl : IRegistryLocalization;
 
-    private sealed class RegistryReplacementLocalizationNl : IRegistryLocalization;
+    internal sealed class RegistryReplacementLocalizationNl : IRegistryLocalization;
 
     /// <summary>
     /// A contract no set in <see cref="RegistryLocalizationNl"/>'s family implements.
@@ -25,20 +25,20 @@ public sealed partial class LocalizationRegistryTests
     /// <summary>
     /// A set serving two contracts at once.
     /// </summary>
-    private sealed class RegistryCombinedLocalizationNl : IRegistryLocalization, IRegistryOtherLocalization;
+    internal sealed class RegistryCombinedLocalizationNl : IRegistryLocalization, IRegistryOtherLocalization;
 
     private interface IRegistryTierLocalization : ILocalizationSet;
 
-    private sealed class RegistryTierDefaultLocalizationNl : IRegistryTierLocalization;
+    internal sealed class RegistryTierDefaultLocalizationNl : IRegistryTierLocalization;
 
-    private sealed class RegistryTierOverrideLocalizationNl : IRegistryTierLocalization;
+    internal sealed class RegistryTierOverrideLocalizationNl : IRegistryTierLocalization;
 
     private interface IRegistryLazyLocalization : ILocalizationSet;
 
     /// <summary>
     /// A set that counts how often it's created, to show when the registry creates a set it registered by its type.
     /// </summary>
-    private sealed class RegistryLazyLocalizationNl : IRegistryLazyLocalization
+    internal sealed class RegistryLazyLocalizationNl : IRegistryLazyLocalization
     {
         public static int Created;
 
@@ -48,13 +48,16 @@ public sealed partial class LocalizationRegistryTests
     private interface IRegistryLateDescribedLocalization : ILocalizationSet;
 
     /// <summary>
-    /// A set whose name ends in <c>Gb</c>, so it registers under <c>gb</c> until the build describes it as <c>en-GB</c>.
+    /// A set the test describes as <c>en</c>, and a set deriving from it that registers under <c>en</c> until the test
+    /// describes it as <c>en-GB</c>.
     /// </summary>
-    private sealed class RegistryLateDescribedLocalizationEnGb : IRegistryLateDescribedLocalization;
+    private class RegistryLateDescribedBase : IRegistryLateDescribedLocalization;
+
+    private sealed class RegistryLateDescribedLocalizationEnGb : RegistryLateDescribedBase;
 
     private interface IRegistrySteadyLocalization : ILocalizationSet;
 
-    private sealed class RegistrySteadyLocalizationNl : IRegistrySteadyLocalization;
+    internal sealed class RegistrySteadyLocalizationNl : IRegistrySteadyLocalization;
 
     private interface IRegistryFlakyLocalization : ILocalizationSet;
 
@@ -62,7 +65,7 @@ public sealed partial class LocalizationRegistryTests
     /// A set whose constructor throws as often as <see cref="FailuresLeft"/> says, as one that reads a setting that isn't
     /// loaded yet at the start of an app.
     /// </summary>
-    private sealed class RegistryFlakyLocalizationNl : IRegistryFlakyLocalization
+    internal sealed class RegistryFlakyLocalizationNl : IRegistryFlakyLocalization
     {
         public static int FailuresLeft;
 
@@ -79,7 +82,7 @@ public sealed partial class LocalizationRegistryTests
     /// A set whose constructor waits until a second thread creates it too, while <see cref="BothCreating"/> is set. So
     /// two threads create it at once.
     /// </summary>
-    private sealed class RegistryRacedLocalizationNl : IRegistryRacedLocalization
+    internal sealed class RegistryRacedLocalizationNl : IRegistryRacedLocalization
     {
         private static int _created;
 
@@ -99,7 +102,7 @@ public sealed partial class LocalizationRegistryTests
     /// <see cref="RegistryRacedLocalizationNl"/> does, its constructor waits until a second thread creates it too, while
     /// <see cref="BothCreating"/> is set.
     /// </summary>
-    private sealed class RegistryRacedDefaultLocalizationEn : IRegistryRacedLocalization
+    internal sealed class RegistryRacedDefaultLocalizationEn : IRegistryRacedLocalization
     {
         private static int _created;
 
@@ -129,8 +132,8 @@ public sealed partial class LocalizationRegistryTests
         where TContract : class, IRegistryBrandTexts
         where TDefaultSet : class, ILocalizationSet, TContract, new()
     {
-        var brand = Internals.GeneratedCode.GetLocalizationSet<TContract>(0, 1)?.Brand
-            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>(0, 1, "Brand", static set => set.Brand);
+        var brand = Internals.GeneratedCode.GetLocalizationSet<TContract>()?.Brand
+            ?? Internals.GeneratedCode.ResolveWording<TContract, TDefaultSet>("Brand", static set => set.Brand);
 
         return brand;
     }
@@ -140,7 +143,7 @@ public sealed partial class LocalizationRegistryTests
     /// <summary>
     /// The set the text takes its default wording from. Never registered.
     /// </summary>
-    private sealed class RegistrySelfReadingLocalizationEn : IRegistrySelfReadingLocalization
+    internal sealed class RegistrySelfReadingLocalizationEn : IRegistrySelfReadingLocalization
     {
         public string Brand => "Shop";
     }
@@ -149,7 +152,7 @@ public sealed partial class LocalizationRegistryTests
     /// A set with a field initializer that reads a text of its own contract, on the thread that sets
     /// <see cref="ReadsOwnText"/>. Per thread, so that a test running beside it creates the set without failing.
     /// </summary>
-    private sealed class RegistrySelfReadingLocalizationNl : IRegistrySelfReadingLocalization
+    internal sealed class RegistrySelfReadingLocalizationNl : IRegistrySelfReadingLocalization
     {
         [ThreadStatic]
         public static bool ReadsOwnText;
@@ -164,7 +167,7 @@ public sealed partial class LocalizationRegistryTests
     /// <summary>
     /// The same, for the set a text takes its default wording from, which no registry holds.
     /// </summary>
-    private sealed class RegistrySelfReadingDefaultLocalizationEn : IRegistrySelfReadingDefaultLocalization
+    internal sealed class RegistrySelfReadingDefaultLocalizationEn : IRegistrySelfReadingDefaultLocalization
     {
         [ThreadStatic]
         public static bool ReadsOwnText;
@@ -200,17 +203,17 @@ public sealed partial class LocalizationRegistryTests
     /// <summary>
     /// The set the text takes its default wording from. Never registered, so a Dutch user never sees it.
     /// </summary>
-    private sealed class RegistryConcurrentLocalizationEn : IRegistryConcurrentLocalization
+    internal sealed class RegistryConcurrentLocalizationEn : IRegistryConcurrentLocalization
     {
         public string Name => "Default";
     }
 
-    private sealed class RegistryConcurrentFirstLocalizationNl : IRegistryConcurrentLocalization
+    internal sealed class RegistryConcurrentFirstLocalizationNl : IRegistryConcurrentLocalization
     {
         public string Name => "Eerste";
     }
 
-    private sealed class RegistryConcurrentSecondLocalizationNl : IRegistryConcurrentLocalization
+    internal sealed class RegistryConcurrentSecondLocalizationNl : IRegistryConcurrentLocalization
     {
         public string Name => "Tweede";
     }
@@ -218,44 +221,49 @@ public sealed partial class LocalizationRegistryTests
     /// <summary>
     /// Registered in the other tier, which the sets above come after.
     /// </summary>
-    private sealed class RegistryConcurrentDefaultLocalizationNl : IRegistryConcurrentLocalization
+    internal sealed class RegistryConcurrentDefaultLocalizationNl : IRegistryConcurrentLocalization
     {
         public string Name => "Standaard";
     }
 
     private interface IRegistryOrderLocalization : ILocalizationSet;
 
-    private sealed class RegistryOrderFirstLocalizationNl : IRegistryOrderLocalization;
+    internal sealed class RegistryOrderFirstLocalizationNl : IRegistryOrderLocalization;
 
-    private sealed class RegistryOrderSecondLocalizationNl : IRegistryOrderLocalization;
+    internal sealed class RegistryOrderSecondLocalizationNl : IRegistryOrderLocalization;
 
     private interface IRegistryGenericLocalization : ILocalizationSet;
 
-    private sealed class RegistryGenericLocalizationNl : IRegistryGenericLocalization;
+    internal sealed class RegistryGenericLocalizationNl : IRegistryGenericLocalization;
 
     /// <summary>
-    /// A set whose language is a constructor argument, so two instances of the type can serve two languages.
+    /// A nested set registered by hand, whose name gives its language.
     /// </summary>
-    private sealed class RegistryConfiguredLocalization(string language) : ILocalizationSet
-    {
-        public string LocalizationLanguageCode { get; } = language;
-    }
+    internal sealed class RegistryLocalizationIt : ILocalizationSet;
 
     /// <summary>
-    /// A set whose language code can change after it registered, which a set's shouldn't.
+    /// Sets the test describes in another letter case than culture names have.
     /// </summary>
-    private sealed class RegistryChangingLocalization : ILocalizationSet
-    {
-        public string LocalizationLanguageCode { get; set; } = "fr";
-    }
+    private sealed class RegistryBelgianLocalization : ILocalizationSet;
+
+    private sealed class RegistryChineseLocalization : ILocalizationSet;
 
     /// <summary>
-    /// A second type whose language is a constructor argument, which no other test registers.
+    /// A nested set the build doesn't describe, because it's private, though its name ends in a language.
     /// </summary>
-    private sealed class RegistryRepeatedLocalization(string language) : ILocalizationSet
-    {
-        public string LocalizationLanguageCode { get; } = language;
-    }
+    private sealed class RegistryUndescribedLocalizationEnGb : ILocalizationSet;
+
+    /// <summary>
+    /// A nested set the build describes, because generated code can name it.
+    /// </summary>
+    internal sealed class RegistryNestedLocalizationIt : ILocalizationSet;
+
+    /// <summary>
+    /// Two types no other test registers, for the test that registers each more than once.
+    /// </summary>
+    internal sealed class RegistryRepeatedLocalizationDe : ILocalizationSet;
+
+    internal sealed class RegistryRepeatedLocalizationFr : ILocalizationSet;
 
     /// <summary>
     /// A name no language code can be derived from.
@@ -268,6 +276,33 @@ public sealed partial class LocalizationRegistryTests
     private sealed class RegistryInvariantParentCulture(string name) : CultureInfo(name)
     {
         public override CultureInfo Parent => InvariantCulture;
+    }
+
+    /// <summary>
+    /// A contract whose sets a library of its own rewords, so they're public. Nested, so this project's build doesn't
+    /// discover them.
+    /// </summary>
+    public interface IRegistryPrecedenceLocalization : ILocalizationSet
+    {
+        string Name { get; }
+    }
+
+    public class RegistryPrecedenceLocalizationNl : IRegistryPrecedenceLocalization
+    {
+        public virtual string Name => "Library";
+    }
+
+    /// <summary>
+    /// The app's rewording, as this test project is the app.
+    /// </summary>
+    public sealed class AppRegistryPrecedenceLocalizationNl : RegistryPrecedenceLocalizationNl
+    {
+        public override string Name => "App";
+    }
+
+    public sealed class HandRegistryPrecedenceLocalizationNl : RegistryPrecedenceLocalizationNl
+    {
+        public override string Name => "Hand";
     }
 
     private static CultureInfo Culture(string name) => CultureInfo.GetCultureInfo(name);
@@ -310,11 +345,9 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
-    public void Create_WithLanguageThatIsNoCultureName_ShouldThrow()
+    public void Create_WithNullLanguage_ShouldThrow()
     {
         // Arrange & Act & Assert
-        Should.Throw<ArgumentException>(() => LocalizationRegistry.Create([], "")).ParamName.ShouldBe("defaultLanguage");
-        Should.Throw<ArgumentException>(() => LocalizationRegistry.Create([], "en", "nl_BE")).ParamName.ShouldBe("otherLanguages");
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.Create([], null!));
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.Create([], "en", null!, "nl"));
     }
@@ -344,35 +377,53 @@ public sealed partial class LocalizationRegistryTests
     }
 
     [Test]
-    public void Create_ShouldWriteLanguagesAsCultureNamesWhateverCaseSetsGive()
+    public void Create_ShouldListLanguagesInOrdinalOrder()
     {
-        // Arrange
-        var belgian = new RegistryConfiguredLocalization("NL-be");
-        var chinese = new RegistryConfiguredLocalization("ZH-hans");
+        // Arrange: described as the build does, cased as culture names are.
+        LocalizationRegistry.DescribeSet<RegistryBelgianLocalization>("nl-BE");
+        LocalizationRegistry.DescribeSet<RegistryChineseLocalization>("zh-Hans");
+        var belgian = new RegistryBelgianLocalization();
+        var chinese = new RegistryChineseLocalization();
 
         // Act
         var registry = LocalizationRegistry.Create([chinese, belgian]);
 
-        // Assert: found in any letter case, listed in one, in ordinal order whatever order the sets registered in.
+        // Assert: in ordinal order whatever order the sets registered in, and found by the user's culture.
         registry.SetLanguages.ShouldBe(["nl-BE", "zh-Hans"]);
         registry.GetByCulture<ILocalizationSet>(CultureInfo.GetCultureInfo("nl-BE")).ShouldBeSameAs(belgian);
     }
 
     [Test]
-    [Arguments("nl_BE")]
-    [Arguments("nl ")]
-    [Arguments("n")]
-    [Arguments("nl--BE")]
-    [Arguments("1nl")]
-    public void Register_AndCreate_ShouldThrowForLanguageCodeThatIsNoCultureName(string languageCode)
+    [NotInParallel(nameof(LocalizationRegistry))]
+    public void Register_OfNestedSetTheBuildDescribed_ShouldFileItUnderTheDescribedLanguage()
     {
-        // Arrange
-        var invalid = new RegistryConfiguredLocalization(languageCode);
+        // Arrange: an internal set nested in a public class, which the registrar of this assembly describes with the
+        // language of its name.
+        var set = new RegistryNestedLocalizationIt();
 
-        // Act & Assert: such a set would be filed under a language no culture reaches.
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(invalid)).Message.ShouldContain($"'{languageCode}'");
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterLibrarySets(invalid));
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Create([invalid]));
+        // Act
+        LocalizationRegistry.Register(set);
+
+        // Assert
+        LocalizationRegistry.GetLanguageCode(typeof(RegistryNestedLocalizationIt)).ShouldBe("it");
+        LocalizationRegistry.GetLocalizationSet<ILocalizationSet>(CultureInfo.GetCultureInfo("it-IT")).ShouldBeSameAs(set);
+    }
+
+    [Test]
+    public void Register_OfSetTheBuildDidNotSee_ShouldThrowNamingTheTypeAndTheFix()
+    {
+        // Arrange: a private nested set, which generated code can't name, so nothing describes it, whatever its name.
+        var set = new RegistryUndescribedLocalizationEnGb();
+
+        // Act
+        var exception = Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(set));
+
+        // Assert: the registry reads no name.
+        exception.Message.ShouldContain(typeof(RegistryUndescribedLocalizationEnGb).ToString());
+        exception.Message.ShouldContain("has no language. The build reads a set's language from its name");
+        exception.Message.ShouldContain("as in ShopLocalizationDe");
+        exception.Message.ShouldContain("nested in a public or internal class");
+        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Create([set]));
     }
 
     [Test]
@@ -431,7 +482,7 @@ public sealed partial class LocalizationRegistryTests
         // Act & Assert
         registry.GetByCulture<IRegistryLocalization>(Culture("nl")).ShouldBeSameAs(combined);
         registry.GetByCulture<IRegistryOtherLocalization>(Culture("nl")).ShouldBeSameAs(combined);
-        registry.GetByCulture(typeof(IRegistryOtherLocalization), Culture("nl")).ShouldBeSameAs(combined);
+        registry.GetByCulture<IRegistryOtherLocalization>(Culture("nl")).ShouldBeSameAs(combined);
     }
 
     [Test]
@@ -445,34 +496,6 @@ public sealed partial class LocalizationRegistryTests
         Should.Throw<ArgumentNullException>(() => registry.GetByCulture(typeof(IRegistryLocalization), null!));
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.Create(null!));
         Should.Throw<ArgumentNullException>(() => LocalizationRegistry.Create([null!])).ParamName.ShouldBe("sets");
-    }
-
-    [Test]
-    // Apart from the tests that count when a set is created, because reading the sets of the app creates every set.
-    [NotInParallel(nameof(LocalizationRegistry))]
-    public void Register_AndCreate_ShouldThrowForNullOrWhiteSpaceLanguageCode()
-    {
-        // Arrange: a set taking its language from configuration that is missing.
-        var withoutLanguage = new RegistryConfiguredLocalization(null!);
-        var withBlankLanguage = new RegistryConfiguredLocalization(" ");
-
-        // Act & Assert: at the registration, naming the set, rather than in every text read afterwards; neither tier
-        // keeps the set.
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Register(withoutLanguage)).Message.ShouldContain(nameof(RegistryConfiguredLocalization));
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.RegisterLibrarySets(withBlankLanguage));
-        Should.Throw<InvalidOperationException>(() => LocalizationRegistry.Create([withoutLanguage]));
-        LocalizationRegistry.Sets.ShouldNotContain(withoutLanguage);
-        LocalizationRegistry.Sets.ShouldNotContain(withBlankLanguage);
-    }
-
-    [Test]
-    public void Create_WithLanguages_ShouldWriteThemAsCultureNames()
-    {
-        // Arrange & Act
-        var registry = LocalizationRegistry.Create([], "EN-gb", "zh-hans");
-
-        // Assert
-        registry.AppLanguages.ShouldBe(["en-GB", "zh-Hans"]);
     }
 
     [Test]

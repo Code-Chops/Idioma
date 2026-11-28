@@ -1,25 +1,22 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes the doc comments of the members of a contract's file: the summary of a text, and the link to its wording in
-/// every language, with that wording next to it.
+/// Writes the doc comments in a contract's file: a text's summary, and a link to its wording in every language.
 /// </summary>
 internal static class ContractDocComments
 {
     /// <summary>
-    /// The line terminators of C#, the pair first so that it counts as one break.
+    /// The line terminators of C#, the pair first so it counts as one break.
     /// </summary>
     private static readonly string[] LineBreaks = ["\r\n", "\r", "\n", "\u0085", "\u2028", "\u2029"];
 
     /// <summary>
-    /// The longest a wording stands next to its link, in characters. A tooltip lists every language, and a long wording
-    /// in each would bury the rest.
+    /// The longest a wording stands next to its link, because a tooltip lists every language.
     /// </summary>
     private const int MaxWordingLength = 80;
 
     /// <summary>
-    /// The sets a contract links to, each with its texts by name (<see cref="IndexedSet"/>), in the order of
-    /// <see cref="LocalizationContract.Sets"/>.
+    /// The sets a contract links to, in the order of <see cref="LocalizationContract.Sets"/>.
     /// </summary>
     public static IndexedSet[] IndexSets(LocalizationContract contract)
     {
@@ -33,8 +30,7 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// A set a contract links to, with its texts by name. The file of a contract asks every set about every text, so
-    /// a search through the set's texts for each would take the square of their number.
+    /// A set a contract links to, with its texts by name, because every set is asked about every text.
     /// </summary>
     public sealed class IndexedSet
     {
@@ -56,8 +52,7 @@ internal static class ContractDocComments
         public SetLink Link { get; }
 
         /// <summary>
-        /// Whether another set linked from the contract has the language of this one, as a set rewording its own
-        /// language has. The links to both then name the set.
+        /// Whether another linked set has this language, as a rewording does. The links to both then name the set.
         /// </summary>
         public bool SharesLanguage { get; }
 
@@ -69,12 +64,11 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// Where the wording a set gives a text is found: the set's own property or method when it declares the text, that
-    /// of the nearest class declaring it when the set inherits the text (<c>ShopLocalizationEn.Checkout</c> for a
-    /// British set that leaves <c>Checkout</c> as it is), and else the set itself.
+    /// Where a set's wording of a text is: the set's own member, the nearest class that declares an inherited one, or
+    /// else the set itself.
     /// </summary>
-    // A cref does not find a member through a class that only inherits it (CS1574), a text implemented explicitly has
-    // no name to link to at all, and a method that shares its name with another has none of its own (CS0419).
+    // A cref doesn't find an inherited member (CS1574), an explicit implementation has no name, and an overloaded
+    // method has no name of its own (CS0419).
     private static (string Namespace, string TypeName, bool HasMember, bool IsInherited) GetCrefTarget(IndexedSet set, string member)
     {
         if (set.DeclaredTexts.Contains(member))
@@ -87,9 +81,7 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// The wording a set gives a text (<see cref="GetCrefTarget"/>), as the file of a contract names it: a class of the
-    /// contract's own namespace by its name alone, as the file itself lies there, and a class of another namespace by
-    /// its full name.
+    /// The cref of a set's wording of a text (<see cref="GetCrefTarget"/>).
     /// </summary>
     private static string GetCref(string @namespace, IndexedSet set, string member)
     {
@@ -101,7 +93,7 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// A class as the file of a contract names it (<see cref="GetCref"/>).
+    /// A class as the contract's file names it.
     /// </summary>
     private static string GetCrefType(string @namespace, string typeNamespace, string typeName)
     {
@@ -110,12 +102,8 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// What follows the link to the wording a set gives a text: the wording, when the build can read it
-    /// (<see cref="ConstantWording"/>, <see cref="MethodWording"/>), as one line of at most
-    /// <see cref="MaxWordingLength"/> characters, then, in parentheses, the set when another set has the same
-    /// language, as a set rewording its own language has, whether it is marked <c>[ExcludeFromLocalizationDiscovery]</c>,
-    /// and the class the wording comes from when the set inherits it (<c>: Checkout (inherited from
-    /// ShopLocalizationEn)</c> for a British set that leaves <c>Checkout</c> as it is).
+    /// What follows the link to a wording: the wording when the build can read it, shortened, then details in
+    /// parentheses, such as <c>: Checkout (inherited from ShopLocalizationEn)</c>.
     /// </summary>
     private static string GetWordingNote(string @namespace, IndexedSet set, string member)
     {
@@ -141,8 +129,7 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// A wording as it stands next to its link: its first line, cut at <see cref="MaxWordingLength"/> characters, and
-    /// an ellipsis where anything was left out.
+    /// The first line, cut at <see cref="MaxWordingLength"/> characters, with an ellipsis where anything was left out.
     /// </summary>
     private static string Shorten(string wording)
     {
@@ -152,7 +139,7 @@ internal static class ContractDocComments
 
         if (line.Length > MaxWordingLength)
         {
-            // Not between the halves of a surrogate pair, which would leave a character XML can't hold.
+            // Not inside a surrogate pair, which XML can't hold half of.
             var length = Char.IsHighSurrogate(line[MaxWordingLength - 1]) ? MaxWordingLength - 1 : MaxWordingLength;
             line = line.Substring(0, length);
             isCut = true;
@@ -163,9 +150,8 @@ internal static class ContractDocComments
     }
 
     /// <summary>
-    /// Writes the doc comment of a generated member: the property's own comment when it has one
-    /// (<c>&lt;inheritdoc cref/&gt;</c>), else its default-language wording, else a plain description, followed by a link
-    /// to its wording in every language, with that wording next to it (<see cref="GetWordingNote"/>).
+    /// Writes a generated member's doc comment: the property's own comment, else its default wording, else a plain
+    /// description, then a link to its wording in every language.
     /// </summary>
     public static void AppendMemberDocs(StringBuilder sb, LocalizationContract contract, IndexedSet[] sets, string className,
         LocalizationMember member)
@@ -179,8 +165,7 @@ internal static class ContractDocComments
             sb.AppendLine("    /// <summary>");
             if (member.DefaultText is { } text)
             {
-                // A multi-line wording stays a valid doc comment: one /// line per line of text, split at every line
-                // break C# knows, since any of them would end the comment and leave the rest as code.
+                // One /// line per line of text, because any line break C# knows would end the comment.
                 foreach (var line in CodeEscaping.EscapeXml(text).Split(LineBreaks, StringSplitOptions.None))
                     sb.AppendLine($"    /// {line}");
             }

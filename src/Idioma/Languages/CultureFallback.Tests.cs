@@ -16,9 +16,19 @@ public sealed class CultureFallbackTests
         public override CultureInfo Parent => parent;
     }
 
-    private static string[] Names(CultureInfo culture) => Names(new CultureFallback(culture));
+    /// <summary>
+    /// The scripts the generated code of an app that declares <c>zh-TW</c>, <c>zh-CN</c> and <c>sr-RS</c> passes.
+    /// </summary>
+    private static readonly FrozenDictionary<string, string> AppScripts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["zh-TW"] = "Hant",
+        ["zh-CN"] = "Hans",
+        ["sr-RS"] = "Cyrl",
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-    private static string[] Names(string name) => Names(new CultureFallback(name));
+    private static string[] Names(CultureInfo culture) => Names(new CultureFallback(culture, AppScripts));
+
+    private static string[] Names(string name) => Names(new CultureFallback(name, AppScripts));
 
     private static string[] Names(CultureFallback fallback)
     {
@@ -83,22 +93,33 @@ public sealed class CultureFallbackTests
     }
 
     [Test]
-    public void Names_WithScript_ShouldTryNameWithoutScriptRightAfterIt()
+    public void Names_WithScriptOfAppLanguage_ShouldTryNameWithoutScriptRightAfterIt()
     {
         // Arrange & Act & Assert: a platform can give a culture with its script, where an app declares the name without
-        // it. zh-TW writes in Hant (its parent culture), and pt-BR in Latin, so each is the same culture.
+        // it. The build gives zh-TW Hant and sr-RS Cyrillic, so each is the same script.
         Names(CultureInfo.GetCultureInfo("zh-Hant-TW")).ShouldBe(["zh-Hant-TW", "zh-TW", "zh-Hant", "zh"]);
-        Names(new CultureInfo("pt-Latn-BR"))[..2].ShouldBe(["pt-Latn-BR", "pt-BR"]);
+        Names(CultureInfo.GetCultureInfo("sr-Cyrl-RS")).ShouldBe(["sr-Cyrl-RS", "sr-RS", "sr-Cyrl", "sr"]);
     }
 
     [Test]
-    public void Names_WithScriptOfAnotherCulture_ShouldNotTryNameWithoutScript()
+    public void Names_WithOtherScriptThanAppLanguage_ShouldNotTryNameWithoutScript()
     {
-        // Arrange & Act & Assert: zh-CN writes in Hans, not Hant, and sr-RS in Cyrillic, not Latin, which its month
-        // names show. Tried after the full name, they would give a user text in a script they didn't choose.
+        // Arrange & Act & Assert: zh-TW is written in Hant, not Hans, zh-CN in Hans, not Hant, and sr-RS in Cyrillic, not
+        // Latin. Tried after the full name, they would give a user text in a script they didn't choose.
+        Names(CultureInfo.GetCultureInfo("zh-Hans-TW"))[..2].ShouldBe(["zh-Hans-TW", "zh-Hans"]);
         Names(CultureInfo.GetCultureInfo("zh-Hant-CN")).ShouldBe(["zh-Hant-CN", "zh-Hant", "zh"]);
         Names(CultureInfo.GetCultureInfo("sr-Latn-RS")).ShouldBe(["sr-Latn-RS", "sr-Latn", "sr"]);
-        Names(CultureInfo.GetCultureInfo("sr-Cyrl-RS")).ShouldBe(["sr-Cyrl-RS", "sr-RS", "sr-Cyrl", "sr"]);
+    }
+
+    [Test]
+    public void Names_WithScriptOfLanguageWithoutScriptGiven_ShouldTryNameWithoutScript()
+    {
+        // Arrange & Act & Assert: the build gives pt-BR no script, and a registry without app languages has no scripts at
+        // all, so the name without the script is tried.
+        Names(new CultureInfo("pt-Latn-BR"))[..2].ShouldBe(["pt-Latn-BR", "pt-BR"]);
+        Names("qq-Latn-QQ").ShouldBe(["qq-Latn-QQ", "qq-QQ", "qq-Latn", "qq"]);
+        Names(new CultureFallback(new CultureWithParent("sr-Latn-RS", CultureInfo.InvariantCulture)))
+            .ShouldBe(["sr-Latn-RS", "sr-RS", "sr-Latn", "sr"]);
     }
 
     [Test]

@@ -7,55 +7,43 @@ namespace CodeChops.Idioma.Generators;
 public sealed partial class InlineTextValuesAnalyzer
 {
     /// <summary>
-    /// The <see cref="Writes"/> of each operation tree of a compilation, by its root: the body of a method, or an
-    /// initializer.
+    /// The <see cref="Writes"/> of each operation tree of a compilation, by its root.
     /// </summary>
-    // One per compilation, so nothing is shared between two of them, and an entry goes when its tree does. The writes of
-    // a tree are found when a wording first reads a local variable in it, so a tree without inline texts isn't searched,
-    // and nothing is allocated for it.
+    // One per compilation, and an entry goes when its tree does. A tree is searched only when a wording first reads a
+    // local in it.
     private sealed class TreeWrites
     {
-        // By reference, because an operation doesn't override Equals. Safe to use from several threads.
+        // By reference, because an operation doesn't override Equals. Thread-safe.
         private ConditionalWeakTable<IOperation, Writes> ByRoot { get; } = new();
 
-        /// <summary>
-        /// What the code around an operation writes its local variables with.
-        /// </summary>
         public Writes Find(IOperation operation, CancellationToken cancellationToken)
         {
             var root = operation;
             while (root.Parent is { } parent)
                 root = parent;
 
-            // Two threads that find the writes of one tree at once each find them, and the first to finish is kept.
+            // Two threads may both find one tree's writes, and the first to finish is kept.
             var writes = this.ByRoot.GetValue(root, tree => Writes.Find(tree, cancellationToken));
             return writes;
         }
     }
 
     /// <summary>
-    /// What the code around a call writes its local variables with, other than where it declares them: its assignments,
-    /// and its arguments passed by reference.
+    /// The assignments and <c>ref</c> arguments of an operation tree, found in one pass and looked up by local.
     /// </summary>
-    // Found in one pass over the operation tree, and then looked up by the local variable. So a wording that reads a
-    // local variable costs as little in a method with thousands of inline texts as in a method with one.
     private sealed class Writes
     {
         /// <summary>
-        /// What each local variable is assigned after its declaration, in the order of the code.
+        /// What each local is assigned after its declaration, in code order.
         /// </summary>
         private Dictionary<ILocalSymbol, List<IOperation>> Assigned { get; } = new(SymbolEqualityComparer.Default);
 
         /// <summary>
-        /// The local variables written in another way, as by a deconstruction or as an argument passed by reference.
-        /// Every local variable that is read where such a write writes to counts.
+        /// The locals read anywhere in the target of another kind of write, such as a deconstruction or a <c>ref</c>
+        /// argument.
         /// </summary>
         private HashSet<ILocalSymbol> WrittenUnreadably { get; } = new(SymbolEqualityComparer.Default);
 
-        /// <summary>
-        /// Finds the assignments and the arguments passed by reference under the root of an operation tree: the body of
-        /// a method, or an initializer.
-        /// </summary>
         public static Writes Find(IOperation root, CancellationToken cancellationToken)
         {
             var writes = new Writes();
@@ -86,9 +74,6 @@ public sealed partial class InlineTextValuesAnalyzer
             return writes;
         }
 
-        /// <summary>
-        /// What a local variable is assigned after its declaration, in the order of the code.
-        /// </summary>
         public IReadOnlyList<IOperation> AssignedTo(ILocalSymbol local)
         {
             if (!this.Assigned.TryGetValue(local, out var values))
@@ -98,8 +83,7 @@ public sealed partial class InlineTextValuesAnalyzer
         }
 
         /// <summary>
-        /// Whether a local variable is written in a way the build can't read
-        /// (<see cref="Reads.ReadsUnreadableLocal"/>).
+        /// See <see cref="Reads.ReadsUnreadableLocal"/>.
         /// </summary>
         public bool IsWrittenUnreadably(ILocalSymbol local)
         {
@@ -107,9 +91,6 @@ public sealed partial class InlineTextValuesAnalyzer
             return isWrittenUnreadably;
         }
 
-        /// <summary>
-        /// Adds every local variable that is read where a write writes to.
-        /// </summary>
         private void AddWrittenUnreadably(IOperation target)
         {
             foreach (var part in target.DescendantsAndSelf())

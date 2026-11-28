@@ -4,8 +4,8 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// What a referenced library leaves untranslated: a contract no language set serves one of this assembly's
-    /// languages for, which adding the set fixes, and standalone texts lacking a language, which nothing here can fix.
+    /// What a referenced library leaves untranslated: a contract without a set for a language (<c>LOC700</c>), and
+    /// standalone texts without a language, which the app can't fix (<c>LOC701</c>).
     /// </summary>
     public static EquatableArray<LocalizationSetsFinding> FindLibraryGaps(
         DeclaredLanguages? languages,
@@ -21,11 +21,7 @@ internal sealed partial record LocalizationSetsAnalysis
 
         foreach (var contract in contracts)
         {
-            // A set whose language its build could not read may be the set of any of them.
-            if (IsServed(referencedSets, contract, ProvidedLocalizationSet.UnreadableLanguage) || IsServed(ownSets, contract, ProvidedLocalizationSet.UnreadableLanguage))
-                continue;
-
-            // ILocalizationSet<TEnum> for the contract of an enum, which every set of it lists (LOC205).
+            // ILocalizationSet<TEnum> for an enum's contract (LOC206).
             var setInterface = references
                 .SelectMany(static reference => reference.SetsOfEnums)
                 .FirstOrDefault(setOfEnum => String.Equals(setOfEnum.Contract, contract, StringComparison.Ordinal))
@@ -36,8 +32,7 @@ internal sealed partial record LocalizationSetsAnalysis
                 if (IsServed(referencedSets, contract, code) || IsServed(ownSets, contract, code))
                     continue;
 
-                // The contract by its full name, each part as code writes it. The set lies wherever the app keeps it, so
-                // the fix chooses its namespace.
+                // The fix chooses the namespace, because the set goes wherever the app keeps it.
                 var setName = SuggestSetName(contract, code);
                 var writtenContract = String.Join(".", contract.Split('.').Select(CodeEscaping.EscapeIdentifier));
 
@@ -50,16 +45,16 @@ internal sealed partial record LocalizationSetsAnalysis
             }
         }
 
-        // Inline texts: a library's sets can be given a language from here, but no text it writes inline can, whether it
-        // has sets or not.
+        // Without a usable default language (LOC102), no fallback can be named.
+        if (declared.DefaultLanguage is not { } appDefault)
+            return new EquatableArray<LocalizationSetsFinding>(findings.ToImmutable());
+
         foreach (var reference in references)
         {
             if (!reference.HasStandaloneTexts || reference.Languages.Length is 0)
                 continue;
 
-            // Such a text falls back as any text does: to this assembly's default language where the library has it, and
-            // else to the library's own default language.
-            var appDefault = declared.Codes[0];
+            // The fallback is the app's default language where the library has it, and else the library's.
             var shown = reference.Languages.Any(language => SupportedLanguages.Serves(language, appDefault)) ? appDefault : reference.Languages[0];
 
             foreach (var code in declared.Codes)

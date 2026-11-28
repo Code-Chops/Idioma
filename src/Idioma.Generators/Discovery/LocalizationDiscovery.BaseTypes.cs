@@ -1,23 +1,15 @@
 namespace CodeChops.Idioma.Generators;
 
-// The part of LocalizationDiscovery that keeps the base types a set lists which bind to nothing yet, such as a contract
-// generated in the same compilation, and asks the compiler which generated contract each one will bind to where the
-// name alone can't tell. A plain comment: the compiler merges the XML docs of every partial declaration, and the type's
-// summary lives in LocalizationDiscovery.cs.
+// Keeps the base types a set lists that bind to nothing yet, such as a contract generated in the same compilation, and
+// asks the compiler which generated contract each binds to where the name alone can't tell.
 /// <inheritdoc cref="LocalizationDiscovery"/>
 internal static partial class LocalizationDiscovery
 {
     /// <summary>
-    /// The base-list entries of this declaration that bind to no type, each with the namespace its qualifier names and
-    /// which entry it is (<see cref="BaseTypeSite"/>). This is what a base list looks like when it names a contract
-    /// another generator writes. Where each is written is added to <paramref name="locations"/>.
+    /// The base-list entries of this declaration that bind to no type, as a contract another generator writes does.
+    /// Where each is written is added to <paramref name="locations"/>.
     /// </summary>
-    /// <param name="type">The class the declaration declares.</param>
-    /// <param name="typeName">The name of that class, as a site names it.</param>
-    /// <param name="declaration">The declaration whose base list is read.</param>
-    /// <param name="semanticModel">The model of the declaration's file.</param>
-    /// <param name="locations">Gets where each entry is written.</param>
-    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <param name="typeName">The name of the class, as a site names it.</param>
     private static ImmutableArray<UnresolvedBaseType> GetUnresolvedBaseTypes(INamedTypeSymbol type, string typeName,
         TypeDeclarationSyntax declaration, SemanticModel semanticModel, ImmutableArray<BaseTypeLocation>.Builder locations,
         CancellationToken cancellationToken)
@@ -50,11 +42,9 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// Which declaration of a class in its file a declaration is, counted from 0 in the order they're written. Only a
-    /// partial class has more than one.
+    /// Which declaration of a class in its file a declaration is, counted from 0 in the order they're written.
     /// </summary>
-    // Counted within the file. The number then stays the same across an edit in any other file, and across an edit in
-    // this one that adds or removes no declaration of the class before it.
+    // Counted within the file, so an edit in another file doesn't change it.
     private static int GetDeclarationIndex(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
     {
         var index = 0;
@@ -69,7 +59,7 @@ internal static partial class LocalizationDiscovery
     /// <summary>
     /// Whether a base type is written with a qualifier, and the namespace that qualifier names. The namespace is
     /// <c>""</c> for <c>global::</c>, and <see langword="null"/> for a qualifier that names no namespace, such as an
-    /// extern alias, which no contract generated here can stand behind.
+    /// extern alias.
     /// </summary>
     private static (bool IsQualified, string? Namespace) ReadQualifier(TypeSyntax type, SemanticModel semanticModel,
         CancellationToken cancellationToken)
@@ -91,19 +81,11 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// Which generated contract each base type will bind to, where two or more contracts generated here share its
-    /// simple name. The compiler binds each one, so its lookup through the enclosing namespaces and the usings decides.
+    /// simple name. The compilation is given a stand-in for each, and the compiler binds the base type, so its lookup
+    /// through namespaces and usings decides. Elsewhere the qualifier or name tells (<see cref="FindGeneratedContract"/>).
     /// </summary>
-    /// <remarks>
-    /// Such a base type binds to nothing while the generators run, because the contract doesn't exist yet. Its qualifier,
-    /// or its name where one generated contract has it, tells which contract it names
-    /// (<see cref="FindGeneratedContract"/>). Two contracts of one name in two namespaces leave that to the compiler. So
-    /// the compilation is given a stand-in for each of them, and the base type is bound there.
-    /// </remarks>
-    // The compilation changes on every edit, so the step that binds runs on every edit. It returns at once where no two
-    // contracts share a name, which is nearly always, and only then makes a compilation of its own.
-    // The question comes from the share of discovery without locations (DiscoveredTexts.OfRegistrar), so it stays as it was
-    // when a wording changes. The share with locations (DiscoveredTexts.OfContract) says where each base type of the
-    // question is written, and is read only where there is something to bind.
+    // Runs on every edit, but returns at once where no two contracts share a name. The question comes from discovery
+    // without locations, so it stays the same when a wording changes.
     public static IncrementalValueProvider<EquatableArray<ContractBinding>> BindContracts(IncrementalGeneratorInitializationContext context,
         IncrementalValueProvider<Discovery> discovery, IncrementalValueProvider<Discovery> locations, IncrementalValueProvider<DeclaredLanguages?> languages)
     {
@@ -121,8 +103,7 @@ internal static partial class LocalizationDiscovery
     }
 
     /// <summary>
-    /// The name of the pipeline step that holds what the compiler is asked to bind (<see cref="AskForBindings"/>), for
-    /// a test to read it.
+    /// The pipeline step of <see cref="AskForBindings"/>, for a test to read.
     /// </summary>
     internal const string BindingQuestionTrackingName = "BindingQuestion";
 
@@ -135,8 +116,7 @@ internal static partial class LocalizationDiscovery
         if (languages is not { } declared)
             return default;
 
-        // The contracts the sets start, before a second set of the default language is told apart from the first: those
-        // are all the contracts a base type can bind to.
+        // All the contracts a base type can bind to.
         var contracts = GetContractNames(GetContractStarts(discovery.Sets, declared))
             .GroupBy(GetSimpleName, StringComparer.Ordinal)
             .Where(static group => group.Skip(1).Any())
@@ -159,7 +139,6 @@ internal static partial class LocalizationDiscovery
 
     /// <summary>
     /// Binds each base type of the question in the compilation with a stand-in for each of its contracts.
-    /// <paramref name="locations"/> says where each base type is written.
     /// </summary>
     private static EquatableArray<ContractBinding> Bind(ContractBindingQuestion question, Compilation compilation,
         Discovery locations, CancellationToken cancellationToken)
@@ -197,7 +176,7 @@ internal static partial class LocalizationDiscovery
 
         foreach (var baseType in question.BaseTypes)
         {
-            // A tree of an earlier compilation, as an edit in the IDE can leave behind, has nothing to bind in this one.
+            // An IDE edit can leave a tree of an earlier compilation.
             if (!written.TryGetValue(baseType.Site, out var location) || location.Tree is not { } tree || !withStandIns.ContainsSyntaxTree(tree))
                 continue;
 

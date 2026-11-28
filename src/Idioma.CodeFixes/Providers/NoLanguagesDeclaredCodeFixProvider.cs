@@ -12,25 +12,14 @@ namespace CodeChops.Idioma.CodeFixes;
 /// <c>[assembly: SupportedLanguages("en", "nl")]</c>.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The attribute goes at the top of the file of the call, after its usings. A name of an argument gives a language as
-/// the generated factory names it, so <c>enGb</c> gives <c>en-GB</c>.
-/// </para>
-/// <para>
-/// A call with an argument without a name gets no fix, because only a name says which language a wording is in. A set
-/// gets no fix either: its name gives its language, but not which language is the default.
-/// </para>
-/// <para>
-/// There's no "Fix all", because the one attribute serves every call.
-/// </para>
+/// A call with an unnamed argument gets no fix, because only a name says which language a wording is in. A set gets no
+/// fix, because its name doesn't say which language is the default. There's no "Fix all", because one attribute serves
+/// every call.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(NoLanguagesDeclaredCodeFixProvider))]
 [Shared]
 public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
 {
-    /// <summary>
-    /// The name of <c>[assembly: SupportedLanguages]</c> as an attribute is written, without its suffix.
-    /// </summary>
     private const string AttributeName = "SupportedLanguages";
 
     public override ImmutableArray<string> FixableDiagnosticIds { get; } = [LocalizationSetsPart.NoLanguagesDeclaredDiagnosticId];
@@ -66,8 +55,7 @@ public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The languages the arguments of a call or an attribute name, in the order they're written, or
-    /// <see langword="null"/> when an argument has no name, or a name gives no culture name or one twice.
+    /// The languages the argument names give, in order, or <see langword="null"/> when one is missing, invalid or repeated.
     /// </summary>
     private static string[]? FindLanguages(SyntaxNode node)
     {
@@ -92,9 +80,8 @@ public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The language a parameter of the generated factory stands for, the reverse of
-    /// <see cref="SupportedLanguages.ToParameterName"/>: <c>en-GB</c> for <c>enGb</c>, and <c>zh-Hans</c> for
-    /// <c>zhHans</c>. A region is in upper case in a culture name, and a script starts with a capital.
+    /// The reverse of <see cref="SupportedLanguages.ToParameterName"/>: <c>en-GB</c> for <c>enGb</c>, <c>zh-Hans</c>
+    /// for <c>zhHans</c>.
     /// </summary>
     private static string ToLanguage(string parameterName)
     {
@@ -125,9 +112,8 @@ public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The file with <c>[assembly: SupportedLanguages(...)]</c> after its usings and its other assembly attributes.
-    /// The attribute is named as the file can name it: by its name alone where that binds to it, and else by its full
-    /// name.
+    /// The file with <c>[assembly: SupportedLanguages(...)]</c> after its usings and other assembly attributes, by its
+    /// name alone where that binds, else by its full name.
     /// </summary>
     private static CompilationUnitSyntax AddAttribute(CompilationUnitSyntax compilationUnit, SemanticModel semanticModel, string[] languages)
     {
@@ -135,8 +121,8 @@ public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
         var first = compilationUnit.Members.FirstOrDefault();
         var position = first?.SpanStart ?? compilationUnit.EndOfFileToken.SpanStart;
 
-        var bindsToAttribute = semanticModel.GetSpeculativeTypeInfo(position, SyntaxFactory.IdentifierName($"{AttributeName}Attribute"), SpeculativeBindingOption.BindAsTypeOrNamespace).Type is INamedTypeSymbol bound
-            && String.Equals(bound.ToDisplayString(), PackageNames.SupportedLanguagesAttribute, StringComparison.Ordinal);
+        var bindsToAttribute = CodeFixSupport.BindsAt(semanticModel, position, $"{AttributeName}Attribute",
+            static bound => String.Equals(bound.ToDisplayString(), PackageNames.SupportedLanguagesAttribute, StringComparison.Ordinal));
 
         var name = bindsToAttribute ? AttributeName : $"{PackageNames.Namespace}.{AttributeName}";
         var comma = SyntaxFactory.Token(SyntaxKind.CommaToken).WithTrailingTrivia(SyntaxFactory.Space);
@@ -150,12 +136,10 @@ public sealed class NoLanguagesDeclaredCodeFixProvider : CodeFixProvider
                 SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Attribute(SyntaxFactory.ParseName(name), SyntaxFactory.AttributeArgumentList(arguments))))
             .WithTrailingTrivia(endOfLine);
 
-        // After the other assembly attributes, which keep what stands between them and the first member.
         if (compilationUnit.AttributeLists.Count > 0 || first is null)
             return compilationUnit.AddAttributeLists(attribute);
 
-        // Before the first member, with a blank line between them. The blank lines before that member now stand before
-        // the attribute, and its comments, such as its doc comment, and its directives stay with it.
+        // Before the first member and a blank line. The member keeps its comments and directives.
         var leading = first.GetLeadingTrivia();
         var blank = 0;
 

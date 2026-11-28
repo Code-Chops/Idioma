@@ -87,6 +87,8 @@ public sealed class KeptTextAnalyzerTests
     [Arguments("private static readonly string[] All = [.. new[] { 1, 2 }.Select(_ => ShopLocalization.Checkout)];", "ShopLocalization.Checkout", "All")]
     [Arguments("private static readonly string First = new[] { 1, 2 }.Select(_ => ShopLocalization.Checkout).First();", "ShopLocalization.Checkout", "First")]
     [Arguments("private static readonly Lazy<string> Label = new(() => ShopLocalization.Checkout);", "ShopLocalization.Checkout", "Label")]
+    [Arguments("private static readonly ILookup<int, string> ByNumber = new[] { 1, 2 }.ToLookup(n => n, _ => ShopLocalization.Checkout);", "ShopLocalization.Checkout", "ByNumber")] // Filled at once
+    [Arguments("private static readonly string[] Sorted = [.. new[] { 1, 2 }.OrderBy(n => n).Select(_ => ShopLocalization.Checkout)];", "ShopLocalization.Checkout", "Sorted")]
     public async Task TextInStaticInitializer_ShouldReportLOC602(string member, string expectedText, string expectedMember)
     {
         // Act
@@ -99,6 +101,27 @@ public sealed class KeptTextAnalyzerTests
         diagnostic.Location.SourceTree!.ToString().Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length).ShouldBe(expectedText);
         diagnostic.GetMessage().ShouldBe(
             $"'{expectedText}' is read once, when '{expectedMember}' is initialized, so every user gets the wording of the first user's language. Read the text where you show it, such as in a property written with '=>'.");
+    }
+
+    [Test]
+    [Arguments("""
+        public static string Title { get; } = LocalizedText.Inline(
+            en: "Orders",
+            nl: "Bestellingen");
+        """, "'LocalizedText.Inline(en: \"Orders\", nl: \"Bestellingen\")' is read once")]
+    [Arguments("""
+        public static string Title { get; } = LocalizedText.Inline(
+            en: "All the orders of this customer, newest first",
+            nl: "Alle bestellingen van deze klant, de nieuwste eerst");
+        """, "'LocalizedText.Inline' is read once")]
+    public async Task TextOverSeveralLines_ShouldBeNamedOnOneLine(string member, string expectedStart)
+    {
+        // Act: a build prints a message up to its first line break.
+        var diagnostic = (await AnalyzeAsync(Members(member))).ShouldHaveSingleItem();
+
+        // Assert: written out on one line, or named by what it reads where that would be long.
+        diagnostic.GetMessage().ShouldStartWith(expectedStart);
+        diagnostic.GetMessage().ShouldNotContain("\n");
     }
 
     [Test]

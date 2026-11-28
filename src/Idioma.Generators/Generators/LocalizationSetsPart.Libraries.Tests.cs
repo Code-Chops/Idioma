@@ -53,7 +53,7 @@ public sealed partial class LocalizationSetsPartTests
             }
             """);
 
-        // Act: every set of the contract of an enum lists ILocalizationSet<TEnum> (LOC205).
+        // Act: every set of the contract of an enum lists ILocalizationSet<TEnum> (LOC206).
         var result = Run("""
             using CodeChops.Idioma;
 

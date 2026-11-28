@@ -3,65 +3,48 @@ using System.Text.RegularExpressions;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes <c>LocalizedText.Inline</c> for the languages of <c>[assembly: SupportedLanguages(...)]</c>, one required
-/// parameter per language, so that leaving a language out is a compile error. It is a static extension on the one shared
-/// <c>LocalizedText</c>, so that every assembly writes a text the same way, whatever its languages. It reports
-/// <c>LOC101</c> for an invalid or repeated language, and still writes the factory for the valid ones, so that error
-/// stays the only one wherever no call names the language that is wrong. A language with a part no culture has, such
-/// as <c>dk</c> for Danish, gets the warning <c>LOC104</c>, and its parameter all the same. Next to the factory it writes the attribute
-/// <c>[Localized]</c>, with the same parameters, which puts a text on a member.
+/// Writes <c>LocalizedText.Inline</c> and <c>[Localized]</c> with one required parameter per language, so leaving a
+/// language out is a compile error. It reports <c>LOC102</c> and <c>LOC103</c>, and still writes the factory for the
+/// usable languages.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The class that holds the extension lies in the global namespace. An extension is found only where its namespace is
-/// in reach, and the global namespace is in reach of every file, so <c>LocalizedText.Inline</c> binds however the
-/// call names the type: by its name alone, or by its full name in a file without a using for its namespace.
+/// The extension's class lies in the global namespace, so <c>LocalizedText.Inline</c> binds however a call names the
+/// type. It's <c>[Embedded]</c>, because a library and its test project with <c>InternalsVisibleTo</c> both generate one.
 /// </para>
 /// <para>
-/// The class is marked <c>[Embedded]</c> because a library and a test project with its <c>InternalsVisibleTo</c> both
-/// generate one, and two visible factories with the same languages would make every call ambiguous.
+/// The attribute lies in <c>CodeChops.Idioma</c>, so another library's <c>LocalizedAttribute</c> is ambiguous
+/// (<c>CS0104</c>) rather than silently hidden. It's <c>[Conditional]</c>, so its wording isn't stored twice.
 /// </para>
 /// <para>
-/// The attribute is a type of its own per assembly, which it can be because it never stands in a signature. It lies in
-/// the namespace <c>CodeChops.Idioma</c>, as the package's own types do, so a file names it with a using as it names
-/// any type. A <c>LocalizedAttribute</c> of another library is then ambiguous next to it (<c>CS0104</c>), where the
-/// global namespace would win over that one unseen. It's only there for the build: <see cref="LocalizedMembers"/> reads its arguments and <see cref="LocalizedMembersSource"/>
-/// writes the texts as code, so the attribute is marked <c>[Conditional]</c> and stays out of the compiled assembly.
-/// Its wording would otherwise be stored twice.
-/// </para>
-/// <para>
-/// An assembly that calls the factory, in code or in Razor markup, is marked <c>[assembly: StandaloneTexts]</c>. No
-/// assembly referencing it can add a language to such a text, so its build warns about the languages it lacks
-/// (<c>LOC701</c>). An assembly with a text on a member gets the same mark from the file that holds those texts.
+/// An assembly that calls the factory, in code or in Razor markup, is marked <c>[assembly: StandaloneTexts]</c>
+/// (<c>LOC701</c>).
 /// </para>
 /// </remarks>
 [Generator(LanguageNames.CSharp)]
 public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
 {
-    public const string InvalidLanguagesDiagnosticId = "LOC101";
-    public const string LanguageVersionTooOldDiagnosticId = "LOC102";
-    public const string UnknownLanguageCodeDiagnosticId = "LOC104";
+    public const string InvalidLanguagesDiagnosticId = "LOC102";
+    public const string LanguageVersionTooOldDiagnosticId = "LOC104";
+    public const string UnknownLanguageCodeDiagnosticId = "LOC103";
 
     internal const string ClassName = "GeneratedLocalizedText";
     internal const string FactoryName = "Inline";
 
     /// <summary>
-    /// The field of <see cref="ClassName"/> that holds the assembly's languages, the default first. The texts on members
-    /// (<see cref="LocalizedMembersSource"/>) pass this array too.
+    /// The field with the assembly's languages, the default first, shared with <see cref="LocalizedMembersSource"/>.
     /// </summary>
     internal const string LanguagesName = "Languages";
 
     /// <summary>
-    /// The symbol the generated attribute is conditional on. Nothing defines it, so the compiler checks each
-    /// <c>[Localized]</c> and leaves it out of the assembly.
+    /// Nothing defines it, so the compiler checks each <c>[Localized]</c> and leaves it out of the assembly.
     /// </summary>
     internal const string AttributeCondition = "IDIOMA_LOCALIZED_IN_METADATA";
 
     private const string TextName = PackageNames.LocalizedText;
 
     /// <summary>
-    /// A call of the factory in Razor markup, which other generators can't see as C#, because Razor's own generator
-    /// writes it.
+    /// A call in Razor markup, which other generators can't see as C#.
     /// </summary>
     private static readonly Regex InlineTextInMarkup = new(@"\bLocalizedText\s*\.\s*Inline\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
@@ -76,12 +59,9 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         helpLinkUri: PackageNames.HelpLink(InvalidLanguagesDiagnosticId));
 
     /// <summary>
-    /// A language code that has the form of a culture name, with a language or a region no culture has
-    /// (<see cref="SupportedLanguages.FindUnknownPart"/>). Reported for a language of
-    /// <c>[assembly: SupportedLanguages]</c>, and by <see cref="LocalizationRegistrationPart"/> for a set's
-    /// <c>LocalizationLanguageCode</c>.
+    /// A code with a language or region no culture has (<see cref="SupportedLanguages.FindUnknownPart"/>).
     /// </summary>
-    // A warning, because the tables the build carries can lag behind the standards, and a warning can be turned off.
+    // A warning, because the build's tables can lag behind the standards.
     internal static readonly DiagnosticDescriptor UnknownLanguageCodeRule = new(
         id: UnknownLanguageCodeDiagnosticId,
         title: "Language code that doesn't exist",
@@ -93,7 +73,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         helpLinkUri: PackageNames.HelpLink(UnknownLanguageCodeDiagnosticId));
 
     /// <summary>
-    /// The warning for a language code with a part no culture has (<c>LOC104</c>), at the place that writes the code.
+    /// <c>LOC103</c> at the place that writes the code.
     /// </summary>
     internal static Diagnostic CreateUnknownLanguageCode(UnknownLanguagePart unknown, Location location)
     {
@@ -118,8 +98,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         var languages = SupportedLanguages.Read(context);
         var compiles = LanguageVersionCheck.Read(context, languages);
 
-        // Two outputs: the declaration holds its location, which every edit in the file of the attribute renews, and
-        // the factory is written from the languages alone, so such an edit does not write it again.
+        // Two outputs, so an edit that only moves the attribute's location doesn't rewrite the factory.
         context.RegisterSourceOutput(languages, static (context, languages) =>
         {
             if (languages is not { } declared)
@@ -128,13 +107,13 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
             foreach (var problem in declared.Problems)
                 context.ReportDiagnostic(Diagnostic.Create(InvalidLanguagesRule, declared.Location.ToLocation(), problem));
 
-            // A language the build uses, with a part no culture has: 'dk' for Danish, or 'en-UK'.
+            // Such as 'dk' for Danish, or 'en-UK'.
             foreach (var code in declared.Codes)
                 if (SupportedLanguages.FindUnknownPart(code) is { } unknown)
                     context.ReportDiagnostic(CreateUnknownLanguageCode(unknown, declared.Location.ToLocation()));
         });
 
-        // Once, at the attribute, for all the generators: none of them writes code for the languages.
+        // Once, at the attribute, for all the generators.
         var version = context.ParseOptionsProvider.Select(static (options, _) => (options as CSharpParseOptions)?.LanguageVersion);
 
         context.RegisterSourceOutput(languages.Combine(version), static (context, data) =>
@@ -152,8 +131,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
             context.AddSource("LocalizedAttribute.g.cs", GenerateAttribute(codes));
         });
 
-        // Reported here, and not by an analyzer: the compiler stops at an attribute that binds to nothing (CS0246)
-        // before any analyzer runs, so a build would show only that, and the advice to add a using directive.
+        // Not an analyzer, because the compiler stops at the unbound attribute (CS0246) before any analyzer runs.
         var localizedWithoutLanguages = context.SyntaxProvider
             .CreateSyntaxProvider(static (node, _) => LocalizedMembers.IsNamedLocalized(node), static (context, cancellationToken) => FindLocalizedWithoutLanguages(context, cancellationToken))
             .Where(static location => location is not null)
@@ -199,8 +177,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Whether a node calls a member named like the factory on something: <c>Something.Inline(...)</c>. All the syntax
-    /// can tell, as the factory does not exist in the compilation a generator sees.
+    /// Whether a node calls <c>Something.Inline(...)</c>, which is all the syntax can tell.
     /// </summary>
     private static bool IsInlineCall(SyntaxNode node)
     {
@@ -211,11 +188,9 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Where an attribute named <c>Localized</c> is written, when its assembly declares no languages and it binds to
-    /// nothing, else <see langword="null"/>. An attribute of that name that binds is one the code brought itself.
+    /// Where an unbound <c>[Localized]</c> is written in an assembly without languages, else <see langword="null"/>.
     /// </summary>
-    // The languages first, which the compilation reads once: with them, the attribute is the generated one, and nothing
-    // needs binding.
+    // The languages first, because they're cheap, and with them nothing needs binding.
     private static DiagnosticLocation? FindLocalizedWithoutLanguages(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
         var attribute = (AttributeSyntax)context.Node;
@@ -227,10 +202,8 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Whether a call of <c>Something.Inline(...)</c> is a call of the factory: <c>LocalizedText.Inline(...)</c>, also
-    /// qualified, or through an alias of the text type (<c>using Text = CodeChops.Idioma.LocalizedText;</c>). The
-    /// factory itself does not exist in the compilation a generator sees, but the receiver does, so its name decides
-    /// first and only another name is bound.
+    /// Whether <c>Something.Inline(...)</c> calls the factory, also qualified or through an alias. The receiver's name
+    /// decides first, and only another name is bound.
     /// </summary>
     private static bool IsFactoryCall(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
@@ -248,7 +221,7 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
         if (String.Equals(name, "LocalizedText", StringComparison.Ordinal))
             return true;
 
-        // A name that is none of those can still be the text type under an alias. Only a plain name can be an alias.
+        // Only a plain name can be an alias.
         var isFactoryCall = receiver is IdentifierNameSyntax
                && context.SemanticModel.GetSymbolInfo(receiver, cancellationToken).Symbol is INamedTypeSymbol type
                && String.Equals(type.ToDisplayString(), PackageNames.LocalizedText, StringComparison.Ordinal);
@@ -257,10 +230,9 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Writes the attribute <c>[Localized]</c>, with one required parameter per language, as the factory has.
+    /// Writes <c>[Localized]</c>, with one required parameter per language.
     /// </summary>
-    // A constructor with a body, and not a primary constructor: its parameters are read by the source generator alone,
-    // and a primary constructor's unread parameters are a warning (CS9113).
+    // Not a primary constructor, because its unread parameters would warn (CS9113).
     private static string GenerateAttribute(EquatableArray<string> codes)
     {
         var parameters = String.Join(", ", codes.Select(static code => $"string {SupportedLanguages.ToParameterName(code)}"));
@@ -317,10 +289,9 @@ public sealed class LocalizedTextFactoryGenerator : IIncrementalGenerator
     {
         var defaultParameter = SupportedLanguages.ToParameterName(codes[0]);
         var parameters = String.Join(", ", codes.Select(static code => $"string {SupportedLanguages.ToParameterName(code)}"));
-        var languages = String.Join(", ", codes.Select(static code => SymbolDisplay.FormatLiteral(code, quote: true)));
+        var languages = String.Join(", ", codes.Select(static code => SymbolDisplay.FormatLiteral(SupportedLanguages.Normalize(code), quote: true)));
 
-        // The wording of the language the package picks, by its position among the languages. Only that wording is
-        // checked for null, because the others aren't read.
+        // Only the picked wording is checked for null, because the others aren't read.
         var wordings = codes.Skip(1).Select(static (code, index) =>
         {
             var parameter = SupportedLanguages.ToParameterName(code);

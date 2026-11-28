@@ -2,13 +2,14 @@ namespace CodeChops.Idioma.Generators;
 
 /// <summary>
 /// Reads what the referenced assemblies say about their languages (<see cref="ReferencedLocalization"/>), for
-/// <see cref="LocalizationSetsAnalysis.FindLibraryGaps"/> to hold them to the languages of this assembly.
+/// <see cref="LocalizationSetsAnalysis.FindLibraryGaps"/> to hold them to the languages of this assembly, and for
+/// <see cref="LocalizationSetsAnalysis.FindRewordingGaps"/> to hold this assembly's rewordings to their sets.
 /// </summary>
 internal static class ReferencedLocalizationReader
 {
     /// <summary>
-    /// What the referenced assemblies say about their languages, in a fixed order. Only assemblies that reference this
-    /// package can hold its attributes, which keeps the framework's assemblies out of this.
+    /// What the referenced assemblies say about their languages, ordered by assembly name. Only assemblies that
+    /// reference this package are read.
     /// </summary>
     public static EquatableArray<ReferencedLocalization> Read(Compilation compilation)
     {
@@ -29,11 +30,10 @@ internal static class ReferencedLocalizationReader
                 var name = attribute.AttributeClass?.ToDisplayString();
 
                 if (String.Equals(name, PackageNames.LocalizationSetAttribute, StringComparison.Ordinal)
-                    && attribute.ConstructorArguments.Length is 2
-                    && attribute.ConstructorArguments[0].Value is string contract
-                    && attribute.ConstructorArguments[1].Value is string language)
+                    && attribute.ConstructorArguments is [{ Value: string contract }, { Value: string language }, { Value: string set }, var reworded, { Kind: TypedConstantKind.Array } bases])
                 {
-                    sets.Add(new ProvidedLocalizationSet(contract, language));
+                    var baseNames = bases.Values.Select(static name => name.Value).OfType<string>().ToImmutableArray();
+                    sets.Add(new ProvidedLocalizationSet(contract, language, set, reworded.Value as string, new EquatableArray<string>(baseNames)));
 
                     if (read.Add(contract) && ReadSetOfEnum(assembly, contract, compilation) is { } setOfEnum)
                         setsOfEnums.Add(setOfEnum);
@@ -53,7 +53,8 @@ internal static class ReferencedLocalizationReader
                     new EquatableArray<string>(languages),
                     new EquatableArray<ProvidedLocalizationSet>(sets.ToImmutable()),
                     hasStandaloneTexts,
-                    new EquatableArray<ReferencedSetOfEnum>(setsOfEnums.ToImmutable())));
+                    new EquatableArray<ReferencedSetOfEnum>(setsOfEnums.ToImmutable()),
+                    new EquatableArray<string>([.. assembly.Modules.First().ReferencedAssemblies.Select(static identity => identity.Name).OrderBy(static name => name, StringComparer.Ordinal)])));
             }
         }
 
@@ -65,9 +66,8 @@ internal static class ReferencedLocalizationReader
     }
 
     /// <summary>
-    /// A referenced contract of an enum, with what a set of it lists in place of <c>ILocalizationSet</c>:
-    /// <c>ILocalizationSet&lt;Lib.OrderStatus&gt;</c>, by the enum's full name. <see langword="null"/> for a contract of
-    /// no enum, and for one whose enums this assembly can't name, as an internal enum of the library.
+    /// A referenced contract of an enum, with the interface a set of it lists, such as
+    /// <c>ILocalizationSet&lt;Lib.OrderStatus&gt;</c>. <see langword="null"/> when no enum of it is accessible here.
     /// </summary>
     private static ReferencedSetOfEnum? ReadSetOfEnum(IAssemblySymbol assembly, string contract, Compilation compilation)
     {

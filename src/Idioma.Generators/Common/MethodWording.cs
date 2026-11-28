@@ -1,26 +1,21 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reads the wording of a text that takes values, as its method writes it: <c>Hello, {name}!</c> for
-/// <c>=> $"Hello, {name}!"</c>. For the doc comments of the generated members, which show the wording of every
-/// language.
+/// Reads the wording of a text that takes values as its method writes it (<c>Hello, {name}!</c>), for the doc comments
+/// of the generated members.
 /// </summary>
 internal static class MethodWording
 {
     /// <summary>
-    /// The separator between the wordings a method chooses between, as in <c>1 item / {count} items</c>.
+    /// The separator between the wordings a method chooses between.
     /// </summary>
     internal const string ChoiceSeparator = " / ";
 
     /// <summary>
-    /// The wording a method returns when it returns one expression that is a constant or an interpolated string, each
-    /// value of which is shown as it is written, in braces. A method that chooses between such wordings, with
-    /// <c>? :</c> or a <c>switch</c>, gives each of them in the order written, apart by <see cref="ChoiceSeparator"/>:
-    /// <c>1 item / {count} items</c>. <see langword="null"/> for any other method.
+    /// The constant or interpolated string a method returns, each value in braces as written. A choice with <c>? :</c>
+    /// or a <c>switch</c> gives each wording, apart by <see cref="ChoiceSeparator"/>: <c>1 item / {count} items</c>.
+    /// <see langword="null"/> for any other method.
     /// </summary>
-    /// <param name="declaration">The method.</param>
-    /// <param name="semanticModel">The semantic model of the tree the method lies in.</param>
-    /// <param name="cancellationToken">Cancels the read.</param>
     public static string? Read(MethodDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         var expression = declaration.ExpressionBody?.Expression
@@ -30,9 +25,6 @@ internal static class MethodWording
         return wording;
     }
 
-    /// <summary>
-    /// The wording of an expression a method returns (<see cref="Read(MethodDeclarationSyntax, SemanticModel, CancellationToken)"/>).
-    /// </summary>
     private static string? Read(ExpressionSyntax expression, MethodDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
         if (ConstantWording.ReadString(expression) is { } written)
@@ -41,8 +33,7 @@ internal static class MethodWording
         if (expression is ParenthesizedExpressionSyntax parenthesized)
             return Read(parenthesized.Expression, declaration, semanticModel, cancellationToken);
 
-        // Asked of the compiler only where the syntax doesn't say it already: a wording that shows a value of the
-        // method is no constant.
+        // Asked of the compiler only where the syntax doesn't already show a parameter.
         if (!TakesValue(expression, declaration)
             && semanticModel.GetConstantValue(expression, cancellationToken) is { HasValue: true, Value: string constant })
         {
@@ -60,17 +51,13 @@ internal static class MethodWording
         return wording;
     }
 
-    /// <summary>
-    /// An interpolated string as it reads, each value in braces as it is written.
-    /// </summary>
     private static string ReadInterpolated(InterpolatedStringExpressionSyntax interpolated)
     {
         var wording = new StringBuilder();
 
         foreach (var content in interpolated.Contents)
         {
-            // The text as it reads, and a value between single braces, however many the string is written with
-            // ($$"""...{{name}}...""").
+            // A value between single braces, also in a raw string with more.
             if (content is InterpolatedStringTextSyntax text)
                 wording.Append(ReadText(text));
             else if (content is InterpolationSyntax value)
@@ -81,8 +68,7 @@ internal static class MethodWording
     }
 
     /// <summary>
-    /// The expressions a choice gives: both branches of <c>? :</c>, or the arm of each case of a <c>switch</c>, leaving
-    /// out an arm that throws. <see langword="null"/> for an expression that isn't a choice.
+    /// The branches of <c>? :</c> or the arms of a <c>switch</c> that don't throw, else <see langword="null"/>.
     /// </summary>
     private static IEnumerable<ExpressionSyntax>? FindChoices(ExpressionSyntax expression)
     {
@@ -97,13 +83,11 @@ internal static class MethodWording
     }
 
     /// <summary>
-    /// Adds the wordings a choice gives to <paramref name="wordings"/>, each once, in the order written. A choice
-    /// inside a choice adds its own. <see langword="false"/> when one of them is no wording this can read, so that the
-    /// hover never shows part of a text as if it were all of it.
+    /// Adds each distinct wording a choice gives, nested choices included. <see langword="false"/> when one can't be
+    /// read, so the hover never shows part of a text as all of it.
     /// </summary>
-    // A literal or an interpolated string is read as it is written, without asking whether it's a constant: a wording a
-    // plural chooses nearly always shows a value. Discovery reads every text of every set on every edit, and asking
-    // that of each wording a choice gives took a tenth of the generator's time per edit.
+    // A literal or interpolated string is read as written without binding, because discovery reads every text on every
+    // edit.
     private static bool AddChoices(IEnumerable<ExpressionSyntax> choices, List<string> wordings, MethodDeclarationSyntax declaration, SemanticModel semanticModel,
         CancellationToken cancellationToken)
     {
@@ -137,12 +121,10 @@ internal static class MethodWording
     }
 
     /// <summary>
-    /// Whether the syntax of an expression says by itself that its value depends on a parameter of the method, so that
-    /// it is no constant: <c>$"Hello, {name}!"</c>, or <c>count is 1 ? "1 item" : $"{count} items"</c>.
+    /// Whether the syntax alone shows that an expression depends on a parameter (<c>$"Hello, {name}!"</c>).
     /// <see langword="false"/> wherever only the compiler can tell.
     /// </summary>
-    // Nearly every text that takes values is written this way, and the generators read each of them on every edit.
-    // Binding one costs more than everything else that is read of it.
+    // Saves binding, which costs more than everything else read of a text.
     internal static bool TakesValue(ExpressionSyntax expression, MethodDeclarationSyntax declaration)
     {
         HashSet<string>? names = null;
@@ -151,8 +133,7 @@ internal static class MethodWording
         {
             var name = parameter.Identifier.ValueText;
 
-            // Not a name two parameters share, which does not compile. And not a parameter named like its type
-            // (Color Color), whose name may stand for the type.
+            // Skips a parameter named like its type (Color Color), whose name may stand for the type.
             if (name.Length is 0 || parameter.Type is null || String.Equals(GetRightmostName(parameter.Type), name, StringComparison.Ordinal))
                 continue;
 
@@ -163,8 +144,7 @@ internal static class MethodWording
         if (names is null)
             return false;
 
-        // Not a name the expression declares anew, as a lambda parameter or a pattern does: there it stands for
-        // something else, or does not compile.
+        // A name the expression declares anew, as a lambda or a pattern does, stands for something else.
         foreach (var token in expression.DescendantTokens())
             if (token.IsKind(SyntaxKind.IdentifierToken) && token.Parent is not IdentifierNameSyntax)
                 names.Remove(token.ValueText);
@@ -174,8 +154,7 @@ internal static class MethodWording
     }
 
     /// <summary>
-    /// Whether an expression is no constant because a part that its value is made of is a parameter. Each shape here is
-    /// a constant only when every part named is one.
+    /// Whether a part of an expression's value is a parameter.
     /// </summary>
     private static bool TakesValue(ExpressionSyntax? expression, HashSet<string> parameters)
     {
@@ -203,8 +182,7 @@ internal static class MethodWording
     }
 
     /// <summary>
-    /// The last name a type is written with: <c>Color</c> for <c>Shop.Color?</c>. <see langword="null"/> for a type
-    /// written without one, such as <c>int</c> or a tuple.
+    /// <c>Color</c> for <c>Shop.Color?</c>, and <see langword="null"/> for <c>int</c> or a tuple.
     /// </summary>
     internal static string? GetRightmostName(TypeSyntax type)
     {
@@ -225,8 +203,7 @@ internal static class MethodWording
     /// </summary>
     public static string ReadText(InterpolatedStringTextSyntax text)
     {
-        // A raw string writes a brace that is text once, and any other string twice: the token of the text holds it as
-        // it is written, where it holds every other escape as the character it stands for.
+        // The token keeps a doubled brace as written, though it unescapes everything else. A raw string doesn't double it.
         var writesBraceTwice = text.Parent is not InterpolatedStringExpressionSyntax interpolated
                                || (!interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedSingleLineRawStringStartToken)
                                    && !interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedMultiLineRawStringStartToken));

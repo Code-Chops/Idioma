@@ -10,7 +10,7 @@ public sealed partial class LocalizationRegistrationPartTests
     public Task ApplicationReferencingAssemblyWithSets_CallsItsRegistrarFirst()
     {
         // Arrange & Act: an app without sets of its own still registers what it references, used or not. Without
-        // languages it doesn't build (LOC103), and its registrar is written all the same.
+        // languages it doesn't build (LOC101), and its registrar is written all the same.
         var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary));
 
         // Assert
@@ -33,8 +33,8 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: every language, the default first, and before the referenced registrars, as only the first
         // registration counts, and a referenced application (the app a test project tests) must not get there first.
-        text.IndexOf("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl\", \"en\");", StringComparison.Ordinal)
-            .ShouldBeLessThan(text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
+        text.IndexOf("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), [\"nl\", \"en\"], [null, null]);", StringComparison.Ordinal)
+            .ShouldBeInRange(0, text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
 
         return Verify(text);
     }
@@ -54,7 +54,24 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: internal, because a host referencing this application registers its own languages first.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl-BE\", \"en\");");
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), [\"nl-BE\", \"en\"], [null, null]);");
+    }
+
+    [Test]
+    public void ApplicationDeclaringLanguages_RegistersThemCasedAsCultureNamesWithScripts()
+    {
+        // Arrange & Act: zh-TW is written in Hant, so zh-Hant-TW tries it at run time, and zh-Hans-TW doesn't. en-GB is
+        // written in one script, so it gets none.
+        var text = GeneratedText(GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("EN-gb", "zh-tw", "SR-rs")]
+
+            namespace TestApp;
+            """));
+
+        // Assert: each code cased as the registry takes it, with its script in the same order.
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), [\"en-GB\", \"zh-TW\", \"sr-RS\"], [null, \"Hant\", \"Cyrl\"]);");
     }
 
     [Test]
@@ -87,12 +104,12 @@ public sealed partial class LocalizationRegistrationPartTests
             """, client));
 
         // Assert: the client's registrar is internal, as it has nothing the server must register.
-        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"en\", \"nl\");");
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), [\"en\", \"nl\"], [null, null]);");
         text.ShouldNotContain("LanguagesClient");
     }
 
     [Test]
-    public void ApplicationWithoutLanguages_ReportsLOC103()
+    public void ApplicationWithoutLanguages_ReportsLOC101()
     {
         // Arrange & Act: a host without texts of its own, whose process would have no languages.
         var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;", SetsLibrary);
@@ -106,7 +123,7 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void ApplicationWithoutLanguagesOrReferences_ReportsLOC103()
+    public void ApplicationWithoutLanguagesOrReferences_ReportsLOC101()
     {
         // Arrange & Act: nothing uses the package but the app itself.
         var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), "namespace TestApp;");
@@ -116,7 +133,7 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void AndroidApplicationWithoutLanguages_ReportsLOC103()
+    public void AndroidApplicationWithoutLanguages_ReportsLOC101()
     {
         // Arrange & Act: built as a library, and an app by the Android SDK's property.
         var result = GeneratorTestHelper.RunWithBuildProperties(
@@ -130,7 +147,7 @@ public sealed partial class LocalizationRegistrationPartTests
     }
 
     [Test]
-    public void LibraryWithoutLanguages_ReportsNoLOC103()
+    public void LibraryWithoutLanguages_ReportsNoLOC101()
     {
         // Arrange & Act: a library's attribute describes only its own texts, and it has none.
         var result = Run("namespace TestApp; public static class Nothing;", SetsLibrary);
@@ -142,9 +159,9 @@ public sealed partial class LocalizationRegistrationPartTests
     [Test]
     [Arguments("\"en\", \"nl\"")]
     [Arguments("\"e\", \"nl\"")]
-    public void ApplicationWithLanguagesOrAnInvalidAttribute_ReportsNoLOC103(string languages)
+    public void ApplicationWithLanguagesOrAnInvalidAttribute_ReportsNoLOC101(string languages)
     {
-        // Arrange & Act: an invalid attribute is there, and LOC101 says what is wrong with it.
+        // Arrange & Act: an invalid attribute is there, and LOC102 says what is wrong with it.
         var result = GeneratorTestHelper.RunAsApplication(LocalizationParts.Registration(), $$"""
             using CodeChops.Idioma;
 
@@ -198,7 +215,7 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: as for an application built as an executable.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl\", \"en\");");
+        text.ShouldContain("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), [\"nl\", \"en\"], [null, null]);");
     }
 
     [Test]
@@ -218,12 +235,12 @@ public sealed partial class LocalizationRegistrationPartTests
 
         // Assert: as for an application built as an executable.
         text.ShouldContain("internal static class LocalizationRegistrar_TestAssembly");
-        text.IndexOf("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), \"nl\", \"en\");", StringComparison.Ordinal)
-            .ShouldBeLessThan(text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
+        text.IndexOf("GeneratedCode.RegisterLanguages(typeof(LocalizationRegistrar_TestAssembly), [\"nl\", \"en\"], [null, null]);", StringComparison.Ordinal)
+            .ShouldBeInRange(0, text.IndexOf("LocalizationRegistrar_SetsLibrary.Register());", StringComparison.Ordinal));
     }
 
     [Test]
-    public void LibraryMarkedAsApplicationWithoutLanguages_ReportsLOC103()
+    public void LibraryMarkedAsApplicationWithoutLanguages_ReportsLOC101()
     {
         // Arrange & Act: the property makes it the app, so it declares its languages as an executable does.
         var result = GeneratorTestHelper.RunWithBuildProperties(

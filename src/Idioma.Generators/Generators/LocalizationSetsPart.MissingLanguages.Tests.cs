@@ -31,9 +31,9 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void SetWithLanguageCodeThatIsNoCultureName_ShouldNotHideMissingLanguage()
+    public void SetWithoutLanguage_ShouldNotHideMissingLanguage()
     {
-        // Arrange & Act: registering the British set throws (LOC207), so it serves no language, and Dutch is missing.
+        // Arrange & Act: the British set's name gives no language, so it serves none, and Dutch is missing.
         var result = Run($$"""
             {{Header}}
 
@@ -44,7 +44,6 @@ public sealed partial class LocalizationSetsPartTests
 
             public sealed class ShopLocalizationBritish : ILocalizationSet, IShopLocalization
             {
-                public string LocalizationLanguageCode => "en_GB";
                 public string Checkout => "Checkout";
             }
             """);
@@ -193,7 +192,7 @@ public sealed partial class LocalizationSetsPartTests
     {
         // Arrange & Act: listing ILocalizationSet again adds nothing to a set of a contract written by hand. The English set
         // is no default-language set to generate a second contract from (LOC200, or a duplicate IGridLocalization once
-        // partial), and the Dutch set does implement its contract (LOC204).
+        // partial), and the Dutch set does implement its contract (LOC205).
         var result = Run($$"""
             {{Header}}
 
@@ -248,36 +247,6 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    public void HandWrittenContractOfSetWithUnreadableLanguage_ShouldBeSkipped()
-    {
-        // Arrange & Act: the build can't tell which language the second set serves, so it does not guess.
-        var result = Run($$"""
-            {{Header}}
-
-            public interface IGridLocalization : ILocalizationSet
-            {
-                string First { get; }
-            }
-
-            public sealed class GridLocalizationEn : ILocalizationSet, IGridLocalization
-            {
-                public string First => "First";
-            }
-
-            public sealed class GridLocalization : ILocalizationSet, IGridLocalization
-            {
-                private static string Language { get; } = "nl";
-
-                public string LocalizationLanguageCode => Language;
-                public string First => "Eerste";
-            }
-            """);
-
-        // Assert
-        DiagnosticIds(result).ShouldBeEmpty();
-    }
-
-    [Test]
     public void EveryLanguageMissing_ShouldReportEach()
     {
         // Arrange & Act
@@ -314,8 +283,8 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         SingleDiagnostic(result, LocalizationSetsPart.MissingLanguageDiagnosticId);
         var provided = ProvidedSets(result);
-        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
-        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
+        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\", ");
+        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\", ");
         var admin = result.Results.Single().GeneratedSources.Single(source => source.HintName is "Shop.Admin.ShopLocalizationEn.Localization.g.cs");
         admin.SourceText.ToString().ShouldNotContain("ShopLocalizationNl");
     }
@@ -340,8 +309,8 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         var provided = ProvidedSets(result);
-        provided.ShouldContain($"LocalizationSetAttribute(\"{expectedNamespace}.IShopLocalization\", \"nl\")");
-        provided.ShouldNotContain($"LocalizationSetAttribute(\"{otherNamespace}.IShopLocalization\", \"nl\")");
+        provided.ShouldContain($"LocalizationSetAttribute(\"{expectedNamespace}.IShopLocalization\", \"nl\", ");
+        provided.ShouldNotContain($"LocalizationSetAttribute(\"{otherNamespace}.IShopLocalization\", \"nl\", ");
         DiagnosticIds(result).ShouldBe(["LOC201"]);
     }
 
@@ -357,8 +326,8 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         var provided = ProvidedSets(result);
-        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\")");
-        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\")");
+        provided.ShouldContain("LocalizationSetAttribute(\"Shop.Admin.IShopLocalization\", \"nl\", ");
+        provided.ShouldNotContain("LocalizationSetAttribute(\"Shop.Checkout.IShopLocalization\", \"nl\", ");
     }
 
     [Test]
@@ -417,11 +386,11 @@ public sealed partial class LocalizationSetsPartTests
     [Arguments("public class ShopLocalizationEnGb : ShopLocalizationEn;")]
     [Arguments("public class ShopLocalizationEnGb : ShopLocalizationEn { public override string Cart => \"Basket\"; }")]
     [Arguments("public class ShopLocalizationEnGb : ILocalizationSet, IShopLocalization { public string Cart => \"Basket\"; }")]
-    [Arguments("public class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet { string ILocalizationSet.LocalizationLanguageCode => \"en-GB\"; }")]
+    [Arguments("public class ShopLocalizationENGB : ShopLocalizationEn;")]
     public void ListedRegionWithSetOfItsOwn_ShouldReportNothing(string british)
     {
         // Arrange & Act: a set that derives from the English one and adds nothing will do, as will one that implements
-        // the contract itself, or one that gives its language in LocalizationLanguageCode.
+        // the contract itself, or one whose name gives the code in capitals.
         var result = Run($$"""
             using CodeChops.Idioma;
 

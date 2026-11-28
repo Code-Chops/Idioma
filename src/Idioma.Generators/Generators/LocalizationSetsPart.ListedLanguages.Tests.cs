@@ -123,8 +123,8 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert: no LOC201 or LOC202, each code listed for the assemblies referencing this one, and linked.
         DiagnosticIds(result).ShouldBeEmpty();
-        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\")");
-        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"zh-Hans\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"nl-BE\", ");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"TestApp.IShopLocalization\", \"zh-Hans\", ");
         ContractText(result).ShouldContain("ShopLocalizationNlBe.Checkout\">nl-BE</see>");
     }
 
@@ -162,17 +162,69 @@ public sealed partial class LocalizationSetsPartTests
         // language.
         DiagnosticIds(result).ShouldBeEmpty();
         var provided = ProvidedSets(result);
-        provided.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"ar\")");
-        provided.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"es-AR\")");
+        provided.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"ar\", ");
+        provided.ShouldContain("LocalizationSetAttribute(\"TestApp.IMessages\", \"es-AR\", ");
         var contract = ContractText(result);
         contract.ShouldContain("MessagesAr.Save\">ar</see>");
         contract.ShouldContain("MessagesEs.Save\">es-AR</see>");
     }
 
     [Test]
-    public void SetNamedAfterUnlistedLongCode_ShouldReportLOC202NamingBothWays()
+    public void SetNamedAfterRegionOfUnlistedLanguage_ShouldReportLOC202AdvisingToListIt()
     {
-        // Arrange & Act: nl-BE is not declared, so the last two letters count, and the set serves 'be'.
+        // Arrange & Act: fr isn't declared, so the last two letters count, and the set serves 'be'.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            {{DutchSet}}
+
+            public sealed class ShopLocalizationFrBE : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Payer";
+            }
+            """);
+
+        // Assert: list the code, which the name then gives.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
+        diagnostic.GetMessage().ShouldContain("'ShopLocalizationFrBE' is a set for 'be'");
+        diagnostic.GetMessage().ShouldContain("If it's meant for 'fr-BE', list 'fr-BE' in the attribute, which its name then gives it.");
+    }
+
+    [Test]
+    public void SetNamedAfterRegionThatDoesNotExist_ShouldReportLOC202NamingTheRegionMeant()
+    {
+        // Arrange & Act: UK isn't a region, so the last two letters count, and the set serves 'uk', which is Ukrainian.
+        var result = Run($$"""
+            {{Header}}
+
+            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            {{DutchSet}}
+
+            public sealed class ShopLocalizationEnUk : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+            """);
+
+        // Assert: the fix still adds 'uk', for a set that is Ukrainian.
+        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
+        diagnostic.GetMessage().ShouldBe("'ShopLocalizationEnUk' is a set for 'uk', which [assembly: SupportedLanguages] doesn't list. Did you mean 'en-GB'? Then name it ShopLocalizationEnGb. Otherwise add 'uk' to the attribute, or remove the set.");
+        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe("uk");
+    }
+
+    [Test]
+    public void SetNamedAfterUnlistedRegionOfListedLanguage_ShouldServeThatRegion()
+    {
+        // Arrange & Act: nl is declared and BE is a region, so the name gives nl-BE.
         var result = Run($$"""
             {{Header}}
 
@@ -189,20 +241,18 @@ public sealed partial class LocalizationSetsPartTests
             }
             """);
 
-        // Assert: list the code, or implement it.
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.UnlistedLanguageDiagnosticId);
-        diagnostic.GetMessage().ShouldContain("'ShopLocalizationNlBe' is a set for 'be'");
-        diagnostic.GetMessage().ShouldContain("If it's meant for 'nl-BE', list 'nl-BE' in the attribute");
-        diagnostic.GetMessage().ShouldContain("implement 'string ILocalizationSet.LocalizationLanguageCode => \"nl-BE\";'");
+        // Assert: no LOC202 for 'be', and no contract needs a Belgian set.
+        DiagnosticIds(result).ShouldBeEmpty();
+        ProvidedSets(result).ShouldContain("\"nl-BE\"");
     }
 
     [Test]
-    [Arguments("ShopLocalizationEnGb", "If it's meant for 'en-GB'", "Otherwise remove the set, because 'gb' is no language.")]
+    [Arguments("ShopLocalizationDeAT", "If it's meant for 'de-AT'", "Otherwise remove the set, because 'at' is no language.")]
     [Arguments("ShopLocalizationQq", "'qq' is no language", "so name the set after one that the attribute lists, or remove the set.")]
     public void SetNamedAfterNoLanguage_ShouldReportLOC202WithoutAdvisingToListIt(string name, string advice, string otherwise)
     {
-        // Arrange & Act: en-GB is not declared, so the last two letters count, and 'gb' is no language. Listed, it would
-        // only give LOC104.
+        // Arrange & Act: neither de-AT nor de is declared, so the last two letters count, and 'at' is no language.
+        // Listed, it would only give LOC103.
         var result = Run($$"""
             {{Header}}
 
@@ -225,7 +275,7 @@ public sealed partial class LocalizationSetsPartTests
         diagnostic.GetMessage().ShouldEndWith(otherwise);
         diagnostic.GetMessage().ShouldNotContain("Otherwise add");
         diagnostic.Properties.TryGetValue(LocalizationSetsPart.SuggestedNameProperty, out var suggested);
-        suggested.ShouldBe(name.EndsWith("EnGb", StringComparison.Ordinal) ? "en-GB" : null);
+        suggested.ShouldBe(name.EndsWith("DeAT", StringComparison.Ordinal) ? "de-AT" : null);
     }
 
     [Test]
@@ -296,13 +346,13 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert: it inherits nl-BE, which nl serves, as at run time; no LOC202 for 'be'.
         DiagnosticIds(result).ShouldNotContain("LOC202", StringComparer.Ordinal);
-        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"RegionalLibrary.IShopLocalization\", \"nl-BE\")");
+        ProvidedSets(result).ShouldContain("LocalizationSetAttribute(\"RegionalLibrary.IShopLocalization\", \"nl-BE\", ");
     }
 
     [Test]
     public void DefaultSetNamedAfterLongCode_ShouldGenerateContractThatCompiles()
     {
-        // Arrange & Act: a regional default language, with no LocalizationLanguageCode written by hand.
+        // Arrange & Act: a regional default language.
         const string source = """
             using CodeChops.Idioma;
 
@@ -344,7 +394,6 @@ public sealed partial class LocalizationSetsPartTests
 
             public sealed class ShopLocalizationNlBe : ILocalizationSet, IShopLocalization
             {
-                string ILocalizationSet.LocalizationLanguageCode => "nl-BE";
                 public string Checkout => "Afrekenen";
             }
             """);
@@ -370,9 +419,8 @@ public sealed partial class LocalizationSetsPartTests
                 public string Checkout => "Afrekenen";
             }
 
-            public sealed class ShopLocalizationGb : ShopLocalizationEn, ILocalizationSet
+            public sealed class ShopLocalizationEnGb : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
             }
             """);
 
@@ -384,7 +432,7 @@ public sealed partial class LocalizationSetsPartTests
     public void RegionalSetOfNonDefaultLanguage_ShouldBeAllowed()
     {
         // Arrange & Act: the Dutch set implements the contract generated here, so the Belgian set only reaches it through
-        // its base. It used to be reported as a set implementing no contract (LOC204).
+        // its base. It used to be reported as a set implementing no contract (LOC205).
         var result = Run($$"""
             {{Header}}
 
@@ -400,7 +448,6 @@ public sealed partial class LocalizationSetsPartTests
 
             public sealed class ShopLocalizationNlBe : ShopLocalizationNl, ILocalizationSet
             {
-                string ILocalizationSet.LocalizationLanguageCode => "nl-BE";
                 public override string Checkout => "Betalen";
             }
             """);
@@ -426,16 +473,15 @@ public sealed partial class LocalizationSetsPartTests
                 public virtual string Colour => "Color";
             }
 
-            public sealed class ShopLocalizationGb : ShopLocalizationEn, ILocalizationSet
+            public sealed class ShopLocalizationEnGb : ShopLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
                 public override string Colour => "Colour";
             }
             """);
 
         // Assert
         DiagnosticIds(result).ShouldBeEmpty();
-        ContractText(result).ShouldContain("<see cref=\"ShopLocalizationGb.Colour\">en-GB</see>");
+        ContractText(result).ShouldContain("<see cref=\"ShopLocalizationEnGb.Colour\">en-GB</see>");
     }
 
     [Test]

@@ -6,22 +6,11 @@ namespace CodeChops.Idioma.Generators;
 public sealed partial class InlineTextValuesAnalyzer
 {
     /// <summary>
-    /// Tells a text among the values a wording shows. A text is wording, as a constant is, so another language may word
-    /// it its own way.
+    /// Tells a text among the values a wording shows, because a text is wording and no value. A text is a text of a
+    /// generated class, or a property of this assembly whose getter only gives a text or another such property.
     /// </summary>
-    /// <remarks>
-    /// A text is one of these:
-    /// <list type="bullet">
-    /// <item>A text of a generated class, such as <c>ShopLocalization.Checkout</c>.</item>
-    /// <item>A property of this assembly whose getter gives a text and does nothing else, such as
-    /// <c>static string Checkout => LocalizedText.Inline(en: "Checkout", nl: "Afrekenen");</c>. Its getter may give the
-    /// text of another such property too.</item>
-    /// </list>
-    /// </remarks>
-    /// <param name="compilation">The compilation, whose semantic models bind a getter in another file.</param>
-    /// <param name="semanticModel">The semantic model of the file of the call.</param>
+    /// <param name="compilation">Binds a getter in another file.</param>
     /// <param name="text">The class <c>LocalizedText</c>, or <see langword="null"/> where the package isn't referenced.</param>
-    /// <param name="cancellationToken">Cancels the analysis.</param>
     private sealed class TextProperties(Compilation compilation, SemanticModel? semanticModel, INamedTypeSymbol? text, CancellationToken cancellationToken)
     {
         /// <summary>
@@ -66,8 +55,7 @@ public sealed partial class InlineTextValuesAnalyzer
         }
 
         /// <summary>
-        /// The expression a property's getter gives and does nothing else with: its expression body, or the one statement
-        /// of its getter's body that returns.
+        /// The expression a getter gives when that's all it does: an expression body or a lone return statement.
         /// </summary>
         private static ExpressionSyntax? FindGiven(PropertyDeclarationSyntax declaration)
         {
@@ -87,8 +75,7 @@ public sealed partial class InlineTextValuesAnalyzer
         }
 
         /// <summary>
-        /// The text inside what only passes it on: a conversion, parentheses, or a text that is <see langword="null"/>
-        /// replaced by another wording, as in <c>LocalizedText.GetTextOfType&lt;Address&gt;() ?? "Address"</c>.
+        /// The text inside a conversion, parentheses, or the left side of <c>??</c>.
         /// </summary>
         private static IOperation Unwrap(IOperation operation)
         {

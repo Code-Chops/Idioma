@@ -4,16 +4,12 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// Holds the contracts written by hand in this assembly to its languages, as a generated contract is: each must have
-    /// a set for every language. Reported at the attribute, like a referenced contract, since the gap is a language the
-    /// attribute lists. Only contracts this assembly has a set of are seen; a contract with a set whose language the
-    /// build can't read is skipped. An excluded set counts for the language it serves, but no contract is seen through
-    /// it alone.
+    /// Checks that each contract written by hand has a set for every language (<c>LOC201</c>), reported at the
+    /// attribute. An excluded set counts for its language, but doesn't make its contract seen on its own.
     /// </summary>
     private static void AnalyzeOwnContracts(
         ImmutableArray<DiscoveredLocalization> sets,
         ImmutableArray<DiscoveredLocalization> excluded,
-        ImmutableArray<DiscoveredLocalization> unreadable,
         DeclaredLanguages declared,
         string defaultLanguage,
         ImmutableArray<LocalizationSetsFinding>.Builder findings)
@@ -25,9 +21,6 @@ internal sealed partial record LocalizationSetsAnalysis
 
         foreach (var contract in contracts)
         {
-            if (unreadable.Any(set => set.OwnContractNames.AsImmutableArray().Contains(contract, StringComparer.Ordinal)))
-                continue;
-
             var members = sets.Where(set => set.OwnContractNames.AsImmutableArray().Contains(contract, StringComparer.Ordinal)).ToArray();
 
             var excludedMembers = excluded.Where(set => set.OwnContractNames.AsImmutableArray().Contains(contract, StringComparer.Ordinal)).ToArray();
@@ -37,8 +30,7 @@ internal sealed partial record LocalizationSetsAnalysis
             var simpleName = contract.Substring(separator + 1);
             var baseName = GetContractBaseName(contract);
 
-            // A set reported for listing ILocalizationSet instead of this contract already says what to do about its
-            // language.
+            // A set reported for its missing contract (LOC205) already says what to do about its language.
             var misdeclared = sets.Where(other => other.Language is not null
                 && String.Equals(other.Namespace, contractNamespace, StringComparison.Ordinal)
                 && IsMissingContract(other, defaultLanguage)
@@ -46,7 +38,6 @@ internal sealed partial record LocalizationSetsAnalysis
 
             foreach (var code in declared.Codes)
             {
-                // A set of the language itself, as for a generated contract.
                 if (members.Any(set => IsSetOf(set, code))
                     || excludedMembers.Any(set => IsSetOf(set, code))
                     || misdeclared.Any(set => IsSetOf(set, code)))
@@ -54,7 +45,7 @@ internal sealed partial record LocalizationSetsAnalysis
                     continue;
                 }
 
-                // Public where one of the contract's sets is, which the new set then matches.
+                // Public when one of the contract's sets is.
                 var setName = SuggestSetName(contract, code);
                 var (suggestion, newSet) = SuggestSet(setName, SupportedLanguages.SetInterface, simpleName, code, contractNamespace, members.Any(static set => set.IsPublic), members);
 

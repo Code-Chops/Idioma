@@ -6,9 +6,8 @@ namespace CodeChops.Idioma.Generators;
 internal static class CodeEscaping
 {
     /// <summary>
-    /// Text as a doc comment can hold it: markup characters as entities, and a character XML does not allow, such as a
-    /// control character or half of a surrogate pair, as the escape C# writes it with (<c>\u0001</c>). Such a character
-    /// would make the comment invalid (<c>CS1570</c>), also when written as an entity.
+    /// Text as a doc comment can hold it: markup characters as entities, and a character XML doesn't allow as a C#
+    /// escape (<c>\u0001</c>), because even as an entity it makes the comment invalid (<c>CS1570</c>).
     /// </summary>
     public static string EscapeXml(string text)
     {
@@ -38,8 +37,7 @@ internal static class CodeEscaping
     /// <summary>
     /// A name as code can write it: a keyword gets an <c>@</c>, as for a text declared as <c>@event</c>.
     /// </summary>
-    // So does scoped, which is a keyword only in front of a parameter: the function that picks the set of a text
-    // lists its parameters by name alone, and (set, scoped) reads there as a modifier without a parameter (CS1001).
+    // So does scoped, because a parameter list by name alone reads (set, scoped) as a modifier (CS1001).
     public static string EscapeIdentifier(string name)
     {
         var escapeIdentifier = SyntaxFacts.GetKeywordKind(name) is SyntaxKind.None && name is not "scoped" ? name : $"@{name}";
@@ -56,8 +54,7 @@ internal static class CodeEscaping
     }
 
     /// <summary>
-    /// Text as a part of a name: every character a name can't hold becomes an underscore, as in <c>My_App</c> for
-    /// <c>My-App</c>. Nothing is put in front of it, so it's only the rest of a name that starts with something else.
+    /// Text as the rest of a name, with an underscore for each character a name can't hold (<c>My_App</c>).
     /// </summary>
     public static string ToIdentifierPart(string? text)
     {

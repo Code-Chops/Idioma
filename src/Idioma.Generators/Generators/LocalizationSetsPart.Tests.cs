@@ -274,7 +274,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         text.ShouldContain($"public interface {contract}{Environment.NewLine}");
         text.ShouldContain($"public static partial class {texts}");
-        text.ShouldContain($"public static string Checkout => GetLocalizationSet<{contract}>(0, 1)?.Checkout ?? ResolveWording<{contract}, {className}>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain($"public static string Checkout => GetLocalizationSet<{contract}>()?.Checkout ?? ResolveWording<{contract}, {className}>(\"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
@@ -300,7 +300,7 @@ public sealed partial class LocalizationSetsPartTests
             """));
 
         // Assert
-        text.ShouldContain("public static string Checkout => GetLocalizationSet<IShopLocalization>(0, 1)?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
+        text.ShouldContain("public static string Checkout => GetLocalizationSet<IShopLocalization>()?.Checkout ?? ResolveWording<IShopLocalization, ShopLocalizationEn>(\"Checkout\", static set => set.Checkout);");
     }
 
     [Test]
@@ -340,11 +340,11 @@ public sealed partial class LocalizationSetsPartTests
         string Contract(string set) => generated.Single(source => String.Equals(source.HintName, $"{set}.Localization.g.cs", StringComparison.Ordinal)).SourceText.ToString();
 
         Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("namespace TestApp.Orders;");
-        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Orders.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(\"Checkout\",");
         Contract("TestApp.Orders.ShopEn").ShouldContain("namespace TestApp.Orders;");
-        Contract("TestApp.Orders.ShopEn").ShouldContain("ResolveWording<IShop, ShopEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Orders.ShopEn").ShouldContain("ResolveWording<IShop, ShopEn>(\"Checkout\",");
         Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("namespace TestApp.Billing;");
-        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\",");
+        Contract("TestApp.Billing.ShopLocalizationEn").ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(\"Checkout\",");
     }
 
     [Test]
@@ -360,7 +360,6 @@ public sealed partial class LocalizationSetsPartTests
 
             public sealed class ShopLocalizationZhHans : ILocalizationSet, IShopLocalization
             {
-                string ILocalizationSet.LocalizationLanguageCode => "zh-Hans";
                 public string Checkout => "结账";
             }
 
@@ -378,9 +377,9 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     public void OnlyPublicInstanceStringPropertiesAreTexts()
     {
-        // Arrange: LocalizationLanguageCode is the ILocalizationSet member, a virtual property is a text (so a set can derive and
-        // override), an inherited property belongs to the base (it is not redeclared), a property without a public
-        // getter could not implement the contract member, and the rest are not texts by shape.
+        // Arrange: a virtual property is a text (so a set can derive and override), an inherited property belongs to the
+        // base (it is not redeclared), a property without a public getter could not implement the contract member, and
+        // the rest are not texts by shape.
         const string source = """
             using CodeChops.Idioma;
 
@@ -395,7 +394,6 @@ public sealed partial class LocalizationSetsPartTests
 
             public class ShopLocalizationEn : ShopWordingBase, ILocalizationSet, IShopLocalization
             {
-                public string LocalizationLanguageCode => "en";
                 public string Checkout => "Checkout";
                 public virtual string Total => "Total";
                 internal string Hidden => "Hidden";
@@ -414,7 +412,7 @@ public sealed partial class LocalizationSetsPartTests
         // Assert
         text.ShouldContain("    string Checkout { get; }");
         text.ShouldContain("    string Total { get; }");
-        foreach (var name in new[] { "LocalizationLanguageCode", "Inherited", "Hidden", "Secret", "Shared", "Count", "Field", "Method" })
+        foreach (var name in new[] { "Inherited", "Hidden", "Secret", "Shared", "Count", "Field", "Method" })
             text.ShouldNotContain($"string {name} {{ get; }}", customMessage: name);
     }
 
@@ -505,8 +503,8 @@ public sealed partial class LocalizationSetsPartTests
         var generated = result.Results.ShouldHaveSingleItem().GeneratedSources;
         var text = generated.Single(source => source.HintName is "ShopLocalizationEn.Localization.g.cs").SourceText.ToString();
         text.ShouldNotContain("namespace ");
-        text.ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(0, 1, \"Checkout\", static set => set.Checkout);");
-        generated.Single(source => source.HintName is "LocalizationSets.g.cs").SourceText.ToString().ShouldContain("LocalizationSetAttribute(\"IShopLocalization\", \"en\")");
+        text.ShouldContain("ResolveWording<IShopLocalization, ShopLocalizationEn>(\"Checkout\", static set => set.Checkout);");
+        generated.Single(source => source.HintName is "LocalizationSets.g.cs").SourceText.ToString().ShouldContain("LocalizationSetAttribute(\"IShopLocalization\", \"en\", ");
     }
 
     [Test]
@@ -554,8 +552,8 @@ public sealed partial class LocalizationSetsPartTests
     public void SetDerivingFromSetOfProjectReferencedAsCompilation_ShouldNotStopTheGenerator()
     {
         // Arrange: an IDE hands a generator a project of the same solution as its compilation, where a build hands over
-        // the assembly. The LocalizationLanguageCode the library's set implements then has syntax, in a tree of that other
-        // compilation, which this one has no semantic model for.
+        // the assembly. The library's set then has syntax in a tree of that other compilation, which this one has no
+        // semantic model for.
         var library = GeneratorTestHelper.CompileProjectWithGenerators("RegionalLibrary", """
             using CodeChops.Idioma;
 
@@ -575,8 +573,6 @@ public sealed partial class LocalizationSetsPartTests
 
             public class GridLocalizationEnGb : GridLocalizationEn, ILocalizationSet
             {
-                string ILocalizationSet.LocalizationLanguageCode => "en-GB";
-
                 public override string Colour => "Colour";
             }
             """);

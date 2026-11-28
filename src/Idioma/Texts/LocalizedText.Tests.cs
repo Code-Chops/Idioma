@@ -175,7 +175,7 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert: by a type the code only has at run time, and by the property itself, also as a class that
             // derives from its type gives it.
             LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("Plaats");
-            LocalizedText.GetTextByMember(typeof(Address), "City").ShouldBe("Plaats");
+            LocalizedText.GetTextByMember<Address>("City").ShouldBe("Plaats");
             LocalizedText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.City))!).ShouldBe("Plaats");
             LocalizedText.GetTextByMember(typeof(BusinessAddress).GetProperty(nameof(Address.City))!).ShouldBe("Plaats");
         }
@@ -207,7 +207,7 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert: a name is compared as an object first, and by its characters then.
             ReferenceEquals(built, nameof(Address.City)).ShouldBeFalse();
             LocalizedText.GetTextByMember<Address>(built).ShouldBe("Plaats");
-            LocalizedText.GetTextByMember(typeof(Address), built).ShouldBe("Plaats");
+            LocalizedText.GetTextByMember<Address>(built).ShouldBe("Plaats");
             LocalizedText.GetTextByMember<Address>("").ShouldBeNull();
         }
 
@@ -256,11 +256,11 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert: by types the code holds, asked in turn, as a page with two forms asks.
             for (var round = 0; round < 3; round++)
             {
-                LocalizedText.GetTextByMember(typeof(Address), nameof(Address.City)).ShouldBe("City");
-                LocalizedText.GetTextByMember(typeof(Line), nameof(Line.Quantity)).ShouldBe("Quantity");
-                LocalizedText.GetTextByMember(typeof(Line), nameof(Address.City)).ShouldBeNull();
-                LocalizedText.GetTextOfType(typeof(Address)).ShouldBe("Address");
-                LocalizedText.GetTextOfType(typeof(Line)).ShouldBeNull();
+                LocalizedText.GetTextByMember<Address>(nameof(Address.City)).ShouldBe("City");
+                LocalizedText.GetTextByMember<Line>(nameof(Line.Quantity)).ShouldBe("Quantity");
+                LocalizedText.GetTextByMember<Line>(nameof(Address.City)).ShouldBeNull();
+                LocalizedText.GetTextOfType<Address>().ShouldBe("Address");
+                LocalizedText.GetTextOfType<Line>().ShouldBeNull();
             }
         }
 
@@ -273,7 +273,7 @@ namespace CodeChops.Idioma.Tests
             LocalizedText.GetTextByMember<Address>("Street").ShouldBeNull();
             LocalizedText.GetTextByMember<Address>("city").ShouldBeNull();
             LocalizedText.GetTextByMember<string>(nameof(String.Length)).ShouldBeNull();
-            LocalizedText.GetTextOfType(typeof(string)).ShouldBeNull();
+            LocalizedText.GetTextOfType<string>().ShouldBeNull();
             LocalizedText.GetTextByMember(typeof(Address).GetProperty(nameof(Address.Unmarked))!).ShouldBeNull();
         }
 
@@ -342,7 +342,7 @@ namespace CodeChops.Idioma.Tests
 
             // Act & Assert: by a type the code only has at run time, and by the type as a member, which a Type is.
             LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
-            LocalizedText.GetTextOfType(typeof(Address)).ShouldBe("Adres");
+            LocalizedText.GetTextOfType<Address>().ShouldBe("Adres");
             LocalizedText.GetTextByMember(typeof(Address)).ShouldBe("Adres");
         }
 
@@ -355,7 +355,7 @@ namespace CodeChops.Idioma.Tests
             // Act & Assert: the definition itself, and two types with type arguments through every overload.
             LocalizedText.GetTextOfType(typeof(Page<>)).ShouldBe("Pagina");
             LocalizedText.GetTextOfType<Page<int>>().ShouldBe("Pagina");
-            LocalizedText.GetTextOfType(typeof(Page<Address>)).ShouldBe("Pagina");
+            LocalizedText.GetTextOfType<Page<Address>>().ShouldBe("Pagina");
             LocalizedText.GetTextByMember(typeof(Page<Address>)).ShouldBe("Pagina");
         }
 

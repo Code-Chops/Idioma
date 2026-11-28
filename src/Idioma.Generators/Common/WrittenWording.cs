@@ -1,34 +1,17 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Finds the strings a text returns as they're written, which is where its wording stands in the source. A placeholder
-/// in one of them reaches the user as written (<c>LOC403</c>).
+/// Finds the strings a text returns as written, where a placeholder reaches the user (<c>LOC403</c>).
 /// </summary>
 /// <remarks>
-/// <para>
-/// A string is found when the text returns it by itself, or as a part of what it returns:
-/// </para>
-/// <list type="bullet">
-/// <item>The text of an interpolated string, and a string in one of its values.</item>
-/// <item>Either side of a concatenation (<c>+</c>) or of a coalesce (<c>??</c>).</item>
-/// <item>Either branch of a conditional (<c>?:</c>).</item>
-/// <item>An arm of a <see langword="switch"/> expression.</item>
-/// </list>
-/// <para>
-/// No other string is found, because it isn't the wording itself:
-/// </para>
-/// <list type="bullet">
-/// <item>A string passed to a method, such as the format of <c>string.Format</c>, which fills the placeholders in.</item>
-/// <item>A string kept in a local variable, which the build doesn't follow.</item>
-/// <item>A string in a condition, in a local function, or in a lambda.</item>
-/// </list>
+/// A string counts when returned by itself, or as part of an interpolation, <c>+</c>, <c>??</c>, <c>?:</c> or a
+/// <see langword="switch"/> expression. A string passed to a method, kept in a local, or inside a condition, local
+/// function or lambda isn't the wording itself.
 /// </remarks>
-// A constant, an interpolation, a concatenation, a conditional, a coalesce, and a switch count as wording written in the source.
 internal static class WrittenWording
 {
     /// <summary>
-    /// The strings a property or method returns as they're written: those of its expression body, of its initializer,
-    /// and of each <see langword="return"/> of its body or of its getter.
+    /// The strings a property or method returns as written.
     /// </summary>
     public static IEnumerable<SyntaxNode> FindStrings(MemberDeclarationSyntax text)
     {
@@ -38,9 +21,8 @@ internal static class WrittenWording
     }
 
     /// <summary>
-    /// The strings an expression shows as they're written (see <see cref="WrittenWording"/>). Each is a string
-    /// (<see cref="LiteralExpressionSyntax"/>) or the text of an interpolated string
-    /// (<see cref="InterpolatedStringTextSyntax"/>).
+    /// The strings an expression shows as written: each a <see cref="LiteralExpressionSyntax"/> or an
+    /// <see cref="InterpolatedStringTextSyntax"/>.
     /// </summary>
     public static IEnumerable<SyntaxNode> FindStrings(ExpressionSyntax? expression)
     {
@@ -76,7 +58,7 @@ internal static class WrittenWording
     }
 
     /// <summary>
-    /// A string found here as it reads: without the escapes of the source.
+    /// A string found here, without the escapes of the source.
     /// </summary>
     public static string Read(SyntaxNode written)
     {
@@ -88,8 +70,7 @@ internal static class WrittenWording
     }
 
     /// <summary>
-    /// The expressions that an expression shows one of, or shows next to each other, when it's no string itself. Empty
-    /// for any other expression, such as a call or the name of a variable.
+    /// The parts an expression shows, such as both sides of <c>+</c>. Empty for a call or a variable.
     /// </summary>
     private static ExpressionSyntax[] FindParts(ExpressionSyntax? expression)
     {
@@ -107,9 +88,6 @@ internal static class WrittenWording
         return parts;
     }
 
-    /// <summary>
-    /// The expressions a property or method returns.
-    /// </summary>
     private static IEnumerable<ExpressionSyntax> FindReturned(MemberDeclarationSyntax text)
     {
         switch (text)
@@ -140,7 +118,7 @@ internal static class WrittenWording
     }
 
     /// <summary>
-    /// The expressions a body returns: its expression, or that of each <see langword="return"/> in its block.
+    /// A body's expression, or that of each <see langword="return"/> in its block.
     /// </summary>
     private static IEnumerable<ExpressionSyntax> FindReturned(ArrowExpressionClauseSyntax? expressionBody, BlockSyntax? body)
     {
@@ -150,7 +128,7 @@ internal static class WrittenWording
         if (body is null)
             yield break;
 
-        // Not what a local function or a lambda returns, which goes to the text's own code and not to the user.
+        // Not what a local function or lambda returns, which doesn't reach the user.
         foreach (var node in body.DescendantNodes(static node => node is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax)))
             if (node is ReturnStatementSyntax { Expression: { } returned })
                 yield return returned;

@@ -5,29 +5,13 @@ using Microsoft.CodeAnalysis.Operations;
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC502</c>), a member of an enum without
-/// <c>[Localized]</c> next to members that have it (<c>LOC501</c>), and a call of <c>GetTextByMember</c> or
-/// <c>GetTextOfType</c> that names a member or a type without a text (<c>LOC601</c>). Without these,
-/// <c>GetTextByMember</c> would silently give nothing, and <c>GetText()</c> would silently show the member's name.
+/// Reports a member marked <c>[Localized]</c> that gets no text (<c>LOC502</c>), an unmarked enum member next to marked
+/// ones (<c>LOC501</c>), and a <c>GetTextByMember</c> or <c>GetTextOfType</c> call that names something without a
+/// text (<c>LOC601</c>).
 /// </summary>
 /// <remarks>
-/// <para>
-/// A marked member gets no text when the source generator can't write it:
-/// </para>
-/// <list type="bullet">
-/// <item>Its type is private or protected inside another type, or file-local, so that generated code can't name
-/// it.</item>
-/// <item>A wording is <see langword="null"/>.</item>
-/// <item>It's written in markup. The generator can't read what Razor generates from a <c>.razor</c> or
-/// <c>.cshtml</c> file, because no source generator sees what another writes. The exception is the file of
-/// declarations that Razor writes from SDK 11 on, which other generators do see.</item>
-/// <item>The attribute is on something a text isn't found by, such as an indexer, or the field behind a
-/// property.</item>
-/// </list>
-/// <para>
-/// An analyzer reports these, and not the generator, because it sees the compilation with the generated attribute in
-/// it. So it knows which attribute each <c>[Localized]</c> binds to, also in Razor's output.
-/// </para>
+/// An analyzer reports these, and not the generator, because it sees the generated attribute in the compilation. So it
+/// knows which attribute each <c>[Localized]</c> binds to, also in Razor's output.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
@@ -46,7 +30,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         category: "Design",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, a file-local one, or one marked [Obsolete] as an error. The generator can't read what Razor generates from a .razor or .cshtml file either, except the @code and the @attribute of a component on SDK 11 or later. A component's code-behind file is C#, so the generator reads it on any SDK. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
+        description: "The source generator reads each [Localized] as the project builds, and writes its text as code at the top level of the assembly. That code can't name a private or protected nested type, or a file-local one. The generator can't read what Razor generates from a .razor or .cshtml file either, except the @code and the @attribute of a component on SDK 11 or later. A component's code-behind file is C#, so the generator reads it on any SDK. A wording that is null gives no text, and neither does an attribute on something a text isn't found by, such as an indexer. Without this warning, LocalizedText.GetTextByMember would silently give nothing for the member.",
         helpLinkUri: PackageNames.HelpLink(CannotRegisterDiagnosticId));
 
     private static readonly DiagnosticDescriptor UnmarkedEnumMemberRule = new(
@@ -76,7 +60,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
 
         // Razor's output counts as generated code, and a member marked in markup must be caught there.
-        // UnnamedLanguageAnalyzer.IsHandWritten leaves out the rest.
+        // AnalyzerSupport.IsHandWritten leaves out the rest.
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
@@ -92,7 +76,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         var sample = $"[{LocalizedMembers.AttributeName}({String.Join(", ", codes.Select(static code => $"{SupportedLanguages.ToParameterName(code)}: \"...\""))})]";
 
         context.RegisterSyntaxNodeAction(c => AnalyzeLocalized(c, codes), SyntaxKind.Attribute);
-        // Found when an enum first needs them, which is rare: only an enum with members both marked and not asks.
+        // Lazy, because only an enum with both marked and unmarked members asks.
         var compilation = context.Compilation;
         var enumsWithSets = new Lazy<ImmutableHashSet<INamedTypeSymbol>>(() => FindEnumsWithSets(compilation), LazyThreadSafetyMode.PublicationOnly);
 
@@ -101,19 +85,16 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         if (context.Compilation.GetTypeByMetadataName(PackageNames.LocalizedText) is not { } text)
             return;
 
-        // Per assembly the calls name a type of, whether it uses Idioma.
         var usesIdioma = new ConcurrentDictionary<IAssemblySymbol, bool>(SymbolEqualityComparer.Default);
 
         context.RegisterOperationAction(c => AnalyzeLookup(c, text, sample, usesIdioma), OperationKind.Invocation);
     }
 
     /// <summary>
-    /// Reports a call of <c>GetTextByMember</c> or <c>GetTextOfType</c> that names its type and its member in the code,
-    /// when that member or type has no text (<c>LOC601</c>): <c>GetTextByMember&lt;Address&gt;(nameof(Address.Street))</c>,
-    /// <c>GetTextByMember(typeof(Address), "Street")</c>, or <c>GetTextOfType&lt;Address&gt;()</c>.
+    /// Reports a <c>GetTextByMember</c> or <c>GetTextOfType</c> call whose type and member are constants in the code,
+    /// when that member or type has no text (<c>LOC601</c>).
     /// </summary>
-    // Not a call that takes a MemberInfo or a Type the code only has at run time, such as the property a form shows,
-    // where null is the answer for a member without a text, and not a type parameter.
+    // A MemberInfo or Type known only at run time isn't checked, because null is a valid answer there.
     private static void AnalyzeLookup(OperationAnalysisContext context, INamedTypeSymbol text, string sample, ConcurrentDictionary<IAssemblySymbol, bool> usesIdioma)
     {
         var invocation = (IInvocationOperation)context.Operation;
@@ -121,7 +102,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
         if (method.Name is not (GetTextByMemberName or GetTextOfTypeName)
             || !SymbolEqualityComparer.Default.Equals(method.ContainingType, text)
-            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, invocation.Syntax.SyntaxTree))
         {
             return;
         }
@@ -159,9 +140,8 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// What a call misses that asks for the text of <paramref name="member"/> of <paramref name="type"/>, or for the
-    /// type's own text when <paramref name="member"/> is <see langword="null"/>: the member as a message names it, and
-    /// what to do. It's <see langword="null"/> where there's a text, or may be one the build can't see.
+    /// The subject and advice for a missing text of <paramref name="member"/>, or of <paramref name="type"/> itself
+    /// when it's <see langword="null"/>. Gives <see langword="null"/> where there may be a text.
     /// </summary>
     // As LocalizedText finds one: a member's text also on a base class, and a type's own text on the type alone.
     private static (string Subject, string Advice)? FindMissingText(
@@ -184,13 +164,24 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         // The first member of that name, which is where the attribute goes.
         ISymbol? declared = null;
 
+        // The first class of an assembly without Idioma that declares a member of that name, such as Exception for
+        // Message, where no class of this assembly declares one.
+        INamedTypeSymbol? declaredWithoutIdioma = null;
+
         for (var current = type; current is not null && current.SpecialType is not SpecialType.System_Object; current = current.BaseType?.OriginalDefinition)
         {
+            // A base class that doesn't bind has no assembly to tell, so it may have a text.
+            if (current.ContainingAssembly is null)
+                return null;
+
             if (!IsOwn(current, compilation))
             {
-                // A text the build can't see, as the attribute isn't kept in a compiled assembly.
+                // The attribute isn't kept in a compiled assembly, so the build can't see its text.
                 if (UsesIdioma(current.ContainingAssembly))
                     return null;
+
+                if (declaredWithoutIdioma is null && current.GetMembers(member).Any(static candidate => candidate is IPropertySymbol or IFieldSymbol))
+                    declaredWithoutIdioma = current;
 
                 continue;
             }
@@ -209,9 +200,14 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
         if (declared is null)
         {
-            return IsOwn(type, compilation)
-                ? (subject, $"'{type.Name}' has no property or field of that name. Name the member with nameof, which the compiler checks")
-                : (subject, OfOtherAssembly(type));
+            if (!IsOwn(type, compilation))
+                return (subject, OfOtherAssembly(type));
+
+            // Such as Message on a class of this assembly that derives from Exception.
+            if (declaredWithoutIdioma is not null)
+                return (subject, $"'{member}' is declared in '{declaredWithoutIdioma.Name}' of '{declaredWithoutIdioma.ContainingAssembly.Name}', which doesn't use Idioma, so it has no text written as an attribute");
+
+            return (subject, $"'{type.Name}' has no property or field of that name. Name the member with nameof, which the compiler checks");
         }
 
         var where = SymbolEqualityComparer.Default.Equals(declared.ContainingType, type) ? declared.Name : $"{declared.ContainingType.Name}.{declared.Name}";
@@ -223,18 +219,12 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
             $"'{type.Name}' is a type of '{type.ContainingAssembly.Name}', which doesn't use Idioma, so it has no texts written as attributes";
     }
 
-    /// <summary>
-    /// Whether a type is one of this assembly's own, whose attributes the build sees.
-    /// </summary>
     private static bool IsOwn(INamedTypeSymbol type, Compilation compilation)
     {
         var isOwn = SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly);
         return isOwn;
     }
 
-    /// <summary>
-    /// Whether a member or a type is marked with the generated <c>[Localized]</c>.
-    /// </summary>
     private static bool HasGeneratedAttribute(ISymbol symbol, Compilation compilation)
     {
         var hasGeneratedAttribute = symbol.GetAttributes().Any(attribute => LocalizedMembers.IsGeneratedAttribute(attribute.AttributeClass, compilation.Assembly));
@@ -288,9 +278,8 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         var type = member as INamedTypeSymbol ?? member.ContainingType;
         var name = member is INamedTypeSymbol || type is null ? member.Name : $"{type.Name}.{member.Name}";
 
-        // In what Razor generated from the user's markup: the attribute compiles, and the generator never saw it. It does
-        // see a file of declarations, which Razor writes from SDK 11 on.
-        if (context.IsGeneratedCode && !UnnamedLanguageAnalyzer.IsRazorDeclaration(attribute.SyntaxTree))
+        // In Razor's output from markup, which the generator never sees. It does see Razor's declarations file (SDK 11+).
+        if (context.IsGeneratedCode && !AnalyzerSupport.IsRazorDeclaration(attribute.SyntaxTree))
         {
             Report("it's written in markup, which the source generator can't read", AdviseOnMarkup(member, type, attribute.SyntaxTree));
             return;
@@ -312,9 +301,8 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Where to move a <c>[Localized]</c> that Razor generated from markup. A member of a component, or an attribute on
-    /// the component itself, moves to a code-behind file, because the component's markup has to stay in its
-    /// <c>.razor</c> file. A class declared in markup moves to a C# file as a whole.
+    /// Where to move a <c>[Localized]</c> written in markup. A component's member or attribute moves to a code-behind
+    /// file, because its markup stays in the <c>.razor</c> file. Any other class moves to a C# file whole.
     /// </summary>
     private static string AdviseOnMarkup(ISymbol member, INamedTypeSymbol? type, SyntaxTree tree)
     {
@@ -334,7 +322,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The enums whose texts a set of this compilation holds, which it lists as <c>ILocalizationSet&lt;TEnum&gt;</c>.
+    /// The enums a set of this compilation implements <c>ILocalizationSet&lt;TEnum&gt;</c> for.
     /// </summary>
     private static ImmutableHashSet<INamedTypeSymbol> FindEnumsWithSets(Compilation compilation)
     {
@@ -367,14 +355,13 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reports each member of an enum without <c>[Localized]</c>, where another member of the enum has it
-    /// (<c>LOC501</c>). Not for an enum that a set holds the texts of, which gets its <c>GetText()</c> from the set.
+    /// Reports each unmarked enum member where another member has <c>[Localized]</c> (<c>LOC501</c>).
     /// </summary>
     private static void AnalyzeEnum(SyntaxNodeAnalysisContext context, string sample, Lazy<ImmutableHashSet<INamedTypeSymbol>> enumsWithSets)
     {
         var declaration = (EnumDeclarationSyntax)context.Node;
 
-        if (!UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree))
+        if (!AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, declaration.SyntaxTree))
             return;
 
         var marked = new List<EnumMemberDeclarationSyntax>();
@@ -382,7 +369,6 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
         foreach (var member in declaration.Members)
         {
-            // By its name first, which binds nothing: nearly every enum has no such attribute.
             var isMarked = member.AttributeLists
                 .SelectMany(static list => list.Attributes)
                 .Any(attribute => IsGeneratedAttribute(attribute, context));
@@ -397,8 +383,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is { } declared && enumsWithSets.Value.Contains(declared))
             return;
 
-        // A member with the value of a marked member, such as Default = Active, shows that member's text, because
-        // GetText() finds a text by the value.
+        // GetText() finds a text by value, so a member such as Default = Active shows Active's text.
         var markedValues = new HashSet<object>();
         foreach (var member in marked)
             if (FindValue(member, context) is { } value)
@@ -414,9 +399,6 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    /// <summary>
-    /// The value of a member of an enum, or <see langword="null"/> when it has none, as in code that doesn't compile.
-    /// </summary>
     private static object? FindValue(EnumMemberDeclarationSyntax member, SyntaxNodeAnalysisContext context)
     {
         var value = context.SemanticModel.GetDeclaredSymbol(member, context.CancellationToken) is { HasConstantValue: true } field
@@ -427,17 +409,15 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether an attribute is the generated <c>[Localized]</c> under another name, as after
-    /// <c>using L = CodeChops.Idioma.LocalizedAttribute;</c>. The source generator finds the attribute by its name, so such a member
-    /// compiles and gets no text.
+    /// Whether an attribute is the generated <c>[Localized]</c> written through a using alias. The source generator
+    /// finds the attribute by name, so such a member gets no text.
     /// </summary>
-    // By the using directives of its file first, which binds nothing: nearly no attribute is written through an alias.
-    // An alias that another file declares with 'global using' isn't followed.
+    // A 'global using' alias of another file isn't followed.
     private static bool IsWrittenThroughAlias(AttributeSyntax attribute, SyntaxNodeAnalysisContext context)
     {
         if (attribute.Name is not IdentifierNameSyntax { Identifier.ValueText: var name }
             || LocalizedMembers.IsNamedLocalized(attribute)
-            || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
+            || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
         {
             return false;
         }
@@ -465,13 +445,11 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Whether an attribute is the generated <c>[Localized]</c>, in code that is the user's own. Also one whose
-    /// arguments don't compile, such as one that leaves a language out: its member is marked all the same.
+    /// Whether a hand-written attribute is the generated <c>[Localized]</c>, also where its arguments don't compile.
     /// </summary>
     private static bool IsGeneratedAttribute(AttributeSyntax attribute, SyntaxNodeAnalysisContext context)
     {
-        // By its name first, which binds nothing: nearly every attribute is another one.
-        if (!LocalizedMembers.IsNamedLocalized(attribute) || !UnnamedLanguageAnalyzer.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
+        if (!LocalizedMembers.IsNamedLocalized(attribute) || !AnalyzerSupport.IsHandWritten(context.IsGeneratedCode, attribute.SyntaxTree))
             return false;
 
         var symbol = context.SemanticModel.GetSymbolInfo(attribute, context.CancellationToken);
@@ -483,8 +461,7 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// The language of the first argument that is the constant <see langword="null"/>, or <see langword="null"/>
-    /// when every argument holds a wording.
+    /// The language of the first argument that's the constant <see langword="null"/>.
     /// </summary>
     private static string? FindNullWording(AttributeSyntax attribute, SyntaxNodeAnalysisContext context, ImmutableArray<string> codes)
     {
@@ -496,14 +473,11 @@ public sealed class LocalizedMemberAnalyzer : DiagnosticAnalyzer
 
         for (var i = 0; i < arguments.Count; i++)
         {
-            var argument = arguments[i];
-
-            // An argument without a name takes the parameter of its place.
-            var parameter = argument.NameColon?.Name.Identifier.ValueText
-                            ?? (argument.NameEquals is null && i < constructor.Parameters.Length ? constructor.Parameters[i].Name : null);
-
-            if (parameter is not null && context.SemanticModel.GetConstantValue(argument.Expression, context.CancellationToken) is { HasValue: true, Value: null })
+            if (AnalyzerSupport.FindParameterOfArgument(arguments, i, constructor) is { } parameter
+                && context.SemanticModel.GetConstantValue(arguments[i].Expression, context.CancellationToken) is { HasValue: true, Value: null })
+            {
                 return SupportedLanguages.FindLanguageOfParameter(parameter, codes);
+            }
         }
 
         return null;

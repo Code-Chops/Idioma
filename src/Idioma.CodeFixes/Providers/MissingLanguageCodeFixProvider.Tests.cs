@@ -147,6 +147,45 @@ public sealed class MissingLanguageCodeFixProviderTests
     }
 
     [Test]
+    public async Task MissingLanguageOfEnumOfThisProject_ShouldNameTheEnumAfterAUsing()
+    {
+        // Arrange: the enum is the project's own, in another namespace than the sets. Its name used to be compared as
+        // a symbol of another compilation, which never matched, so the new set named it in full.
+        const string domain = """
+            namespace TestApp.Domain;
+
+            public enum OrderStatus { Pending }
+            """;
+        const string sets = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl", "de")]
+
+            namespace TestApp.Texts;
+
+            public class OrderStatusLocalizationEn : ILocalizationSet<TestApp.Domain.OrderStatus>, IOrderStatusLocalization
+            {
+                public virtual string Pending => "Pending";
+            }
+
+            public class OrderStatusLocalizationNl : ILocalizationSet<TestApp.Domain.OrderStatus>, IOrderStatusLocalization
+            {
+                public string Pending => "In behandeling";
+            }
+            """;
+
+        // Act
+        var fixes = await CodeFixTestHelper.FixWithAddedFilesAsync(new MissingLanguageCodeFixProvider(), LocalizationParts.Sets(), domain, sets);
+
+        // Assert: named alone, with a using of its namespace, as a library's enum is.
+        var (_, text) = fixes.ShouldHaveSingleItem().Added.ShouldHaveSingleItem();
+        text.ShouldContain("using TestApp.Domain;");
+        text.ShouldContain("public class OrderStatusLocalizationDe : ILocalizationSet<OrderStatus>, IOrderStatusLocalization");
+
+        ShouldReportNothing(domain, sets, text);
+    }
+
+    [Test]
     public async Task GlobalUsingOfThePackage_ShouldLeaveTheUsingOut()
     {
         // Arrange

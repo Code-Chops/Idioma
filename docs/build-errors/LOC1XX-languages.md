@@ -16,28 +16,10 @@ The IDE fix declares the languages that an `Inline` call or a `[Localized]` name
 
 ## LOC101
 
-`[assembly: SupportedLanguages]` lists a language that isn't a culture name, or lists one twice. Both are build errors. List each language once, as a culture name such as `en` or `en-GB`.
-
-A code that has the form of a culture name but names no language, such as `dk` for Danish, is [LOC104](#loc104).
-
-## LOC102
-
-The project declares its languages and compiles with a version of C# older than 14. Remove `<LangVersion>` from the project file, or set it to 14 or later. C# 14 is the default on .NET 10.
-
-```text
-error LOC102: Idioma needs C# 14 or later, and this project uses C# 13.0. Remove <LangVersion> from the project file, or set it to 14 or later.
-```
-
-The code generated for your languages uses extension members, which C# 14 brings. So the generators write none of it, and the compiler reports what your code then misses, such as the contract of a set (`CS0246`) or `LocalizedText.Inline` (`CS0117`).
-
-A library that declares no languages builds with an older version, such as one that only references a library that uses Idioma. An app always declares its languages ([LOC103](#loc103)), so it needs C# 14.
-
-## LOC103
-
 The project builds an app, and it declares no languages. Add `[assembly: SupportedLanguages("en", "nl")]` with your languages, the default first.
 
 ```text
-error LOC103: 'Shop.Server' is an app, but it declares no languages. Add [assembly: SupportedLanguages("en", "nl")] with your languages, the default first.
+error LOC101: 'Shop.Server' is an app, but it declares no languages. Add [assembly: SupportedLanguages("en", "nl")] with your languages, the default first.
 ```
 
 The app's attribute decides the languages your users get, and its first language is the fallback for every text. A library's attribute only describes the library's own texts. So an app declares its languages even when it has no texts of its own:
@@ -48,19 +30,25 @@ The app's attribute decides the languages your users get, and its first language
 
 A library needs the attribute only for texts of its own ([LOC100](#loc100)).
 
-The build takes a project for an app when it builds an executable or an Android app. A project that builds as a library but runs as the app, such as an AWS Lambda function, sets the MSBuild property `<IdiomaApplication>true</IdiomaApplication>` in its project file. It then gets LOC103 too ([details](../libraries-and-apps.md#the-apps-languages)).
+The build takes a project for an app when it builds an executable or an Android app. A project that builds as a library but runs as the app, such as an AWS Lambda function, sets the MSBuild property `<IdiomaApplication>true</IdiomaApplication>` in its project file. It then gets LOC101 too ([details](../libraries-and-apps.md#the-apps-languages)).
 
-## LOC104
+## LOC102
+
+`[assembly: SupportedLanguages]` lists a language that isn't a culture name, or lists one twice. Both are build errors. List each language once, as a culture name such as `en` or `en-GB`.
+
+A code that has the form of a culture name but names no language, such as `dk` for Danish, is [LOC103](#loc103).
+
+## LOC103
 
 A language code has the form of a culture name, but its language or its region doesn't exist. This is a warning. The code compiles and its sets are complete, but no user's culture ever matches it:
 
 ```csharp
-[assembly: SupportedLanguages("en", "dk")] // LOC104: Danish is 'da'
+[assembly: SupportedLanguages("en", "dk")] // LOC103: Danish is 'da'
 ```
 
 ```text
-warning LOC104: 'dk' won't match any user's culture, because 'dk' isn't an ISO 639-1 language code. Danish is 'da', so write 'da'.
-warning LOC104: 'en-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. The United Kingdom is 'GB', so write 'en-GB'.
+warning LOC103: 'dk' won't match any user's culture, because 'dk' isn't an ISO 639-1 language code. Danish is 'da', so write 'da'.
+warning LOC103: 'en-UK' won't match any user's culture, because 'UK' isn't an ISO 3166-1 region code. The United Kingdom is 'GB', so write 'en-GB'.
 ```
 
 Write the code as .NET names the culture. The usual mistake is the code of a country in place of the code of a language:
@@ -80,13 +68,22 @@ The build checks two parts of a code:
 - A language of two letters is a code of ISO 639-1.
 - A region of two letters is a code of ISO 3166-1. `XK` for Kosovo counts too, because .NET uses it.
 
-It doesn't check a longer language such as `fil`, a script such as `Hans`, or a region of three digits such as `419`. A code that doesn't have the form of a culture name is [LOC101](#loc101) or [LOC207](LOC2XX-sets.md#loc207).
+It doesn't check a longer language such as `fil`, a script such as `Hans`, or a region of three digits such as `419`. A code that doesn't have the form of a culture name is [LOC102](#loc102).
 
-The warning is reported in two places:
-
-- at `[assembly: SupportedLanguages]`, for a language it lists
-- at a set's `LocalizationLanguageCode`, for the constant it returns
+The warning is reported at `[assembly: SupportedLanguages]`, for a language it lists. A set's name gives no region that doesn't exist, because the build reads only real regions from a name. So `ShopLocalizationEnUk` serves `uk`, and [LOC202](LOC2XX-sets.md#loc202) suggests `ShopLocalizationEnGb`.
 
 `se` gets no warning, because it's Northern Sami. Swedish is `sv`.
 
-The build carries its own lists of codes, so it reports the same on every machine. A list can lag behind its standard. If your code is right, turn the warning off with `#pragma warning disable LOC104` around the attribute or the property.
+The build carries its own lists of codes, so it reports the same on every machine. A list can lag behind its standard. If your code is right, turn the warning off with `#pragma warning disable LOC103` around the attribute.
+
+## LOC104
+
+The project declares its languages and compiles with a version of C# older than 14. Remove `<LangVersion>` from the project file, or set it to 14 or later. C# 14 is the default on .NET 10.
+
+```text
+error LOC104: Idioma needs C# 14 or later, and this project uses C# 13.0. Remove <LangVersion> from the project file, or set it to 14 or later.
+```
+
+The code generated for your languages uses extension members, which C# 14 brings. So the generators write none of it, and the compiler reports what your code then misses, such as the contract of a set (`CS0246`) or `LocalizedText.Inline` (`CS0117`).
+
+A library that declares no languages builds with an older version, such as one that only references a library that uses Idioma. An app always declares its languages ([LOC101](#loc101)), so it needs C# 14.

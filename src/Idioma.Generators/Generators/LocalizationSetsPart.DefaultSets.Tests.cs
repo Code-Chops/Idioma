@@ -7,7 +7,7 @@ namespace CodeChops.Idioma.Tests;
 public sealed partial class LocalizationSetsPartTests
 {
     [Test]
-    [Arguments("public sealed class ShopLocalization : ILocalizationSet { public string LocalizationLanguageCode => \"en\"; public string Checkout => \"Checkout\"; }", "its name doesn't end in En")]
+    [Arguments("public sealed class ShopLocalization : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "its name doesn't end in En")]
     [Arguments("public abstract class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it's abstract")]
     [Arguments("public sealed class ShopLocalizationEn<T> : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it's generic")]
     [Arguments("file sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization { public string Checkout => \"Checkout\"; }", "it's file-local")]
@@ -40,7 +40,7 @@ public sealed partial class LocalizationSetsPartTests
     [Test]
     [Arguments("public sealed class FakeShopEn : ILocalizationSet, IShopLocalization")]
     [Arguments("public sealed class FakeShopEn : ILocalizationSet, IShopLocalization, System.IDisposable")]
-    public void SecondRegisteredClassOfDefaultLanguage_ShouldReportOnlyLOC209(string declaration)
+    public void SecondRegisteredClassOfDefaultLanguage_ShouldReportOnlyLOC203(string declaration)
     {
         // Arrange: a second class in the default language, which lists ILocalizationSet next to the contract generated
         // from ShopLocalizationEn. It's registered like any set, so only one of the two would show.
@@ -58,7 +58,7 @@ public sealed partial class LocalizationSetsPartTests
         // Act
         var result = Run(source);
 
-        // Assert: no LOC200 for its shape, no LOC204 for a contract of its own, and one contract, from ShopLocalizationEn.
+        // Assert: no LOC200 for its shape, no LOC205 for a contract of its own, and one contract, from ShopLocalizationEn.
         DiagnosticIds(result).ShouldBe([LocalizationSetsPart.RepeatedLanguageDiagnosticId]);
         ContractText(result).ShouldContain("interface IShopLocalization");
     }
@@ -88,31 +88,32 @@ public sealed partial class LocalizationSetsPartTests
         // Act
         var result = Run(source);
 
-        // Assert: no LOC200 for its shape, no LOC204 for a contract of its own, and one contract, from ShopLocalizationEn.
+        // Assert: no LOC200 for its shape, no LOC205 for a contract of its own, and one contract, from ShopLocalizationEn.
         DiagnosticIds(result).ShouldBeEmpty();
         ContractText(result).ShouldContain("interface IShopLocalization");
     }
 
     [Test]
-    [Arguments("public string LocalizationLanguageCode => \"nl\";", "its LocalizationLanguageCode gives 'nl', where its name gives 'en'")]
-    [Arguments("string ILocalizationSet.LocalizationLanguageCode => \"en-US\";", "its LocalizationLanguageCode gives 'en-US', where its name gives 'en'")]
-    [Arguments("public string LocalizationLanguageCode => System.Environment.GetEnvironmentVariable(\"LANGUAGE\") ?? \"en\";", "its LocalizationLanguageCode isn't a constant, so the build can't read its language")]
-    public void SetNamedAfterDefaultLanguageWithAnotherCode_ShouldReportLOC200(string languageCode, string problem)
+    public void SetEndingInDefaultLanguageThatServesARegionOfAnother_ShouldReportLOC200()
     {
-        // Arrange & Act: no set starts IShopLocalization then, so every set that lists it fails to compile.
-        var result = Run($$"""
-            {{Header}}
+        // Arrange & Act: en-NL is listed, so the name gives en-NL. No set starts IShopLocalizationEn then, so every set
+        // that lists it fails to compile.
+        var result = Run("""
+            using CodeChops.Idioma;
 
-            public sealed class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            [assembly: SupportedLanguages("nl", "en", "en-NL")]
+
+            namespace TestApp;
+
+            public sealed class ShopLocalizationEnNl : ILocalizationSet, IShopLocalizationEn
             {
-                {{languageCode}}
                 public string Checkout => "Checkout";
             }
             """);
 
         // Assert
         var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
-        diagnostic.GetMessage().ShouldBe($"'ShopLocalizationEn' is the default-language set of a contract, but {problem}. The generator can't use it, so it writes no texts for it. Return the constant 'en' from LocalizationLanguageCode, or remove LocalizationLanguageCode so that the name gives the language.");
+        diagnostic.GetMessage().ShouldBe("'ShopLocalizationEnNl' is the default-language set of a contract, but it serves 'en-NL', where its name ends in the default language 'nl'. The generator can't use it, so it writes no texts for it. Rename it so that its name gives 'nl'.");
         diagnostic.Properties.ShouldNotContainKey(LocalizationSetsPart.SuggestedNameProperty);
     }
 
@@ -156,7 +157,7 @@ public sealed partial class LocalizationSetsPartTests
     public void DefaultSetListingContractOfAnotherSetNextToItsOwn_ShouldStillStartItsContract()
     {
         // Arrange: a set that starts IOrderLocalization and words IShopLocalization in the same class, next to
-        // ShopLocalizationEn, which LOC209 reports.
+        // ShopLocalizationEn, which LOC203 reports.
         var source = $$"""
             {{ShopSets}}
 
@@ -271,7 +272,7 @@ public sealed partial class LocalizationSetsPartTests
             }
             """);
 
-        // Assert: no LOC204 asks a set to list the interface it lists.
+        // Assert: no LOC205 asks a set to list the interface it lists.
         var error = errors.ShouldHaveSingleItem();
         error.Id.ShouldBe("LOC200");
         error.GetMessage().ShouldStartWith("'HandLocalizationEn' is the default-language set of a contract, but its contract would be named 'IHandLocalization', like the interface 'IHandLocalization'.");
@@ -584,39 +585,13 @@ public sealed partial class LocalizationSetsPartTests
     }
 
     [Test]
-    [Arguments("ShopLocalizationen", "ShopLocalizationEn")]
-    [Arguments("ShopTexts", "ShopTextsEn")]
-    public void DefaultSetNotNamedAfterItsLanguage_ShouldBeToldTheNameThatEndsInIt(string name, string expectedName)
-    {
-        // Arrange & Act: a name that ends in its language without a capital gets the suffix in place of that ending,
-        // not after it (ShopLocalizationenEn, whose generated class would be ShopLocalizationen).
-        var result = Run($$"""
-            using CodeChops.Idioma;
-
-            [assembly: SupportedLanguages("en")]
-
-            namespace TestApp;
-
-            public sealed partial class {{name}} : ILocalizationSet
-            {
-                public string LocalizationLanguageCode => "en";
-                public string Checkout => "Checkout";
-            }
-            """);
-
-        // Assert
-        var diagnostic = SingleDiagnostic(result, LocalizationSetsPart.CannotExtendDiagnosticId);
-        diagnostic.Properties[LocalizationSetsPart.SuggestedNameProperty].ShouldBe(expectedName);
-    }
-
-    [Test]
     [Arguments("ShopLocalization", "ShopLocalizationEn")]
     [Arguments("ShopTexts", "ShopTextsEn")]
     [Arguments("ShopLocalizationen", "ShopLocalizationEn")]
     public void DefaultSetWhoseNameGivesNoLanguage_ShouldBeToldTheNameThatEndsInIt(string name, string expectedName)
     {
         // Arrange & Act: the set lists the contract generated from it, as a default-language set does. Its name ends in
-        // no language, and it implements no LocalizationLanguageCode.
+        // no language.
         var result = Run($$"""
             using CodeChops.Idioma;
 

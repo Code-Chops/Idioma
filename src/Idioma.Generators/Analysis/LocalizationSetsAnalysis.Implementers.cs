@@ -4,23 +4,21 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// The sets that implement the contract generated from a default-language set, whatever their language and other
-    /// than that set itself.
+    /// The sets other than the default-language set that implement its generated contract, in any language.
     /// </summary>
-    // The generator's own contract does not exist yet, so a set implementing it lists an unresolved name, itself or
-    // through a class it derives from, which names this contract (LocalizationDiscovery.FindGeneratedContract). A set
-    // deriving from the default set implements it too.
+    // The generated contract doesn't exist yet, so a set lists it as an unresolved name
+    // (LocalizationDiscovery.FindGeneratedContract). A set derived from the default set implements it too.
     private sealed class Implementers
     {
         private ImmutableArray<DiscoveredLocalization> Sets { get; }
 
         /// <summary>
-        /// The indexes of the sets that list each contract, in the order of the sets.
+        /// The indexes of the sets that list each contract, in order.
         /// </summary>
         private Dictionary<string, List<int>> ByContract { get; } = new(StringComparer.Ordinal);
 
         /// <summary>
-        /// The indexes of the sets that derive from each class, in the order of the sets.
+        /// The indexes of the sets that derive from each class, in order.
         /// </summary>
         private Dictionary<string, List<int>> ByAncestor { get; } = new(StringComparer.Ordinal);
 

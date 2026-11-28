@@ -45,6 +45,8 @@ public string Greeting(string name) => "Hallo!";          // In ShopLocalization
 
 Use the value in every language. Any use counts, in a condition or in the wording, so `count is 1 ? "1 artikel" : "meer artikelen"` uses `count`. A value that the default wording only uses to choose between wordings, such as a form of address, may go unused.
 
+A method whose body only throws has no wording yet, so it isn't checked. That's what your IDE's "Implement interface" writes, as in `=> throw new NotImplementedException();`, so a new set doesn't get this error before you word it.
+
 An inline text is held to the same rule. The wording of the default language shows a value where it holds one in an interpolated string:
 
 ```csharp
@@ -74,6 +76,8 @@ The build reads only the strings a text returns:
 
 It doesn't read a string passed to a method, because the method may fill the placeholder in. So `string.Format("{0} items", count)` gets no warning. A string kept in a local variable isn't read either.
 
+An inline text passed straight to a composite format gets no warning either, as in `string.Format(LocalizedText.Inline(en: "{0} items", nl: "{0} artikelen"), count)`. That's a parameter marked `[StringSyntax(StringSyntaxAttribute.CompositeFormat)]`, as the format of `string.Format` and `StringBuilder.AppendFormat` is.
+
 A text that an attribute names as its error message gets no warning either, because the attribute fills the placeholder in. That's a validation attribute with `ErrorMessageResourceName` and `ErrorMessageResourceType`, as in `[Required(ErrorMessageResourceName = nameof(ShopLocalization.NameRequired), ErrorMessageResourceType = typeof(ShopLocalization))]`. Its `{0}` shows the name of the field. A display name, as `[Display]` reads it with `Name` and `ResourceType`, is shown as written, so its placeholder is still reported.
 
 The build sees only the attributes of its own project. Where another project names the text, such as your models next to a library with your texts, mark the text in your default-language set as a format:
@@ -84,6 +88,8 @@ public string NameRequired => "Enter {0}";
 ```
 
 That says that something fills in its placeholders, so no language gets the warning. The generated class repeats the mark, so your IDE shows `ShopLocalization.NameRequired` as a format too. `StringSyntaxAttribute` is in `System.Diagnostics.CodeAnalysis`.
+
+The mark and an attribute's error message count only for a property, because an attribute reads only a property. A method takes its values as parameters, so a placeholder in its wording is still reported.
 
 A placeholder is a number in braces, as `string.Format` reads it. An alignment or a format may follow the number:
 

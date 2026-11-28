@@ -11,14 +11,8 @@ namespace CodeChops.Idioma.CodeFixes;
 /// compiler then names each language the attribute lacks (<c>CS7036</c>).
 /// </summary>
 /// <remarks>
-/// <para>
-/// The wording is the member's name, which is what users see now. So the fix changes nothing that users see, and asks
-/// for every other language. Change the wording where the name doesn't read well.
-/// </para>
-/// <para>
-/// The attribute is written as the other members of the enum write it, also by an alias, and on a line of its own when
-/// theirs stands on one.
-/// </para>
+/// The wording is the member's name, which is what users see now, so the fix changes nothing they see. The attribute is
+/// written as the enum's other members write it.
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(UnmarkedEnumMemberCodeFixProvider))]
 [Shared]
@@ -56,8 +50,7 @@ public sealed class UnmarkedEnumMemberCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The first <c>[Localized]</c> on a member of an enum, with the list it stands in, or <see langword="null"/>
-    /// when no member has one.
+    /// The first <c>[Localized]</c> on a member of an enum, with its list, or <see langword="null"/>.
     /// </summary>
     private static (AttributeSyntax Attribute, AttributeListSyntax List)? FindMarked(EnumDeclarationSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
     {
@@ -92,7 +85,7 @@ public sealed class UnmarkedEnumMemberCodeFixProvider : CodeFixProvider
         var leading = member.GetLeadingTrivia();
         var indentation = leading.Reverse().TakeWhile(static trivia => trivia.IsKind(SyntaxKind.WhitespaceTrivia)).Reverse();
 
-        // Without elastic trivia, which the IDE would format after the fix, such as with a line break after the list.
+        // Without elastic trivia, which the IDE would reformat.
         var list = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(attribute))
             .NormalizeWhitespace()
             .WithLeadingTrivia(leading)

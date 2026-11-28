@@ -229,6 +229,21 @@ public sealed class TextParametersAnalyzerTests
     }
 
     [Test]
+    [Arguments("public string Invited(string host, string guest) => throw new System.NotImplementedException();")]
+    [Arguments("public string Invited(string host, string guest) { throw new System.NotImplementedException(); }")]
+    public async Task MethodThatOnlyThrows_ShouldReportNothingAboutItsValues(string invited)
+    {
+        // Arrange & Act: what "Implement interface" writes for a text, before anyone words it.
+        var diagnostics = await AnalyzeAsync(Sets($$"""
+            {{invited}}
+            {{DutchItemsInCart}}
+            """));
+
+        // Assert: no LOC402, because there's no wording yet that could leave a value out.
+        diagnostics.ShouldBeEmpty();
+    }
+
+    [Test]
     public async Task SetUsingValueOnlyInCondition_ShouldReportNothing()
     {
         // Arrange & Act: the English wording shows the count, and the Dutch one only chooses by it. Any use of a value
@@ -305,9 +320,9 @@ public sealed class TextParametersAnalyzerTests
     }
 
     [Test]
-    public async Task SetWhoseLanguageTheBuildCannotRead_ShouldReportLOC402WithoutNamingIt()
+    public async Task SetWithoutLanguage_ShouldReportLOC402WithoutNamingIt()
     {
-        // Arrange & Act: the German set's LocalizationLanguageCode is no constant, so only the running app knows its language.
+        // Arrange & Act: the German set's name gives no language.
         var diagnostics = await AnalyzeAsync("""
             using ShopLibrary;
 
@@ -315,8 +330,6 @@ public sealed class TextParametersAnalyzerTests
 
             public sealed class GermanShopLocalization : CodeChops.Idioma.ILocalizationSet, IShopLocalization
             {
-                string CodeChops.Idioma.ILocalizationSet.LocalizationLanguageCode => System.Environment.GetEnvironmentVariable("SHOP_LANGUAGE") ?? "de";
-
                 public string Invited(string host, string guest) => $"{host} hat jemanden eingeladen";
             }
             """, ShopLibrary);

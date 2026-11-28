@@ -9,7 +9,8 @@
 
   <PropertyGroup Label="Package">
     <IsPackable>true</IsPackable>
-    <PackageReleaseNotes>Basic setup</PackageReleaseNotes>
+    <!-- The commit messages describe each change, up to the tag the publish workflow requires (v plus the version). -->
+    <PackageReleaseNotes>A preview, so the API can still change between versions. The changes of this version are in the commit history up to its tag: https://github.com/Code-Chops/Idioma/commits/v$(Version)</PackageReleaseNotes>
     <PackageId>CodeChops.Idioma</PackageId>
     <Description>Translations for any .NET 10+ app, written in C# and checked at compile time: a class per language, inline texts, or an attribute on a type or its members. A missing translation, or one that never uses a value the original shows, is a build error. No resource files, no dependencies, safe to trim and to publish with Native AOT. In preview, so the API can still change between versions.</Description>
     <PackageTags>CodeChops;Idioma;localization;translations;i18n;l10n;globalization;blazor;source-generator;sourcegenerator;aot;trimming</PackageTags>

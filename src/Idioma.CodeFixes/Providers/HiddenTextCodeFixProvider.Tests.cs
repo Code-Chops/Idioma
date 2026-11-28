@@ -164,7 +164,7 @@ public sealed class HiddenTextCodeFixProviderTests
         var fixes = await FixAsync(source);
 
         // Assert
-        fixes[0].Title.ShouldBe("Make 'ShopLocalizationEnGb.Color' virtual and override it");
+        fixes[0].Title.ShouldBe("Remove 'sealed' from 'ShopLocalizationEnGb.Color' and override it");
 
         var fixedSource = fixes[0].Sources.ShouldHaveSingleItem();
         fixedSource.ShouldBe(source

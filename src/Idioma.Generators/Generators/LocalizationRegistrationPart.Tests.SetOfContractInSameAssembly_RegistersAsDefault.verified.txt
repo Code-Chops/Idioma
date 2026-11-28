@@ -37,7 +37,7 @@ file static class OwnLocalizationSets
     internal static void Register()
     {
         CodeChops.Idioma.Internals.GeneratedCode.DescribeSet<TestApp.ShopLocalizationDe>("de");
-        CodeChops.Idioma.Internals.GeneratedCode.RegisterSets(asDefaults: true,
+        CodeChops.Idioma.Internals.GeneratedCode.RegisterSets(CodeChops.Idioma.Internals.SetTier.LibrarySets,
             (typeof(TestApp.ShopLocalizationDe), static () => new TestApp.ShopLocalizationDe()));
     }
 }

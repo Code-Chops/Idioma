@@ -83,6 +83,84 @@ public sealed class HiddenTextAnalyzerTests
     }
 
     [Test]
+    public async Task PropertyHidingSealedOverride_ShouldAdviseToRemoveSealed()
+    {
+        // Arrange: a set of the app's own that rewords the British set, which sealed its text.
+        var source = Sets("""public virtual string Color => "Color";""", """public sealed override string Color => "Colour";""") + """
+
+
+            public class MyShopLocalizationEnGb : ShopLocalizationEnGb
+            {
+                public new string Color => "Colour of the house";
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: a sealed override can't be made virtual, but it can lose 'sealed'.
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldEndWith("Remove 'sealed' from 'ShopLocalizationEnGb.Color' and override it, or list 'IShopLocalization' again next to 'ShopLocalizationEnGb'.");
+    }
+
+    [Test]
+    public async Task PropertyHidingMemberThatHidesTheTextToo_ShouldOnlyAdviseToListTheContractAgain()
+    {
+        // Arrange: an override in the last set would override the British member, which isn't the text.
+        var source = Sets("""public string Color => "Color";""", """public new string Color => "Colour";""") + """
+
+
+            public class MyShopLocalizationEnGb : ShopLocalizationEnGb
+            {
+                public new string Color => "Colour of the house";
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert: the British set may make the English text virtual, and the last set can only list the contract.
+        diagnostics.Select(static diagnostic => diagnostic.GetMessage()).ShouldBe(
+        [
+            "'ShopLocalizationEnGb.Color' hides 'ShopLocalizationEn.Color' instead of overriding it, so users of 'en-GB' won't see its wording. Make 'ShopLocalizationEn.Color' virtual and override it, or list 'IShopLocalization' again next to 'ShopLocalizationEn'.",
+            "'MyShopLocalizationEnGb.Color' hides 'ShopLocalizationEnGb.Color' instead of overriding it, so users of 'en-GB' won't see its wording. List 'IShopLocalization' again next to 'ShopLocalizationEnGb', because 'ShopLocalizationEnGb.Color' hides the text too.",
+        ], ignoreOrder: true);
+    }
+
+    [Test]
+    public async Task PropertyHidingExplicitImplementation_ShouldOnlyAdviseToListTheContractAgain()
+    {
+        // Arrange: the Dutch set implements the text explicitly, which can be neither virtual nor overridden.
+        const string source = """
+            using CodeChops.Idioma;
+
+            [assembly: SupportedLanguages("en", "nl")]
+
+            namespace TestApp;
+
+            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
+            {
+                public string Checkout => "Checkout";
+            }
+
+            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization
+            {
+                string IShopLocalization.Checkout => "Afrekenen";
+            }
+
+            public class FormalShopLocalizationNl : ShopLocalizationNl
+            {
+                public string Checkout => "Betalen";
+            }
+            """;
+
+        // Act
+        var diagnostics = await AnalyzeAsync(source);
+
+        // Assert
+        diagnostics.ShouldHaveSingleItem().GetMessage().ShouldBe("'FormalShopLocalizationNl.Checkout' hides 'ShopLocalizationNl.Checkout' instead of overriding it, so users of 'nl' won't see its wording. List 'IShopLocalization' again next to 'ShopLocalizationNl', because 'ShopLocalizationNl' implements 'Checkout' explicitly, which can't be overridden.");
+    }
+
+    [Test]
     public async Task MethodHidingText_ShouldReportLOC302()
     {
         // Arrange & Act

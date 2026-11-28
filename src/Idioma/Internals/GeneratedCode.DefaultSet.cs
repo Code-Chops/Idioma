@@ -6,15 +6,9 @@ namespace CodeChops.Idioma.Internals;
 public static partial class GeneratedCode
 {
     /// <summary>
-    /// The set of a contract's default language, which gives the texts of the generated class their default wording.
-    /// It's one instance per set, created when a text first needs it.
+    /// The one instance of a contract's set of the default language, created when a text first needs it. So a
+    /// constructor that throws fails each text that needs the set, not the generated class for good.
     /// </summary>
-    /// <remarks>
-    /// The set isn't created as the generated class is first used. So a set whose constructor throws doesn't fail that
-    /// class for good, with an exception that names only the class. The text that needs the set throws, and so does
-    /// every text after it.
-    /// </remarks>
-    /// <typeparam name="TSet">The set of the default language, such as <c>ShopLocalizationEn</c>.</typeparam>
     /// <exception cref="InvalidOperationException">
     /// When the set's constructor throws, with that exception inside. The message names the set.
     /// </exception>
@@ -25,16 +19,13 @@ public static partial class GeneratedCode
         return set;
     }
 
-    /// <summary>
-    /// The one instance of a set of a default language (<see cref="GetDefaultSet{TSet}"/>).
-    /// </summary>
     private static class DefaultSet<TSet>
         where TSet : class, ILocalizationSet, new()
     {
         internal static TSet? Instance;
 
-        // Not kept where the constructor throws, so the next text tries again and says the same. Two threads may each
-        // create the set, and the first one to finish gives every text its instance.
+        // Not kept where the constructor throws, so the next text tries again. Where two threads race, the first to
+        // finish wins.
         internal static TSet Create()
         {
             var created = (TSet)LocalizationRegistry.CreateSet(typeof(TSet), static () => New());
@@ -43,9 +34,7 @@ public static partial class GeneratedCode
             return set;
         }
 
-        // new TSet() of a type parameter creates the set through the runtime, which puts what the constructor throws
-        // inside an exception of its own. Taken out again, so that the exception that names the set holds the set's
-        // own, as for a set the registry creates.
+        // new TSet() wraps what the constructor throws in a TargetInvocationException, which is unwrapped here.
         private static TSet New()
         {
             try

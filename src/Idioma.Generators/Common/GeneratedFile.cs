@@ -6,61 +6,40 @@ namespace CodeChops.Idioma.Generators;
 internal static class GeneratedFile
 {
     /// <summary>
-    /// The warnings about naming something marked <c>[Obsolete]</c>, without and with a message. Every generated file
-    /// turns them off for all of its code, which names the package's own obsolete types and any set marked
-    /// <c>[Obsolete]</c>.
+    /// The warnings about naming something <c>[Obsolete]</c>, which every generated file turns off, because it names
+    /// the package's obsolete types and any obsolete set.
     /// </summary>
     public const string ObsoleteWarnings = "CS0612, CS0618";
 
-    /// <summary>
-    /// The version of the package, which <see cref="CodeAttributes"/> names as the version of the tool.
-    /// </summary>
-    // The assembly version of the generator, which Directory.Build.props sets to that of the package.
+    // Directory.Build.props sets the assembly version to that of the package.
     private static string Version { get; } = typeof(GeneratedFile).Assembly.GetName().Version is { } version ? version.ToString(3) : "0.0.0";
 
     /// <summary>
-    /// The attributes that mark generated code for the tools that read it: <c>[GeneratedCode]</c>, with the version of
-    /// the package, and <c>[ExcludeFromCodeCoverage]</c>, which keeps it out of a report of code coverage. Written on a
-    /// type the generator writes whole, and on each member of the generated class of a set, which is partial. So a
-    /// member the user writes in that class counts as their own.
+    /// <c>[GeneratedCode]</c> and <c>[ExcludeFromCodeCoverage]</c>. Written on each generated member of a partial
+    /// class, so a member written by hand in it still counts as its author's own.
     /// </summary>
     public static string CodeAttributes { get; } = $"[System.CodeDom.Compiler.GeneratedCode(\"{PackageNames.Assembly}\", \"{Version}\"), System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]";
 
     /// <summary>
-    /// The namespaces of <see cref="CodeAttributes"/>, which a file imports where it writes them by their names alone
-    /// (<see cref="ImportedCodeAttributes"/>).
+    /// The namespaces a file imports for <see cref="ImportedCodeAttributes"/>.
     /// </summary>
     public static readonly string[] CodeAttributeNamespaces = ["System.CodeDom.Compiler", "System.Diagnostics.CodeAnalysis"];
 
     /// <summary>
-    /// <see cref="CodeAttributes"/> by their names alone, for a file that imports their namespaces
-    /// (<see cref="CodeAttributeNamespaces"/>). That's a file with types in the user's namespace. There, a full name
-    /// starting with <c>System</c> would bind to a part of that namespace named <c>System</c>, as in
-    /// <c>Acme.System.Shop</c>.
+    /// <see cref="CodeAttributes"/> by short name, for a file with types in the user's namespace. There, a full name
+    /// starting with <c>System</c> could bind to <c>Acme.System</c>.
     /// </summary>
     public static string ImportedCodeAttributes { get; } = $"[GeneratedCode(\"{PackageNames.Assembly}\", \"{Version}\"), ExcludeFromCodeCoverage]";
 
     /// <summary>
-    /// <c>[GeneratedCode]</c> alone, by its name alone, for an interface, which <c>[ExcludeFromCodeCoverage]</c> can't
-    /// mark.
+    /// <c>[GeneratedCode]</c> alone, for an interface, which <c>[ExcludeFromCodeCoverage]</c> can't mark.
     /// </summary>
     public static string ImportedGeneratedCodeAttribute { get; } = $"[GeneratedCode(\"{PackageNames.Assembly}\", \"{Version}\")]";
 
     /// <summary>
-    /// <see cref="ObsoleteWarnings"/>, followed by what naming the sets a file names reports besides
-    /// (<see cref="DiscoveredLocalization.SuppressedDiagnostics"/>), as a pragma lists them.
+    /// The first lines of a generated file: the marker, the nullable context, and the pragma that turns off
+    /// <paramref name="warnings"/>. It ends without a line break.
     /// </summary>
-    public static string WithSuppressed(string warnings, EquatableArray<string> suppressed)
-    {
-        var withSuppressed = suppressed.Length is 0 ? warnings : $"{warnings}, {String.Join(", ", suppressed)}";
-        return withSuppressed;
-    }
-
-    /// <summary>
-    /// The first lines of a generated file with nullable annotations: the marker of generated code, the nullable
-    /// context, and the pragma that turns off <paramref name="warnings"/>. It ends without a line break.
-    /// </summary>
-    /// <param name="warnings">The warnings to turn off, as a pragma lists them.</param>
     /// <param name="reason">Why the file turns them off, which follows the pragma as a comment.</param>
     public static string GetHeader(string warnings, string reason)
     {
@@ -74,8 +53,7 @@ internal static class GeneratedFile
     }
 
     /// <summary>
-    /// Writes the last lines of a file that starts with <see cref="GetHeader"/>, which restore its warnings and its
-    /// nullable context.
+    /// Writes the lines that undo <see cref="GetHeader"/>.
     /// </summary>
     public static void AppendFooter(StringBuilder sb, string warnings)
     {
@@ -83,18 +61,12 @@ internal static class GeneratedFile
         sb.AppendLine("#nullable restore");
     }
 
-    /// <summary>
-    /// The pragma that turns off warnings, with the reason as a comment.
-    /// </summary>
     public static string DisableWarnings(string warnings, string reason)
     {
         var pragma = $"#pragma warning disable {warnings} // {reason}";
         return pragma;
     }
 
-    /// <summary>
-    /// The pragma that restores the warnings <see cref="DisableWarnings"/> turned off.
-    /// </summary>
     public static string RestoreWarnings(string warnings)
     {
         var pragma = $"#pragma warning restore {warnings}";

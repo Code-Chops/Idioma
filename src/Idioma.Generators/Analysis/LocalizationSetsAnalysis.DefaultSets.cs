@@ -4,11 +4,9 @@ namespace CodeChops.Idioma.Generators;
 internal sealed partial record LocalizationSetsAnalysis
 {
     /// <summary>
-    /// Reports a default-language set whose name gives no language (<c>LOC200</c>), with the name that ends in the
-    /// default language.
+    /// Reports a default-language set whose name gives no language (<c>LOC200</c>), with a name that ends in the
+    /// default language. Such a set starts no contract, so every set that lists it fails to compile (CS0246).
     /// </summary>
-    // Such a set starts no contract, so every set that lists the contract fails to compile (CS0246). The name that
-    // ends in the default language resolves it.
     private static void ReportDefaultSetsWithoutLanguage(
         ImmutableArray<DiscoveredLocalization> sets,
         DeclaredLanguages declared,
@@ -31,8 +29,7 @@ internal sealed partial record LocalizationSetsAnalysis
 
             var suggestedName = SuggestNameEndingIn(set.Name, suffix);
 
-            // Its name gives no language, so it may be meant for another one, as ShopLocalizationDutch is. The
-            // contract it lists, IShopLocalization, gives the name that set would have.
+            // It may be meant for another language, as ShopLocalizationDutch is. The contract it lists gives that name.
             var otherLanguage = declared.Codes.FirstOrDefault(code => !String.Equals(code, defaultLanguage, StringComparison.OrdinalIgnoreCase));
             var contractStem = set.UnresolvedBaseTypes.Select(static baseType => baseType.Name)
                 .FirstOrDefault(static name => name.Length > 1 && name[0] == 'I' && Char.IsUpper(name[1]))?.Substring(1);
@@ -49,11 +46,10 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Reports a set named after the default language whose <c>LocalizationLanguageCode</c> gives it another language, or
-    /// one the build can't read (<c>LOC200</c>). It lists the contract named after it, which no set then starts.
+    /// Reports a set whose name ends in the default language but serves another language, such as
+    /// <c>ShopLocalizationEnNl</c> for a declared <c>en-NL</c> where the default language is <c>nl</c> (<c>LOC200</c>). No
+    /// set then starts its contract, so every set that lists it fails to compile (CS0246).
     /// </summary>
-    // Without this, every set that lists the contract fails to compile (CS0246), and nothing says why. A code that isn't
-    // a culture name is LOC207 already.
     private static void ReportDefaultSetsOfAnotherLanguage(
         ImmutableArray<DiscoveredLocalization> sets,
         string defaultLanguage,
@@ -62,8 +58,8 @@ internal sealed partial record LocalizationSetsAnalysis
     {
         foreach (var set in sets)
         {
-            if (set is not { ListsLocalizationSet: true, NameGivesNoLanguage: false, Locations.InvalidLanguageCode: null }
-                || String.Equals(set.Language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
+            if (set is not { ListsLocalizationSet: true, Language: { } language }
+                || String.Equals(language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
                 || LocalizationDiscovery.ImplementsContract(set)
                 || LocalizationDiscovery.RewordsSet(set)
                 || LocalizationDiscovery.DeriveBaseName(set.Name, defaultLanguage) is not { } baseName)
@@ -79,24 +75,20 @@ internal sealed partial record LocalizationSetsAnalysis
                 continue;
             }
 
-            var problem = set.Language is { } language
-                ? $"its LocalizationLanguageCode gives '{language}', where its name gives '{defaultLanguage}'"
-                : "its LocalizationLanguageCode isn't a constant, so the build can't read its language";
+            var problem = $"it serves '{language}', where its name ends in the default language '{defaultLanguage}'";
 
             findings.Add(new LocalizationSetsFinding(
                 LocalizationSetsRule.CannotExtend,
                 set.Location,
-                new EquatableArray<string>([set.Name, problem, $"Return the constant '{defaultLanguage}' from LocalizationLanguageCode, or remove LocalizationLanguageCode so that the name gives the language."])));
+                new EquatableArray<string>([set.Name, problem, $"Rename it so that its name gives '{defaultLanguage}'."])));
         }
     }
 
     /// <summary>
     /// Reports a set named after the language of a regional default language, such as <c>ShopLocalizationEn</c> with
-    /// <c>("en-US", "nl")</c> (<c>LOC200</c>). It lists the contract named after it, which no set then starts.
+    /// <c>("en-US", "nl")</c> (<c>LOC200</c>). No set then starts its contract, so every set that lists it fails to
+    /// compile (CS0246).
     /// </summary>
-    // Its language serves the default language, so it's listed (no LOC202), and it isn't the default-language set,
-    // which has the default language itself. Without this, every set that lists the contract fails to compile
-    // (CS0246), and nothing says why.
     private static void ReportDefaultSetsOfParentLanguage(
         ImmutableArray<DiscoveredLocalization> sets,
         string defaultLanguage,
@@ -105,7 +97,7 @@ internal sealed partial record LocalizationSetsAnalysis
     {
         foreach (var set in sets)
         {
-            if (set is not { ListsLocalizationSet: true, NameGivesNoLanguage: false, Language: { } language }
+            if (set is not { ListsLocalizationSet: true, Language: { } language }
                 || String.Equals(language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
                 || !SupportedLanguages.Serves(language, defaultLanguage)
                 || LocalizationDiscovery.ImplementsContract(set)
@@ -135,11 +127,8 @@ internal sealed partial record LocalizationSetsAnalysis
 
     /// <summary>
     /// Reports a default-language set that implements another contract and also lists the contract named after it,
-    /// which it can't start (<c>LOC200</c>).
+    /// which it can't start (<c>LOC200</c>). A set that implements a contract, such as a library's, starts none.
     /// </summary>
-    // A default-language set that implements a contract already, such as a library's, translates or rewords it,
-    // and starts none of its own. When it also lists the contract named after it, which binds to nothing, that
-    // contract is the one it meant to start, and every set that lists it fails to compile (CS0246).
     private static void ReportDefaultSetsOfAnotherContract(
         ImmutableArray<DiscoveredLocalization> sets,
         string defaultLanguage,
@@ -175,11 +164,75 @@ internal sealed partial record LocalizationSetsAnalysis
     }
 
     /// <summary>
-    /// Reports a default-language set of a shape the generator can't extend (<c>LOC200</c>).
+    /// Reports a set of another language that lists the contract named after it while no default-language set gives
+    /// that contract (<c>LOC205</c>), such as <c>ShopLocalizationNl : ILocalizationSet, IShopLocalization</c> without a
+    /// <c>ShopLocalizationEn</c>. Without this, the build shows only CS0246 for the contract. A set reported for
+    /// anything else already, such as LOC202 or a name of the default language, isn't reported again.
     /// </summary>
-    // Such a set would otherwise leave its contract and texts ungenerated without a word, and every other language's
-    // set without the contract it implements. Not a class that lists a contract another set starts, such as a test
-    // double of the default language: it's a set of that contract, and starts none of its own.
+    private static void ReportSetsOfContractWithoutDefaultSet(
+        ImmutableArray<DiscoveredLocalization> sets,
+        string defaultLanguage,
+        GeneratedContracts generatedContracts,
+        ImmutableArray<LocalizationSetsFinding>.Builder findings)
+    {
+        foreach (var set in sets)
+        {
+            if (set is not { ListsLocalizationSet: true, Language: { } language }
+                || String.Equals(language, defaultLanguage, StringComparison.OrdinalIgnoreCase)
+                || LocalizationDiscovery.ImplementsContract(set)
+                || LocalizationDiscovery.RewordsSet(set)
+                || LocalizationDiscovery.DeriveBaseName(set.Name, language) is not { } baseName)
+            {
+                continue;
+            }
+
+            var ownContract = $"I{baseName}";
+
+            if (!ListsMissingContract(set, ownContract, generatedContracts)
+                || findings.Any(finding => finding.Location == set.Location))
+            {
+                continue;
+            }
+
+            // A set meant to give the contract is reported already, such as ShopLocalizationEn where the default
+            // language is en-US (LOC200), and fixing it gives this set its contract.
+            if (sets.Any(other => !String.Equals(other.MetadataName, set.MetadataName, StringComparison.Ordinal)
+                                  && String.Equals(other.Namespace, set.Namespace, StringComparison.Ordinal)
+                                  && ListsMissingContract(other, ownContract, generatedContracts)
+                                  && findings.Any(finding => finding.Location == other.Location)))
+            {
+                continue;
+            }
+
+            var defaultSet = $"{baseName}{SupportedLanguages.ToTypeSuffix(defaultLanguage)}";
+
+            findings.Add(new LocalizationSetsFinding(
+                LocalizationSetsRule.MissingContract,
+                set.Location,
+                new EquatableArray<string>([
+                    set.Name,
+                    language,
+                    $"its contract '{ownContract}' doesn't exist",
+                    $"The generator writes '{ownContract}' from a default-language set named '{defaultSet}' that it can use. Write that set, or check the name of the one you have.",
+                ])));
+        }
+    }
+
+    /// <summary>
+    /// Whether a set lists a contract of that name that binds to nothing and that no set generates.
+    /// </summary>
+    private static bool ListsMissingContract(DiscoveredLocalization set, string contract, GeneratedContracts generatedContracts)
+    {
+        var listsMissingContract = set.UnresolvedBaseTypes.Any(baseType => String.Equals(baseType.Name, contract, StringComparison.Ordinal)
+                                                                           && LocalizationDiscovery.FindGeneratedContract(baseType, generatedContracts) is null);
+
+        return listsMissingContract;
+    }
+
+    /// <summary>
+    /// Reports a default-language set of a shape the generator can't extend (<c>LOC200</c>). A class that lists a
+    /// contract another set starts, such as a test double, is left alone, because it starts none.
+    /// </summary>
     private static void ReportUnextendableDefaultSets(
         EquatableArray<UnextendableSet> unextendable,
         string defaultLanguage,

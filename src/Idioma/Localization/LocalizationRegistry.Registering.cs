@@ -1,50 +1,52 @@
+using System.Diagnostics;
 using System.Reflection;
 
 namespace CodeChops.Idioma;
 
-// The part of LocalizationRegistry that keeps what is registered: the sets of the whole app, the app's languages, and
-// how the build described each set. A plain comment: the compiler merges the XML docs of every partial
-// declaration, and the type's summary lives in LocalizationRegistry.cs.
+// The part of LocalizationRegistry that keeps what's registered: the sets, the app's languages, and how the build
+// described each set.
 //
 // Nothing here takes a lock. The registrations are one object that never changes, and a registration swaps it for a
-// new one in one step. The registry of the whole app is built from it at the first read.
+// new one in one step.
 /// <inheritdoc cref="LocalizationRegistry"/>
 public sealed partial class LocalizationRegistry
 {
     /// <summary>
     /// What <see cref="Current"/> is built from: every registered set, and the app's languages.
     /// </summary>
-    // A field, because the swap takes it by reference. A swap that needs a value captures it, rather than handing it to
-    // the overload that takes an argument. That overload is generic over the argument's type, and for a struct,
-    // ReadyToRun can't compile it, so every app would JIT it at its start.
-    private static Registrations Registered = new(defaults: [], overrides: [], languages: [], application: null);
+    // A field, because the swap takes it by reference. A swap captures a value rather than use the overload that takes
+    // an argument, because ReadyToRun can't precompile that one for a struct.
+    private static Registrations Registered = Registrations.Empty;
 
     /// <summary>
-    /// How the source generator described the sets it found, per type: the language the build read from its name,
-    /// and, for a set deriving from another, the texts its own class words. Lock-free to read, because every
-    /// LocalizationLanguageCode a set doesn't implement reads it, and so does every lookup in a set that derives from
-    /// another.
+    /// The language the build read for each set (<see cref="DescribeSet"/>). Lock-free to read, because filing a set
+    /// reads it.
     /// </summary>
-    // The language, so that a set keeps it when its type is renamed after the build, and a set named after a longer
-    // code its assembly declares, such as ShopLocalizationEnGb for en-GB, isn't read by its last two letters. The texts,
-    // so that the registry knows which texts a set rewords without calling it (GetWordingSet).
-    private static ConcurrentDictionary<Type, SetDescription> SetDescriptions { get; } = new();
+    // The registry reads no name, so a set keeps its language when its type is renamed after the build.
+    private static ConcurrentDictionary<Type, string> DescribedLanguages { get; } = new();
 
     /// <summary>
-    /// The assembly of the app, whose registrar registered the languages first (<see cref="RegisterLanguages"/>), or
-    /// <see langword="null"/> before that. Its texts of an enum win over those of every library
-    /// (<see cref="Internals.GeneratedCode.RegisterEnumTexts{TEnum, TContract}"/>).
+    /// The language of each set type read so far (<see cref="GetLanguageCode"/>), because filing a set and wording a
+    /// text that falls back read it again.
+    /// </summary>
+    private static ConcurrentDictionary<Type, string> LanguagesByType { get; } = new();
+
+    /// <summary>
+    /// Counts the descriptions, so a language read while one arrived isn't kept (<see cref="GetLanguageCode"/>).
+    /// </summary>
+    private static int DescriptionCount;
+
+    /// <summary>
+    /// The assembly whose registrar registered the languages first, or <see langword="null"/> before that. Its texts of
+    /// an enum win over those of every library (<see cref="Internals.GeneratedCode.RegisterEnumTexts{TEnum, TContract}"/>).
     /// </summary>
     internal static Assembly? ApplicationAssembly => Volatile.Read(ref Registered).Application;
 
-    // The types of the sets this thread is creating, the outermost first, or null on a thread that has created none.
-    // A constructor runs on one thread, so the types tell a set that needs itself while it's created. Read only where a
-    // set is created, so no text pays for it.
+    // The types of the sets this thread is creating, the outermost first, so a set that needs itself is told apart.
     [ThreadStatic]
     private static List<Type>? SetsBeingCreated;
 
-    // The exception this thread threw last for a set that needs itself, so that the sets being created around it hand
-    // it on as it is.
+    // So the sets being created around it hand this exception on as it is.
     [ThreadStatic]
     private static InvalidOperationException? ThrownForSetNeedingItself;
 
@@ -62,7 +64,8 @@ public sealed partial class LocalizationRegistry
     /// app's languages.</item>
     /// </list>
     /// <para>
-    /// The set wins over the sets registered before it, for every text it changes. See <see cref="ILocalizationSet"/>.
+    /// For each contract and language, the set registered last this way wins whole, over every set that registered
+    /// itself. See <see cref="ILocalizationSet"/>.
     /// </para>
     /// <para>
     /// A set shows for a language your app declares, and for a region of one. A set for <c>en-AU</c> shows to
@@ -73,9 +76,10 @@ public sealed partial class LocalizationRegistry
     /// </remarks>
     /// <typeparam name="TSet">The set.</typeparam>
     /// <exception cref="InvalidOperationException">
-    /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
-    /// culture name such as <c>en-GB</c>.
+    /// When a set has no language. The build reads it from a name that ends in the language
+    /// (<c>ShopLocalizationDe</c>), of a top-level class or a class nested in a public or internal class. A class you
+    /// can't rename gets a language by deriving from it with a name that gives one:
+    /// <c>public class ShopLocalizationDe : ThirdPartyGermanTexts;</c>.
     /// </exception>
     public static void Register<TSet>()
         where TSet : class, ILocalizationSet, new()
@@ -88,8 +92,9 @@ public sealed partial class LocalizationRegistry
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each set wins over the sets registered before it, for every text it changes. See <see cref="ILocalizationSet"/>.
-    /// Registering a set of the same type and language again replaces the earlier one.
+    /// For each contract and language, the set registered last this way wins whole, over every set that registered
+    /// itself. See <see cref="ILocalizationSet"/>. Registering a set of the same type and language again replaces the
+    /// earlier one.
     /// </para>
     /// <para>
     /// A set shows for a language your app declares, and for a region of one. A set for <c>en-AU</c> shows to
@@ -99,17 +104,18 @@ public sealed partial class LocalizationRegistry
     /// </para>
     /// </remarks>
     /// <param name="sets">
-    /// The sets, in the order they apply. For one contract and language, a later set wins for every text it changes.
+    /// The sets, in the order they apply. For one contract and language, the last set wins.
     /// </param>
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
-    /// culture name such as <c>en-GB</c>.
+    /// When a set has no language. The build reads it from a name that ends in the language
+    /// (<c>ShopLocalizationDe</c>), of a top-level class or a class nested in a public or internal class. A class you
+    /// can't rename gets a language by deriving from it with a name that gives one:
+    /// <c>public class ShopLocalizationDe : ThirdPartyGermanTexts;</c>.
     /// </exception>
     public static void Register(params ReadOnlySpan<ILocalizationSet> sets)
     {
-        Add(sets, asDefaults: false);
+        Add(sets, RegistrationTier.ByHand);
     }
 
     /// <summary>
@@ -118,160 +124,185 @@ public sealed partial class LocalizationRegistry
     /// a library this way itself.
     /// </summary>
     /// <remarks>
-    /// A set from <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> wins over these for every text it changes,
-    /// whichever registers first. Registering a set of the same type and language again replaces the earlier one.
+    /// Every rewording wins over these whole, whichever registers first: a set of
+    /// <see cref="Register(ReadOnlySpan{ILocalizationSet})"/>, and a set of another assembly that derives from one of
+    /// them. Registering a set of the same type and language again replaces the earlier one.
     /// </remarks>
     /// <param name="sets">
-    /// The sets, in the order they apply. For one contract and language, a later set wins for every text it changes.
+    /// The sets, in the order they apply. For one contract and language, the last set wins.
     /// </param>
     /// <exception cref="ArgumentNullException">When one of the sets is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// When a set has no language code, or one that isn't a culture name. Name the set after its language
-    /// (<c>ShopLocalizationDe</c>), or have its <see cref="ILocalizationSet.LocalizationLanguageCode"/> return a
-    /// culture name such as <c>en-GB</c>.
+    /// When a set has no language. The build reads it from a name that ends in the language
+    /// (<c>ShopLocalizationDe</c>), of a top-level class or a class nested in a public or internal class. A class you
+    /// can't rename gets a language by deriving from it with a name that gives one:
+    /// <c>public class ShopLocalizationDe : ThirdPartyGermanTexts;</c>.
     /// </exception>
     public static void RegisterLibrarySets(params ReadOnlySpan<ILocalizationSet> sets)
     {
-        Add(sets, asDefaults: true);
+        Add(sets, RegistrationTier.LibrarySets);
     }
 
     /// <summary>
-    /// Sets the app's <see cref="SupportedLanguages"/>, for <see cref="Internals.GeneratedCode.RegisterLanguages"/>, and
-    /// stores the <paramref name="application"/> they come from as the app (<see cref="ApplicationAssembly"/>). Only
-    /// the first call counts.
+    /// Sets the app's <see cref="SupportedLanguages"/>, the default script of each, and <see cref="ApplicationAssembly"/>.
+    /// Only the first call counts.
     /// </summary>
-    internal static void RegisterLanguages(Assembly application, string defaultLanguage, params ReadOnlySpan<string> otherLanguages)
+    /// <param name="application">The app's assembly.</param>
+    /// <param name="languages">The app's languages, the default first, each cased as culture names are.</param>
+    /// <param name="scripts">
+    /// The default script of each language, such as <c>Hant</c> for <c>zh-TW</c>, or <see langword="null"/> where the
+    /// build knows none. In the order of <paramref name="languages"/>.
+    /// </param>
+    // The codes come from the generated code, which the build has checked (LOC102), so they're taken as they are.
+    internal static void RegisterLanguages(Assembly application, ReadOnlySpan<string> languages, ReadOnlySpan<string?> scripts)
     {
         ArgumentNullException.ThrowIfNull(application);
+        Debug.Assert(!languages.IsEmpty && languages.Length == scripts.Length);
 
-        // Checked as a registry of your own checks its languages, and here rather than at the first text shown.
-        var languages = ToCultureNames(defaultLanguage, otherLanguages);
+        var appLanguages = ImmutableArray.Create(languages);
+        var scriptsByLanguage = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // The app's own registrar runs before any assembly it loads, and calls this before the registrars of the
-        // assemblies it references, so the first call is the app's. The app and its languages are set in one swap, so
-        // two apps that start at once can't each set one of them. The texts of an enum chosen before are chosen again
-        // with the app's first (GeneratedCode.GetEnumText). The swap gives a new registry instance, so that a cache a
-        // consumer keys on it drops wording resolved before.
+        for (var i = 0; i < languages.Length; i++)
+            if (scripts[i] is { } script)
+                scriptsByLanguage[languages[i]] = script;
+
+        var appScripts = scriptsByLanguage.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        // The app's registrar runs first, so the first call is the app's. The app and its languages are set in one swap,
+        // so two apps that start at once can't each set one. The swap gives a new registry, so a cache keyed on it drops
+        // wording resolved before.
         // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes the languages, a struct, is left to the JIT under ReadyToRun.
         ImmutableInterlocked.Update(
             ref Registered,
-            registered => registered.Application is null ? registered.WithApplication(application, languages) : registered);
+            registered => registered.Application is null ? registered.WithApplication(application, appLanguages, appScripts) : registered);
     }
 
     /// <summary>
-    /// Stores what the build read about a set, for <see cref="Internals.GeneratedCode.DescribeSet"/>: its language, or
-    /// <see langword="null"/> for a set whose <see cref="ILocalizationSet.LocalizationLanguageCode"/> the build couldn't
-    /// read, and the texts its own class words. A set has one code. Describing it with the same code again changes nothing, and
-    /// another code is refused.
+    /// Stores the language the build read for a set, and the default script of that language. The same code again
+    /// changes nothing, and another code is refused.
     /// </summary>
-    internal static void DescribeSet<TSet>(string? languageCode, string[] ownTexts)
+    /// <param name="script">
+    /// The default script of the language, such as <c>Cyrl</c> for <c>sr-RS</c>, or <see langword="null"/> where the
+    /// build knows none. A script the app's registrar gave for the language stays.
+    /// </param>
+    // The code comes from the generated code, which the build has checked and cased as culture names are.
+    internal static void DescribeSet<TSet>(string languageCode, string? script = null)
         where TSet : class, ILocalizationSet
     {
-        ArgumentNullException.ThrowIfNull(ownTexts);
+        ArgumentNullException.ThrowIfNull(languageCode);
 
-        // Checked here: a code that is no culture name would otherwise fail every text of the app once the lookup
-        // tables are built again, far from this call.
-        if (languageCode is not null)
-            languageCode = ToCultureName(languageCode, nameof(languageCode));
-
-        // A set registered before its description is filed under the language of its name, and words every text itself, until
-        // the lookup tables are built again. So the registrations are swapped for a copy, which builds them anew.
-        var description = new SetDescription(languageCode, ownTexts);
-        var existing = SetDescriptions.GetOrAdd(typeof(TSet), description);
-
-        if (!ReferenceEquals(existing, description))
+        if (!DescribedLanguages.TryAdd(typeof(TSet), languageCode))
         {
             // The same code again, as when the generated registration runs twice, leaves the set as it is.
-            var described = existing.LanguageCode;
+            var described = DescribedLanguages[typeof(TSet)];
 
             if (String.Equals(described, languageCode, StringComparison.Ordinal))
                 return;
 
-            throw new ArgumentException($"'{typeof(TSet).Name}' already has the language code '{described ?? "null"}', so it can't take '{languageCode ?? "null"}'. A set's language doesn't change.", nameof(languageCode));
+            throw new ArgumentException($"'{typeof(TSet).Name}' already has the language code '{described}', so it can't take '{languageCode}'. A set's language doesn't change.", nameof(languageCode));
         }
 
-        ImmutableInterlocked.Update(ref Registered, static registered => registered.Copy());
+        // Whole, because a description changes the language of the types that derive from the set too. Counted first,
+        // so a read that started before this description doesn't keep its language after the clear.
+        Interlocked.Increment(ref DescriptionCount);
+        LanguagesByType.Clear();
+
+        // A set registered before its description is filed under the language it inherited, so a copy rebuilds the
+        // lookup tables. A copy shares every part and builds its registry at the first read, so it costs less than
+        // looking for such a set, and the registration that follows a description makes a new one anyway.
+        // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes an argument, a struct here, is left to the JIT under ReadyToRun.
+        ImmutableInterlocked.Update(ref Registered, current => script is null ? current.Copy() : current.WithScript(languageCode, script));
     }
 
     /// <summary>
-    /// The language code a set's type is described with, or else for the nearest class it derives from that has one. So a
-    /// rewording of a British set serves British English too. <see langword="null"/> when none has one.
+    /// The language of a set's type, written as culture names are. It's the language the build described for the set,
+    /// or for the nearest class it derives from. The registry reads no name, so a renamed class keeps its language, and
+    /// no code of the set runs.
     /// </summary>
-    internal static string? GetDescribedLanguageCode(Type type)
+    /// <exception cref="InvalidOperationException">When neither the type nor a class it derives from is described.</exception>
+    // A type that throws isn't kept, so it throws again at the next read.
+    internal static string GetLanguageCode(Type setType)
     {
-        for (var current = type; current is not null; current = current.BaseType)
-            if (SetDescriptions.TryGetValue(current, out var description) && description.LanguageCode is { } languageCode)
-                return languageCode;
+        if (LanguagesByType.TryGetValue(setType, out var known))
+            return known;
 
-        return null;
+        while (true)
+        {
+            var count = Volatile.Read(ref DescriptionCount);
+            var language = ReadLanguageCode(setType);
+            LanguagesByType[setType] = language;
+
+            // A description that arrived meanwhile may have cleared the languages before this one was kept, and it may
+            // be this type's own. So the language is read again.
+            if (Volatile.Read(ref DescriptionCount) == count)
+                return language;
+
+            LanguagesByType.TryRemove(setType, out _);
+        }
     }
 
-    /// <summary>
-    /// Adds sets that were created already, for <see cref="Register(ReadOnlySpan{ILocalizationSet})"/> and
-    /// <see cref="RegisterLibrarySets"/>. With <paramref name="asDefaults"/>, they give a library's own wording, as the
-    /// sets the generated code registers through <see cref="Internals.GeneratedCode.RegisterSets"/> do. Every other set
-    /// wins over those.
-    /// </summary>
-    private static void Add(ReadOnlySpan<ILocalizationSet> sets, bool asDefaults)
+    private static string ReadLanguageCode(Type setType)
+    {
+        for (var current = setType; current is not null; current = current.BaseType)
+            if (DescribedLanguages.TryGetValue(current, out var described))
+                return described;
+
+        throw new InvalidOperationException(
+            $"'{setType}' has no language. The build reads a set's language from its name, so end the name in the language code, as in ShopLocalizationDe. "
+            + "The class must be top-level, or nested in a public or internal class, and its project must reference Idioma.");
+    }
+
+    private static void Add(ReadOnlySpan<ILocalizationSet> sets, RegistrationTier tier)
     {
         // No swap for no sets, because a new registry drops every lookup and set the old one kept.
         if (sets.IsEmpty)
             return;
 
-        // Read here so that a set without a language code fails at its registration, not at the first text rendered
-        // afterwards. And read once, before the swap: a language code is consumer code, and the swap may run again.
+        // Before the swap, so a set without a language fails at its registration, not at the first text shown afterwards.
         var entries = new Registration[sets.Length];
         for (var i = 0; i < sets.Length; i++)
         {
             ArgumentNullException.ThrowIfNull(sets[i], nameof(sets));
-            entries[i] = Registration.Of(sets[i]);
+            entries[i] = Registration.Of(sets[i], tier);
         }
 
-        // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
-        ImmutableInterlocked.Update(ref Registered, registered => registered.With(entries, asDefaults));
+        ImmutableInterlocked.Update(ref Registered, static (registered, entries) => registered.With(entries), entries);
     }
 
     /// <summary>
-    /// Adds sets that the registry creates when a text of their contract is first shown, for
-    /// <see cref="Internals.GeneratedCode.RegisterSets"/>. Each is filed under the language the build described its
-    /// type (<see cref="DescribeSet"/>), without creating it.
+    /// Adds sets that the registry creates when a text of their contract is first shown, each filed under its
+    /// described language without creating it.
     /// </summary>
+    /// <param name="sets">Each set's type, with what creates it.</param>
+    /// <param name="tier">Where the sets come from, as the build read it.</param>
     /// <exception cref="InvalidOperationException">
-    /// When a set has no language, because the build described it with none and its name gives none.
+    /// When a set's type gives no language (<see cref="GetLanguageCode"/>).
     /// </exception>
-    // Not created here, because this runs in a module initializer, before Main. A set whose constructor throws there
-    // takes the app down where nothing can catch it, also an app that never shows the set's texts. Created when the
-    // first text of its contract is shown, it throws from there, where the app can log it, and only for the texts of
-    // its contract.
-    //
-    // The build registers only a set whose language it describes (LOC208), so the registry never creates a set to file
-    // it. A set without a description, which only code written by hand registers here, takes the language its name gives, as
-    // its LocalizationLanguageCode does.
-    internal static void RegisterSets(ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets, bool asDefaults)
+    // Not created here, because this runs in a module initializer, before Main, where nothing can catch what a
+    // constructor throws. Created at the first text, it throws where the app can log it.
+    internal static void RegisterSets(ReadOnlySpan<(Type Type, Func<ILocalizationSet> Create)> sets, RegistrationTier tier)
     {
         var entries = new Registration[sets.Length];
+
         for (var i = 0; i < sets.Length; i++)
         {
             var (type, create) = sets[i];
             ArgumentNullException.ThrowIfNull(type, nameof(sets));
             ArgumentNullException.ThrowIfNull(create, nameof(sets));
 
-            entries[i] = Registration.ToCreate(type, create, ILocalizationSet.GetLanguageCode(type));
+            entries[i] = Registration.ToCreate(type, create, tier);
         }
 
-        // ReSharper disable once HeapView.CanAvoidClosure - The overload that takes both values, as a tuple, is left to the JIT under ReadyToRun.
-        ImmutableInterlocked.Update(ref Registered, registered => registered.With(entries, asDefaults));
+        ImmutableInterlocked.Update(ref Registered, static (registered, entries) => registered.With(entries), entries);
     }
 
     /// <summary>
-    /// Creates a set the registry registered by its type, and says which set it was if its constructor throws.
+    /// Creates a set, and names the set if its constructor throws.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// When the set's constructor throws, with that exception inside. Also when the constructor, or a field
-    /// initializer, reads a text that needs the set itself.
+    /// initializer, reads a text that needs the set itself, which would otherwise recurse without end.
     /// </exception>
-    // A set that reads a text of its own contract as it's created needs itself for that text. Nothing is kept until a
-    // set exists, so the read created the set again, without end, until the stack overflowed and the process died.
     internal static ILocalizationSet CreateSet(Type type, Func<ILocalizationSet> create)
     {
         var beingCreated = SetsBeingCreated ??= [];

@@ -1,26 +1,20 @@
 namespace CodeChops.Idioma;
 
 /// <summary>
-/// Picks the language a standalone text shows for the user. A standalone text carries its own wording instead of a
-/// set's. It's written with <c>LocalizedText.Inline</c>, or with <c>[Localized]</c> on a member.
-/// </summary>
-/// <remarks>
-/// A standalone text has a wording for each language of its assembly, the default language first. It shows the first
-/// of these:
+/// Picks the language a standalone text shows for the user. It shows the first of these:
 /// <list type="number">
-/// <item>The wording for the user's culture, or else for a culture it falls back to. A culture none of the app's
-/// languages serves skips this.</item>
-/// <item>The wording for the app's default language, or else for a language it falls back to.</item>
+/// <item>The wording for the user's culture, or a culture it falls back to, where one of the app's languages serves
+/// it.</item>
+/// <item>The wording for the app's default language, or a language it falls back to.</item>
 /// <item>The wording for the assembly's default language.</item>
 /// </list>
-/// </remarks>
+/// </summary>
 internal static class StandaloneLanguage
 {
     /// <summary>
-    /// What this thread picked last. A render asks for the same languages and culture text after text, so comparing two
-    /// references skips walking the names. All standalone texts of an assembly pass one array, so a render that shows
-    /// inline texts and texts on members in turn still finds its pick here. Per thread, because threads of a server
-    /// render for users of different languages at once.
+    /// What this thread picked last, which a render asks for text after text. All standalone texts of an assembly pass
+    /// one array, so comparing two references is enough. Per thread, because threads of a server render for users of
+    /// different languages at once.
     /// </summary>
     [ThreadStatic]
     private static LocalizationRegistry.CultureLookup? LastLookup;
@@ -32,10 +26,9 @@ internal static class StandaloneLanguage
     private static int LastIndex;
 
     /// <summary>
-    /// The position, among an assembly's languages, of the one a text shows for the user's culture
-    /// (<see cref="CultureInfo.CurrentUICulture"/>).
+    /// The position, among an assembly's languages (the default first), of the one a text shows for
+    /// <see cref="CultureInfo.CurrentUICulture"/>.
     /// </summary>
-    /// <param name="languages">The languages of the assembly, each a culture name, the default first.</param>
     public static int IndexOfShownLanguage(string[] languages)
     {
         var lookup = LocalizationRegistry.Current.Resolve(CultureInfo.CurrentUICulture);
@@ -52,9 +45,6 @@ internal static class StandaloneLanguage
         return index;
     }
 
-    /// <summary>
-    /// The position of the language a text shows for a culture, as a registry resolves it.
-    /// </summary>
     internal static int IndexOfShownLanguage(string[] languages, LocalizationRegistry.CultureLookup lookup)
     {
         if (lookup.ShowsCulture)

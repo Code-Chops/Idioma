@@ -75,9 +75,7 @@ public sealed partial class LocalizationSetsPartTests
         text.ShouldContain("    string Tuples((string Name, int Count) pair, (int, string?) unnamed);");
         text.ShouldContain("    string Delegates(System.Func<int, string> format);");
         text.ShouldContain("    string @event(string @class, int @int);");
-        text.ShouldContain("public static string @event(string @class, int @int) => GetLocalizationSetForValues<IShopLocalization>(");
-        text.ShouldContain(")?.@event(@class, @int) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, (string, int)>(");
-        text.ShouldContain(", \"event\", static (set, values) => set.@event(values.Item1, values.Item2), (@class, @int));");
+        text.ShouldContain("public static string @event(string @class, int @int) => GetLocalizationSetForValues<IShopLocalization>()?.@event(@class, @int) ?? ResolveWording<IShopLocalization, ShopLocalizationEn, (string, int)>(\"event\", static (set, values) => set.@event(values.Item1, values.Item2), (@class, @int));");
     }
 
     [Test]

@@ -6,39 +6,13 @@ namespace CodeChops.Idioma.Tests;
 public sealed partial class LocalizationSetsPartTests
 {
     [Test]
-    [Arguments("\"\"")]
-    [Arguments("\"-\"")]
-    [Arguments("\"en\\nx\"")]
-    public void SetWithLanguageCodeThatIsNoCultureName_ShouldNotStopTheGeneratorOrBeHeldToALanguage(string languageCode)
-    {
-        // Arrange: what a LocalizationLanguageCode holds while it is being typed. The contract must still be written: without it
-        // every IShopLocalization of the project stops compiling.
-        var source = $$"""
-            {{ShopSets}}
-
-            public class ShopLocalizationBritish : ShopLocalizationEn, ILocalizationSet
-            {
-                string ILocalizationSet.LocalizationLanguageCode => {{languageCode}};
-            }
-            """;
-
-        // Act
-        var result = Run(source);
-
-        // Assert: nothing about its language from here; LOC207 says what is wrong with the code.
-        DiagnosticIds(result).ShouldBeEmpty();
-        ContractText(result).ShouldContain("interface IShopLocalization");
-        GeneratorTestHelper.GetGeneratorDiagnostics(source).Select(diagnostic => diagnostic.Id).ShouldBe(["LOC207"]);
-    }
-
-    [Test]
     [Arguments("\"e\", \"nl\"")]
     [Arguments("\"en_US\", \"nl\"")]
     [Arguments("null, \"nl\"")]
     [Arguments("\"e\"")]
     public void InvalidDefaultLanguage_ShouldNotMakeTheNextLanguageTheDefault(string languages)
     {
-        // Arrange: the first language is wrong, which LOC101 reports. With the next one as the default, the English set
+        // Arrange: the first language is wrong, which LOC102 reports. With the next one as the default, the English set
         // would be reported as unlisted, no contract would be written, and every use of it would stop compiling.
         var source = ShopSets.Replace("\"en\", \"nl\"", languages, StringComparison.Ordinal);
 
@@ -46,7 +20,7 @@ public sealed partial class LocalizationSetsPartTests
         var result = Run(source);
         var errors = GeneratorTestHelper.CompileWithGenerators(source);
 
-        // Assert: the contract is still written, from the set that starts it, and LOC101 stays the only error.
+        // Assert: the contract is still written, from the set that starts it, and LOC102 stays the only error.
         DiagnosticIds(result).ShouldBeEmpty();
         ContractText(result).ShouldContain("interface IShopLocalization");
         errors.ShouldHaveSingleItem().Id.ShouldBe(LocalizedTextFactoryGenerator.InvalidLanguagesDiagnosticId);
@@ -81,37 +55,7 @@ public sealed partial class LocalizationSetsPartTests
 
         // Assert
         run.GeneratedSources.Count(generated => generated.HintName.EndsWith(".Localization.g.cs", StringComparison.Ordinal)).ShouldBe(1);
-        errors.ShouldHaveSingleItem().Id.ShouldBe("LOC101");
-    }
-
-    [Test]
-    public void SetImplementingLanguageCodeOfAnotherInterface_ShouldServeLanguageOfItsName()
-    {
-        // Arrange & Act: the explicit implementation is not that of ILocalizationSet.LocalizationLanguageCode, which the set leaves
-        // to its name. Taken for it, the set would count as German: unlisted, and the Dutch one missing.
-        var result = Run($$"""
-            {{Header}}
-
-            public interface IHasCode
-            {
-                string LocalizationLanguageCode { get; }
-            }
-
-            public class ShopLocalizationEn : ILocalizationSet, IShopLocalization
-            {
-                public virtual string Checkout => "Checkout";
-            }
-
-            public class ShopLocalizationNl : ILocalizationSet, IShopLocalization, IHasCode
-            {
-                string IHasCode.LocalizationLanguageCode => "de";
-
-                public virtual string Checkout => "Afrekenen";
-            }
-            """);
-
-        // Assert
-        DiagnosticIds(result).ShouldBeEmpty();
+        errors.ShouldHaveSingleItem().Id.ShouldBe("LOC102");
     }
 
     [Test]
@@ -142,7 +86,7 @@ public sealed partial class LocalizationSetsPartTests
     public void ChineseRegionDerivedFromSetOfItsScript_ShouldBeAllowed()
     {
         // Arrange & Act: users in Taiwan get the Traditional Chinese wording at run time, so the set derives from a
-        // set of its own language, and nothing is left in another one (LOC203).
+        // set of its own language, and nothing is left in another one (LOC204).
         var result = Run("""
             using CodeChops.Idioma;
 

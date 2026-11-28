@@ -42,14 +42,14 @@ public sealed class SupportedLanguagesAttributeTests
     }
 
     [Test]
-    public void ShouldHoldLanguagesInLetterCaseOfCultureNames()
+    public void ShouldHoldLanguagesAsWritten()
     {
-        // Arrange & Act: the build accepts a language in any letter case.
+        // Arrange & Act: the build accepts a language in any letter case, and checks it, so the attribute keeps it.
         var attribute = new SupportedLanguagesAttribute("EN-gb", "NL", "zh-hans");
 
         // Assert
-        attribute.DefaultLanguage.ShouldBe("en-GB");
-        attribute.Languages.ShouldBe(["en-GB", "nl", "zh-Hans"]);
+        attribute.DefaultLanguage.ShouldBe("EN-gb");
+        attribute.Languages.ShouldBe(["EN-gb", "NL", "zh-hans"]);
     }
 
     [Test]

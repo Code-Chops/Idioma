@@ -6,30 +6,23 @@ using Microsoft.CodeAnalysis.CodeFixes;
 namespace CodeChops.Idioma.CodeFixes;
 
 /// <summary>
-/// Fixes a member of a set that hides a text of a class it derives from, instead of overriding it (<c>LOC302</c>). It
-/// overrides the text, as in <c>public override string Color => "Colour";</c>, or it lists the contract again, as in
+/// Fixes a member of a set that hides a text of a base class instead of overriding it (<c>LOC302</c>). It overrides
+/// the text, or it lists the contract again, as in
 /// <c>class ShopLocalizationEnGb : ShopLocalizationEn, IShopLocalization</c>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// To override, the fix puts <c>override</c> in the place of <c>new</c>. Where the text isn't virtual yet, it makes the
-/// text virtual in the class that declares it: it adds <c>virtual</c>, or removes <c>sealed</c> from an override. So
-/// this fix can change two files.
+/// Overriding replaces <see langword="new"/> with <see langword="override"/>. Where the text isn't virtual yet,
+/// the fix also makes it virtual where it's declared, so it can change two files.
 /// </para>
-/// <para>
-/// There's no fix to override a text that the member can't override:
-/// </para>
+/// <para>There's no override fix for:</para>
 /// <list type="bullet">
-/// <item>A text of another project or assembly that isn't virtual, such as a library's. The fix doesn't change it.</item>
-/// <item>A text implemented explicitly, as in <c>string IShopLocalization.Color</c>, which can't be virtual.</item>
-/// <item>A text that a class in between hides too. An override would override that class's member, which has a
-/// diagnostic of its own.</item>
-/// <item>A partial member, or a property with a setter that the text lacks.</item>
+/// <item>a non-virtual text of another project or assembly.</item>
+/// <item>an explicitly implemented text, which can't be virtual.</item>
+/// <item>a text that a class in between hides too, which has its own diagnostic.</item>
+/// <item>a partial member, or a property with a setter that the text lacks.</item>
 /// </list>
-/// <para>
-/// Listing the contract again is always offered. The contract then calls the set's own member. The contract is named
-/// by its name alone where the file can name it so, and else by its full name.
-/// </para>
+/// <para>Listing the contract again is always offered.</para>
 /// </remarks>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(HiddenTextCodeFixProvider))]
 [Shared]
@@ -39,9 +32,8 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
     private const string ListContractKey = "ListContractAgain";
 
     /// <summary>
-    /// Applies the fix the IDE asks for to every diagnostic at once. Each member and each class changes once, because
-    /// two sets can hide one text, and one set can hide two texts of a contract. A set that hides texts of two
-    /// contracts lists both.
+    /// Applies the chosen fix to every diagnostic at once. Each member and class changes once, because several
+    /// diagnostics can share them.
     /// </summary>
     private static readonly FixAllProvider FixAll = new FixAllByKey(
         overriding: new ReplaceNodesFixAllProvider<MemberDeclarationSyntax>(
@@ -97,14 +89,10 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
             diagnostic);
     }
 
-    /// <summary>
-    /// A member of a set that hides a text, with the contract of that text and the member that implements it.
-    /// </summary>
     private sealed record Hiding(MemberDeclarationSyntax Declaration, ISymbol Member, INamedTypeSymbol Set, INamedTypeSymbol Contract, ISymbol Implementation);
 
     /// <summary>
-    /// The member a diagnostic sits on the name of, with the text it hides. <see langword="null"/> when the code changed
-    /// since the diagnostic was reported.
+    /// The member a diagnostic sits on, with the text it hides, or <see langword="null"/> when the code has changed.
     /// </summary>
     private static Hiding? Find(SyntaxNode root, SemanticModel semanticModel, Diagnostic diagnostic, CancellationToken cancellationToken)
     {
@@ -131,16 +119,16 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// What overriding the hidden text changes, with the title of that fix. <see langword="null"/> when the member can't
-    /// override it (see the remarks of this class).
+    /// The changes and title of the override fix, or <see langword="null"/> when there's none (see the class remarks).
     /// </summary>
     private static (string Title, Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax> Changes)? Override(Hiding hiding,
         Compilation compilation, CancellationToken cancellationToken)
     {
         var (declaration, member, set, _, implementation) = hiding;
 
-        if (FindOverridden(member, set) is not { IsStatic: false } overridden
-            || !LeadsTo(overridden, implementation)
+        // The member an override would override, as LOC302 names it.
+        if (HiddenTextAnalyzer.FindHidden(member, set) is not { IsStatic: false } overridden
+            || !Overrides.IsOrOverrides(overridden, implementation)
             || IsPartial(declaration)
             || member is IPropertySymbol { SetMethod: not null } && overridden is IPropertySymbol { SetMethod: null })
         {
@@ -150,13 +138,13 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
         var name = $"{overridden.ContainingType.Name}.{member.Name}";
         var changes = new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>
         {
-            [declaration] = declaration.WithModifiers(WithOverride(declaration.Modifiers)),
+            [declaration] = WithOverride(declaration),
         };
 
         if (overridden is { IsVirtual: true } or { IsAbstract: true } or { IsOverride: true, IsSealed: false })
             return ($"Override '{name}'", changes);
 
-        // Made virtual where it's declared, which has to be a file of this project.
+        // Made virtual where it's declared, which must be in this project.
         if (overridden.DeclaringSyntaxReferences.Length is not 1
             || !compilation.ContainsSyntaxTree(overridden.DeclaringSyntaxReferences[0].SyntaxTree)
             || overridden.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) is not MemberDeclarationSyntax text
@@ -166,54 +154,15 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
             return null;
         }
 
-        changes[text] = text.WithModifiers(overridden.IsOverride
-            ? Remove(text.Modifiers, SyntaxKind.SealedKeyword)
-            : Insert(text.Modifiers, SyntaxKind.VirtualKeyword));
+        // A sealed override loses 'sealed', and any other member becomes virtual. The title says which, as LOC302 does.
+        if (overridden.IsOverride)
+        {
+            changes[text] = CodeFixSupport.RemoveModifier(text, SyntaxKind.SealedKeyword);
+            return ($"Remove 'sealed' from '{name}' and override it", changes);
+        }
 
+        changes[text] = CodeFixSupport.InsertModifier(text, SyntaxKind.VirtualKeyword);
         return ($"Make '{name}' virtual and override it", changes);
-    }
-
-    /// <summary>
-    /// The member that an override of <paramref name="member"/> would override: the first of its name and parameters in
-    /// the classes its set derives from.
-    /// </summary>
-    private static ISymbol? FindOverridden(ISymbol member, INamedTypeSymbol set)
-    {
-        for (var type = set.BaseType; type is not null; type = type.BaseType)
-        {
-            foreach (var candidate in type.GetMembers(member.Name))
-                if (HiddenTextAnalyzer.Hides(member, candidate))
-                    return candidate;
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Whether a member implements the text, or overrides the member that does, so that an override of it words the
-    /// text.
-    /// </summary>
-    private static bool LeadsTo(ISymbol overridden, ISymbol implementation)
-    {
-        for (var member = overridden; member is not null; member = GetOverridden(member))
-        {
-            if (SymbolEqualityComparer.Default.Equals(member, implementation))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static ISymbol? GetOverridden(ISymbol member)
-    {
-        var overridden = member switch
-        {
-            IPropertySymbol property => property.OverriddenProperty,
-            IMethodSymbol method => (ISymbol?)method.OverriddenMethod,
-            _ => null,
-        };
-
-        return overridden;
     }
 
     private static bool IsPartial(MemberDeclarationSyntax declaration)
@@ -222,68 +171,20 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The modifiers of the hiding member with <c>override</c> in the place of <c>new</c>, or else after its
-    /// accessibility. A <c>virtual</c> goes, because an override is virtual itself.
+    /// Puts <c>override</c> in place of <c>new</c>, or after the accessibility. Drops <c>virtual</c>, because an
+    /// override is virtual already.
     /// </summary>
-    private static SyntaxTokenList WithOverride(SyntaxTokenList modifiers)
+    private static MemberDeclarationSyntax WithOverride(MemberDeclarationSyntax declaration)
     {
-        var index = modifiers.IndexOf(SyntaxKind.NewKeyword);
+        var withOverride = declaration.Modifiers.Any(SyntaxKind.NewKeyword)
+            ? CodeFixSupport.ReplaceModifier(declaration, SyntaxKind.NewKeyword, SyntaxKind.OverrideKeyword)
+            : CodeFixSupport.InsertModifier(declaration, SyntaxKind.OverrideKeyword);
 
-        var withOverride = index >= 0
-            ? modifiers.Replace(modifiers[index], SyntaxFactory.Token(modifiers[index].LeadingTrivia, SyntaxKind.OverrideKeyword, modifiers[index].TrailingTrivia))
-            : Insert(modifiers, SyntaxKind.OverrideKeyword);
-
-        return Remove(withOverride, SyntaxKind.VirtualKeyword);
+        return CodeFixSupport.RemoveModifier(withOverride, SyntaxKind.VirtualKeyword);
     }
 
     /// <summary>
-    /// The modifiers with a keyword after the last accessibility keyword, such as <c>public</c>, or else first.
-    /// </summary>
-    private static SyntaxTokenList Insert(SyntaxTokenList modifiers, SyntaxKind kind)
-    {
-        var index = 0;
-
-        for (var i = 0; i < modifiers.Count; i++)
-        {
-            if (SyntaxFacts.IsAccessibilityModifier(modifiers[i].Kind()))
-                index = i + 1;
-        }
-
-        var keyword = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
-
-        // First: the keyword takes over what stood before the modifiers, such as their indentation.
-        if (index is 0 && modifiers.Count > 0)
-        {
-            keyword = keyword.WithLeadingTrivia(modifiers[0].LeadingTrivia);
-            modifiers = modifiers.Replace(modifiers[0], modifiers[0].WithLeadingTrivia());
-        }
-
-        return modifiers.Insert(index, keyword);
-    }
-
-    /// <summary>
-    /// The modifiers without a keyword. What stood before it, such as the indentation of a first modifier, goes to the
-    /// modifier after it.
-    /// </summary>
-    private static SyntaxTokenList Remove(SyntaxTokenList modifiers, SyntaxKind kind)
-    {
-        var index = modifiers.IndexOf(kind);
-
-        if (index < 0)
-            return modifiers;
-
-        var removed = modifiers[index];
-        modifiers = modifiers.RemoveAt(index);
-
-        if (index < modifiers.Count && removed.LeadingTrivia.Count > 0)
-            modifiers = modifiers.Replace(modifiers[index], modifiers[index].WithLeadingTrivia(removed.LeadingTrivia.AddRange(modifiers[index].LeadingTrivia)));
-
-        return modifiers;
-    }
-
-    /// <summary>
-    /// What listing the contract again changes: the end of the base list of the part of the set that holds the member,
-    /// or else of the first part that has one. <see langword="null"/> when no part has a base list.
+    /// Appends the contract to the base list of the member's part, or else of the first part with a base list.
     /// </summary>
     private static Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>? ListContract(Hiding hiding, Compilation compilation,
         CancellationToken cancellationToken)
@@ -291,17 +192,13 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
         var part = hiding.Declaration.Parent as TypeDeclarationSyntax;
 
         if (part?.BaseList is null)
-        {
-            part = hiding.Set.DeclaringSyntaxReferences
-                .Select(reference => reference.GetSyntax(cancellationToken))
-                .OfType<TypeDeclarationSyntax>()
-                .FirstOrDefault(static declaration => declaration.BaseList is not null);
-        }
+            part = CodeFixSupport.GetParts(hiding.Set, cancellationToken).FirstOrDefault(static declaration => declaration.BaseList is not null);
 
         if (part?.BaseList is not { } baseList)
             return null;
 
-        var contract = NameContract(hiding.Contract, compilation.GetSemanticModel(part.SyntaxTree), baseList.SpanStart);
+        // One name per part, so ListBoth compares names.
+        var contract = SyntaxFactory.ParseTypeName(CodeFixSupport.NameAt(compilation.GetSemanticModel(part.SyntaxTree), baseList.SpanStart, hiding.Contract));
         var changes = new Dictionary<MemberDeclarationSyntax, MemberDeclarationSyntax>
         {
             [part] = CodeFixSupport.InsertBaseType(part, baseList.Types.Count, SyntaxFactory.SimpleBaseType(contract)),
@@ -311,8 +208,8 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// A part of a set on which two diagnostics list a contract: the earlier result, with each contract of the later
-    /// one that it lacks. A contract has one name in a part (<see cref="NameContract"/>), so the names tell them apart.
+    /// Merges two listings on one part by adding the later's missing contracts to the earlier. A contract has one name
+    /// per part (<see cref="CodeFixSupport.NameAt"/>), so comparing names is enough.
     /// </summary>
     private static MemberDeclarationSyntax ListBoth(MemberDeclarationSyntax earlier, MemberDeclarationSyntax later)
     {
@@ -331,23 +228,7 @@ public sealed class HiddenTextCodeFixProvider : CodeFixProvider
     }
 
     /// <summary>
-    /// The contract as the code at a position can name it: by its name alone where that binds to the contract, and else
-    /// by its full name.
-    /// </summary>
-    private static TypeSyntax NameContract(INamedTypeSymbol contract, SemanticModel semanticModel, int position)
-    {
-        var simpleName = SyntaxFactory.IdentifierName(contract.Name);
-
-        var bindsToContract = SymbolEqualityComparer.Default.Equals(
-            semanticModel.GetSpeculativeTypeInfo(position, simpleName, SpeculativeBindingOption.BindAsTypeOrNamespace).Type,
-            contract);
-
-        return bindsToContract ? simpleName : SyntaxFactory.ParseTypeName(contract.ToDisplayString());
-    }
-
-    /// <summary>
-    /// Applies to every diagnostic the fix whose key the IDE asks for: overriding the texts, or listing the contracts
-    /// again.
+    /// Picks the "Fix all" provider by the equivalence key the IDE asks for.
     /// </summary>
     private sealed class FixAllByKey(FixAllProvider overriding, FixAllProvider listing) : FixAllProvider
     {

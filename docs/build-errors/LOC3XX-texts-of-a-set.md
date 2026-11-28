@@ -46,8 +46,10 @@ Where the text can't be virtual, such as a text of a library, list the contract 
 
 The IDE offers both fixes:
 
-- Override the text. The fix puts `override` in place of `new`. Where the text isn't virtual yet, it makes it virtual in the set that declares it, so the fix can change two files. A library's text that isn't virtual gets no such fix, and neither does a text implemented explicitly.
+- Override the text. The fix puts `override` in place of `new`. Where the text isn't virtual yet, it makes it virtual in the set that declares it, so the fix can change two files. A `sealed override` loses `sealed` instead. A library's text that isn't virtual gets no such fix, and neither does a text implemented explicitly, because neither can be overridden.
 - List the contract again. This fix is always offered.
+
+The message gives the same advice. It names the member an override would override, which can be a `sealed override` in a set between the two. Where a set in between hides the text with `new` too, only listing the contract again helps.
 
 "Fix all" changes each text once, however many sets hide it. A set that hides texts of two contracts lists both.
 

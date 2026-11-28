@@ -1,30 +1,24 @@
 namespace CodeChops.Idioma.Generators;
 
 /// <summary>
-/// Writes the file of a contract (<see cref="LocalizationContract"/>): the generated class with its texts, then the
-/// contract interface, and for a set of the texts of an enum the switch that gives the text of a value.
+/// Writes a contract's file: the generated class with its texts, the contract, and for an enum's texts the switch that
+/// gives the text of a value.
 /// </summary>
 internal static partial class LocalizationContractSource
 {
-    // The namespaces the file of a contract imports, for what the method that gives a text by its key names (AppendGet),
-    // and for the attributes that mark generated code (GeneratedFile.ImportedCodeAttributes).
+    // For what AppendGet names, and for GeneratedFile.ImportedCodeAttributes.
     private static readonly string[] ImportedNamespaces = ["System", "System.Collections.Immutable", .. GeneratedFile.CodeAttributeNamespaces];
 
     /// <summary>
-    /// What the parts of a contract's file are written from: the contract, the sets it links to, and the names the
-    /// file writes throughout.
+    /// What the parts of a contract's file are written from. Names are escaped as code writes them.
     /// </summary>
-    /// <param name="Contract">The contract the file is written for.</param>
-    /// <param name="Sets">The sets the contract links to, each with its texts by name.</param>
-    /// <param name="ClassName">The default-language set, as code writes its name.</param>
+    /// <param name="ClassName">The default-language set.</param>
     /// <param name="DefaultSet">
-    /// What the texts take their default wording from, as code writes its name: the default-language set, or the class
-    /// that implements the contract for it where it doesn't list the contract (<see cref="AppendDefaultSetAsContract"/>).
+    /// The default-language set, or the class that implements the contract for it when it doesn't list it
+    /// (<see cref="AppendDefaultSetAsContract"/>).
     /// </param>
-    /// <param name="ContractName">The name of the contract interface.</param>
-    /// <param name="TextsName">The generated class, as code writes its name.</param>
-    /// <param name="Texts">The texts the generated class holds, which leaves out a text with a reserved name (<c>LOC300</c>).</param>
-    /// <param name="Accessibility">The accessibility of the generated types: <c>public</c> or <c>internal</c>.</param>
+    /// <param name="TextsName">The generated class.</param>
+    /// <param name="Texts">The texts of the generated class, without reserved names (<c>LOC300</c>).</param>
     private sealed record ContractFile(
         LocalizationContract Contract,
         ContractDocComments.IndexedSet[] Sets,
@@ -41,8 +35,8 @@ internal static partial class LocalizationContractSource
             .Where(member => !LocalizationSetsAnalysis.IsReservedTextName(member.Name, contract.TextsName, hasLookup: contract.Enums.Length > 0))
             .ToArray();
 
-        // The set by its simple name: this file lies in the set's namespace. Its full name would start with a name the
-        // namespace may hold something else under, as a namespace Shop that holds a class Shop does.
+        // The set by its simple name, because the file lies in its namespace, and a full name could be shadowed, as by a
+        // class Shop in a namespace Shop.
         var file = new ContractFile(
             contract,
             ContractDocComments.IndexSets(contract),
@@ -53,18 +47,14 @@ internal static partial class LocalizationContractSource
             texts,
             Accessibility: contract.IsPublic ? "public" : "internal");
 
-        // The framework's types are imported here, at the top of the file, and named by their name alone. So is what
-        // words a text, which is called by its name alone. Inside the generated class a text stands before every
-        // namespace of its name, so behind a text named CodeChops the package's namespace could not be reached to call
-        // it. The pragma also covers a set marked [Obsolete] or [Experimental], whose texts read it for as long as it
-        // exists, and an enum, a member of it or a parameter type marked so, which the file names too.
-        var warnings = GeneratedFile.WithSuppressed(GeneratedFile.ObsoleteWarnings, contract.SuppressedDiagnostics);
+        // Types are imported at the top and named alone, because inside the generated class a text named CodeChops
+        // would hide the package's namespace. The pragma also covers an obsolete set, enum, member or parameter type the
+        // file names.
+        const string warnings = GeneratedFile.ObsoleteWarnings;
         var sb = new StringBuilder();
         AppendHeader(sb, contract, warnings);
 
-        // The texts first, because they're what someone who opens this file looks for. Partial, so that a helper can sit
-        // next to them, unless the generated code can't create the set for their default wording (LOC200). A switch
-        // it calls, for a set of the texts of an enum, comes last.
+        // The texts first, because they're what someone opening the file looks for. An enum's switch comes last.
         var lookups = new StringBuilder();
 
         if (contract.HasTexts)
@@ -75,10 +65,9 @@ internal static partial class LocalizationContractSource
 
         AppendContract(sb, file);
 
-        // The text of each member of an enum, outside the generated class: there a text named like the enum, or like
-        // what its name starts with, would stand before it in a pattern. File-local, so that inside this file its name
-        // binds to it even next to another type of that name. Generic, so that no text can stand before it: a name
-        // with a type argument is not looked for among the texts.
+        // Outside the generated class, where a text named like the enum would hide it in a pattern. File-local, so its
+        // name binds here next to another type of that name. Generic, because a name with a type argument isn't looked
+        // up among the texts.
         if (lookups.Length > 0)
         {
             sb.AppendLine($$"""
@@ -97,9 +86,6 @@ internal static partial class LocalizationContractSource
         if (contract is { HasTexts: true, DefaultSetListsContract: false })
             AppendDefaultSetAsContract(sb, file);
 
-        if (contract.HasTexts && texts.Any(static text => text.IsObsoleteAsError))
-            AppendObsoleteTexts(sb, file);
-
         if (contract.HasTexts && contract.Enums.Any(static @enum => @enum.HasTextsOfItsAssembly))
             AppendEnumTextsRegistration(sb, file);
 
@@ -109,13 +95,11 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// Writes the class that implements the contract for a default-language set that doesn't list it (<c>LOC204</c>).
-    /// Each member hands on to the set. So the texts compile and show the set's wording, and LOC204 is the one error,
-    /// at the set, rather than an error per text in this file.
+    /// Writes the class that implements the contract for a default-language set that doesn't list it (<c>LOC205</c>),
+    /// so LOC205 is the one error rather than an error per text.
     /// </summary>
-    // Explicit implementations, so that no text can clash with a member of the class, such as one named ToString or
-    // set. File-local, so that it's no type of the assembly: neither the generator nor the registry takes it for a set.
-    // Marked [Obsolete] where a text of the set is obsolete as an error, which code inside such a class may name.
+    // Explicit implementations, so no text clashes with a member such as ToString. File-local, so neither the generator
+    // nor the registry takes it for a set. It has no language, because LOC205 fails the build before any text is read.
     private static void AppendDefaultSetAsContract(StringBuilder sb, ContractFile file)
     {
         var contract = file.Contract;
@@ -124,14 +108,12 @@ internal static partial class LocalizationContractSource
         sb.AppendLine($$"""
 
             /// <summary>
-            /// Implements <see cref="{{name}}"/> for <see cref="{{file.ClassName}}"/>, which doesn't list it yet (LOC204), so that the texts compile.
+            /// Implements <see cref="{{name}}"/> for <see cref="{{file.ClassName}}"/>, which doesn't list it yet (LOC205), so that the texts compile.
             /// </summary>
             {{GeneratedFile.ImportedCodeAttributes}}
-            {{(contract.Members.Any(static member => member.IsObsoleteAsError) ? "[Obsolete] " : "")}}file sealed class {{file.DefaultSet}} : {{PackageNames.LocalizationSet}}, {{name}}
+            file sealed class {{file.DefaultSet}} : {{PackageNames.LocalizationSet}}, {{name}}
             {
                 private readonly {{file.ClassName}} set = new();
-
-                string {{PackageNames.LocalizationSet}}.LocalizationLanguageCode => (({{PackageNames.LocalizationSet}})this.set).LocalizationLanguageCode;
             """);
 
         foreach (var member in contract.Members)
@@ -152,8 +134,7 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// Writes what stands above the types of a contract's file: the pragma that turns off
-    /// <paramref name="warnings"/>, the using directives, and the namespace.
+    /// Writes the pragma, the using directives and the namespace.
     /// </summary>
     private static void AppendHeader(StringBuilder sb, LocalizationContract contract, string warnings)
     {
@@ -169,10 +150,8 @@ internal static partial class LocalizationContractSource
 
         sb.AppendLine($"using static {PackageNames.GeneratedCode};");
 
-        // The using directives of the default-language set, for a text that takes a value of a type that bound to
-        // nothing when this was written, as one another generator writes. Such a type stands here by the words the
-        // set writes it in, and those name it only next to the directives the set has. A type that did bind needs
-        // none of them: it stands here by its full name.
+        // The set's using directives, for a parameter type that didn't bind, such as one another generator writes. It's
+        // written as the set writes it, so it needs the set's directives.
         AppendUsings(sb, contract.Usings.OfFile);
         sb.AppendLine();
 
@@ -183,7 +162,7 @@ internal static partial class LocalizationContractSource
 
                 """);
 
-            // Those the set has inside its namespace, where a name may be written from that namespace on.
+            // The directives the set has inside its namespace.
             if (contract.Usings.OfNamespace.Length > 0)
             {
                 AppendUsings(sb, contract.Usings.OfNamespace);
@@ -193,7 +172,7 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// Writes the contract interface, with one member per text.
+    /// Writes the contract, with one member per text.
     /// </summary>
     private static void AppendContract(StringBuilder sb, ContractFile file)
     {
@@ -205,16 +184,13 @@ internal static partial class LocalizationContractSource
         var texts = file.Texts;
         var accessibility = file.Accessibility;
 
-        // Each member of the contract inherits the doc comment of its text, which says the same. A member writes its
-        // own when the class doesn't hold its text (LOC300). A text named like the class doesn't hide the class from a
-        // cref, which looks for a type in front of the dot.
+        // A member inherits its text's doc comment, or writes its own when the class doesn't hold the text (LOC300).
         var inheritingDocs = new HashSet<string>(StringComparer.Ordinal);
 
         if (contract.HasTexts)
             inheritingDocs.UnionWith(texts.Select(static text => text.Name));
 
-        // The contract, which every set lists itself. The contract of a set of an enum names its enums, which each set
-        // lists as ILocalizationSet<TEnum> (LOC205).
+        // An enum's sets list ILocalizationSet<TEnum> (LOC206).
         var setInterface = contract.Enums.Length is 0
             ? $"<see cref=\"{PackageNames.LocalizationSet}\"/>"
             : $"<c>{CodeEscaping.EscapeXml(String.Join(", ", contract.Enums.Select(@enum => $"{SupportedLanguages.SetInterface}<{ContractTypeNames.RenderType(@enum.Type, contract.Namespace)}>")))}</c>";
@@ -247,16 +223,12 @@ internal static partial class LocalizationContractSource
                 continue;
             }
 
-            // Each value the default wording shows, which TextParametersAnalyzer holds every other set to, in this
-            // assembly and in those referencing it. On the method and not on the parameter, because an IDE's "Implement
-            // interface" copies the attributes of a parameter into the set it writes, where this obsolete one would warn.
+            // Each value the default wording shows, for TextParametersAnalyzer. On the method, because "Implement
+            // interface" copies a parameter's attributes into the set, where this obsolete one would warn.
             foreach (var parameter in member.Parameters)
-            {
                 if (parameter.IsShown)
                     sb.AppendLine($"    [{PackageNames.InternalsNamespace}.ShownValue({SymbolDisplay.FormatLiteral(parameter.Name, quote: true)})]");
-            }
 
-            // A text that takes values is a method: its parameters are what the compiler holds every language to.
             sb.AppendLine($"    string {CodeEscaping.EscapeIdentifier(member.Name)}({ContractTypeNames.RenderParameters(member, contract.Namespace)});");
         }
 
@@ -264,8 +236,7 @@ internal static partial class LocalizationContractSource
     }
 
     /// <summary>
-    /// Writes the using directives a contract's file repeats (<see cref="RepeatedUsings"/>), but for those it has
-    /// already, because a repeated one is a warning (CS0105).
+    /// Writes the repeated using directives (<see cref="RepeatedUsings"/>), skipping those the file has (CS0105).
     /// </summary>
     private static void AppendUsings(StringBuilder sb, EquatableArray<string> usings)
     {
